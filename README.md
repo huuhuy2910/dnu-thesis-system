@@ -7,7 +7,7 @@
 
 Hệ thống quản lý đăng ký, theo dõi tiến độ và bảo vệ đồ án tốt nghiệp cho sinh viên ngành Công nghệ thông tin - Trường Đại học Đại Nam.
 
-> 📘 *Dự án được thực hiện cho học phần **Chuyển đổi số (Digital Transformation - DX)** và cũng là MVP nền móng phục vụ xây dựng hệ thống đồ án tốt nghiệp hoàn chỉnh sau này.*
+> 📘 *Dự án được thực hiện cho học phần **Chuyển đổi số (Digital Transformation - DX)** và cũng là MVP(Minimum Viable Product) nền móng phục vụ xây dựng hệ thống đồ án tốt nghiệp hoàn chỉnh sau này.*
 
 ### 👥 Thành viên nhóm
 - Nguyễn Hữu Huy  
@@ -40,7 +40,7 @@ Hệ thống quản lý đăng ký, theo dõi tiến độ và bảo vệ đồ 
 
 Graduation Thesis Management and Defense Tracking System for IT students at Dai Nam University.
 
-> 🧩 *This project is developed for the **Digital Transformation (DX)** course and also serves as a foundational MVP for the future Graduation Thesis Management System.*
+> 🧩 *This project is developed for the **Digital Transformation (DX)** course and also serves as a foundational MVP(Minimum Viable Product) for the future Graduation Thesis Management System.*
 
 ### 👥 Team Members
 - Nguyen Huu Huy  
