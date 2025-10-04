@@ -1,12 +1,42 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import {
+  Home,
+  BookOpen,
+  LineChart,
+  Upload,
+  Calendar,
+  Bell,
+} from 'lucide-react';
+import './SideNav.css';
 
 const StudentNav: React.FC = () => {
+  const navItems = [
+    { path: '/student', label: 'Trang chủ', icon: <Home size={18} /> },
+    { path: '/student/topics', label: 'Đăng ký đề tài', icon: <BookOpen size={18} /> },
+    { path: '/student/progress', label: 'Tiến độ đồ án', icon: <LineChart size={18} /> },
+    { path: '/student/reports', label: 'Nộp báo cáo', icon: <Upload size={18} /> },
+    { path: '/student/schedule', label: 'Lịch bảo vệ', icon: <Calendar size={18} /> },
+    { path: '/student/notifications', label: 'Thông báo', icon: <Bell size={18} /> },
+  ];
+
   return (
-    <nav>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        <li><Link to="/student">Trang chủ</Link></li>
-        <li><Link to="/student/topics">Đề tài (mẫu)</Link></li>
+    <nav className="sidenav student-theme">
+      <ul>
+        {navItems.map((item) => (
+          <li key={item.path}>
+            <NavLink
+              to={item.path}
+              end
+              className={({ isActive }) =>
+                isActive ? 'active' : undefined
+              }
+            >
+              <span className="icon">{item.icon}</span>
+              <span className="label">{item.label}</span>
+            </NavLink>
+          </li>
+        ))}
       </ul>
     </nav>
   );

@@ -1,0 +1,126 @@
+/* ================================
+   🎨 COMMON SIDENAV STYLES
+   ================================ */
+
+.sidenav {
+  margin-top: 8px;
+  padding: 0 12px;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.sidenav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidenav li {
+  margin-bottom: 4px;
+}
+
+/* --- LINK --- */
+.sidenav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: all 0.25s ease;
+}
+
+/* Hover effect */
+.sidenav a:hover {
+  background-color: var(--hover-bg);
+  color: var(--accent);
+}
+
+/* Active */
+.sidenav a.active {
+  background-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Icon */
+.sidenav .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+}
+
+/* Label */
+.sidenav .label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+/* ================================
+   🎨 ROLE THEMES
+   ================================ */
+
+/* Student (cam tươi) */
+.student-theme {
+  --accent: #f68a2f;
+  --hover-bg: rgba(246, 138, 47, 0.12);
+}
+
+/* Lecturer (cam nhạt) */
+.lecturer-theme {
+  --accent: #f7934c;
+  --hover-bg: rgba(247, 147, 76, 0.12);
+}
+
+/* Admin (cam đậm) */
+.admin-theme {
+  --accent: #d95d00;
+  --hover-bg: rgba(217, 93, 0, 0.12);
+}
+
+/* ================================
+   📱 RESPONSIVE
+   ================================ */
+
+@media (max-width: 1024px) {
+  .sidenav a {
+    font-size: 13px;
+    padding: 9px 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidenav {
+    padding: 0 8px;
+  }
+
+  .sidenav a {
+    font-size: 12px;
+    padding: 8px 9px;
+    border-radius: 6px;
+  }
+
+  .sidenav .label {
+    display: none; /* Chỉ hiển thị icon ở mobile */
+  }
+
+  .sidenav ul {
+    display: flex;
+    justify-content: space-around;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 6px 0;
+    z-index: 50;
+  }
+
+  .sidenav li {
+    margin: 0;
+  }
+}
