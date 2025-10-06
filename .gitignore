@@ -391,3 +391,63 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# ------------------------------------------------------------------
+# Local build outputs, dotnet publish artifacts and NuGet/project files
+# Explicitly ignore compiled binaries, symbol files and transient files
+# shown in your screenshots so they don't get pushed to GitHub.
+# ------------------------------------------------------------------
+# compiled binaries and symbol files
+*.dll
+*.exe
+*.pdb
+
+# dotnet publish / app host / runtime files
+apphost.exe
+*.runtimeconfig.json
+*.deps.json
+
+# msbuild / intermediate / lock files
+project.assets.json
+project.nuget.cache
+project.nuget.g.props
+project.nuget.g.targets
+
+# NuGet packages and lock artifacts
+*.nupkg
+packages/
+
+# VS/IDE / build artifacts (redundant with earlier patterns but explicit)
+**/[Bb]in/
+**/[Oo]bj/
+
+# dotnet publish output folders
+**/publish/
+
+# local generated files from build tools
+*.user
+*.userosscache
+*.vspscc
+.vs/
+
+# ------------------------------------------------------------------
+# Frontend (thesis-frontend) — Vite/React build artifacts and secrets
+# ------------------------------------------------------------------
+# Node modules and build output
+thesis-frontend/node_modules/
+thesis-frontend/dist/
+thesis-frontend/build/
+thesis-frontend/.vite/
+
+# Environment and secret files (Vite uses .env files)
+thesis-frontend/.env
+thesis-frontend/.env.*
+
+# Debug logs
+thesis-frontend/npm-debug.log*
+thesis-frontend/yarn-debug.log*
+thesis-frontend/pnpm-debug.log*
+
+# Optional: local IDE files for frontend
+thesis-frontend/.idea/
+thesis-frontend/.vscode/

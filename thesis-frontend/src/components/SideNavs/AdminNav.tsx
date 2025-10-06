@@ -15,7 +15,8 @@ const AdminNav: React.FC = () => {
     { path: '/admin', label: 'Trang chủ', icon: <Home size={18} /> },
     { path: '/admin/users', label: 'Quản lý người dùng', icon: <Users size={18} /> },
     { path: '/admin/topics', label: 'Quản lý đề tài', icon: <ClipboardList size={18} /> },
-    { path: '/admin/committees', label: 'Quản lý hội đồng', icon: <ShieldCheck size={18} /> },
+  // New committee list route (uses the new admin route namespace)
+  { path: '/admin/committees-new', label: 'Quản lý hội đồng', icon: <ShieldCheck size={18} /> },
     { path: '/admin/config', label: 'Cấu hình hệ thống', icon: <FileCog size={18} /> },
     { path: '/admin/settings', label: 'Cài đặt khác', icon: <Settings size={18} /> },
   ];

@@ -16,7 +16,9 @@ const StudentNav: React.FC = () => {
     { path: '/student/topics', label: 'Đăng ký đề tài', icon: <BookOpen size={18} /> },
     { path: '/student/progress', label: 'Tiến độ đồ án', icon: <LineChart size={18} /> },
     { path: '/student/reports', label: 'Nộp báo cáo', icon: <Upload size={18} /> },
-    { path: '/student/schedule', label: 'Lịch bảo vệ', icon: <Calendar size={18} /> },
+  { path: '/student/schedule', label: 'Lịch bảo vệ', icon: <Calendar size={18} /> },
+  // Quick access to student's defense info
+  { path: '/student/defense-info', label: 'Thông tin bảo vệ', icon: <Calendar size={18} /> },
     { path: '/student/notifications', label: 'Thông báo', icon: <Bell size={18} /> },
   ];
 

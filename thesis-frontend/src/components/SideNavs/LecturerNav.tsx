@@ -14,7 +14,9 @@ const LecturerNav: React.FC = () => {
     { path: '/lecturer', label: 'Trang chủ', icon: <Home size={18} /> },
     { path: '/lecturer/students', label: 'Sinh viên hướng dẫn', icon: <Users size={18} /> },
     { path: '/lecturer/topics', label: 'Đề tài duyệt', icon: <ClipboardList size={18} /> },
-    { path: '/lecturer/schedule', label: 'Lịch chấm bảo vệ', icon: <CalendarCheck size={18} /> },
+  { path: '/lecturer/schedule', label: 'Lịch chấm bảo vệ', icon: <CalendarCheck size={18} /> },
+  // Committees view for lecturer
+  { path: '/lecturer/committees', label: 'Hội đồng của tôi', icon: <Users size={18} /> },
     { path: '/lecturer/reports', label: 'Nhận xét báo cáo', icon: <FileText size={18} /> },
   ];
 
