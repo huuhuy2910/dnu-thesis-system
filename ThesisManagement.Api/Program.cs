@@ -40,6 +40,8 @@ builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepositor
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ICodeGenerator, CodeGeneratorService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICommitteeManagementService, CommitteeManagementService>();
+builder.Services.AddScoped<IDefenseAssignmentService, DefenseAssignmentService>();
 
 var app = builder.Build();
 
