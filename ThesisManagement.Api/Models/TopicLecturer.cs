@@ -7,6 +7,7 @@ namespace ThesisManagement.Api.Models
         public int TopicID { get; set; }
         public string? TopicCode { get; set; } // Code-based reference
         public int LecturerProfileID { get; set; }
+        public string? LecturerCode { get; set; } // Code-based reference
         public bool IsPrimary { get; set; } = false;
         public DateTime CreatedAt { get; set; }
 

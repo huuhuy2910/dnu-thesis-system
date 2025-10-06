@@ -49,7 +49,9 @@ namespace ThesisManagement.Api.Controllers
             var ent = new TopicLecturer
             {
                 TopicID = topic.TopicID,
+                TopicCode = topic.TopicCode,
                 LecturerProfileID = lecturerProfile.LecturerProfileID,
+                LecturerCode = lecturerProfile.LecturerCode,
                 IsPrimary = dto.IsPrimary,
                 CreatedAt = DateTime.UtcNow
             };
