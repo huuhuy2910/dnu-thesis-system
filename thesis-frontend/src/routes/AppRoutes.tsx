@@ -7,6 +7,7 @@ import StudentLayout from "../components/Layouts/StudentLayout";
 import LecturerLayout from "../components/Layouts/LecturerLayout";
 import AdminLayout from "../components/Layouts/AdminLayout";
 import StudentDashboard from "../pages/student/Dashboard";
+import TopicRegistration from "../pages/student/TopicRegistration";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
@@ -41,6 +42,7 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<StudentDashboard />} />
+        <Route path="topics" element={<TopicRegistration />} />
         <Route path="defense-info" element={<StudentDefenseInfo />} />
         {/* thêm các route con của student ở đây */}
       </Route>

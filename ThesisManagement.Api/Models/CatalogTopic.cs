@@ -11,6 +11,8 @@ namespace ThesisManagement.Api.Models
         public string? Summary { get; set; }
         public int? DepartmentID { get; set; } // Keep for internal use
         public string? DepartmentCode { get; set; } // New: reference by code
+        public string? AssignedStatus { get; set; } // New: status of assignment
+        public DateTime? AssignedAt { get; set; } // New: timestamp of assignment
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
 

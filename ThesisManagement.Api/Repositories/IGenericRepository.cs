@@ -12,6 +12,7 @@ namespace ThesisManagement.Api.Repositories
         Task AddAsync(TEntity entity);
         void Update(TEntity entity);
         void Remove(TEntity entity);
+    Task RemoveByIdAsync(params object[] keyValues);
         IQueryable<TEntity> Query();
     }
 }

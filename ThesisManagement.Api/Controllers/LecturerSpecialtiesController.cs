@@ -36,10 +36,18 @@ namespace ThesisManagement.Api.Controllers
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] LecturerSpecialtyCreateDto dto)
         {
+            var lecturerProfile = await _uow.LecturerProfiles.GetByIdAsync(dto.LecturerProfileID);
+            if (lecturerProfile == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
+
+            var specialty = await _uow.Specialties.GetByIdAsync(dto.SpecialtyID);
+            if (specialty == null) return NotFound(ApiResponse<object>.Fail("Specialty not found", 404));
+
             var ent = new LecturerSpecialty
             {
                 LecturerProfileID = dto.LecturerProfileID,
                 SpecialtyID = dto.SpecialtyID,
+                LecturerCode = lecturerProfile.LecturerCode,
+                SpecialtyCode = specialty.SpecialtyCode,
                 CreatedAt = DateTime.UtcNow
             };
 

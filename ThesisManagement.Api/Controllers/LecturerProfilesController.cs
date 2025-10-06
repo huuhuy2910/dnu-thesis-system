@@ -30,7 +30,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { UserID = 0, DepartmentID = (int?)null }));
+        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { UserID = 0, DepartmentID = (int?)null, CurrentGuidingCount = 0 }));
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] LecturerProfileCreateDto dto)
@@ -58,6 +58,7 @@ namespace ThesisManagement.Api.Controllers
                 Degree = dto.Degree,
                 GuideQuota = dto.GuideQuota ?? 10,
                 DefenseQuota = dto.DefenseQuota ?? 8,
+                CurrentGuidingCount = dto.CurrentGuidingCount,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -71,7 +72,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.LecturerProfiles.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(new LecturerProfileUpdateDto(ent.DepartmentCode, ent.Degree, ent.GuideQuota, ent.DefenseQuota)));
+            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(new LecturerProfileUpdateDto(ent.DepartmentCode, ent.Degree, ent.GuideQuota, ent.DefenseQuota, ent.CurrentGuidingCount)));
         }
 
         [HttpPut("update/{id}")]
@@ -90,6 +91,7 @@ namespace ThesisManagement.Api.Controllers
             ent.Degree = dto.Degree;
             ent.GuideQuota = dto.GuideQuota ?? ent.GuideQuota;
             ent.DefenseQuota = dto.DefenseQuota ?? ent.DefenseQuota;
+            ent.CurrentGuidingCount = dto.CurrentGuidingCount ?? ent.CurrentGuidingCount;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.LecturerProfiles.Update(ent);
             await _uow.SaveChangesAsync();

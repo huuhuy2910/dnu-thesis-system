@@ -34,6 +34,7 @@ namespace ThesisManagement.Api.Mappings
             CreateMap<Specialty, SpecialtyReadDto>();
             CreateMap<LecturerSpecialty, LecturerSpecialtyReadDto>();
             CreateMap<TopicLecturer, TopicLecturerReadDto>();
+            CreateMap<CatalogTopicSpecialty, CatalogTopicSpecialtyReadDto>();
         }
     }
 }

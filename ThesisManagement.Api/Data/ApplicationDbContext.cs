@@ -86,6 +86,7 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.Department).WithMany(x => x.LecturerProfiles).HasForeignKey(x => x.DepartmentCode).HasPrincipalKey(x => x.DepartmentCode);
                 b.Property(x => x.GuideQuota).HasDefaultValue(10);
                 b.Property(x => x.DefenseQuota).HasDefaultValue(8);
+                b.Property(x => x.CurrentGuidingCount).HasDefaultValue(0);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
@@ -98,6 +99,7 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.CatalogTopicCode).IsUnique();
                 b.Property(x => x.Title).HasMaxLength(255).IsRequired();
                 b.Property(x => x.Summary).HasMaxLength(1000);
+                b.Property(x => x.AssignedStatus).HasMaxLength(20);
                 b.HasOne(x => x.Department).WithMany(x => x.CatalogTopics).HasForeignKey(x => x.DepartmentCode).HasPrincipalKey(x => x.DepartmentCode);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
@@ -106,6 +108,14 @@ namespace ThesisManagement.Api.Data
             // Topics
             modelBuilder.Entity<Topic>(b =>
             {
+                b.ToTable("Topics", tb =>
+                {
+                    // Inform EF Core that triggers exist on this table so it avoids using a bare OUTPUT clause.
+                    // Update the trigger names below to match the actual triggers defined in the database.
+                    tb.HasTrigger("TR_Topics_Insert");
+                    tb.HasTrigger("TR_Topics_Update");
+                    tb.HasTrigger("TR_Topics_Delete");
+                });
                 b.HasKey(x => x.TopicID);
                 b.Property(x => x.TopicCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.TopicCode).IsUnique();
