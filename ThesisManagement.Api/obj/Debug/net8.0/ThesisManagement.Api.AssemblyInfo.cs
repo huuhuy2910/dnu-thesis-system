@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ThesisManagement.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f8c450d7c5cb6f8f6296ac980f25fe5d96122667")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eb94bee030bbe174d86e1188e82bc3167b37aba1")]
 [assembly: System.Reflection.AssemblyProductAttribute("ThesisManagement.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ThesisManagement.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
