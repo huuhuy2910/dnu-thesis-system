@@ -7,5 +7,6 @@ namespace ThesisManagement.Api.DTOs
         public string? Tags { get; set; }
         public string? OwnerLecturerCode { get; set; }
         public string? DepartmentCode { get; set; }
+        public string? AssignedStatus { get; set; }
     }
 }

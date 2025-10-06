@@ -30,7 +30,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { Title = "", Summary = "", Tags = "" }));
+        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { Title = "", Summary = "", Tags = "", AssignedStatus = "", AssignedAt = (DateTime?)null }));
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CatalogTopicCreateDto dto)
@@ -50,6 +50,8 @@ namespace ThesisManagement.Api.Controllers
                 Summary = dto.Summary,
                 DepartmentID = department?.DepartmentID,
                 DepartmentCode = dto.DepartmentCode,
+                AssignedStatus = dto.AssignedStatus,
+                AssignedAt = dto.AssignedAt,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -63,7 +65,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.CatalogTopics.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            return Ok(ApiResponse<CatalogTopicUpdateDto>.SuccessResponse(new CatalogTopicUpdateDto(ent.Title, ent.Summary, ent.DepartmentCode)));
+            return Ok(ApiResponse<CatalogTopicUpdateDto>.SuccessResponse(new CatalogTopicUpdateDto(ent.Title, ent.Summary, ent.DepartmentCode, ent.AssignedStatus, ent.AssignedAt)));
         }
 
         [HttpPut("update/{code}")]
@@ -82,6 +84,8 @@ namespace ThesisManagement.Api.Controllers
                 ent.DepartmentCode = dto.DepartmentCode;
             }
             
+            ent.AssignedStatus = dto.AssignedStatus;
+            ent.AssignedAt = dto.AssignedAt;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.CatalogTopics.Update(ent);
             await _uow.SaveChangesAsync();

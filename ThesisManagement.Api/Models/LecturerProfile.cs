@@ -15,6 +15,7 @@ namespace ThesisManagement.Api.Models
         public string? Specialties { get; set; } // Keep for backward compatibility
         public int? GuideQuota { get; set; }
         public int? DefenseQuota { get; set; }
+        public int CurrentGuidingCount { get; set; } = 0; // New: current number of guiding topics
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
 

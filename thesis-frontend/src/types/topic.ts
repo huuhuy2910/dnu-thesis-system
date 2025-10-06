@@ -23,3 +23,15 @@ export interface Topic {
   specialtyID: number | null;
   specialtyCode: string | null;
 }
+
+export interface TopicFormData {
+  topicCode?: string; // Auto generated from API template
+  title: string;
+  summary: string;
+  type: "CATALOG" | "SELF";
+  catalogTopicID: number | null;
+  supervisorLecturerProfileID: number | null;
+  departmentID: number | null;
+  specialtyID: number | null;
+  status?: string; // Auto set to "Đang chờ"
+}

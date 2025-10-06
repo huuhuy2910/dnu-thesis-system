@@ -171,6 +171,8 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrEmpty(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
 
+            if (!string.IsNullOrEmpty(filter.AssignedStatus))
+                query = query.Where(x => x.AssignedStatus == filter.AssignedStatus);
 
             // Filter by owner lecturer
             if (!string.IsNullOrEmpty(filter.OwnerLecturerCode))
