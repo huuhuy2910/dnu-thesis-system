@@ -9,6 +9,9 @@ import AdminLayout from "../components/Layouts/AdminLayout";
 import StudentDashboard from "../pages/student/Dashboard";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import AdminDashboard from "../pages/admin/Dashboard";
+import UsersManagement from "../pages/admin/UsersManagement";
+import TopicsManagement from "../pages/admin/TopicsManagement";
+import CommitteesManagement from "../pages/admin/CommitteesManagement";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 /**
@@ -57,7 +60,10 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<AdminDashboard />} />
-        {/* thêm các route con của admin ở đây */}
+        <Route path="users" element={<UsersManagement />} />
+        <Route path="topics" element={<TopicsManagement />} />
+        <Route path="committees" element={<CommitteesManagement />} />
+        {/* thêm các route con khác của admin ở đây */}
       </Route>
 
       {/* fallback: nếu không match => điều hướng về /login */}

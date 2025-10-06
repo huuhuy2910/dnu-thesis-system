@@ -1,0 +1,360 @@
+/* ==========================================
+   Admin Dashboard Styles
+   Đại học Đại Nam - Thesis Management System
+   ========================================== */
+
+.admin-dashboard {
+  padding: 32px;
+  background-color: #fafafa;
+  min-height: calc(100vh - 80px);
+  font-family: 'Segoe UI', Inter, Roboto, sans-serif;
+}
+
+/* Header Section */
+.dashboard-header {
+  margin-bottom: 32px;
+}
+
+.dashboard-header h1 {
+  color: #f37021;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.dashboard-header p {
+  color: #666;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Stats Cards Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-left: 4px solid;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card.orange {
+  border-left-color: #f37021;
+}
+
+.stat-card.blue {
+  border-left-color: #1e88e5;
+}
+
+.stat-card.green {
+  border-left-color: #2e7d32;
+}
+
+.stat-card.purple {
+  border-left-color: #8e24aa;
+}
+
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.stat-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.stat-card-icon.orange {
+  background-color: #f37021;
+}
+
+.stat-card-icon.blue {
+  background-color: #1e88e5;
+}
+
+.stat-card-icon.green {
+  background-color: #2e7d32;
+}
+
+.stat-card-icon.purple {
+  background-color: #8e24aa;
+}
+
+.stat-card-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.stat-card-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Content Grid (Charts + Notifications) */
+.dashboard-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Chart Section */
+.chart-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.chart-section h2 {
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.chart-container {
+  padding: 16px 0;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 300px;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.bar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.bar {
+  width: 100%;
+  max-width: 80px;
+  background: linear-gradient(to top, var(--bar-color), var(--bar-color-light));
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  transition: transform 0.3s;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.bar:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.bar-value {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 16px;
+  color: #333;
+}
+
+.bar-label {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  font-weight: 500;
+}
+
+.chart-note {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+  margin-top: 16px;
+  text-align: center;
+}
+
+/* Notifications Section */
+.notifications-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-section h2 {
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notifications-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notification-item {
+  padding: 16px;
+  border-left: 3px solid #f37021;
+  background: #fff3e0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: background 0.2s;
+}
+
+.notification-item:hover {
+  background: #ffe0b2;
+}
+
+.notification-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.notification-desc {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.notification-date {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Recent Topics Table */
+.recent-topics-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.recent-topics-section h2 {
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.topics-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+.topics-table thead {
+  background-color: #f5f5f5;
+}
+
+.topics-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #666;
+  font-size: 14px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.topics-table td {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #333;
+}
+
+.topics-table tbody tr:hover {
+  background-color: #fafafa;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.in-progress {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.status-badge.pending {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.status-badge.approved {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .admin-dashboard {
+    padding: 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-content {
+    grid-template-columns: 1fr;
+  }
+
+  .topics-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .bar-chart {
+    height: 250px;
+  }
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #999;
+}

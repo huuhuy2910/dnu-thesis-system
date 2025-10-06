@@ -15,48 +15,112 @@
 }
 
 .sidenav li {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  opacity: 0;
+  animation: fadeInSlide 0.4s ease forwards;
+}
+
+/* Stagger animation for each item */
+.sidenav li:nth-child(1) { animation-delay: 0.05s; }
+.sidenav li:nth-child(2) { animation-delay: 0.1s; }
+.sidenav li:nth-child(3) { animation-delay: 0.15s; }
+.sidenav li:nth-child(4) { animation-delay: 0.2s; }
+.sidenav li:nth-child(5) { animation-delay: 0.25s; }
+.sidenav li:nth-child(6) { animation-delay: 0.3s; }
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* --- LINK --- */
 .sidenav a {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 14px;
   font-weight: 500;
   color: #333;
-  text-decoration: none;
-  padding: 10px 12px;
-  border-radius: 8px;
-  transition: all 0.25s ease;
+  text-decoration: none; /* Remove underline */
+  padding: 12px 14px;
+  border-radius: 10px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-/* Hover effect */
+/* Remove any underline that might appear */
+.sidenav a:hover,
+.sidenav a:focus,
+.sidenav a:active {
+  text-decoration: none;
+  outline: none;
+}
+
+/* Hover effect with scale */
 .sidenav a:hover {
   background-color: var(--hover-bg);
   color: var(--accent);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Active */
+/* Active state with gradient and shadow */
 .sidenav a.active {
-  background-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
   color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(243, 112, 33, 0.25);
+  transform: translateX(4px);
 }
 
-/* Icon */
+/* Ripple effect on click */
+.sidenav a::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.sidenav a:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Icon with smooth scale */
 .sidenav .icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
+  min-width: 22px;
+  transition: transform 0.3s ease;
+}
+
+.sidenav a:hover .icon {
+  transform: scale(1.1);
+}
+
+.sidenav a.active .icon {
+  transform: scale(1.15);
 }
 
 /* Label */
 .sidenav .label {
   flex: 1;
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
 }
 
 /* ================================
@@ -66,19 +130,22 @@
 /* Student (cam tươi) */
 .student-theme {
   --accent: #f68a2f;
-  --hover-bg: rgba(246, 138, 47, 0.12);
+  --accent-light: #ff9f4a;
+  --hover-bg: rgba(246, 138, 47, 0.1);
 }
 
 /* Lecturer (cam nhạt) */
 .lecturer-theme {
   --accent: #f7934c;
-  --hover-bg: rgba(247, 147, 76, 0.12);
+  --accent-light: #ffaa66;
+  --hover-bg: rgba(247, 147, 76, 0.1);
 }
 
 /* Admin (cam đậm) */
 .admin-theme {
-  --accent: #d95d00;
-  --hover-bg: rgba(217, 93, 0, 0.12);
+  --accent: #F37021; /* brand orange */
+  --accent-light: #FF8838; /* lighter shade for gradient */
+  --hover-bg: #FFF3E0; /* light orange background - exact spec */
 }
 
 /* ================================
@@ -88,7 +155,7 @@
 @media (max-width: 1024px) {
   .sidenav a {
     font-size: 13px;
-    padding: 9px 10px;
+    padding: 11px 12px;
   }
 }
 
@@ -99,8 +166,8 @@
 
   .sidenav a {
     font-size: 12px;
-    padding: 8px 9px;
-    border-radius: 6px;
+    padding: 10px 9px;
+    border-radius: 8px;
   }
 
   .sidenav .label {
@@ -116,11 +183,33 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    padding: 6px 0;
+    padding: 8px 0;
     z-index: 50;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
   }
 
   .sidenav li {
     margin: 0;
+    animation: none; /* Disable stagger on mobile */
+    opacity: 1;
+  }
+
+  .sidenav a:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* ================================
+   🎬 ANIMATIONS
+   ================================ */
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
   }
 }
