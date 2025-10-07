@@ -5,3 +5,37 @@ body {
 }
 a { color: #06c; text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* Responsive adjustments for the FIT homepage */
+.header-brand-inline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 1200;
+    background: #fff;
+  }
+
+  nav {
+    display: none; /* Simplest responsive behavior: hide nav on small screens */
+  }
+
+  .hero-inner {
+    grid-template-columns: 1fr !important;
+    padding: 0 1rem !important;
+  }
+
+  .roles-grid, .features-grid, .announcements-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .logo-ios-small {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
