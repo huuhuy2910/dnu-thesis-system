@@ -1,25 +1,44 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React from "react";
+import { NavLink } from "react-router-dom";
 import {
   Home,
   Users,
   ClipboardList,
   FileCog,
   ShieldCheck,
-  Settings,
-} from 'lucide-react';
-import './SideNav.css';
-import './AdminNav.css';
+  Bell,
+} from "lucide-react";
+import "./SideNav.css";
+import "./AdminNav.css";
 
 const AdminNav: React.FC = () => {
   const navItems = [
-    { path: '/admin', label: 'Trang chủ', icon: <Home size={18} /> },
-    { path: '/admin/users', label: 'Quản lý người dùng', icon: <Users size={18} /> },
-    { path: '/admin/topics', label: 'Quản lý đề tài', icon: <ClipboardList size={18} /> },
-  // New committee list route (uses the new admin route namespace)
-  { path: '/admin/committees-new', label: 'Quản lý hội đồng', icon: <ShieldCheck size={18} /> },
-    { path: '/admin/config', label: 'Cấu hình hệ thống', icon: <FileCog size={18} /> },
-    { path: '/admin/settings', label: 'Cài đặt khác', icon: <Settings size={18} /> },
+    { path: "/admin", label: "Trang chủ", icon: <Home size={18} /> },
+    {
+      path: "/admin/users",
+      label: "Quản lý người dùng",
+      icon: <Users size={18} />,
+    },
+    {
+      path: "/admin/topics",
+      label: "Quản lý đề tài",
+      icon: <ClipboardList size={18} />,
+    },
+    {
+      path: "/admin/committees",
+      label: "Quản lý hội đồng",
+      icon: <ShieldCheck size={18} />,
+    },
+    {
+      path: "/admin/notifications/create",
+      label: "Tạo thông báo",
+      icon: <Bell size={18} />,
+    },
+    {
+      path: "/admin/system-config",
+      label: "Cấu hình hệ thống",
+      icon: <FileCog size={18} />,
+    },
   ];
 
   return (
@@ -30,9 +49,7 @@ const AdminNav: React.FC = () => {
             <NavLink
               to={item.path}
               end
-              className={({ isActive }) =>
-                isActive ? 'active' : undefined
-              }
+              className={({ isActive }) => (isActive ? "active" : undefined)}
             >
               <span className="icon">{item.icon}</span>
               <span className="label">{item.label}</span>
