@@ -4,8 +4,15 @@
 # Author: Nguyen Dan Truong
 # Source: Adapted from GitHub official VisualStudio.gitignore
 ################################################################################
+################################################################################
+# DNU-THESIS-SYSTEM PROJECT
+# Combined ignore for .NET 8 (Backend) + React/Vite (Frontend)
+# Author: Nguyen Dan Truong
+# Source: Adapted from GitHub official VisualStudio.gitignore
+################################################################################
 
 # ================================
+# 1️⃣ User-specific / Environment
 # 1️⃣ User-specific / Environment
 # ================================
 *.rsuser
@@ -22,11 +29,22 @@
 *.dbmdl
 *.pfx
 *.publishsettings
+*.env
+*.env.*
+.vscode/
+.vs/
+.idea/
+*.dbmdl
+*.pfx
+*.publishsettings
 mono_crash.*
 
 # ================================
 # 2️⃣ Build and Output Directories
+# 2️⃣ Build and Output Directories
 # ================================
+[Bb]in/
+[Oo]bj/
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -63,13 +81,65 @@ project.nuget.g.targets
 *.runtimeconfig.json
 *.vspscc
 *.vssscc
+publish/
+out/
+temp/
+tmp/
+.cache/
+**/[Bb]in/
+**/[Oo]bj/
+
+# ================================
+# 3️⃣ Build Artifacts & Cache Files
+# ================================
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+*.tlog
+*.tmp
+*.bak
+*.json.lock
+*.lock.json
+project.assets.json
+project.nuget.cache
+project.nuget.g.props
+project.nuget.g.targets
+*.deps.json
+*.runtimeconfig.json
+*.vspscc
+*.vssscc
 *.idb
+*.ipdb
 *.ipdb
 *.iobj
 *.sbr
 *.tlb
 *.tli
 *.tlh
+*.pch
+*.obj
+
+# ================================
+# 4️⃣ NuGet & Package Artifacts
+# ================================
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+!packages/build/
+.nuget.props
+.nuget.targets
+
+# ================================
+# 5️⃣ Test Results / Coverage
+# ================================
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
 *.pch
 *.obj
 
@@ -101,9 +171,17 @@ MSBuild_Logs/
 # ================================
 # 6️⃣ SQL / Local DB / Cache
 # ================================
+BenchmarkDotNet.Artifacts/
+MSBuild_Logs/
+
+# ================================
+# 6️⃣ SQL / Local DB / Cache
+# ================================
 *.mdf
 *.ldf
 *.ndf
+*.db
+*.sqlite
 *.db
 *.sqlite
 healthchecksdb
@@ -117,8 +195,18 @@ appsettings.*.Development.json
 ScaffoldingReadMe.txt
 publish/
 Properties/launchSettings.json
+# ================================
+# 7️⃣ ASP.NET / Server Config
+# ================================
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Development.json
+ScaffoldingReadMe.txt
+publish/
+Properties/launchSettings.json
 
 # ================================
+# 8️⃣ Frontend (React + Vite)
 # 8️⃣ Frontend (React + Vite)
 # ================================
 thesis-frontend/node_modules/
@@ -129,7 +217,12 @@ thesis-frontend/.cache/
 thesis-frontend/.idea/
 thesis-frontend/.vscode/
 thesis-frontend/.eslintcache
+thesis-frontend/.cache/
+thesis-frontend/.idea/
+thesis-frontend/.vscode/
+thesis-frontend/.eslintcache
 
+# Logs
 # Logs
 thesis-frontend/npm-debug.log*
 thesis-frontend/yarn-debug.log*
