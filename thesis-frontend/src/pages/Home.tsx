@@ -80,19 +80,22 @@ const timelineSteps = [
     description:
       "Sinh viên đề xuất hoặc chọn đề tài do khoa gợi ý, giảng viên hướng dẫn xác nhận trực tuyến. Deadline rõ ràng, hỗ trợ chỉnh sửa.",
   },
-  {
+  { 
+    phase: "01",
     icon: <CheckCircle className="w-6 h-6" />,
-    title: "Phân công hội đồng",
-    description:
-      "Ban chủ nhiệm cấu hình hội đồng FIT, phân lịch bảo vệ, thông báo tới giảng viên và sinh viên. Tự động tránh xung đột lịch.",
-  },
-  {
-    icon: <Calendar className="w-6 h-6" />,
     title: "Theo dõi tiến độ",
     description:
       "Nhật ký làm việc, mốc nộp minh chứng và phản hồi được lưu trữ tập trung, dễ truy vết. Giám sát liên tục từ xa.",
   },
   {
+    phase: "01",
+    icon: <Calendar className="w-6 h-6" />,
+    title: "Phân công hội đồng",
+    description:
+      "Ban chủ nhiệm cấu hình hội đồng FIT, phân lịch bảo vệ, thông báo tới giảng viên và sinh viên. Tự động tránh xung đột lịch.",
+  },
+  {
+    phase: "01",
     icon: <Award className="w-6 h-6" />,
     title: "Bảo vệ & đánh giá",
     description:
@@ -329,7 +332,8 @@ const Home: React.FC = () => {
           >
             <motion.div variants={fadeUp} className="space-y-6">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-primary leading-tight">
-                Kết nối – Quản lý – Đánh giá đồ án tốt nghiệp trong một hệ thống duy nhất.              </h1>
+  Hệ thống quản lý đồ án tốt nghiệp – kết nối mọi vai trò FIT.
+              </h1>
               <p className="text-lg text-gray-600 leading-relaxed">
                 Được thiết kế riêng cho FIT - Đại học Đại Nam, hệ thống chuẩn hóa toàn bộ quy trình từ đăng ký đề tài, theo dõi tiến độ đến tổ chức bảo vệ, đảm bảo minh bạch và hiệu quả cho từng học kỳ.
               </p>
