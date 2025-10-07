@@ -81,21 +81,21 @@ const timelineSteps = [
       "Sinh viên đề xuất hoặc chọn đề tài do khoa gợi ý, giảng viên hướng dẫn xác nhận trực tuyến. Deadline rõ ràng, hỗ trợ chỉnh sửa.",
   },
   { 
-    phase: "01",
+    phase: "02",
     icon: <CheckCircle className="w-6 h-6" />,
     title: "Theo dõi tiến độ",
     description:
       "Nhật ký làm việc, mốc nộp minh chứng và phản hồi được lưu trữ tập trung, dễ truy vết. Giám sát liên tục từ xa.",
   },
   {
-    phase: "01",
+    phase: "03",
     icon: <Calendar className="w-6 h-6" />,
     title: "Phân công hội đồng",
     description:
       "Ban chủ nhiệm cấu hình hội đồng FIT, phân lịch bảo vệ, thông báo tới giảng viên và sinh viên. Tự động tránh xung đột lịch.",
   },
   {
-    phase: "01",
+    phase: "04",
     icon: <Award className="w-6 h-6" />,
     title: "Bảo vệ & đánh giá",
     description:
