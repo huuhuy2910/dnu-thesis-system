@@ -410,7 +410,7 @@ const TopicRegistration: React.FC = () => {
         style={{
           padding: "24px",
           maxWidth: "900px",
-          margin: "0 auto",
+          margin: "50px auto",
           backgroundColor: "#fff",
           minHeight: "100vh",
         }}
@@ -687,11 +687,17 @@ const TopicRegistration: React.FC = () => {
                     color: "#333",
                   }}
                 >
-                  {departments.find(
-                    (d) => d.departmentID === existingTopic.departmentID
-                  )?.name ||
-                    existingTopic.departmentCode ||
-                    "Chưa có"}
+                  {(() => {
+                    // Prefer department name by ID, then try to match by departmentCode, then fallback to raw code
+                    const byId = departments.find(
+                      (d) => d.departmentID === existingTopic.departmentID
+                    )?.name;
+                    if (byId) return byId;
+                    const byCode = departments.find(
+                      (d) => d.departmentCode === existingTopic.departmentCode
+                    )?.name;
+                    return byCode || existingTopic.departmentCode || "Chưa có";
+                  })()}
                 </div>
               </div>
 
@@ -717,11 +723,17 @@ const TopicRegistration: React.FC = () => {
                     color: "#333",
                   }}
                 >
-                  {specialties.find(
-                    (s) => s.specialtyID === existingTopic.specialtyID
-                  )?.name ||
-                    existingTopic.specialtyCode ||
-                    "Chưa có"}
+                  {(() => {
+                    // Prefer specialty name by ID, then try to match by specialtyCode, then fallback to raw code
+                    const byId = specialties.find(
+                      (s) => s.specialtyID === existingTopic.specialtyID
+                    )?.name;
+                    if (byId) return byId;
+                    const byCode = specialties.find(
+                      (s) => s.specialtyCode === existingTopic.specialtyCode
+                    )?.name;
+                    return byCode || existingTopic.specialtyCode || "Chưa có";
+                  })()}
                 </div>
               </div>
             </div>

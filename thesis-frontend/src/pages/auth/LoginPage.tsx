@@ -103,12 +103,12 @@ const LoginPage: React.FC = () => {
       <div
         style={{
           background: "white",
-          border: "2px solid #ffe8d6",
+          border: "2px solid #f37021",
           borderRadius: "24px",
           padding: "3rem",
           width: "100%",
           maxWidth: "420px",
-          boxShadow: "0 25px 50px rgba(255, 107, 53, 0.1)",
+          boxShadow: "0 25px 50px rgba(243, 112, 33, 0.1)",
           position: "relative",
           zIndex: 1,
         }}
@@ -117,37 +117,41 @@ const LoginPage: React.FC = () => {
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div
             style={{
-              width: "80px",
-              height: "80px",
-              background: "linear-gradient(45deg, #ff6b35, #f7931e)",
+              width: "120px",
+              height: "120px",
+              backgroundColor: "#fff",
               borderRadius: "50%",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 1rem",
-              fontSize: "2rem",
-              boxShadow: "0 10px 30px rgba(255, 107, 53, 0.3)",
+              border: "3px solid #f37021",
+              boxShadow: "0 10px 30px rgba(243, 112, 33, 0.2)",
             }}
           >
-            🔐
+            <img
+              src="/dnu_logo.png"
+              alt="DNU Logo"
+              style={{
+                width: "80px",
+                height: "80px",
+                objectFit: "contain",
+              }}
+            />
           </div>
           <h1
             style={{
-              color: "#2d3748",
+              color: "#f37021",
               margin: "0 0 0.5rem 0",
               fontSize: "2rem",
               fontWeight: "600",
-              background: "linear-gradient(45deg, #ff6b35, #f7931e)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
             }}
           >
             Đăng nhập
           </h1>
           <p
             style={{
-              color: "#4a5568",
+              color: "#666",
               margin: 0,
               fontSize: "0.9rem",
             }}
@@ -167,12 +171,9 @@ const LoginPage: React.FC = () => {
               borderRadius: "12px",
               marginBottom: "1.5rem",
               fontSize: "0.9rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
             }}
           >
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
@@ -183,7 +184,7 @@ const LoginPage: React.FC = () => {
             <label
               style={{
                 display: "block",
-                color: "#2d3748",
+                color: "#333",
                 marginBottom: "0.5rem",
                 fontSize: "0.9rem",
                 fontWeight: "500",
@@ -200,24 +201,11 @@ const LoginPage: React.FC = () => {
                 background: focusedField === "username" ? "#fff8f3" : "white",
                 border:
                   focusedField === "username"
-                    ? "2px solid #ff6b35"
+                    ? "2px solid #f37021"
                     : "2px solid #e2e8f0",
                 transition: "all 0.3s ease",
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  left: "1rem",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: focusedField === "username" ? "#ff6b35" : "#a0aec0",
-                  fontSize: "1.1rem",
-                  transition: "color 0.3s ease",
-                }}
-              >
-                👤
-              </div>
               <input
                 type="text"
                 value={username}
@@ -229,11 +217,11 @@ const LoginPage: React.FC = () => {
                 autoComplete="off"
                 style={{
                   width: "100%",
-                  padding: "1rem 1rem 1rem 3rem",
+                  padding: "1rem",
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#2d3748",
+                  color: "#333",
                   fontSize: "1rem",
                   fontFamily: "inherit",
                 }}
@@ -246,7 +234,7 @@ const LoginPage: React.FC = () => {
             <label
               style={{
                 display: "block",
-                color: "white",
+                color: "#333",
                 marginBottom: "0.5rem",
                 fontSize: "0.9rem",
                 fontWeight: "500",
@@ -262,24 +250,11 @@ const LoginPage: React.FC = () => {
                 background: focusedField === "password" ? "#fff8f3" : "white",
                 border:
                   focusedField === "password"
-                    ? "2px solid #ff6b35"
+                    ? "2px solid #f37021"
                     : "2px solid #e2e8f0",
                 transition: "all 0.3s ease",
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  left: "1rem",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: focusedField === "password" ? "#ff6b35" : "#a0aec0",
-                  fontSize: "1.1rem",
-                  transition: "color 0.3s ease",
-                }}
-              >
-                🔒
-              </div>
               <input
                 type="password"
                 value={password}
@@ -291,11 +266,11 @@ const LoginPage: React.FC = () => {
                 autoComplete="off"
                 style={{
                   width: "100%",
-                  padding: "1rem 1rem 1rem 3rem",
+                  padding: "1rem",
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#2d3748",
+                  color: "#333",
                   fontSize: "1rem",
                   fontFamily: "inherit",
                 }}
@@ -310,9 +285,7 @@ const LoginPage: React.FC = () => {
             style={{
               width: "100%",
               padding: "1rem",
-              background: loading
-                ? "rgba(156, 163, 175, 0.5)"
-                : "linear-gradient(45deg, #ff6b35, #f7931e)",
+              background: loading ? "#ccc" : "#f37021",
               color: "white",
               border: "none",
               borderRadius: "12px",
@@ -326,21 +299,21 @@ const LoginPage: React.FC = () => {
               gap: "0.5rem",
               boxShadow: loading
                 ? "none"
-                : "0 10px 30px rgba(255, 107, 53, 0.3)",
+                : "0 10px 30px rgba(243, 112, 33, 0.3)",
               transform: loading ? "none" : "translateY(0)",
             }}
             onMouseOver={(e) => {
               if (!loading) {
                 e.currentTarget.style.transform = "translateY(-2px)";
                 e.currentTarget.style.boxShadow =
-                  "0 15px 40px rgba(255, 107, 53, 0.4)";
+                  "0 15px 40px rgba(243, 112, 33, 0.4)";
               }
             }}
             onMouseOut={(e) => {
               if (!loading) {
                 e.currentTarget.style.transform = "translateY(0)";
                 e.currentTarget.style.boxShadow =
-                  "0 10px 30px rgba(255, 107, 53, 0.3)";
+                  "0 10px 30px rgba(243, 112, 33, 0.3)";
               }
             }}
           >
@@ -359,7 +332,7 @@ const LoginPage: React.FC = () => {
                 Đang đăng nhập...
               </>
             ) : (
-              <>🚀 Đăng nhập</>
+              <>Đăng nhập</>
             )}
           </button>
         </form>
@@ -368,7 +341,7 @@ const LoginPage: React.FC = () => {
         <div style={{ textAlign: "center", marginTop: "2rem" }}>
           <p
             style={{
-              color: "#4a5568",
+              color: "#666",
               margin: 0,
               fontSize: "0.9rem",
             }}

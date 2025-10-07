@@ -8,7 +8,16 @@ import LecturerLayout from "../components/Layouts/LecturerLayout";
 import AdminLayout from "../components/Layouts/AdminLayout";
 import StudentDashboard from "../pages/student/Dashboard";
 import TopicRegistration from "../pages/student/TopicRegistration";
+import Progress from "../pages/student/Progress";
+import Reports from "../pages/student/Reports";
+import Schedule from "../pages/student/Schedule";
+import Notifications from "../pages/student/Notifications";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
+import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
+import LecturerStudents from "../pages/lecturer/LecturerStudents";
+import LecturerTopics from "../pages/lecturer/LecturerTopics";
+import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
+import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
 import TopicsManagement from "../pages/admin/TopicsManagement";
@@ -19,7 +28,6 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import CommitteeList from "../pages/admin/CommitteeList";
 import CreateCommittee from "../pages/admin/CreateCommittee";
 import CommitteeDetail from "../pages/admin/CommitteeDetail";
-import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 
 /**
@@ -43,6 +51,10 @@ const AppRoutes: React.FC = () => {
       >
         <Route index element={<StudentDashboard />} />
         <Route path="topics" element={<TopicRegistration />} />
+        <Route path="progress" element={<Progress />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="schedule" element={<Schedule />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="defense-info" element={<StudentDefenseInfo />} />
         {/* thêm các route con của student ở đây */}
       </Route>
@@ -57,7 +69,11 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<LecturerDashboard />} />
+        <Route path="students" element={<LecturerStudents />} />
+        <Route path="topics" element={<LecturerTopics />} />
+        <Route path="schedule" element={<LecturerSchedule />} />
         <Route path="committees" element={<LecturerCommittees />} />
+        <Route path="reports" element={<LecturerReports />} />
         {/* thêm các route con của lecturer ở đây */}
       </Route>
 
@@ -76,7 +92,10 @@ const AppRoutes: React.FC = () => {
         <Route path="committees" element={<CommitteesManagement />} />
         <Route path="committees-new" element={<CommitteeList />} />
         <Route path="committees-new/create" element={<CreateCommittee />} />
-        <Route path="committees-new/detail/:code" element={<CommitteeDetail />} />
+        <Route
+          path="committees-new/detail/:code"
+          element={<CommitteeDetail />}
+        />
         {/* thêm các route con khác của admin ở đây */}
       </Route>
 
