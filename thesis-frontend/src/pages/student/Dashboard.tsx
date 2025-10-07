@@ -141,6 +141,7 @@ const Dashboard: React.FC = () => {
         gridTemplateColumns: "2fr 1fr",
         gap: "20px",
         padding: "10px 0",
+        margin: "50px 0 0 0 ",
       }}
     >
       {/* LEFT COLUMN */}
