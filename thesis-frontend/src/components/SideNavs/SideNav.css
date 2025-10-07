@@ -5,7 +5,15 @@
 .sidenav {
   margin-top: 8px;
   padding: 0 12px;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Poppins', 'Roboto', sans-serif;
+  --accent: #1d4ed8;
+  --text-color: #1f2937;
+  --hover-text: var(--accent, #0f172a);
+  --hover-bg: rgba(15, 23, 42, 0.08);
+  --inactive-bg: transparent;
+  --active-bg: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  --active-text: #ffffff;
+  --active-shadow: 0 4px 12px rgba(59, 130, 246, 0.18);
 }
 
 .sidenav ul {
@@ -46,13 +54,14 @@
   gap: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
-  text-decoration: none; /* Remove underline */
+  color: var(--text-color);
+  text-decoration: none;
   padding: 12px 14px;
   border-radius: 10px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  background: var(--inactive-bg);
 }
 
 /* Remove any underline that might appear */
@@ -66,16 +75,16 @@
 /* Hover effect with scale */
 .sidenav a:hover {
   background-color: var(--hover-bg);
-  color: var(--accent);
+  color: var(--hover-text);
   transform: translateX(4px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Active state with gradient and shadow */
 .sidenav a.active {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(243, 112, 33, 0.25);
+  background: var(--active-bg);
+  color: var(--active-text);
+  box-shadow: var(--active-shadow);
   transform: translateX(4px);
 }
 
@@ -123,30 +132,6 @@
   z-index: 1;
 }
 
-/* ================================
-   🎨 ROLE THEMES
-   ================================ */
-
-/* Student (cam tươi) */
-.student-theme {
-  --accent: #f68a2f;
-  --accent-light: #ff9f4a;
-  --hover-bg: rgba(246, 138, 47, 0.1);
-}
-
-/* Lecturer (cam nhạt) */
-.lecturer-theme {
-  --accent: #f7934c;
-  --accent-light: #ffaa66;
-  --hover-bg: rgba(247, 147, 76, 0.1);
-}
-
-/* Admin (cam đậm) */
-.admin-theme {
-  --accent: #F37021; /* brand orange */
-  --accent-light: #FF8838; /* lighter shade for gradient */
-  --hover-bg: #FFF3E0; /* light orange background - exact spec */
-}
 
 /* ================================
    📱 RESPONSIVE

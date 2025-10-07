@@ -9,6 +9,7 @@ import {
   Settings,
 } from 'lucide-react';
 import './SideNav.css';
+import './AdminNav.css';
 
 const AdminNav: React.FC = () => {
   const navItems = [

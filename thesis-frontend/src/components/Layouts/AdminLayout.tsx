@@ -25,19 +25,20 @@ const AdminLayout: React.FC = () => {
         style={{
           display: "flex",
           minHeight: "100vh",
-          backgroundColor: "#FAFAFA", // light gray background per spec
-          fontFamily: "Segoe UI, sans-serif",
+          backgroundColor: "#FFFFFF",
+          fontFamily: "'Inter', 'Poppins', 'Roboto', sans-serif",
+          
         }}
       >
         <aside
           style={{
             width: 260,
-            backgroundColor: "#ffffff",
-            color: "#333",
+            backgroundColor: "#001C3D",
+            color: "#FFFFFF",
             display: "flex",
             flexDirection: "column",
-            borderRight: "none",
-            boxShadow: "4px 0 20px rgba(0,0,0,0.06)",
+            borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "2px 0 8px rgba(0, 0, 0, 0.15)",
             position: "fixed",
             top: 0,
             left: 0,
@@ -49,8 +50,8 @@ const AdminLayout: React.FC = () => {
             style={{
               textAlign: "center",
               padding: "28px 20px",
-              background: "linear-gradient(180deg, #FFF8F3 0%, #ffffff 100%)",
-              borderBottom: "1px solid #f5f5f5",
+              background: "linear-gradient(180deg, rgba(243, 112, 33, 0.1) 0%, #001C3D 100%)",
+              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
             }}
           >
             <img
@@ -58,8 +59,9 @@ const AdminLayout: React.FC = () => {
               alt="Đại học Đại Nam"
               style={{
                 width: 90,
-                marginBottom: 14,
-                filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))",
+                display: "block",
+                margin: "0 auto 14px",
+                filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
                 transition: "transform 0.3s ease",
               }}
               onMouseEnter={(e) =>
@@ -71,11 +73,11 @@ const AdminLayout: React.FC = () => {
             />
             <h3
               style={{
-                color: "#f37021",
+                color: "#F37021",
                 fontSize: 18,
                 fontWeight: 700,
                 marginBottom: 4,
-                letterSpacing: "-0.3px",
+                letterSpacing: "0.5px",
               }}
             >
               Quản trị hệ thống
@@ -83,7 +85,7 @@ const AdminLayout: React.FC = () => {
             <p
               style={{
                 fontSize: 12,
-                color: "#999",
+                color: "#6B7280",
                 margin: 0,
                 fontWeight: 500,
               }}
@@ -99,15 +101,15 @@ const AdminLayout: React.FC = () => {
           <footer
             style={{
               fontSize: 11,
-              color: "#999",
+              color: "#6B7280",
               textAlign: "center",
               padding: "20px 16px",
-              borderTop: "1px solid #f0f0f0",
-              background: "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
+              borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "linear-gradient(180deg, #001C3D 0%, rgba(0, 28, 61, 0.8) 100%)",
               fontWeight: 500,
             }}
           >
-            <div style={{ marginBottom: 4, fontSize: 10, color: "#bbb" }}>
+            <div style={{ marginBottom: 4, fontSize: 10, color: "#888" }}>
               Phiên bản 1.0.0
             </div>
             © 2025 Đại học Đại Nam
@@ -124,19 +126,19 @@ const AdminLayout: React.FC = () => {
         >
           <header
             style={{
-              background: "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
-              padding: "12px 28px",
-              borderBottom: "none",
-              boxShadow: "0 2px 12px rgba(243, 112, 33, 0.15)",
+              backgroundColor: "#001C3D",
+              padding: "18px 36px",
+              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+              boxShadow: "0 2px 12px rgba(0, 0, 0, 0.2)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              color: "#fff",
+              color: "#FFFFFF",
               position: "fixed",
               left: 260,
               right: 0,
               top: 0,
-              height: 50,
+              height: 72,
               zIndex: 20,
             }}
           >
@@ -144,11 +146,11 @@ const AdminLayout: React.FC = () => {
               <h2
                 style={{
                   margin: 0,
-                  fontSize: 19,
+                  fontSize: 20,
                   fontWeight: 600,
-                  color: "#fff",
-                  letterSpacing: "-0.3px",
-                  textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                  color: "#FFFFFF",
+                  letterSpacing: "0.5px",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.3)",
                 }}
               >
                 Quản trị hệ thống đồ án tốt nghiệp
@@ -167,7 +169,7 @@ const AdminLayout: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor =
-                    "rgba(255, 255, 255, 0.2)";
+                    "rgba(243, 112, 33, 0.2)";
                   e.currentTarget.style.transform = "translateY(-2px)";
                 }}
                 onMouseLeave={(e) => {
@@ -182,8 +184,8 @@ const AdminLayout: React.FC = () => {
                     position: "absolute",
                     top: "6px",
                     right: "6px",
-                    backgroundColor: "#ff3d00",
-                    color: "#fff",
+                    backgroundColor: "#FF3D00",
+                    color: "#FFFFFF",
                     borderRadius: "50%",
                     width: "18px",
                     height: "18px",
@@ -191,8 +193,8 @@ const AdminLayout: React.FC = () => {
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "10px",
-                    fontWeight: "700",
-                    border: "2px solid #F37021",
+                    fontWeight: 700,
+                    border: "2px solid #001C3D",
                     boxShadow: "0 2px 6px rgba(255, 61, 0, 0.4)",
                     animation: "pulse 2s infinite",
                   }}
@@ -208,17 +210,17 @@ const AdminLayout: React.FC = () => {
                   alignItems: "center",
                   gap: "10px",
                   padding: "8px 14px",
-                  backgroundColor: "rgba(255, 255, 255, 0.15)",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
                   borderRadius: "12px",
                   transition: "all 0.3s ease",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor =
-                    "rgba(255, 255, 255, 0.25)";
+                    "rgba(255, 255, 255, 0.2)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor =
-                    "rgba(255, 255, 255, 0.15)";
+                    "rgba(255, 255, 255, 0.1)";
                 }}
               >
                 <div
@@ -227,12 +229,12 @@ const AdminLayout: React.FC = () => {
                     height: 32,
                     borderRadius: "50%",
                     background:
-                      "linear-gradient(135deg, #fff 0%, #ffe0cc 100%)",
+                      "linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(243, 112, 33, 0.1))",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "16px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                   }}
                 >
                   👤
@@ -241,7 +243,7 @@ const AdminLayout: React.FC = () => {
                   style={{
                     fontSize: 14,
                     fontWeight: 600,
-                    textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
                   }}
                 >
                   {auth.user?.fullName || "Quản trị viên"}
@@ -255,32 +257,29 @@ const AdminLayout: React.FC = () => {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  backgroundColor: "rgba(255, 255, 255, 0.2)",
-                  color: "#fff",
-                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  backgroundColor: "#F37021",
+                  color: "#FFFFFF",
+                  border: "none",
                   borderRadius: "10px",
                   padding: "10px 18px",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: "pointer",
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                  boxShadow: "0 2px 8px rgba(243, 112, 33, 0.3)",
                   textDecoration: "none",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#fff";
-                  e.currentTarget.style.color = "#F37021";
+                  e.currentTarget.style.backgroundColor = "#E55A1B";
                   e.currentTarget.style.transform = "translateY(-2px)";
                   e.currentTarget.style.boxShadow =
-                    "0 4px 12px rgba(0, 0, 0, 0.15)";
+                    "0 4px 12px rgba(243, 112, 33, 0.4)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor =
-                    "rgba(255, 255, 255, 0.2)";
-                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.backgroundColor = "#F37021";
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow =
-                    "0 2px 8px rgba(0, 0, 0, 0.1)";
+                    "0 2px 8px rgba(243, 112, 33, 0.3)";
                 }}
               >
                 <LogOut size={17} strokeWidth={2.5} />
@@ -292,10 +291,10 @@ const AdminLayout: React.FC = () => {
           <div
             style={{
               flex: 1,
-              backgroundColor: "#FAFAFA",
+              backgroundColor: "#FFFFFF",
               padding: "24px 32px",
-              marginTop: 50,
-              height: "calc(100vh - 50px)",
+              marginTop: 72,
+              height: "calc(100vh - 72px)",
               overflowY: "auto",
             }}
           >
@@ -304,12 +303,12 @@ const AdminLayout: React.FC = () => {
 
           <footer
             style={{
-              backgroundColor: "#fff",
-              borderTop: "1px solid #f0f0f0",
+              backgroundColor: "#F5F6FA",
+              borderTop: "1px solid #E5E7EB",
               padding: "16px 36px",
               textAlign: "center",
               fontSize: "12px",
-              color: "#888",
+              color: "#6B7280",
               fontWeight: 500,
               boxShadow: "0 -2px 10px rgba(0,0,0,0.03)",
             }}

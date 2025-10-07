@@ -8,6 +8,7 @@ import {
   FileText,
 } from 'lucide-react';
 import './SideNav.css';
+import './LecturerNav.css';
 
 const LecturerNav: React.FC = () => {
   const navItems = [

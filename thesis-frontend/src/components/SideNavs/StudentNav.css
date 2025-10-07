@@ -1,0 +1,11 @@
+/* Student SideNav Theme */
+.sidenav.student-theme {
+  --accent: #f37021;
+  --text-color: #1a2736;
+  --hover-text: #f37021;
+  --hover-bg: rgba(243, 112, 33, 0.18);
+  --inactive-bg: rgba(243, 112, 33, 0.1);
+  --active-bg: #f37021;
+  --active-text: #ffffff;
+  --active-shadow: 0 6px 16px rgba(243, 112, 33, 0.28);
+}

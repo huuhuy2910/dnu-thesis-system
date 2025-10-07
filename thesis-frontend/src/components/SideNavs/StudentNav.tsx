@@ -9,6 +9,7 @@ import {
   Bell,
 } from 'lucide-react';
 import './SideNav.css';
+import './StudentNav.css';
 
 const StudentNav: React.FC = () => {
   const navItems = [

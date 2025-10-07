@@ -12,19 +12,19 @@ const LecturerLayout: React.FC = () => {
       style={{
         display: "flex",
         minHeight: "100vh",
-        backgroundColor: "#FAFAFA",
-        fontFamily: "Segoe UI, sans-serif",
+        backgroundColor: "#FFFFFF",
+        fontFamily: "'Inter', 'Poppins', 'Roboto', sans-serif",
       }}
     >
       <aside
         style={{
           width: 260,
-          backgroundColor: "#ffffff",
-          color: "#333",
+          backgroundColor: "#F5F6FA",
+          color: "#002855",
           display: "flex",
           flexDirection: "column",
-          borderRight: "none",
-          boxShadow: "4px 0 18px rgba(243,112,33,0.05)",
+          borderRight: "1px solid #E5E7EB",
+          boxShadow: "2px 0 8px rgba(0, 0, 0, 0.05)",
           position: "fixed",
           top: 0,
           left: 0,
@@ -36,8 +36,8 @@ const LecturerLayout: React.FC = () => {
           style={{
             textAlign: "center",
             padding: "24px 18px",
-            background: "linear-gradient(180deg,#FFF8F3 0%,#fff 100%)",
-            borderBottom: "1px solid #f6f2ef",
+            background: "linear-gradient(180deg, rgba(243, 112, 33, 0.08) 0%, #F5F6FA 100%)",
+            borderBottom: "1px solid #E5E7EB",
           }}
         >
           <img
@@ -45,22 +45,24 @@ const LecturerLayout: React.FC = () => {
             alt="Đại học Đại Nam"
             style={{
               width: 88,
-              marginBottom: 10,
-              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.08))",
+              display: "block",
+              margin: "0 auto 10px",
+              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
             }}
           />
           <h3
             style={{
-              color: "#f37021",
+              color: "#F37021",
               fontSize: 17,
               fontWeight: 700,
               margin: 0,
+              letterSpacing: "0.5px",
             }}
           >
-            Bảng điều khiển Giảng viên
+            Hệ thống Quản lý Đồ án
           </h3>
-          <div style={{ fontSize: 12, color: "#9a8a80", marginTop: 6 }}>
-            Vai trò: <strong style={{ color: "#f37021" }}>Giảng viên</strong>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6 }}>
+            Vai trò: <strong style={{ color: "#F37021" }}>Giảng viên</strong>
           </div>
         </div>
 
@@ -71,10 +73,10 @@ const LecturerLayout: React.FC = () => {
         <footer
           style={{
             fontSize: 11,
-            color: "#999",
+            color: "#6B7280",
             textAlign: "center",
             padding: "18px 12px",
-            borderTop: "1px solid #f0ebe8",
+            borderTop: "1px solid #E5E7EB",
           }}
         >
           © 2025 Đại học Đại Nam
@@ -91,28 +93,30 @@ const LecturerLayout: React.FC = () => {
       >
         <header
           style={{
-            background: "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
-            padding: "12px 28px",
-            boxShadow: "0 2px 12px rgba(243,112,33,0.12)",
+            backgroundColor: "#002855",
+            padding: "18px 36px",
+            boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            color: "#fff",
+            color: "#FFFFFF",
             position: "fixed",
             left: 260,
             right: 0,
             top: 0,
-            height: 50,
+            height: 72,
             zIndex: 20,
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <h2
               style={{
                 margin: 0,
-                fontSize: 19,
+                fontSize: 20,
                 fontWeight: 600,
-                color: "#fff",
+                color: "#FFFFFF",
+                letterSpacing: "0.5px",
               }}
             >
               Bảng điều khiển Giảng viên
@@ -122,9 +126,10 @@ const LecturerLayout: React.FC = () => {
                 fontSize: 12,
                 padding: "4px 8px",
                 borderRadius: 8,
-                background: "rgba(255,255,255,0.12)",
-                color: "#fff",
+                backgroundColor: "rgba(243, 112, 33, 0.2)",
+                color: "#F37021",
                 fontWeight: 600,
+                letterSpacing: "0.3px",
               }}
             >
               Giảng viên
@@ -138,7 +143,7 @@ const LecturerLayout: React.FC = () => {
                 alignItems: "center",
                 gap: 10,
                 padding: "6px 10px",
-                background: "rgba(255,255,255,0.12)",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
                 borderRadius: 12,
               }}
             >
@@ -147,7 +152,7 @@ const LecturerLayout: React.FC = () => {
                   width: 32,
                   height: 32,
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg,#fff,#ffeede)",
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(243, 112, 33, 0.1))",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -156,7 +161,7 @@ const LecturerLayout: React.FC = () => {
               >
                 👤
               </div>
-              <div style={{ color: "#fff", fontWeight: 600 }}>
+              <div style={{ color: "#FFFFFF", fontWeight: 600 }}>
                 {auth.user?.fullName || "Giảng viên"}
               </div>
             </div>
@@ -167,27 +172,25 @@ const LecturerLayout: React.FC = () => {
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                backgroundColor: "rgba(255,255,255,0.2)",
-                color: "#fff",
-                border: "1px solid rgba(255,255,255,0.28)",
+                backgroundColor: "#F37021",
+                color: "#FFFFFF",
+                border: "none",
                 padding: "10px 16px",
                 borderRadius: 10,
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: "pointer",
+                transition: "all 0.3s ease",
+                boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  "#fff";
-                (e.currentTarget as HTMLButtonElement).style.color = "#F37021";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "translateY(-2px)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E55A1B";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(243, 112, 33, 0.3)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  "rgba(255,255,255,0.2)";
-                (e.currentTarget as HTMLButtonElement).style.color = "#fff";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "translateY(0)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F37021";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(243, 112, 33, 0.2)";
               }}
             >
               <LogOut size={16} /> Đăng xuất
@@ -198,10 +201,10 @@ const LecturerLayout: React.FC = () => {
         <div
           style={{
             flex: 1,
-            backgroundColor: "#FAFAFA",
+            backgroundColor: "#FFFFFF",
             padding: "24px 32px",
-            marginTop: 50,
-            height: "calc(100vh - 50px)",
+            marginTop: 72,
+            height: "calc(100vh - 72px)",
             overflowY: "auto",
           }}
         >
@@ -210,12 +213,12 @@ const LecturerLayout: React.FC = () => {
 
         <footer
           style={{
-            backgroundColor: "#fff",
-            borderTop: "1px solid #f0f0f0",
+            backgroundColor: "#F5F6FA",
+            borderTop: "1px solid #E5E7EB",
             padding: "16px 36px",
             textAlign: "center",
             fontSize: 12,
-            color: "#888",
+            color: "#6B7280",
           }}
         >
           © 2025 Đại học Đại Nam

@@ -1,0 +1,19 @@
+/* Lecturer SideNav Theme */
+.sidenav.lecturer-theme {
+  --accent: #f37021;
+  --text-color: #2a3446;
+  --hover-text: #f37021;
+  --hover-bg: rgba(243, 112, 33, 0.14);
+  --inactive-bg: rgba(243, 112, 33, 0.08);
+  --active-bg: #f37021;
+  --active-text: #ffffff;
+  --active-shadow: 0 6px 14px rgba(243, 112, 33, 0.26);
+}
+
+.sidenav.lecturer-theme a {
+  color: var(--text-color);
+}
+
+.sidenav.lecturer-theme a.active {
+  color: #ffffff;
+}

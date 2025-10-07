@@ -63,8 +63,8 @@ const LoginPage: React.FC = () => {
     <div
       style={{
         minHeight: "100vh",
-        background:
-          "linear-gradient(135deg, #ffffff 0%, #fff8f3 50%, #ffe8d6 100%)",
+        backgroundColor: "#FFFFFF",
+        fontFamily: "'Inter', 'Poppins', 'Roboto', sans-serif",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -82,8 +82,8 @@ const LoginPage: React.FC = () => {
           width: "200%",
           height: "200%",
           background:
-            "radial-gradient(circle, rgba(255, 107, 53, 0.05) 0%, transparent 70%)",
-          animation: "float 6s ease-in-out infinite",
+            "radial-gradient(circle, rgba(243, 112, 33, 0.03) 0%, transparent 70%)",
+          animation: "float 8s ease-in-out infinite",
         }}
       />
       <div
@@ -94,69 +94,73 @@ const LoginPage: React.FC = () => {
           width: "60%",
           height: "60%",
           background:
-            "radial-gradient(circle, rgba(247, 147, 30, 0.03) 0%, transparent 70%)",
-          animation: "float 8s ease-in-out infinite reverse",
+            "radial-gradient(circle, rgba(0, 40, 85, 0.02) 0%, transparent 70%)",
+          animation: "float 10s ease-in-out infinite reverse",
         }}
       />
 
       {/* Login Form */}
       <div
+        className="login-form-container"
         style={{
-          background: "white",
-          border: "2px solid #f37021",
-          borderRadius: "24px",
+          background: "#FFFFFF",
+          border: "1px solid #E5E7EB",
+          borderRadius: "16px",
           padding: "3rem",
           width: "100%",
           maxWidth: "420px",
-          boxShadow: "0 25px 50px rgba(243, 112, 33, 0.1)",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
           position: "relative",
           zIndex: 1,
         }}
       >
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+        <div className="login-header" style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <div
             style={{
-              width: "120px",
-              height: "120px",
-              backgroundColor: "#fff",
-              borderRadius: "50%",
+              width: "100px",
+              height: "100px",
+              backgroundColor: "#FFFFFF",
+              borderRadius: "16px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 1rem",
-              border: "3px solid #f37021",
-              boxShadow: "0 10px 30px rgba(243, 112, 33, 0.2)",
+              margin: "0 auto 1.5rem",
+              border: "2px solid #F37021",
+              boxShadow: "0 8px 24px rgba(243, 112, 33, 0.15)",
             }}
           >
             <img
+              className="login-logo"
               src="/dnu_logo.png"
               alt="DNU Logo"
               style={{
-                width: "80px",
-                height: "80px",
+                width: "70px",
+                height: "70px",
                 objectFit: "contain",
               }}
             />
           </div>
           <h1
             style={{
-              color: "#f37021",
+              color: "#002855",
               margin: "0 0 0.5rem 0",
-              fontSize: "2rem",
-              fontWeight: "600",
+              fontSize: "1.8rem",
+              fontWeight: 700,
+              letterSpacing: "0.5px",
             }}
           >
-            Đăng nhập
+            Đăng nhập hệ thống
           </h1>
           <p
             style={{
-              color: "#666",
+              color: "#6B7280",
               margin: 0,
-              fontSize: "0.9rem",
+              fontSize: "0.95rem",
+              fontWeight: 400,
             }}
           >
-            Chào mừng bạn quay trở lại
+            Hệ thống Quản lý Đồ án Tốt nghiệp - Đại học Đại Nam
           </p>
         </div>
 
@@ -164,13 +168,14 @@ const LoginPage: React.FC = () => {
         {error && (
           <div
             style={{
-              background: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.3)",
-              color: "#ef4444",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              color: "#DC2626",
               padding: "1rem",
-              borderRadius: "12px",
+              borderRadius: "8px",
               marginBottom: "1.5rem",
               fontSize: "0.9rem",
+              fontWeight: 500,
             }}
           >
             {error}
@@ -184,11 +189,11 @@ const LoginPage: React.FC = () => {
             <label
               style={{
                 display: "block",
-                color: "#333",
+                color: "#002855",
                 marginBottom: "0.5rem",
                 fontSize: "0.9rem",
-                fontWeight: "500",
-                transition: "color 0.3s ease",
+                fontWeight: 600,
+                letterSpacing: "0.3px",
               }}
             >
               Tên đăng nhập
@@ -196,13 +201,13 @@ const LoginPage: React.FC = () => {
             <div
               style={{
                 position: "relative",
-                borderRadius: "12px",
+                borderRadius: "8px",
                 overflow: "hidden",
-                background: focusedField === "username" ? "#fff8f3" : "white",
+                backgroundColor: focusedField === "username" ? "rgba(243, 112, 33, 0.02)" : "#FFFFFF",
                 border:
                   focusedField === "username"
-                    ? "2px solid #f37021"
-                    : "2px solid #e2e8f0",
+                    ? "2px solid #F37021"
+                    : "2px solid #E5E7EB",
                 transition: "all 0.3s ease",
               }}
             >
@@ -215,15 +220,17 @@ const LoginPage: React.FC = () => {
                 required
                 placeholder="Nhập tên đăng nhập"
                 autoComplete="off"
+                className="login-input"
                 style={{
                   width: "100%",
-                  padding: "1rem",
+                  padding: "0.875rem 1rem",
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#333",
+                  color: "#002855",
                   fontSize: "1rem",
                   fontFamily: "inherit",
+                  fontWeight: 400,
                 }}
               />
             </div>
@@ -234,10 +241,11 @@ const LoginPage: React.FC = () => {
             <label
               style={{
                 display: "block",
-                color: "#333",
+                color: "#002855",
                 marginBottom: "0.5rem",
                 fontSize: "0.9rem",
-                fontWeight: "500",
+                fontWeight: 600,
+                letterSpacing: "0.3px",
               }}
             >
               Mật khẩu
@@ -245,13 +253,13 @@ const LoginPage: React.FC = () => {
             <div
               style={{
                 position: "relative",
-                borderRadius: "12px",
+                borderRadius: "8px",
                 overflow: "hidden",
-                background: focusedField === "password" ? "#fff8f3" : "white",
+                backgroundColor: focusedField === "password" ? "rgba(243, 112, 33, 0.02)" : "#FFFFFF",
                 border:
                   focusedField === "password"
-                    ? "2px solid #f37021"
-                    : "2px solid #e2e8f0",
+                    ? "2px solid #F37021"
+                    : "2px solid #E5E7EB",
                 transition: "all 0.3s ease",
               }}
             >
@@ -264,15 +272,17 @@ const LoginPage: React.FC = () => {
                 required
                 placeholder="Nhập mật khẩu"
                 autoComplete="off"
+                className="login-input"
                 style={{
                   width: "100%",
-                  padding: "1rem",
+                  padding: "0.875rem 1rem",
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#333",
+                  color: "#002855",
                   fontSize: "1rem",
                   fontFamily: "inherit",
+                  fontWeight: 400,
                 }}
               />
             </div>
@@ -282,15 +292,16 @@ const LoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
+            className="login-button"
             style={{
               width: "100%",
-              padding: "1rem",
-              background: loading ? "#ccc" : "#f37021",
-              color: "white",
+              padding: "0.875rem 1rem",
+              backgroundColor: loading ? "#E5E7EB" : "#F37021",
+              color: loading ? "#6B7280" : "#FFFFFF",
               border: "none",
-              borderRadius: "12px",
+              borderRadius: "8px",
               fontSize: "1rem",
-              fontWeight: "600",
+              fontWeight: 600,
               cursor: loading ? "not-allowed" : "pointer",
               transition: "all 0.3s ease",
               display: "flex",
@@ -299,21 +310,24 @@ const LoginPage: React.FC = () => {
               gap: "0.5rem",
               boxShadow: loading
                 ? "none"
-                : "0 10px 30px rgba(243, 112, 33, 0.3)",
+                : "0 4px 12px rgba(243, 112, 33, 0.2)",
               transform: loading ? "none" : "translateY(0)",
+              letterSpacing: "0.3px",
             }}
             onMouseOver={(e) => {
               if (!loading) {
-                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.backgroundColor = "#E55A1B";
+                e.currentTarget.style.transform = "translateY(-1px)";
                 e.currentTarget.style.boxShadow =
-                  "0 15px 40px rgba(243, 112, 33, 0.4)";
+                  "0 6px 16px rgba(243, 112, 33, 0.25)";
               }
             }}
             onMouseOut={(e) => {
               if (!loading) {
+                e.currentTarget.style.backgroundColor = "#F37021";
                 e.currentTarget.style.transform = "translateY(0)";
                 e.currentTarget.style.boxShadow =
-                  "0 10px 30px rgba(243, 112, 33, 0.3)";
+                  "0 4px 12px rgba(243, 112, 33, 0.2)";
               }
             }}
           >
@@ -321,10 +335,10 @@ const LoginPage: React.FC = () => {
               <>
                 <div
                   style={{
-                    width: "20px",
-                    height: "20px",
-                    border: "2px solid rgba(255, 255, 255, 0.3)",
-                    borderTop: "2px solid white",
+                    width: "18px",
+                    height: "18px",
+                    border: "2px solid rgba(107, 114, 128, 0.3)",
+                    borderTop: "2px solid #6B7280",
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
                   }}
@@ -341,12 +355,13 @@ const LoginPage: React.FC = () => {
         <div style={{ textAlign: "center", marginTop: "2rem" }}>
           <p
             style={{
-              color: "#666",
+              color: "#6B7280",
               margin: 0,
-              fontSize: "0.9rem",
+              fontSize: "0.85rem",
+              fontWeight: 400,
             }}
           >
-            Hệ thống Quản lý Khóa luận © 2025
+            © 2025 Đại học Đại Nam - Khoa Công nghệ Thông tin
           </p>
         </div>
       </div>
@@ -356,7 +371,7 @@ const LoginPage: React.FC = () => {
         {`
           @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(5deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
           }
 
           @keyframes spin {
