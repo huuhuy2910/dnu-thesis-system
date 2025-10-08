@@ -8,6 +8,15 @@ export interface StudentProfile {
   studentImage: string;
   gpa: number;
   academicStanding: string;
+  gender: string;
+  dateOfBirth: string;
+  phoneNumber: string;
+  studentEmail: string;
+  address: string;
+  enrollmentYear: number;
+  status: string;
+  graduationYear: number;
+  notes: string;
   createdAt: string;
   lastUpdated: string;
 }

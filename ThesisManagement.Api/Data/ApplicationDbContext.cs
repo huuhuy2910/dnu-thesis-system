@@ -70,6 +70,18 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.User).WithOne(x => x.StudentProfile).HasForeignKey<StudentProfile>(x => x.UserID);
                 b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentID).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.StudentImage).HasMaxLength(255);
+
+                // New columns added to StudentProfiles
+                b.Property(x => x.Gender).HasMaxLength(10);
+                b.Property(x => x.DateOfBirth).HasColumnType("date");
+                b.Property(x => x.PhoneNumber).HasMaxLength(20);
+                b.Property(x => x.StudentEmail).HasMaxLength(150);
+                b.Property(x => x.Address).HasMaxLength(255);
+                b.Property(x => x.EnrollmentYear);
+                b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Đang học");
+                b.Property(x => x.GraduationYear);
+                b.Property(x => x.Notes);
+
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });

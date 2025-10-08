@@ -22,13 +22,16 @@ import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
 import TopicsManagement from "../pages/admin/TopicsManagement";
 import CommitteesManagement from "../pages/admin/CommitteesManagement";
+import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 // Committee Management
 import CommitteeList from "../pages/admin/CommitteeList";
 import CreateCommittee from "../pages/admin/CreateCommittee";
 import CommitteeDetail from "../pages/admin/CommitteeDetail";
+import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
+import StudentProfilePage from "../pages/student/StudentProfile";
 
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
@@ -56,6 +59,7 @@ const AppRoutes: React.FC = () => {
         <Route path="schedule" element={<Schedule />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="defense-info" element={<StudentDefenseInfo />} />
+        <Route path="profile" element={<StudentProfilePage />} />
         {/* thêm các route con của student ở đây */}
       </Route>
 
@@ -90,12 +94,14 @@ const AppRoutes: React.FC = () => {
         <Route path="users" element={<UsersManagement />} />
         <Route path="topics" element={<TopicsManagement />} />
         <Route path="committees" element={<CommitteesManagement />} />
+        <Route path="system-config" element={<SystemConfig />} />
         <Route path="committees-new" element={<CommitteeList />} />
         <Route path="committees-new/create" element={<CreateCommittee />} />
         <Route
           path="committees-new/detail/:code"
           element={<CommitteeDetail />}
         />
+        <Route path="notifications/create" element={<CreateNotification />} />
         {/* thêm các route con khác của admin ở đây */}
       </Route>
 
