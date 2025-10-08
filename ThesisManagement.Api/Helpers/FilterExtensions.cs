@@ -89,6 +89,39 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrEmpty(filter.FacultyCode))
                 query = query.Where(x => x.FacultyCode != null && x.FacultyCode.Contains(filter.FacultyCode));
 
+            if (!string.IsNullOrEmpty(filter.Gender))
+                query = query.Where(x => x.Gender == filter.Gender);
+
+            if (filter.DateOfBirthFrom.HasValue)
+                query = query.Where(x => x.DateOfBirth >= filter.DateOfBirthFrom.Value);
+
+            if (filter.DateOfBirthTo.HasValue)
+                query = query.Where(x => x.DateOfBirth <= filter.DateOfBirthTo.Value);
+
+            if (!string.IsNullOrEmpty(filter.PhoneNumber))
+                query = query.Where(x => x.PhoneNumber != null && x.PhoneNumber.Contains(filter.PhoneNumber));
+
+            if (!string.IsNullOrEmpty(filter.StudentEmail))
+                query = query.Where(x => x.StudentEmail != null && x.StudentEmail.Contains(filter.StudentEmail));
+
+            if (!string.IsNullOrEmpty(filter.Address))
+                query = query.Where(x => x.Address != null && x.Address.Contains(filter.Address));
+
+            if (filter.MinEnrollmentYear.HasValue)
+                query = query.Where(x => x.EnrollmentYear >= filter.MinEnrollmentYear.Value);
+
+            if (filter.MaxEnrollmentYear.HasValue)
+                query = query.Where(x => x.EnrollmentYear <= filter.MaxEnrollmentYear.Value);
+
+            if (!string.IsNullOrEmpty(filter.Status))
+                query = query.Where(x => x.Status == filter.Status);
+
+            if (filter.MinGraduationYear.HasValue)
+                query = query.Where(x => x.GraduationYear >= filter.MinGraduationYear.Value);
+
+            if (filter.MaxGraduationYear.HasValue)
+                query = query.Where(x => x.GraduationYear <= filter.MaxGraduationYear.Value);
+
             if (filter.MinGPA.HasValue)
                 query = query.Where(x => x.GPA >= filter.MinGPA.Value);
 
@@ -378,7 +411,7 @@ namespace ThesisManagement.Api.Helpers
         {
             if (!string.IsNullOrEmpty(filter.Search))
             {
-                query = query.Where(x => x.Role.Contains(filter.Search));
+                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Search));
             }
 
             if (!string.IsNullOrWhiteSpace(filter.CommitteeCode))
@@ -391,7 +424,7 @@ namespace ThesisManagement.Api.Helpers
                 query = query.Where(x => x.MemberLecturerProfile!.LecturerCode == filter.LecturerCode);
 
             if (!string.IsNullOrEmpty(filter.Role))
-                query = query.Where(x => x.Role.Contains(filter.Role));
+                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);

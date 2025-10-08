@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import StudentNav from "../SideNavs/StudentNav";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut } from "lucide-react";
+import { LogOut, ChevronDown, User } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/student-profile";
@@ -10,6 +10,7 @@ import type { StudentProfile } from "../../types/student-profile";
 const StudentLayout: React.FC = () => {
   const auth = useAuth();
   const [studentImage, setStudentImage] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -28,6 +29,24 @@ const StudentLayout: React.FC = () => {
     };
     loadProfile();
   }, [auth.user?.userCode]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest("[data-dropdown]")) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDropdown]);
 
   return (
     <div
@@ -58,7 +77,8 @@ const StudentLayout: React.FC = () => {
           style={{
             textAlign: "center",
             padding: "24px 18px",
-            background: "linear-gradient(180deg, rgba(243, 112, 33, 0.05) 0%, #FFFFFF 100%)",
+            background:
+              "linear-gradient(180deg, rgba(243, 112, 33, 0.05) 0%, #FFFFFF 100%)",
             borderBottom: "1px solid #E5E7EB",
           }}
         >
@@ -159,80 +179,223 @@ const StudentLayout: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "6px 10px",
-                backgroundColor: "rgba(243, 112, 33, 0.05)",
-                borderRadius: 12,
-              }}
-            >
-              {studentImage ? (
-                <img
-                  src={studentImage}
-                  alt={auth.user?.fullName || "avatar"}
+            <div style={{ position: "relative" }} data-dropdown>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "none",
+                  border: "none",
+                  padding: "6px",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  transition: "background-color 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "rgba(243, 112, 33, 0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                {studentImage ? (
+                  <img
+                    src={studentImage}
+                    alt={auth.user?.fullName || "avatar"}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      border: "2px solid rgba(243, 112, 33, 0.1)",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background:
+                        "linear-gradient(135deg, #FFFFFF, rgba(243, 112, 33, 0.1))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                      color: "#002855",
+                      fontSize: "20px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {auth.user?.fullName ? auth.user.fullName.charAt(0) : "S"}
+                  </div>
+                )}
+                <ChevronDown
+                  size={16}
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                    border: "2px solid rgba(243, 112, 33, 0.1)",
+                    color: "#6B7280",
+                    transition: "transform 0.2s",
+                    transform: showDropdown ? "rotate(180deg)" : "rotate(0deg)",
                   }}
                 />
-              ) : (
+              </button>
+
+              {/* Dropdown Menu */}
+              {showDropdown && (
                 <div
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #FFFFFF, rgba(243, 112, 33, 0.1))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                    color: "#002855",
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    background: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                    minWidth: "200px",
+                    zIndex: 1000,
+                    marginTop: "8px",
                   }}
                 >
-                  {auth.user?.fullName ? auth.user.fullName.charAt(0) : "S"}
+                  <div
+                    style={{
+                      padding: "16px",
+                      borderBottom: "1px solid #E5E7EB",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    {/* Avatar */}
+                    {studentImage ? (
+                      <img
+                        src={studentImage}
+                        alt={auth.user?.fullName || "avatar"}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                          border: "2px solid rgba(243, 112, 33, 0.1)",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          background:
+                            "linear-gradient(135deg, #FFFFFF, rgba(243, 112, 33, 0.1))",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                          color: "#002855",
+                          fontSize: "18px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {auth.user?.fullName
+                          ? auth.user.fullName.charAt(0)
+                          : "S"}
+                      </div>
+                    )}
+
+                    {/* User Info */}
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: "600",
+                          color: "#111827",
+                          marginBottom: "2px",
+                        }}
+                      >
+                        {auth.user?.fullName || "Sinh viên"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          color: "#6B7280",
+                        }}
+                      >
+                        {auth.user?.userCode || ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: "8px" }}>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        // Navigate to student profile page
+                        window.location.href = "/student/profile";
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        width: "100%",
+                        padding: "12px 16px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "8px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#374151",
+                        transition: "background-color 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#F9FAFB";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <User size={16} color="#6B7280" />
+                      Thông tin sinh viên
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        auth.logout();
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        width: "100%",
+                        padding: "12px 16px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "8px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#DC2626",
+                        transition: "background-color 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#FEF2F2";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <LogOut size={16} color="#DC2626" />
+                      Đăng xuất
+                    </button>
+                  </div>
                 </div>
               )}
-              <div style={{ color: "#002855", fontWeight: 600 }}>
-                {auth.user?.fullName || "Sinh viên"}
-              </div>
             </div>
-
-            <button
-              onClick={() => auth.logout()}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: "#F37021",
-                color: "#FFFFFF",
-                border: "none",
-                padding: "10px 16px",
-                borderRadius: 10,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E55A1B";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(243, 112, 33, 0.3)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F37021";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(243, 112, 33, 0.2)";
-              }}
-            >
-              <LogOut size={16} /> Đăng xuất
-            </button>
           </div>
         </header>
 

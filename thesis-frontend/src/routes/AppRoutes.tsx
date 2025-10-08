@@ -31,6 +31,7 @@ import CreateCommittee from "../pages/admin/CreateCommittee";
 import CommitteeDetail from "../pages/admin/CommitteeDetail";
 import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
+import StudentProfilePage from "../pages/student/StudentProfile";
 
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
@@ -58,6 +59,7 @@ const AppRoutes: React.FC = () => {
         <Route path="schedule" element={<Schedule />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="defense-info" element={<StudentDefenseInfo />} />
+        <Route path="profile" element={<StudentProfilePage />} />
         {/* thêm các route con của student ở đây */}
       </Route>
 

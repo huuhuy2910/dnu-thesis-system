@@ -1,3 +1,4 @@
+using System;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,27 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { UserID = 0, DepartmentID = (int?)null }));
+        public IActionResult GetCreate()
+        {
+            var sample = new StudentProfileCreateDto(
+                string.Empty,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Đang học",
+                null,
+                null);
+            return Ok(ApiResponse<StudentProfileCreateDto>.SuccessResponse(sample));
+        }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] StudentProfileCreateDto dto)
@@ -60,6 +81,15 @@ namespace ThesisManagement.Api.Controllers
                 StudentImage = dto.StudentImage,
                 GPA = dto.GPA,
                 AcademicStanding = dto.AcademicStanding,
+                Gender = dto.Gender,
+                DateOfBirth = dto.DateOfBirth,
+                PhoneNumber = dto.PhoneNumber,
+                StudentEmail = dto.StudentEmail,
+                Address = dto.Address,
+                EnrollmentYear = dto.EnrollmentYear,
+                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Đang học" : dto.Status,
+                GraduationYear = dto.GraduationYear,
+                Notes = dto.Notes,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -68,27 +98,55 @@ namespace ThesisManagement.Api.Controllers
             return StatusCode(201, ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(entity),1,201));
         }
 
-        [HttpGet("get-update/{id}")]
-        public async Task<IActionResult> GetUpdate(int id)
+        [HttpGet("get-update/{code}")]
+        public async Task<IActionResult> GetUpdate(string code)
         {
-            var ent = await _uow.StudentProfiles.GetByIdAsync(id);
+            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
-            return Ok(ApiResponse<StudentProfileUpdateDto>.SuccessResponse(new StudentProfileUpdateDto(ent.DepartmentCode, ent.ClassCode, ent.FacultyCode, ent.StudentImage, ent.GPA ?? 0, ent.AcademicStanding)));
+            var dto = new StudentProfileUpdateDto(
+                ent.StudentCode,
+                ent.UserCode,
+                ent.DepartmentCode,
+                ent.ClassCode,
+                ent.FacultyCode,
+                ent.StudentImage,
+                ent.GPA,
+                ent.AcademicStanding,
+                ent.Gender,
+                ent.DateOfBirth,
+                ent.PhoneNumber,
+                ent.StudentEmail,
+                ent.Address,
+                ent.EnrollmentYear,
+                ent.Status,
+                ent.GraduationYear,
+                ent.Notes);
+            return Ok(ApiResponse<StudentProfileUpdateDto>.SuccessResponse(dto));
         }
 
-        [HttpPut("update/{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] StudentProfileUpdateDto dto)
+        [HttpPut("update/{code}")]
+        public async Task<IActionResult> Update(string code, [FromBody] StudentProfileUpdateDto dto)
         {
-            var ent = await _uow.StudentProfiles.GetByIdAsync(id);
+            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
             
+            // Resolve User by Code if provided
+            if (!string.IsNullOrWhiteSpace(dto.UserCode) && !string.Equals(dto.UserCode, ent.UserCode, StringComparison.OrdinalIgnoreCase))
+            {
+                var user = await _uow.Users.Query().FirstOrDefaultAsync(u => u.UserCode == dto.UserCode);
+                if (user == null) return BadRequest(ApiResponse<object>.Fail("User not found", 400));
+                ent.UserCode = user.UserCode;
+                ent.UserID = user.UserID;
+            }
+
             // Resolve Department by Code if provided
             Department? department = null;
             if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
             {
                 department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
+                if (department == null) return BadRequest(ApiResponse<object>.Fail("Department not found", 400));
             }
-            
+
             ent.DepartmentCode = dto.DepartmentCode;
             ent.DepartmentID = department?.DepartmentID;
             ent.ClassCode = dto.ClassCode;
@@ -96,16 +154,25 @@ namespace ThesisManagement.Api.Controllers
             ent.StudentImage = dto.StudentImage;
             ent.GPA = dto.GPA;
             ent.AcademicStanding = dto.AcademicStanding;
+            ent.Gender = dto.Gender;
+            ent.DateOfBirth = dto.DateOfBirth;
+            ent.PhoneNumber = dto.PhoneNumber;
+            ent.StudentEmail = dto.StudentEmail;
+            ent.Address = dto.Address;
+            ent.EnrollmentYear = dto.EnrollmentYear;
+            ent.Status = dto.Status;
+            ent.GraduationYear = dto.GraduationYear;
+            ent.Notes = dto.Notes;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.StudentProfiles.Update(ent);
             await _uow.SaveChangesAsync();
             return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(ent)));
         }
 
-        [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [HttpDelete("delete/{code}")]
+        public async Task<IActionResult> Delete(string code)
         {
-            var ent = await _uow.StudentProfiles.GetByIdAsync(id);
+            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
             _uow.StudentProfiles.Remove(ent);
             await _uow.SaveChangesAsync();

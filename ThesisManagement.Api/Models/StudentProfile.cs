@@ -12,16 +12,25 @@ namespace ThesisManagement.Api.Models
         public string? DepartmentCode { get; set; } // New: reference by code
         public string? ClassCode { get; set; }
         public string? FacultyCode { get; set; }
-    public string? StudentImage { get; set; }
+        public string? StudentImage { get; set; }
         public decimal? GPA { get; set; }
         public string? AcademicStanding { get; set; }
+        public string? Gender { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? StudentEmail { get; set; }
+        public string? Address { get; set; }
+        public int? EnrollmentYear { get; set; }
+        public string? Status { get; set; }
+        public int? GraduationYear { get; set; }
+        public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
 
-    public User? User { get; set; }
-    public Department? Department { get; set; }
-    // Navigation collections removed to avoid EF creating shadow properties
-    // public ICollection<Topic>? ProposedTopics { get; set; }
-    // public ICollection<ProgressSubmission>? ProgressSubmissions { get; set; }
+        public User? User { get; set; }
+        public Department? Department { get; set; }
+        // Navigation collections removed to avoid EF creating shadow properties
+        // public ICollection<Topic>? ProposedTopics { get; set; }
+        // public ICollection<ProgressSubmission>? ProgressSubmissions { get; set; }
     }
 }
