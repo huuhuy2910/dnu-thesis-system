@@ -92,7 +92,6 @@ const timelineSteps = [
     description:
       "Sinh viên đề xuất hoặc chọn đề tài do khoa gợi ý, giảng viên hướng dẫn xác nhận trực tuyến. Deadline rõ ràng, hỗ trợ chỉnh sửa.",
   },
-  {
     phase: "02",
     icon: <CheckCircle className="w-6 h-6" />,
     title: "Theo dõi tiến độ",
