@@ -21,8 +21,8 @@ namespace ThesisManagement.Api.DTOs
         string? DepartmentCode,
         string Status,
         int? ResubmitCount,
-        DateTime CreatedAt,
-        DateTime LastUpdated,
+    DateTime? CreatedAt,
+    DateTime? LastUpdated,
         int? SpecialtyID,
         string? SpecialtyCode
     );
@@ -71,8 +71,8 @@ namespace ThesisManagement.Api.DTOs
         string? DepartmentCode,
         string Status,
         int? ResubmitCount,
-        DateTime CreatedAt,
-        DateTime LastUpdated,
+    DateTime? CreatedAt,
+    DateTime? LastUpdated,
         int? SpecialtyID,
         string? SpecialtyCode
     );

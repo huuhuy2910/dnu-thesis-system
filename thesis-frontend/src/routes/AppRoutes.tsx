@@ -32,6 +32,7 @@ import CommitteeDetail from "../pages/admin/CommitteeDetail";
 import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 import StudentProfilePage from "../pages/student/StudentProfile";
+import ScrollToTop from "../components/ScrollToTop";
 
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
@@ -39,75 +40,78 @@ import StudentProfilePage from "../pages/student/StudentProfile";
  */
 const AppRoutes: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<LoginPage />} />
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<LoginPage />} />
 
-      {/* STUDENT */}
-      <Route
-        path="/student/*"
-        element={
-          <ProtectedRoute allowedRoles={["STUDENT"]}>
-            <StudentLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<StudentDashboard />} />
-        <Route path="topics" element={<TopicRegistration />} />
-        <Route path="progress" element={<Progress />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="schedule" element={<Schedule />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="defense-info" element={<StudentDefenseInfo />} />
-        <Route path="profile" element={<StudentProfilePage />} />
-        {/* thêm các route con của student ở đây */}
-      </Route>
-
-      {/* LECTURER */}
-      <Route
-        path="/lecturer/*"
-        element={
-          <ProtectedRoute allowedRoles={["LECTURER"]}>
-            <LecturerLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<LecturerDashboard />} />
-        <Route path="students" element={<LecturerStudents />} />
-        <Route path="topics" element={<LecturerTopics />} />
-        <Route path="schedule" element={<LecturerSchedule />} />
-        <Route path="committees" element={<LecturerCommittees />} />
-        <Route path="reports" element={<LecturerReports />} />
-        {/* thêm các route con của lecturer ở đây */}
-      </Route>
-
-      {/* ADMIN */}
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute allowedRoles={["ADMIN"]}>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<AdminDashboard />} />
-        <Route path="users" element={<UsersManagement />} />
-        <Route path="topics" element={<TopicsManagement />} />
-        <Route path="committees" element={<CommitteesManagement />} />
-        <Route path="system-config" element={<SystemConfig />} />
-        <Route path="committees-new" element={<CommitteeList />} />
-        <Route path="committees-new/create" element={<CreateCommittee />} />
+        {/* STUDENT */}
         <Route
-          path="committees-new/detail/:code"
-          element={<CommitteeDetail />}
-        />
-        <Route path="notifications/create" element={<CreateNotification />} />
-        {/* thêm các route con khác của admin ở đây */}
-      </Route>
+          path="/student/*"
+          element={
+            <ProtectedRoute allowedRoles={["STUDENT"]}>
+              <StudentLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<StudentDashboard />} />
+          <Route path="topics" element={<TopicRegistration />} />
+          <Route path="progress" element={<Progress />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="schedule" element={<Schedule />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="defense-info" element={<StudentDefenseInfo />} />
+          <Route path="profile" element={<StudentProfilePage />} />
+          {/* thêm các route con của student ở đây */}
+        </Route>
 
-      {/* fallback: nếu không match => điều hướng về /login */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+        {/* LECTURER */}
+        <Route
+          path="/lecturer/*"
+          element={
+            <ProtectedRoute allowedRoles={["LECTURER"]}>
+              <LecturerLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<LecturerDashboard />} />
+          <Route path="students" element={<LecturerStudents />} />
+          <Route path="topics" element={<LecturerTopics />} />
+          <Route path="schedule" element={<LecturerSchedule />} />
+          <Route path="committees" element={<LecturerCommittees />} />
+          <Route path="reports" element={<LecturerReports />} />
+          {/* thêm các route con của lecturer ở đây */}
+        </Route>
+
+        {/* ADMIN */}
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UsersManagement />} />
+          <Route path="topics" element={<TopicsManagement />} />
+          <Route path="committees" element={<CommitteesManagement />} />
+          <Route path="system-config" element={<SystemConfig />} />
+          <Route path="committees-new" element={<CommitteeList />} />
+          <Route path="committees-new/create" element={<CreateCommittee />} />
+          <Route
+            path="committees-new/detail/:code"
+            element={<CommitteeDetail />}
+          />
+          <Route path="notifications/create" element={<CreateNotification />} />
+          {/* thêm các route con khác của admin ở đây */}
+        </Route>
+
+        {/* fallback: nếu không match => điều hướng về /login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </>
   );
 };
 

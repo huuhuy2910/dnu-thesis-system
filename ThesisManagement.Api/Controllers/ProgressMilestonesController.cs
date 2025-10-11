@@ -1,5 +1,7 @@
+using System;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
@@ -29,20 +31,47 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { TopicID = 0, Type = "OUTLINE" }));
+        public IActionResult GetCreate()
+        {
+            var sample = new ProgressMilestoneCreateDto(
+                string.Empty,
+                null,
+                null,
+                null,
+                null,
+                "Chưa bắt đầu",
+                null,
+                null);
+            return Ok(ApiResponse<ProgressMilestoneCreateDto>.SuccessResponse(sample));
+        }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] ProgressMilestoneCreateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.TopicCode))
+                return BadRequest(ApiResponse<object>.Fail("TopicCode is required", 400));
+            if (dto.TopicID.HasValue && dto.TopicID <= 0)
+                return BadRequest(ApiResponse<object>.Fail("TopicID must be positive", 400));
             var code = _codeGen.Generate("MILE");
+            MilestoneTemplate? template = null;
+            if (!string.IsNullOrWhiteSpace(dto.MilestoneTemplateCode))
+            {
+                template = await _uow.MilestoneTemplates.Query().FirstOrDefaultAsync(x => x.MilestoneTemplateCode == dto.MilestoneTemplateCode);
+                if (template == null)
+                    return BadRequest(ApiResponse<object>.Fail("MilestoneTemplate not found", 400));
+            }
+
             var ent = new ProgressMilestone
             {
                 MilestoneCode = code,
+                TopicID = dto.TopicID,
                 TopicCode = dto.TopicCode,
-                Type = dto.Type,
+                MilestoneTemplateCode = template?.MilestoneTemplateCode ?? dto.MilestoneTemplateCode,
+                Ordinal = dto.Ordinal ?? template?.Ordinal,
                 Deadline = dto.Deadline,
-                Note = dto.Note,
-                State = "NOT_STARTED",
+                State = string.IsNullOrWhiteSpace(dto.State) ? "Chưa bắt đầu" : dto.State,
+                StartedAt = dto.StartedAt,
+                CompletedAt = dto.CompletedAt,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -56,7 +85,15 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.ProgressMilestones.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("Milestone not found", 404));
-            return Ok(ApiResponse<ProgressMilestoneUpdateDto>.SuccessResponse(new ProgressMilestoneUpdateDto(ent.Type, ent.Deadline, ent.State, ent.Note)));
+            var dto = new ProgressMilestoneUpdateDto(
+                ent.TopicID,
+                ent.MilestoneTemplateCode,
+                ent.Ordinal,
+                ent.Deadline,
+                ent.State,
+                ent.StartedAt,
+                ent.CompletedAt);
+            return Ok(ApiResponse<ProgressMilestoneUpdateDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{id}")]
@@ -64,10 +101,26 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.ProgressMilestones.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("Milestone not found", 404));
-            ent.Type = dto.Type ?? ent.Type;
+            if (dto.TopicID.HasValue)
+                ent.TopicID = dto.TopicID;
+            if (!string.IsNullOrWhiteSpace(dto.MilestoneTemplateCode) && !string.Equals(dto.MilestoneTemplateCode, ent.MilestoneTemplateCode, StringComparison.OrdinalIgnoreCase))
+            {
+                var template = await _uow.MilestoneTemplates.Query().FirstOrDefaultAsync(x => x.MilestoneTemplateCode == dto.MilestoneTemplateCode);
+                if (template == null)
+                    return BadRequest(ApiResponse<object>.Fail("MilestoneTemplate not found", 400));
+                ent.MilestoneTemplateCode = template.MilestoneTemplateCode;
+                if (!dto.Ordinal.HasValue)
+                    ent.Ordinal = template.Ordinal;
+            }
+
+            if (dto.Ordinal.HasValue)
+                ent.Ordinal = dto.Ordinal;
+
             ent.Deadline = dto.Deadline;
-            ent.State = dto.State ?? ent.State;
-            ent.Note = dto.Note;
+            if (!string.IsNullOrWhiteSpace(dto.State))
+                ent.State = dto.State;
+            ent.StartedAt = dto.StartedAt;
+            ent.CompletedAt = dto.CompletedAt;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.ProgressMilestones.Update(ent);
             await _uow.SaveChangesAsync();

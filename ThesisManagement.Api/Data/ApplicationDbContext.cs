@@ -30,6 +30,9 @@ namespace ThesisManagement.Api.Data
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<CatalogTopicTag> CatalogTopicTags => Set<CatalogTopicTag>();
         public DbSet<TopicTag> TopicTags => Set<TopicTag>();
+    public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
+    public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
+    public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -160,8 +163,14 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.MilestoneID);
                 b.Property(x => x.MilestoneCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.MilestoneCode).IsUnique();
-                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
-                b.Property(x => x.State).HasMaxLength(20).HasDefaultValue("NOT_STARTED");
+                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicID).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.TopicCode).HasMaxLength(60);
+                b.Property(x => x.MilestoneTemplateCode).HasMaxLength(40);
+                b.HasOne(x => x.MilestoneTemplate).WithMany(x => x.ProgressMilestones).HasForeignKey(x => x.MilestoneTemplateCode).HasPrincipalKey(x => x.MilestoneTemplateCode).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.Ordinal);
+                b.Property(x => x.State).HasMaxLength(50).HasDefaultValue("Chưa bắt đầu");
+                b.Property(x => x.StartedAt);
+                b.Property(x => x.CompletedAt);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
@@ -169,15 +178,68 @@ namespace ThesisManagement.Api.Data
             // ProgressSubmissions
             modelBuilder.Entity<ProgressSubmission>(b =>
             {
+                // Inform EF Core that triggers exist on this table so it avoids using a bare OUTPUT clause.
+                // Update the trigger names below to match the actual triggers defined in the database.
+                b.ToTable("ProgressSubmissions", tb =>
+                {
+                    tb.HasTrigger("TR_ProgressSubmissions_Insert");
+                    tb.HasTrigger("TR_ProgressSubmissions_Update");
+                    tb.HasTrigger("TR_ProgressSubmissions_Delete");
+                });
+
                 b.HasKey(x => x.SubmissionID);
                 b.Property(x => x.SubmissionCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.SubmissionCode).IsUnique();
-                b.HasOne(x => x.Milestone).WithMany().HasForeignKey(x => x.MilestoneCode).HasPrincipalKey(x => x.MilestoneCode).OnDelete(DeleteBehavior.SetNull);
-                b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserCode).HasPrincipalKey(x => x.UserCode).OnDelete(DeleteBehavior.SetNull);
-                // StudentProfile navigation removed to prevent shadow properties
-                // b.HasOne(x => x.StudentProfile).WithMany().HasForeignKey(x => x.StudentProfileCode).HasPrincipalKey(x => x.StudentCode).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.Milestone).WithMany(x => x.ProgressSubmissions).HasForeignKey(x => x.MilestoneID).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.MilestoneCode).HasMaxLength(60);
+                b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserID).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.StudentUserCode).HasMaxLength(40);
+                b.Property(x => x.StudentProfileCode).HasMaxLength(60);
                 b.Property(x => x.SubmittedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.AttemptNumber).HasDefaultValue(1);
+                // File columns are stored in SubmissionFiles table; do not configure file columns on ProgressSubmission
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // MilestoneTemplates
+            modelBuilder.Entity<MilestoneTemplate>(b =>
+            {
+                b.HasKey(x => x.MilestoneTemplateID);
+                b.Property(x => x.MilestoneTemplateCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.MilestoneTemplateCode).IsUnique();
+                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+                b.Property(x => x.Description);
+                b.Property(x => x.Ordinal).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.LastUpdated);
+            });
+
+            // MilestoneStateHistory (table name is singular in DB)
+            modelBuilder.Entity<MilestoneStateHistory>(b =>
+            {
+                b.ToTable("MilestoneStateHistory");
+                b.HasKey(x => x.HistoryID);
+                b.HasOne(x => x.Milestone).WithMany(x => x.StateHistories).HasForeignKey(x => x.MilestoneID);
+                b.Property(x => x.MilestoneCode).HasMaxLength(60);
+                b.Property(x => x.TopicCode).HasMaxLength(40);
+                b.Property(x => x.OldState).HasMaxLength(50);
+                b.Property(x => x.NewState).HasMaxLength(50).IsRequired();
+                b.Property(x => x.ChangedByUserCode).HasMaxLength(40);
+                b.Property(x => x.Comment);
+                b.Property(x => x.ChangedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // SubmissionFiles
+            modelBuilder.Entity<SubmissionFile>(b =>
+            {
+                b.HasKey(x => x.FileID);
+                b.HasOne(x => x.Submission).WithMany(x => x.SubmissionFiles).HasForeignKey(x => x.SubmissionID);
+                b.Property(x => x.SubmissionCode).HasMaxLength(60);
+                b.Property(x => x.FileURL).HasMaxLength(1024).IsRequired();
+                b.Property(x => x.FileName).HasMaxLength(255);
+                b.Property(x => x.MimeType).HasMaxLength(100);
+                b.Property(x => x.UploadedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.UploadedByUserCode).HasMaxLength(40);
             });
 
             // Committees

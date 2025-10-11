@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle,
   Circle,
@@ -6,6 +6,12 @@ import {
   AlertCircle,
   TrendingUp,
 } from "lucide-react";
+import { fetchData } from "../../api/fetchData";
+import { useAuth } from "../../hooks/useAuth";
+import type { ApiResponse } from "../../types/api";
+import type { MilestoneTemplate } from "../../types/milestoneTemplate";
+import type { ProgressMilestone } from "../../types/progressMilestone";
+import type { Topic } from "../../types/topic";
 
 interface Milestone {
   id: number;
@@ -14,48 +20,247 @@ interface Milestone {
   deadline: string;
   status: "completed" | "in-progress" | "pending" | "overdue";
   completedDate?: string;
+  ordinal: number; // Add ordinal
 }
 
 const Progress: React.FC = () => {
-  const [milestones] = useState<Milestone[]>([
-    {
-      id: 1,
-      title: "Đăng ký đề tài",
-      description: "Hoàn thành đăng ký đề tài và được phê duyệt",
-      deadline: "2025-01-15",
-      status: "completed",
-      completedDate: "2025-01-10",
-    },
-    {
-      id: 2,
-      title: "Nộp báo cáo tiến độ lần 1",
-      description: "Báo cáo về tình hình nghiên cứu và tiến độ ban đầu",
-      deadline: "2025-02-28",
-      status: "completed",
-      completedDate: "2025-02-25",
-    },
-    {
-      id: 3,
-      title: "Nộp báo cáo tiến độ lần 2",
-      description: "Báo cáo kết quả nghiên cứu và triển khai",
-      deadline: "2025-04-15",
-      status: "in-progress",
-    },
-    {
-      id: 4,
-      title: "Nộp khóa luận hoàn chỉnh",
-      description: "Hoàn thiện và nộp bản khóa luận cuối cùng",
-      deadline: "2025-05-20",
-      status: "pending",
-    },
-    {
-      id: 5,
-      title: "Bảo vệ khóa luận",
-      description: "Trình bày và bảo vệ khóa luận trước hội đồng",
-      deadline: "2025-06-10",
-      status: "pending",
-    },
-  ]);
+  const auth = useAuth();
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [progressAnimated, setProgressAnimated] = useState(false);
+
+  // Hardcoded deadlines based on ordinal (fallback if needed)
+  const getDeadlineByOrdinal = (ordinal: number): string => {
+    const deadlines: { [key: number]: string } = {
+      1: "2025-01-15",
+      2: "2025-02-28",
+      3: "2025-04-15",
+      4: "2025-05-20",
+      5: "2025-06-10",
+    };
+    return deadlines[ordinal] || "2025-12-31";
+  };
+
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (!auth.user?.userCode) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // First, fetch the student's topic
+        console.log("Fetching topics for userCode:", auth.user.userCode);
+        const topicsRes = (await fetchData(
+          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`
+        )) as ApiResponse<Topic[]>;
+        console.log("Topics response:", topicsRes);
+        console.log("Topics data:", topicsRes.data);
+        if (!topicsRes.data || topicsRes.data.length === 0) {
+          // No topic found, set empty milestones
+          console.log("No topics found");
+          setMilestones([]);
+          setLoading(false);
+          return;
+        }
+        const topic = topicsRes.data[0]; // Assume first topic
+        const topicCode = topic.topicCode;
+        console.log("Topic code:", topicCode);
+
+        // Fetch all milestone templates
+        console.log("Fetching milestone templates...");
+        const templatesRes = (await fetchData(
+          "/MilestoneTemplates/get-list"
+        )) as ApiResponse<MilestoneTemplate[]>;
+        console.log("Templates response:", templatesRes);
+        if (!templatesRes.data || templatesRes.data.length === 0) {
+          console.error("Failed to fetch milestone templates");
+          setMilestones([]);
+          setLoading(false);
+          return;
+        }
+        const templates = templatesRes.data;
+        console.log("Templates:", templates.length);
+
+        // Fetch progress milestones for the topic
+        console.log("Fetching progress milestones...");
+        const progressRes = (await fetchData(
+          `/ProgressMilestones/get-list?TopicCode=${topicCode}`
+        )) as ApiResponse<ProgressMilestone[]>;
+        console.log("Progress response:", progressRes);
+        if (!progressRes.data || progressRes.data.length === 0) {
+          console.error("Failed to fetch progress milestones");
+          setMilestones([]);
+          setLoading(false);
+          return;
+        }
+        const progressMilestones = progressRes.data;
+        console.log("Progress milestones:", progressMilestones.length);
+
+        // Create milestones array
+        const milestonesData: Milestone[] = templates.map(
+          (template: MilestoneTemplate) => {
+            const progressMilestone = progressMilestones.find(
+              (pm) =>
+                pm.milestoneTemplateCode === template.milestoneTemplateCode
+            );
+
+            let status: "completed" | "in-progress" | "pending" | "overdue" =
+              "pending";
+            let completedDate: string | undefined;
+            const deadline: string = getDeadlineByOrdinal(template.ordinal);
+
+            if (progressMilestone) {
+              const state = progressMilestone.state.toLowerCase();
+              if (state === "hoàn thành" || state === "completed") {
+                status = "completed";
+                completedDate = progressMilestone.completedAt
+                  ? progressMilestone.completedAt.split("T")[0]
+                  : undefined;
+              } else if (
+                state === "đang thực hiện" ||
+                state === "hoạt động" ||
+                state === "in progress" ||
+                state === "active"
+              ) {
+                status = "in-progress";
+              } else if (
+                state === "chưa bắt đầu" ||
+                state === "not started" ||
+                state === "pending"
+              ) {
+                status = "pending";
+              }
+            }
+
+            return {
+              id: template.milestoneTemplateID,
+              title: template.name,
+              description: template.description,
+              deadline,
+              status,
+              completedDate,
+              ordinal: template.ordinal,
+            };
+          }
+        );
+
+        // Logic: Mark all lower ordinals as completed if there's any higher ordinal milestone
+        const sortedMilestones = milestonesData.sort(
+          (a, b) => a.ordinal - b.ordinal
+        );
+        const highestOrdinal = Math.max(
+          ...progressMilestones.map((pm) => pm.ordinal)
+        );
+
+        const finalMilestones = sortedMilestones.map((milestone) => {
+          if (milestone.ordinal < highestOrdinal) {
+            return {
+              ...milestone,
+              status: "completed" as const,
+              completedDate:
+                milestone.completedDate ||
+                new Date().toISOString().split("T")[0],
+            };
+          }
+          return milestone;
+        });
+
+        console.log("Milestones data:", finalMilestones);
+        setMilestones(finalMilestones);
+        // Trigger progress animation after data loads
+        setTimeout(() => setProgressAnimated(true), 500);
+      } catch (error) {
+        console.error("Error loading progress:", error);
+        setMilestones([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProgress();
+  }, [auth.user?.userCode]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
+        {/* Header Skeleton */}
+        <div style={{ marginBottom: "32px" }}>
+          <div
+            style={{
+              height: "32px",
+              width: "200px",
+              borderRadius: "4px",
+              marginBottom: "8px",
+            }}
+            className="loading-skeleton"
+          />
+          <div
+            style={{
+              height: "14px",
+              width: "300px",
+              borderRadius: "4px",
+            }}
+            className="loading-skeleton"
+          />
+        </div>
+
+        {/* Progress Overview Skeleton */}
+        <div
+          style={{
+            height: "200px",
+            borderRadius: "16px",
+            marginBottom: "32px",
+          }}
+          className="loading-skeleton"
+        />
+
+        {/* Timeline Skeleton */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "16px",
+            padding: "32px",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+          }}
+        >
+          <div
+            style={{
+              height: "24px",
+              width: "150px",
+              borderRadius: "4px",
+              marginBottom: "24px",
+            }}
+            className="loading-skeleton"
+          />
+          {/* Multiple milestone skeletons */}
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              style={{ display: "flex", gap: "24px", marginBottom: "24px" }}
+            >
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                }}
+                className="loading-skeleton"
+              />
+              <div
+                style={{
+                  flex: 1,
+                  height: "100px",
+                  borderRadius: "12px",
+                }}
+                className="loading-skeleton"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const completedCount = milestones.filter(
     (m) => m.status === "completed"
@@ -104,8 +309,114 @@ const Progress: React.FC = () => {
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
+      <style>
+        {`
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+
+          @keyframes progressFill {
+            from {
+              width: 0%;
+            }
+            to {
+              width: ${progressPercentage}%;
+            }
+          }
+
+          @keyframes pulse {
+            0%, 100% {
+              transform: scale(1);
+              box-shadow: 0 0 0 0 rgba(243, 112, 33, 0.4);
+            }
+            50% {
+              transform: scale(1.05);
+              box-shadow: 0 0 0 10px rgba(243, 112, 33, 0);
+            }
+          }
+
+          @keyframes bounceIn {
+            0% {
+              opacity: 0;
+              transform: scale(0.3);
+            }
+            50% {
+              opacity: 1;
+              transform: scale(1.05);
+            }
+            70% {
+              transform: scale(0.9);
+            }
+            100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
+
+          @keyframes slideInLeft {
+            from {
+              opacity: 0;
+              transform: translateX(-50px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+
+          .progress-header {
+            animation: fadeInUp 0.8s ease-out;
+          }
+
+          .progress-overview {
+            animation: fadeInUp 1s ease-out 0.2s both;
+          }
+
+          .progress-bar-fill {
+            animation: progressFill 2s ease-out 1s both;
+          }
+
+          .timeline-container {
+            animation: fadeInUp 1.2s ease-out 0.4s both;
+          }
+
+          .milestone-card {
+            animation: slideInLeft 0.6s ease-out both;
+          }
+
+          .milestone-in-progress {
+            animation: pulse 2s infinite;
+          }
+
+          .progress-circle {
+            animation: bounceIn 1s ease-out 0.8s both;
+          }
+
+          @keyframes shimmer {
+            0% {
+              background-position: -200px 0;
+            }
+            100% {
+              background-position: calc(200px + 100%) 0;
+            }
+          }
+
+          .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200px 100%;
+            animation: shimmer 1.5s infinite;
+          }
+        `}
+      </style>
       {/* Header */}
-      <div style={{ marginBottom: "32px" }}>
+      <div style={{ marginBottom: "32px" }} className="progress-header">
         <h1
           style={{
             fontSize: "28px",
@@ -135,6 +446,7 @@ const Progress: React.FC = () => {
           marginBottom: "32px",
           boxShadow: "0 4px 12px rgba(243, 112, 33, 0.1)",
         }}
+        className="progress-overview"
       >
         <div
           style={{
@@ -170,6 +482,7 @@ const Progress: React.FC = () => {
               justifyContent: "center",
               position: "relative",
             }}
+            className="progress-circle"
           >
             <div
               style={{
@@ -189,6 +502,7 @@ const Progress: React.FC = () => {
                   fontWeight: "700",
                   color: "#f37021",
                 }}
+                className="progress-percentage"
               >
                 {progressPercentage}%
               </span>
@@ -211,11 +525,12 @@ const Progress: React.FC = () => {
         >
           <div
             style={{
-              width: `${progressPercentage}%`,
+              width: progressAnimated ? `${progressPercentage}%` : "0%",
               height: "100%",
               background: "linear-gradient(90deg, #f37021 0%, #ff8838 100%)",
-              transition: "width 0.5s ease",
+              transition: progressAnimated ? "none" : "width 0.5s ease",
             }}
+            className={progressAnimated ? "progress-bar-fill" : ""}
           />
         </div>
       </div>
@@ -228,6 +543,7 @@ const Progress: React.FC = () => {
           padding: "32px",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
         }}
+        className="timeline-container"
       >
         <h2
           style={{
@@ -257,14 +573,16 @@ const Progress: React.FC = () => {
           <div
             style={{ display: "flex", flexDirection: "column", gap: "24px" }}
           >
-            {milestones.map((milestone) => (
+            {milestones.map((milestone, index) => (
               <div
                 key={milestone.id}
                 style={{
                   display: "flex",
                   gap: "24px",
                   position: "relative",
+                  animationDelay: `${0.6 + index * 0.1}s`,
                 }}
+                className="milestone-card"
               >
                 {/* Icon */}
                 <div
@@ -280,6 +598,11 @@ const Progress: React.FC = () => {
                     justifyContent: "center",
                     zIndex: 1,
                   }}
+                  className={
+                    milestone.status === "in-progress"
+                      ? "milestone-in-progress"
+                      : ""
+                  }
                 >
                   {getStatusIcon(milestone.status)}
                 </div>
@@ -297,15 +620,17 @@ const Progress: React.FC = () => {
                         : "#fafafa",
                     border: `2px solid ${getStatusColor(milestone.status)}`,
                     borderRadius: "12px",
-                    transition: "all 0.3s ease",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    cursor: "pointer",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateX(4px)";
+                    e.currentTarget.style.transform =
+                      "translateX(8px) scale(1.02)";
                     e.currentTarget.style.boxShadow =
-                      "0 4px 12px rgba(0,0,0,0.1)";
+                      "0 8px 25px rgba(0,0,0,0.15)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateX(0)";
+                    e.currentTarget.style.transform = "translateX(0) scale(1)";
                     e.currentTarget.style.boxShadow = "none";
                   }}
                 >
@@ -410,6 +735,7 @@ const Progress: React.FC = () => {
           border: "1px solid #fcd34d",
           borderRadius: "12px",
         }}
+        className="tips-section"
       >
         <h3
           style={{

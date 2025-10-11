@@ -58,6 +58,6 @@ namespace ThesisManagement.Api.DTOs
         string? Status,
         int? GraduationYear,
         string? Notes,
-        DateTime CreatedAt,
-        DateTime LastUpdated);
+    DateTime? CreatedAt,
+    DateTime? LastUpdated);
 }

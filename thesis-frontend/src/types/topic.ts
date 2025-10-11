@@ -24,6 +24,10 @@ export interface Topic {
   specialtyCode: string | null;
 }
 
+export interface ApiResponseTopics {
+  data: Topic[];
+}
+
 export interface TopicFormData {
   topicCode?: string; // Auto generated from API template
   title: string;

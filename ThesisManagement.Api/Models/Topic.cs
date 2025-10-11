@@ -24,8 +24,8 @@ namespace ThesisManagement.Api.Models
         public string? DepartmentCode { get; set; } // New: reference by code
         public string Status { get; set; } = null!;
         public int? ResubmitCount { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime LastUpdated { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? LastUpdated { get; set; }
         public int? SpecialtyID { get; set; } // Keep for internal use
         public string? SpecialtyCode { get; set; } // New: reference by code
 

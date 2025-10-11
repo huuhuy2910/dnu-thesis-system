@@ -18,6 +18,9 @@ namespace ThesisManagement.Api.Services
             Topics = new GenericRepository<Topic>(_db);
             ProgressMilestones = new GenericRepository<ProgressMilestone>(_db);
             ProgressSubmissions = new GenericRepository<ProgressSubmission>(_db);
+            MilestoneTemplates = new GenericRepository<MilestoneTemplate>(_db);
+            MilestoneStateHistories = new GenericRepository<MilestoneStateHistory>(_db);
+            SubmissionFiles = new GenericRepository<SubmissionFile>(_db);
             Committees = new GenericRepository<Committee>(_db);
             CommitteeMembers = new GenericRepository<CommitteeMember>(_db);
             DefenseAssignments = new GenericRepository<DefenseAssignment>(_db);
@@ -38,6 +41,9 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<Topic> Topics { get; }
         public IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         public IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
+    public IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
+    public IGenericRepository<MilestoneStateHistory> MilestoneStateHistories { get; }
+    public IGenericRepository<SubmissionFile> SubmissionFiles { get; }
         public IGenericRepository<Committee> Committees { get; }
         public IGenericRepository<CommitteeMember> CommitteeMembers { get; }
         public IGenericRepository<DefenseAssignment> DefenseAssignments { get; }

@@ -13,7 +13,7 @@ import type { CatalogTopic } from "../../types/catalog-topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { Department } from "../../types/department";
 import type { Specialty } from "../../types/specialty-type";
-import type { StudentProfile } from "../../types/student-profile";
+import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import {
   BookOpen,
@@ -27,6 +27,7 @@ import {
 const TopicRegistration: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
+  const userCode = auth.user?.userCode;
   const [registrationType, setRegistrationType] = useState<"catalog" | "self">(
     "catalog"
   );
@@ -122,10 +123,10 @@ const TopicRegistration: React.FC = () => {
         }
 
         // Check if student already has a pending or approved topic
-        if (auth.user?.userCode) {
+        if (userCode) {
           try {
             const topicsRes = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`
+              `/Topics/get-list?ProposerUserCode=${userCode}`
             );
             const topics = (topicsRes as ApiResponse<Topic[]>)?.data || [];
             const existingTopic = topics.find(
@@ -150,7 +151,7 @@ const TopicRegistration: React.FC = () => {
     };
 
     fetchInitialData();
-  }, [auth]);
+  }, [userCode]);
 
   // Handle registration type change
   const handleRegistrationTypeChange = (type: "catalog" | "self") => {
