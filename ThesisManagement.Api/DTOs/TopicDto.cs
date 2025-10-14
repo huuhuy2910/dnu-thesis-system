@@ -24,7 +24,8 @@ namespace ThesisManagement.Api.DTOs
     DateTime? CreatedAt,
     DateTime? LastUpdated,
         int? SpecialtyID,
-        string? SpecialtyCode
+        string? SpecialtyCode,
+        string? LecturerComment
     );
 
     public record TopicUpdateDto(
@@ -48,7 +49,8 @@ namespace ThesisManagement.Api.DTOs
         DateTime? CreatedAt,
         DateTime? LastUpdated,
         int? SpecialtyID,
-        string? SpecialtyCode
+        string? SpecialtyCode,
+        string? LecturerComment
     );
 
     public record TopicReadDto(
@@ -74,6 +76,7 @@ namespace ThesisManagement.Api.DTOs
     DateTime? CreatedAt,
     DateTime? LastUpdated,
         int? SpecialtyID,
-        string? SpecialtyCode
+        string? SpecialtyCode,
+        string? LecturerComment
     );
 }

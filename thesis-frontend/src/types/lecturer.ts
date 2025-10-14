@@ -7,6 +7,14 @@ export interface LecturerProfile {
   guideQuota: number;
   defenseQuota: number;
   currentGuidingCount: number;
+  gender: string;
+  dateOfBirth: string;
+  email: string;
+  phoneNumber: string;
+  profileImage: string;
+  address: string;
+  notes: string;
+  fullName: string;
   createdAt: string;
   lastUpdated: string | null;
 }

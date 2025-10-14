@@ -190,18 +190,14 @@ namespace ThesisManagement.Api.Services
                     .Join(_context.LecturerProfiles,
                         cm => cm.MemberLecturerProfileID,
                         lp => lp.LecturerProfileID,
-                        (cm, lp) => new { cm, lp })
-                    .Join(_context.Users,
-                        x => x.lp.UserCode,
-                        u => u.UserCode,
-                        (x, u) => new CommitteeMemberDetailDto
+                        (cm, lp) => new CommitteeMemberDetailDto
                         {
-                            CommitteeMemberID = x.cm.CommitteeMemberID,
-                            LecturerCode = x.lp.LecturerCode,
-                            LecturerName = u.FullName,
-                            Degree = x.lp.Degree,
-                            Role = x.cm.Role ?? "",
-                            IsChair = x.cm.IsChair ?? false
+                            CommitteeMemberID = cm.CommitteeMemberID,
+                            LecturerCode = lp.LecturerCode,
+                            LecturerName = lp.FullName ?? "",
+                            Degree = lp.Degree,
+                            Role = cm.Role ?? "",
+                            IsChair = cm.IsChair ?? false
                         })
                     .ToListAsync();
 
@@ -215,16 +211,12 @@ namespace ThesisManagement.Api.Services
                     .GroupJoin(_context.StudentProfiles,
                         x => x.t.ProposerStudentCode,
                         sp => sp.StudentCode,
-                        (x, sp) => new { x.da, x.t, sp = sp.FirstOrDefault() })
-                    .GroupJoin(_context.Users,
-                        x => x.sp != null ? x.sp.UserCode : null,
-                        u => u.UserCode,
-                        (x, u) => new DefenseTopicDto
+                        (x, sp) => new DefenseTopicDto
                         {
                             TopicCode = x.t.TopicCode,
                             Title = x.t.Title,
                             StudentCode = x.t.ProposerStudentCode,
-                            StudentName = u.FirstOrDefault() != null ? u.FirstOrDefault()!.FullName : null,
+                            StudentName = sp.FirstOrDefault() != null ? sp.FirstOrDefault()!.FullName : null,
                             ScheduledAt = x.da.ScheduledAt
                         })
                     .ToListAsync();
@@ -265,20 +257,16 @@ namespace ThesisManagement.Api.Services
                 }
 
                 var lecturers = await query
-                    .Join(_context.Users,
-                        lp => lp.UserCode,
-                        u => u.UserCode,
-                        (lp, u) => new { lp, u })
-                    .Select(x => new AvailableLecturerDto
+                    .Select(lp => new AvailableLecturerDto
                     {
-                        LecturerProfileID = x.lp.LecturerProfileID,
-                        LecturerCode = x.lp.LecturerCode,
-                        FullName = x.u.FullName,
-                        Degree = x.lp.Degree,
-                        DepartmentCode = x.lp.DepartmentCode,
-                        Specialties = x.lp.Specialties,
-                        CurrentDefenseCount = _context.CommitteeMembers.Count(cm => cm.MemberLecturerCode == x.lp.LecturerCode),
-                        IsEligibleForChair = x.lp.Degree != null && x.lp.Degree.Contains("Tiến sĩ")
+                        LecturerProfileID = lp.LecturerProfileID,
+                        LecturerCode = lp.LecturerCode,
+                        FullName = lp.FullName ?? "",
+                        Degree = lp.Degree,
+                        DepartmentCode = lp.DepartmentCode,
+                        Specialties = lp.Specialties,
+                        CurrentDefenseCount = _context.CommitteeMembers.Count(cm => cm.MemberLecturerCode == lp.LecturerCode),
+                        IsEligibleForChair = lp.Degree != null && lp.Degree.Contains("Tiến sĩ")
                     })
                     .OrderBy(l => l.CurrentDefenseCount)
                     .ToListAsync();
@@ -327,16 +315,12 @@ namespace ThesisManagement.Api.Services
                             .GroupJoin(_context.StudentProfiles,
                                 y => y.t.ProposerStudentCode,
                                 sp => sp.StudentCode,
-                                (y, sp) => new { y.da, y.t, sp = sp.FirstOrDefault() })
-                            .GroupJoin(_context.Users,
-                                y => y.sp != null ? y.sp.UserCode : null,
-                                u => u.UserCode,
-                                (y, u) => new DefenseTopicDto
+                                (y, sp) => new DefenseTopicDto
                                 {
                                     TopicCode = y.t.TopicCode,
                                     Title = y.t.Title,
                                     StudentCode = y.t.ProposerStudentCode,
-                                    StudentName = u.FirstOrDefault() != null ? u.FirstOrDefault()!.FullName : null,
+                                    StudentName = sp.FirstOrDefault() != null ? sp.FirstOrDefault()!.FullName : null,
                                     ScheduledAt = y.da.ScheduledAt
                                 })
                             .ToList()
@@ -346,7 +330,7 @@ namespace ThesisManagement.Api.Services
                 var result = new LecturerCommitteesDto
                 {
                     LecturerCode = lecturerCode,
-                    LecturerName = lecturer.User?.FullName ?? "",
+                    LecturerName = lecturer.FullName ?? "",
                     Committees = committees
                 };
 
@@ -399,18 +383,14 @@ namespace ThesisManagement.Api.Services
                             .Join(_context.LecturerProfiles,
                                 cm => cm.MemberLecturerProfileID,
                                 lp => lp.LecturerProfileID,
-                                (cm, lp) => new { cm, lp })
-                            .Join(_context.Users,
-                                x => x.lp.UserCode,
-                                u => u.UserCode,
-                                (x, u) => new CommitteeMemberDetailDto
+                                (cm, lp) => new CommitteeMemberDetailDto
                                 {
-                                    CommitteeMemberID = x.cm.CommitteeMemberID,
-                                    LecturerCode = x.lp.LecturerCode,
-                                    LecturerName = u.FullName,
-                                    Degree = x.lp.Degree,
-                                    Role = x.cm.Role ?? "",
-                                    IsChair = x.cm.IsChair ?? false
+                                    CommitteeMemberID = cm.CommitteeMemberID,
+                                    LecturerCode = lp.LecturerCode,
+                                    LecturerName = lp.FullName ?? "",
+                                    Degree = lp.Degree,
+                                    Role = cm.Role ?? "",
+                                    IsChair = cm.IsChair ?? false
                                 })
                             .ToListAsync();
 
@@ -428,7 +408,7 @@ namespace ThesisManagement.Api.Services
                 var result = new StudentDefenseInfoDto
                 {
                     StudentCode = studentCode,
-                    StudentName = student.User?.FullName ?? "",
+                    StudentName = student.FullName ?? "",
                     Topic = new StudentTopicDto
                     {
                         TopicCode = topic.TopicCode,

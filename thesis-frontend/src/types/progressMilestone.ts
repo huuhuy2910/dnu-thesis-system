@@ -3,12 +3,16 @@ export interface ProgressMilestone {
   milestoneCode: string;
   topicID: number;
   topicCode: string;
-  milestoneTemplateCode: string;
-  ordinal: number;
-  deadline: string;
+  milestoneTemplateCode: string | null;
+  ordinal: number | null;
+  deadline: string | null;
   state: string;
   startedAt: string | null;
-  completedAt: string | null;
+  completedAt1: string | null;
+  completedAt2: string | null;
+  completedAt3: string | null;
+  completedAt4: string | null;
+  completedAt5: string | null;
   createdAt: string;
   lastUpdated: string;
 }

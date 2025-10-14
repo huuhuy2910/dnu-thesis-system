@@ -1,4 +1,5 @@
 // src/main.tsx
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";

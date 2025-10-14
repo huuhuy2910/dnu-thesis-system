@@ -28,7 +28,6 @@ import type { Topic } from "../../types/topic";
 import type {
   LecturerProfile,
   Specialty,
-  User,
   Milestone,
 } from "../../types/lecturer";
 
@@ -47,7 +46,6 @@ const Reports: React.FC = () => {
   const [lecturerProfile, setLecturerProfile] =
     useState<LecturerProfile | null>(null);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
-  const [lecturerUser, setLecturerUser] = useState<User | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     [key: string]: string;
@@ -70,6 +68,14 @@ const Reports: React.FC = () => {
           const userTopic = topicsRes.data[0]; // Get the first topic
           setTopic(userTopic);
 
+          // Check if topic is pending approval
+          if (userTopic.status === "Đang chờ") {
+            setCanSubmit(false);
+            setSubmitMessage(
+              "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo."
+            );
+          }
+
           // Fetch milestones for the topic
           const milestonesRes = (await fetchData(
             `/ProgressMilestones/get-list?TopicCode=${userTopic.topicCode}`
@@ -87,15 +93,6 @@ const Reports: React.FC = () => {
 
             if (lecturerRes.data) {
               setLecturerProfile(lecturerRes.data);
-
-              // Fetch lecturer user details
-              const userRes = (await fetchData(
-                `/Users/get-detail/${lecturerRes.data.userCode}`
-              )) as ApiResponse<User>;
-
-              if (userRes.data) {
-                setLecturerUser(userRes.data);
-              }
 
               // Fetch lecturer specialties
               const specialtiesRes = (await fetchData(
@@ -126,7 +123,7 @@ const Reports: React.FC = () => {
     fetchTopicAndLecturerInfo();
   }, [auth.user?.userCode]);
 
-  // Fetch submission history
+  // Fetch submission history and check submission permissions
   useEffect(() => {
     const fetchReports = async () => {
       if (!auth.user?.userCode) {
@@ -140,7 +137,6 @@ const Reports: React.FC = () => {
         const submissionsRes = (await fetchData(
           `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`
         )) as ApiResponse<Record<string, unknown>[]>;
-        console.log("Submissions response:", submissionsRes);
 
         if (!submissionsRes.data || submissionsRes.data.length === 0) {
           setReports([]);
@@ -208,6 +204,44 @@ const Reports: React.FC = () => {
 
     fetchReports();
   }, [auth.user?.userCode]);
+
+  // Check submission permissions based on topic status and latest submission
+  useEffect(() => {
+    // First priority: no topic registered
+    if (!topic) {
+      setCanSubmit(false);
+      setSubmitMessage("Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo.");
+      return;
+    }
+
+    // Second priority: topic status
+    if (topic.status === "Đang chờ") {
+      setCanSubmit(false);
+      setSubmitMessage(
+        "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo."
+      );
+      return;
+    }
+
+    // Third priority: latest submission status
+    if (reports.length > 0) {
+      const latestSubmission = reports[0];
+      const lecturerState = latestSubmission.lecturerState as string;
+      if (!lecturerState || lecturerState.toLowerCase() === "pending") {
+        setCanSubmit(false);
+        setSubmitMessage(
+          "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới."
+        );
+      } else {
+        setCanSubmit(true);
+        setSubmitMessage(null);
+      }
+    } else {
+      // No submissions yet and topic is approved
+      setCanSubmit(true);
+      setSubmitMessage(null);
+    }
+  }, [topic, reports]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -507,7 +541,7 @@ const Reports: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
       <style>
         {`
           @keyframes shimmer {
@@ -520,27 +554,6 @@ const Reports: React.FC = () => {
           }
         `}
       </style>
-      {/* Header */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontSize: "28px",
-            fontWeight: "700",
-            color: "#1a1a1a",
-            marginBottom: "8px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
-        >
-          <FileText size={32} color="#f37021" />
-          Nộp báo cáo
-        </h1>
-        <p style={{ fontSize: "14px", color: "#666" }}>
-          Nộp báo cáo tiến độ và xem lịch sử nộp báo cáo
-        </p>
-      </div>
-
       {/* Topic and Lecturer Info */}
       {(topic || lecturerProfile) && (
         <div
@@ -983,7 +996,7 @@ const Reports: React.FC = () => {
                             fontWeight: "500",
                           }}
                         >
-                          {lecturerUser?.fullName || "Đang tải..."}
+                          {lecturerProfile?.fullName || "Đang tải..."}
                         </div>
                       </div>
                     </div>
@@ -1018,7 +1031,7 @@ const Reports: React.FC = () => {
                             fontWeight: "500",
                           }}
                         >
-                          {lecturerUser?.email || "Đang tải..."}
+                          {lecturerProfile?.email || "Đang tải..."}
                         </div>
                       </div>
                     </div>
@@ -1250,7 +1263,11 @@ const Reports: React.FC = () => {
       )}
 
       <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "24px",
+        }}
       >
         {/* Upload Form */}
         <div
@@ -1816,7 +1833,7 @@ const Reports: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: "16px",
-                maxHeight: "600px",
+                maxHeight: "800px",
                 overflowY: "auto",
                 paddingRight: "8px",
               }}
@@ -1882,15 +1899,6 @@ const Reports: React.FC = () => {
                       transition: "all 0.3s ease",
                       position: "relative",
                       overflow: "hidden",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-4px)";
-                      e.currentTarget.style.boxShadow =
-                        "0 8px 25px rgba(0,0,0,0.15)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "none";
                     }}
                   >
                     <div

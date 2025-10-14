@@ -3,6 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { fetchData } from "../../api/fetchData";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
+import type { LecturerProfile } from "../../types/lecturer-profile";
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -47,7 +48,7 @@ const Dashboard: React.FC = () => {
         const fetchedTopics = topicsResponse.data || [];
         setTopics(fetchedTopics);
 
-        // Fetch supervisor names
+        // Fetch supervisor names from LecturerProfiles
         const uniqueCodes = Array.from(
           new Set(
             fetchedTopics
@@ -58,10 +59,13 @@ const Dashboard: React.FC = () => {
         const names: Record<string, string> = {};
         for (const code of uniqueCodes) {
           try {
-            const userResponse = await fetchData<{
-              data: { fullName: string };
-            }>(`/Users/get-detail/${code}`);
-            names[code] = userResponse.data?.fullName || code;
+            const lecturerResponse = await fetchData<{
+              data: LecturerProfile[];
+            }>(`/LecturerProfiles/get-list?UserCode=${code}`);
+            const lecturerData = lecturerResponse.data || [];
+            if (lecturerData.length > 0) {
+              names[code] = lecturerData[0].fullName || code;
+            }
           } catch {
             names[code] = code; // fallback to code
           }
@@ -192,7 +196,6 @@ const Dashboard: React.FC = () => {
         gridTemplateColumns: "2fr 1fr",
         gap: "20px",
         padding: "10px 0",
-        margin: "50px 0 0 0 ",
       }}
     >
       {/* LEFT COLUMN */}
@@ -268,7 +271,7 @@ const Dashboard: React.FC = () => {
                     Họ tên:
                   </span>
                   <span style={{ color: "#333" }}>
-                    {auth.user?.fullName || "N/A"}
+                    {profile?.fullName || auth.user?.fullName || "N/A"}
                   </span>
                 </div>
                 <div
@@ -284,7 +287,7 @@ const Dashboard: React.FC = () => {
                     Email:
                   </span>
                   <span style={{ color: "#333" }}>
-                    {auth.user?.email || "N/A"}
+                    {profile.studentEmail || "N/A"}
                   </span>
                 </div>
                 <div

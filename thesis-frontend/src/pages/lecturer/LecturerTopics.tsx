@@ -39,19 +39,6 @@ const LecturerTopics: React.FC = () => {
       priority: "high",
     },
     {
-      topicCode: "DT2024002",
-      title: "Phát triển ứng dụng di động cho giáo dục",
-      description:
-        "Thiết kế và phát triển ứng dụng di động hỗ trợ học tập trực tuyến cho sinh viên.",
-      studentCode: "SV2024002",
-      studentName: "Trần Thị B",
-      submissionDate: "2025-01-20",
-      status: "pending",
-      category: "Công nghệ phần mềm",
-      priority: "medium",
-      comments: "Cần bổ sung thêm về phương pháp nghiên cứu",
-    },
-    {
       topicCode: "DT2024003",
       title: "Hệ thống quản lý thư viện thông minh",
       description:

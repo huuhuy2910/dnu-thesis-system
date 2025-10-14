@@ -1,66 +1,89 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { fetchData } from "../../api/fetchData";
+import { useAuth } from "../../hooks/useAuth";
+import type { ApiResponse } from "../../types/api";
+import type { LecturerProfile } from "../../types/lecturer-profile";
+import type { Department } from "../../types/department";
+import type { LecturerSpecialty } from "../../types/specialty";
+import type { Specialty } from "../../types/specialty-type";
 import {
   ArrowLeft,
   User,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  GraduationCap,
   Edit,
   Save,
+  GraduationCap,
+  Building,
+  Users,
+  BookOpen,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
-import type { ApiResponse } from "../../types/api";
-import type { StudentProfile } from "../../types/studentProfile";
-import { useAuth } from "../../hooks/useAuth";
 
-const StudentProfilePage: React.FC = () => {
+const LecturerProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [profile, setProfile] = useState<LecturerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<Partial<StudentProfile>>(
+  const [editedProfile, setEditedProfile] = useState<Partial<LecturerProfile>>(
     {}
   );
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [specialtyNames, setSpecialtyNames] = useState<string[]>([]);
 
-  const loadStudentProfile = React.useCallback(async () => {
+  const loadLecturerProfile = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Get student profile list
+      // Get lecturer profile list
       const listRes = await fetchData(
-        `/StudentProfiles/get-list?UserCode=${auth.user?.userCode}`
+        `/LecturerProfiles/get-list?UserCode=${auth.user?.userCode}`
       );
-      const listData = (listRes as ApiResponse<StudentProfile[]>)?.data || [];
+      const listData = (listRes as ApiResponse<LecturerProfile[]>)?.data || [];
 
       if (listData.length > 0) {
-        const studentCode = listData[0].studentCode;
+        const lecturerCode = listData[0].lecturerCode;
 
-        // Get detailed profile
-        const detailRes = await fetchData(
-          `/StudentProfiles/get-update/${studentCode}`
-        );
-        const detailData = (detailRes as ApiResponse<StudentProfile>)?.data;
-
-        if (detailData) {
-          setProfile(detailData);
-          setEditedProfile(detailData);
-        } else {
-          setProfile(listData[0]);
-          setEditedProfile(listData[0]);
+        if (!lecturerCode) {
+          setError("Không tìm thấy mã giảng viên trong dữ liệu");
+          return;
         }
+
+        // Get detailed profile - try but fallback to list data if fails
+        let profileData = listData[0];
+        try {
+          const detailRes = await fetchData(
+            `/LecturerProfiles/get-update/${lecturerCode}`
+          );
+          const detailData = (detailRes as ApiResponse<LecturerProfile>)?.data;
+
+          if (detailData && Object.keys(detailData).length > 0) {
+            profileData = detailData;
+          }
+        } catch (detailErr) {
+          console.error(
+            "Error fetching detailed profile, using list data:",
+            detailErr
+          );
+        }
+
+        // Ensure lecturerCode is set
+        profileData = { ...profileData, lecturerCode };
+
+        setProfile(profileData);
+        setEditedProfile(profileData);
+
+        // Load departments
+        const deptRes = await fetchData("/Departments/get-list");
+        setDepartments((deptRes as ApiResponse<Department[]>)?.data || []);
       } else {
-        setError("Không tìm thấy thông tin sinh viên");
+        setError("Không tìm thấy thông tin giảng viên");
       }
     } catch (err) {
-      console.error("Error loading student profile:", err);
-      setError("Có lỗi xảy ra khi tải thông tin sinh viên");
+      console.error("Error loading lecturer profile:", err);
+      setError("Có lỗi xảy ra khi tải thông tin giảng viên");
     } finally {
       setLoading(false);
     }
@@ -68,16 +91,70 @@ const StudentProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (auth.user?.userCode) {
-      loadStudentProfile();
+      loadLecturerProfile();
     }
-  }, [loadStudentProfile, auth.user?.userCode]);
+  }, [loadLecturerProfile, auth.user?.userCode]);
+
+  // Load specialty names
+  useEffect(() => {
+    const loadSpecialtyNames = async () => {
+      if (!profile?.lecturerCode) {
+        return;
+      }
+
+      try {
+        // Get lecturer specialties
+        const lecturerSpecRes = await fetchData(
+          `/LecturerSpecialties/get-list?LecturerCode=${profile.lecturerCode}`
+        );
+        const lecturerSpecialties =
+          (lecturerSpecRes as ApiResponse<LecturerSpecialty[]>)?.data || [];
+
+        if (lecturerSpecialties.length === 0) {
+          setSpecialtyNames([]);
+          return;
+        }
+
+        // Get specialty names for each specialty code
+        const specialtyNamesPromises = lecturerSpecialties.map(async (ls) => {
+          try {
+            const specRes = await fetchData(
+              `/Specialties/get-list?SpecialtyCode=${ls.specialtyCode}`
+            );
+            const specialtyData =
+              (specRes as ApiResponse<Specialty[]>)?.data || [];
+            return specialtyData.length > 0
+              ? specialtyData[0].name
+              : ls.specialtyCode;
+          } catch (err) {
+            console.error(`Error loading specialty ${ls.specialtyCode}:`, err);
+            return ls.specialtyCode;
+          }
+        });
+
+        const names = await Promise.all(specialtyNamesPromises);
+        setSpecialtyNames(names);
+      } catch (err) {
+        console.error("Error loading specialty names:", err);
+        setSpecialtyNames([]);
+      }
+    };
+
+    if (profile?.lecturerCode) {
+      loadSpecialtyNames();
+    }
+  }, [profile?.lecturerCode]);
 
   const handleSave = async () => {
-    if (!profile) return;
+    if (!profile || !profile.lecturerCode) {
+      setError("Không thể cập nhật: thiếu thông tin mã giảng viên");
+      return;
+    }
 
     try {
       setLoading(true);
-      await fetchData(`/StudentProfiles/update/${profile.studentCode}`, {
+
+      await fetchData(`/LecturerProfiles/update/${profile.lecturerCode}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -88,7 +165,7 @@ const StudentProfilePage: React.FC = () => {
       setProfile({ ...profile, ...editedProfile });
       setIsEditing(false);
       // Reload to get updated data
-      await loadStudentProfile();
+      await loadLecturerProfile();
     } catch (err) {
       console.error("Error updating profile:", err);
       setError("Có lỗi xảy ra khi cập nhật thông tin");
@@ -110,12 +187,17 @@ const StudentProfilePage: React.FC = () => {
       // Store the URL into the edited profile so the payload contains the image
       setEditedProfile({
         ...editedProfile,
-        studentImage: url,
+        profileImage: url,
       });
     } else {
       // If no URL entered, clear preview
       setImagePreview(null);
     }
+  };
+
+  const getDepartmentName = (departmentCode: string) => {
+    const dept = departments.find((d) => d.departmentCode === departmentCode);
+    return dept?.name || departmentCode;
   };
 
   if (loading && !profile) {
@@ -127,22 +209,22 @@ const StudentProfilePage: React.FC = () => {
           alignItems: "center",
           padding: "100px",
           gap: "16px",
-          background: "#F9FAFB",
+          background: "linear-gradient(135deg, #002855 0%, #003d82 100%)",
           borderRadius: "16px",
-          border: "1px solid #E5E7EB",
+          border: "1px solid #f37021",
         }}
       >
         <div
           style={{
             width: "32px",
             height: "32px",
-            border: "3px solid #E5E7EB",
-            borderTop: "3px solid #4F46E5",
+            border: "3px solid #f37021",
+            borderTop: "3px solid #ffffff",
             borderRadius: "50%",
             animation: "spin 1s linear infinite",
           }}
         />
-        <span style={{ color: "#374151", fontSize: "18px", fontWeight: "500" }}>
+        <span style={{ color: "#ffffff", fontSize: "18px", fontWeight: "500" }}>
           ĐANG TẢI THÔNG TIN...
         </span>
       </div>
@@ -158,37 +240,41 @@ const StudentProfilePage: React.FC = () => {
             alignItems: "center",
             gap: "12px",
             padding: "20px",
-            background: "#FEF2F2",
-            border: "1px solid #FECACA",
+            background: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+            border: "1px solid #f37021",
             borderRadius: "12px",
           }}
         >
-          <div style={{ color: "#DC2626", fontSize: "20px" }}>⚠️</div>
+          <div style={{ color: "#ffffff", fontSize: "20px" }}>⚠️</div>
           <span
-            style={{ color: "#DC2626", fontSize: "16px", fontWeight: "500" }}
+            style={{ color: "#ffffff", fontSize: "16px", fontWeight: "500" }}
           >
-            {error || "KHÔNG TÌM THẤY THÔNG TIN SINH VIÊN"}
+            {error || "KHÔNG TÌM THẤY THÔNG TIN GIẢNG VIÊN"}
           </span>
         </div>
         <button
-          onClick={() => navigate("/student")}
+          onClick={() => navigate("/lecturer")}
           style={{
             marginTop: "20px",
             padding: "12px 24px",
-            background: "#4F46E5",
+            background: "linear-gradient(135deg, #002855 0%, #003d82 100%)",
             color: "white",
-            border: "none",
+            border: "1px solid #f37021",
             borderRadius: "8px",
             fontSize: "14px",
             fontWeight: "500",
             cursor: "pointer",
-            transition: "background-color 0.2s",
+            transition: "all 0.2s",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#4338CA";
+            e.currentTarget.style.background =
+              "linear-gradient(135deg, #003d82 0%, #002855 100%)";
+            e.currentTarget.style.transform = "translateY(-1px)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#4F46E5";
+            e.currentTarget.style.background =
+              "linear-gradient(135deg, #002855 0%, #003d82 100%)";
+            e.currentTarget.style.transform = "translateY(0)";
           }}
         >
           Quay lại
@@ -203,7 +289,7 @@ const StudentProfilePage: React.FC = () => {
         padding: "32px",
         maxWidth: "1200px",
         margin: "0 auto",
-        background: "#fff",
+        background: "#ffffff",
         minHeight: "100vh",
       }}
     >
@@ -217,15 +303,15 @@ const StudentProfilePage: React.FC = () => {
           }}
         >
           <button
-            onClick={() => navigate("/student")}
+            onClick={() => navigate("/lecturer")}
             style={{
               display: "flex",
               alignItems: "center",
               gap: "8px",
               padding: "12px 20px",
-              background: "#F3F4F6",
-              color: "#374151",
-              border: "1px solid #D1D5DB",
+              background: "linear-gradient(135deg, #002855 0%, #003d82 100%)",
+              color: "white",
+              border: "1px solid #f37021",
               borderRadius: "8px",
               fontSize: "14px",
               fontWeight: "500",
@@ -233,10 +319,14 @@ const StudentProfilePage: React.FC = () => {
               transition: "all 0.2s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#E5E7EB";
+              e.currentTarget.style.background =
+                "linear-gradient(135deg, #003d82 0%, #002855 100%)";
+              e.currentTarget.style.transform = "translateY(-1px)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#F3F4F6";
+              e.currentTarget.style.background =
+                "linear-gradient(135deg, #002855 0%, #003d82 100%)";
+              e.currentTarget.style.transform = "translateY(0)";
             }}
           >
             <ArrowLeft size={18} />
@@ -248,7 +338,7 @@ const StudentProfilePage: React.FC = () => {
               style={{
                 fontSize: "32px",
                 fontWeight: "700",
-                color: "#111827",
+                color: "#002855",
                 marginBottom: "8px",
                 display: "flex",
                 alignItems: "center",
@@ -256,13 +346,13 @@ const StudentProfilePage: React.FC = () => {
                 gap: "16px",
               }}
             >
-              <User size={36} color="#6B7280" />
-              THÔNG TIN SINH VIÊN
+              <User size={36} color="#f37021" />
+              THÔNG TIN GIẢNG VIÊN
             </h1>
             <p
               style={{
                 fontSize: "18px",
-                color: "#6B7280",
+                color: "#003d82",
                 margin: 0,
                 fontWeight: "400",
               }}
@@ -286,28 +376,29 @@ const StudentProfilePage: React.FC = () => {
                 alignItems: "center",
                 gap: "8px",
                 padding: "12px 20px",
-                background: isEditing ? "#10B981" : "#4F46E5",
+                background: isEditing
+                  ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                  : "linear-gradient(135deg, #f37021 0%, #ea580c 100%)",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
                 cursor: loading ? "not-allowed" : "pointer",
-                transition: "background-color 0.2s",
+                transition: "all 0.2s",
                 opacity: loading ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.backgroundColor = isEditing
-                    ? "#059669"
-                    : "#4338CA";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(243, 112, 33, 0.3)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.backgroundColor = isEditing
-                    ? "#10B981"
-                    : "#4F46E5";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
                 }
               }}
             >
@@ -323,20 +414,25 @@ const StudentProfilePage: React.FC = () => {
                   alignItems: "center",
                   gap: "8px",
                   padding: "12px 20px",
-                  background: "#F3F4F6",
-                  color: "#374151",
-                  border: "1px solid #D1D5DB",
+                  background:
+                    "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+                  color: "white",
+                  border: "none",
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: "500",
                   cursor: "pointer",
-                  transition: "background-color 0.2s",
+                  transition: "all 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#E5E7EB";
+                  e.currentTarget.style.background =
+                    "linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#F3F4F6";
+                  e.currentTarget.style.background =
+                    "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)";
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 Hủy
@@ -357,12 +453,13 @@ const StudentProfilePage: React.FC = () => {
         {/* Profile Image & Basic Info - Left Column */}
         <div
           style={{
-            background: "#FFFFFF",
+            background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
             borderRadius: "16px",
             padding: "32px",
-            border: "1px solid #E5E7EB",
+            border: "2px solid #f37021",
             textAlign: "center",
             height: "fit-content",
+            boxShadow: "0 8px 32px rgba(0, 40, 85, 0.1)",
           }}
         >
           <div
@@ -372,14 +469,14 @@ const StudentProfilePage: React.FC = () => {
               borderRadius: "50%",
               margin: "0 auto 24px",
               overflow: "hidden",
-              border: "4px solid #E5E7EB",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+              border: "4px solid #f37021",
+              boxShadow: "0 4px 12px rgba(243, 112, 33, 0.3)",
             }}
           >
-            {imagePreview || profile.studentImage ? (
+            {imagePreview || profile.profileImage ? (
               <img
-                src={imagePreview || profile.studentImage}
-                alt={profile.fullName || auth.user?.fullName || "Student"}
+                src={imagePreview || profile.profileImage}
+                alt={profile.fullName}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -391,20 +488,17 @@ const StudentProfilePage: React.FC = () => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  background: "linear-gradient(135deg, #F3F4F6, #E5E7EB)",
+                  background:
+                    "linear-gradient(135deg, #002855 0%, #003d82 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  color: "white",
                   fontSize: "48px",
-                  color: "#6B7280",
-                  fontWeight: "600",
+                  fontWeight: "bold",
                 }}
               >
-                {profile.fullName
-                  ? profile.fullName.charAt(0)
-                  : auth.user?.fullName
-                  ? auth.user.fullName.charAt(0)
-                  : "S"}
+                {profile.fullName.charAt(0)}
               </div>
             )}
           </div>
@@ -413,20 +507,22 @@ const StudentProfilePage: React.FC = () => {
             style={{
               fontSize: "24px",
               fontWeight: "600",
-              color: "#111827",
+              color: "#002855",
               marginBottom: "8px",
             }}
           >
-            {profile.fullName || auth.user?.fullName || "Sinh viên"}
+            {profile.fullName}
           </h2>
           <p
             style={{
               fontSize: "16px",
-              color: "#6B7280",
+              color: "#f37021",
               marginBottom: "16px",
             }}
           >
-            {profile.studentCode}
+            {profile.degree}
+            <br></br>
+            {getDepartmentName(profile.departmentCode)}
           </p>
 
           <div
@@ -437,8 +533,11 @@ const StudentProfilePage: React.FC = () => {
               gap: "8px",
               padding: "8px 16px",
               marginBottom: "16px",
-              background: profile.status === "Đang học" ? "#D1FAE5" : "#FEF3C7",
-              color: profile.status === "Đang học" ? "#065F46" : "#92400E",
+              background:
+                profile.currentGuidingCount < profile.guideQuota
+                  ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                  : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+              color: "white",
               borderRadius: "20px",
               fontSize: "14px",
               fontWeight: "500",
@@ -450,38 +549,42 @@ const StudentProfilePage: React.FC = () => {
                 height: "8px",
                 borderRadius: "50%",
                 background:
-                  profile.status === "Đang học" ? "#10B981" : "#F59E0B",
+                  profile.currentGuidingCount < profile.guideQuota
+                    ? "#ffffff"
+                    : "#ffffff",
               }}
             />
-            {profile.status}
+            {profile.currentGuidingCount}/{profile.guideQuota} đề tài đang hướng
+            dẫn
           </div>
 
           {isEditing && (
-            <div style={{ marginTop: "16px" }}>
+            <div style={{ marginTop: "24px" }}>
               <label
                 style={{
                   display: "block",
+                  marginBottom: "8px",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "8px",
+                  color: "#002855",
                 }}
               >
-                Đường dẫn ảnh đại diện
+                URL ảnh đại diện
               </label>
               <input
-                type="text"
-                value={editedProfile.studentImage || ""}
+                type="url"
+                value={editedProfile.profileImage || ""}
                 onChange={handleImageUrlChange}
                 placeholder="Nhập URL ảnh..."
                 style={{
                   width: "100%",
                   padding: "12px",
-                  border: "1px solid #D1D5DB",
+                  border: "2px solid #f37021",
                   borderRadius: "8px",
                   fontSize: "14px",
                   background: "#FFFFFF",
-                  marginBottom: "8px",
+                  boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                  transition: "border-color 0.2s, box-shadow 0.2s",
                 }}
               />
             </div>
@@ -491,24 +594,25 @@ const StudentProfilePage: React.FC = () => {
         {/* Personal Information - Right Column */}
         <div
           style={{
-            background: "#FFFFFF",
+            background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
             borderRadius: "16px",
             padding: "32px",
-            border: "1px solid #E5E7EB",
+            border: "2px solid #f37021",
+            boxShadow: "0 8px 32px rgba(0, 40, 85, 0.1)",
           }}
         >
           <h3
             style={{
               fontSize: "20px",
               fontWeight: "600",
-              color: "#111827",
+              color: "#002855",
               marginBottom: "24px",
               display: "flex",
               alignItems: "center",
               gap: "12px",
             }}
           >
-            <User size={24} color="#6B7280" />
+            <User size={24} color="#f37021" />
             Thông tin cá nhân
           </h3>
 
@@ -519,14 +623,164 @@ const StudentProfilePage: React.FC = () => {
               gap: "20px",
             }}
           >
+            {/* Full Name */}
             <div>
               <label
                 style={{
                   display: "block",
+                  marginBottom: "8px",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "6px",
+                  color: "#002855",
+                }}
+              >
+                Họ và tên *
+              </label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedProfile.fullName || ""}
+                  onChange={(e) =>
+                    setEditedProfile({
+                      ...editedProfile,
+                      fullName: e.target.value,
+                    })
+                  }
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #f37021",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    background: "#FFFFFF",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    padding: "12px",
+                    background: "#F9FAFB",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    color: "#111827",
+                  }}
+                >
+                  {profile.fullName}
+                </div>
+              )}
+            </div>
+
+            {/* Email */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#002855",
+                }}
+              >
+                Email *
+              </label>
+              {isEditing ? (
+                <input
+                  type="email"
+                  value={editedProfile.email || ""}
+                  onChange={(e) =>
+                    setEditedProfile({
+                      ...editedProfile,
+                      email: e.target.value,
+                    })
+                  }
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #f37021",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    background: "#FFFFFF",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    padding: "12px",
+                    background: "#F9FAFB",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    color: "#111827",
+                  }}
+                >
+                  {profile.email}
+                </div>
+              )}
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#002855",
+                }}
+              >
+                Số điện thoại
+              </label>
+              {isEditing ? (
+                <input
+                  type="tel"
+                  value={editedProfile.phoneNumber || ""}
+                  onChange={(e) =>
+                    setEditedProfile({
+                      ...editedProfile,
+                      phoneNumber: e.target.value,
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #f37021",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    background: "#FFFFFF",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    padding: "12px",
+                    background: "#F9FAFB",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    color: "#111827",
+                  }}
+                >
+                  {profile.phoneNumber || "Chưa cập nhật"}
+                </div>
+              )}
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#002855",
                 }}
               >
                 Giới tính
@@ -543,10 +797,12 @@ const StudentProfilePage: React.FC = () => {
                   style={{
                     width: "100%",
                     padding: "12px",
-                    border: "1px solid #D1D5DB",
+                    border: "2px solid #f37021",
                     borderRadius: "8px",
                     fontSize: "14px",
                     background: "#FFFFFF",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
                   }}
                 >
                   <option value="">Chọn giới tính</option>
@@ -569,14 +825,15 @@ const StudentProfilePage: React.FC = () => {
               )}
             </div>
 
+            {/* Date of Birth */}
             <div>
               <label
                 style={{
                   display: "block",
+                  marginBottom: "8px",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "6px",
+                  color: "#002855",
                 }}
               >
                 Ngày sinh
@@ -600,10 +857,12 @@ const StudentProfilePage: React.FC = () => {
                   style={{
                     width: "100%",
                     padding: "12px",
-                    border: "1px solid #D1D5DB",
+                    border: "2px solid #f37021",
                     borderRadius: "8px",
                     fontSize: "14px",
                     background: "#FFFFFF",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
                   }}
                 />
               ) : (
@@ -623,121 +882,22 @@ const StudentProfilePage: React.FC = () => {
               )}
             </div>
 
+            {/* Address */}
             <div>
               <label
                 style={{
+                  display: "block",
+                  marginBottom: "8px",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
+                  color: "#002855",
                 }}
               >
-                <Phone size={16} />
-                Số điện thoại
-              </label>
-              {isEditing ? (
-                <input
-                  type="tel"
-                  value={editedProfile.phoneNumber || ""}
-                  onChange={(e) =>
-                    setEditedProfile({
-                      ...editedProfile,
-                      phoneNumber: e.target.value,
-                    })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "1px solid #D1D5DB",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    background: "#FFFFFF",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    padding: "12px",
-                    background: "#F9FAFB",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#111827",
-                  }}
-                >
-                  {profile.phoneNumber || "Chưa cập nhật"}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <Mail size={16} />
-                Email sinh viên
-              </label>
-              {isEditing ? (
-                <input
-                  type="email"
-                  value={editedProfile.studentEmail || ""}
-                  onChange={(e) =>
-                    setEditedProfile({
-                      ...editedProfile,
-                      studentEmail: e.target.value,
-                    })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "1px solid #D1D5DB",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    background: "#FFFFFF",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    padding: "12px",
-                    background: "#F9FAFB",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#111827",
-                  }}
-                >
-                  {profile.studentEmail || "Chưa cập nhật"}
-                </div>
-              )}
-            </div>
-
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  color: "#6B7280",
-                  marginBottom: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <MapPin size={16} />
                 Địa chỉ
               </label>
               {isEditing ? (
-                <textarea
+                <input
+                  type="text"
                   value={editedProfile.address || ""}
                   onChange={(e) =>
                     setEditedProfile({
@@ -745,15 +905,15 @@ const StudentProfilePage: React.FC = () => {
                       address: e.target.value,
                     })
                   }
-                  rows={3}
                   style={{
                     width: "100%",
                     padding: "12px",
-                    border: "1px solid #D1D5DB",
+                    border: "2px solid #f37021",
                     borderRadius: "8px",
                     fontSize: "14px",
                     background: "#FFFFFF",
-                    resize: "vertical",
+                    boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
                   }}
                 />
               ) : (
@@ -777,25 +937,26 @@ const StudentProfilePage: React.FC = () => {
       {/* Academic Information - Full Width Below */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
           borderRadius: "16px",
           padding: "32px",
-          border: "1px solid #E5E7EB",
+          border: "2px solid #f37021",
+          boxShadow: "0 8px 32px rgba(0, 40, 85, 0.1)",
         }}
       >
         <h3
           style={{
             fontSize: "20px",
             fontWeight: "600",
-            color: "#111827",
+            color: "#002855",
             marginBottom: "24px",
             display: "flex",
             alignItems: "center",
             gap: "12px",
           }}
         >
-          <GraduationCap size={24} color="#6B7280" />
-          Thông tin học tập
+          <GraduationCap size={24} color="#f37021" />
+          Thông tin công tác
         </h3>
 
         <div
@@ -805,67 +966,20 @@ const StudentProfilePage: React.FC = () => {
             gap: "20px",
           }}
         >
+          {/* Department */}
           <div>
             <label
               style={{
-                display: "block",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
+                color: "#002855",
               }}
             >
-              Mã sinh viên
-            </label>
-            <div
-              style={{
-                padding: "12px",
-                background: "#F9FAFB",
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: "#111827",
-                fontWeight: "500",
-              }}
-            >
-              {profile.studentCode}
-            </div>
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
-              }}
-            >
-              Lớp
-            </label>
-            <div
-              style={{
-                padding: "12px",
-                background: "#F9FAFB",
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: "#111827",
-              }}
-            >
-              {profile.classCode}
-            </div>
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
-              }}
-            >
+              <Building size={16} color="#f37021" />
               Khoa
             </label>
             <div
@@ -877,144 +991,25 @@ const StudentProfilePage: React.FC = () => {
                 color: "#111827",
               }}
             >
-              {profile.facultyCode}
+              {getDepartmentName(profile.departmentCode)}
             </div>
           </div>
 
+          {/* Degree */}
           <div>
             <label
               style={{
-                display: "block",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
-              }}
-            >
-              Bộ môn
-            </label>
-            <div
-              style={{
-                padding: "12px",
-                background: "#F9FAFB",
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: "#111827",
-              }}
-            >
-              {profile.departmentCode}
-            </div>
-          </div>
-
-          <div>
-            <label
-              style={{
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-              }}
-            >
-              <Calendar size={16} />
-              Năm nhập học
-            </label>
-            {isEditing ? (
-              <input
-                type="number"
-                value={editedProfile.enrollmentYear || ""}
-                onChange={(e) =>
-                  setEditedProfile({
-                    ...editedProfile,
-                    enrollmentYear: parseInt(e.target.value) || 0,
-                  })
-                }
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  border: "1px solid #D1D5DB",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "#FFFFFF",
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  padding: "12px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  color: "#111827",
-                }}
-              >
-                {profile.enrollmentYear}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label
-              style={{
+                marginBottom: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+                color: "#002855",
               }}
             >
-              <GraduationCap size={16} />
-              Năm tốt nghiệp
-            </label>
-            {isEditing ? (
-              <input
-                type="number"
-                value={editedProfile.graduationYear || ""}
-                onChange={(e) =>
-                  setEditedProfile({
-                    ...editedProfile,
-                    graduationYear: parseInt(e.target.value) || 0,
-                  })
-                }
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  border: "1px solid #D1D5DB",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "#FFFFFF",
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  padding: "12px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  color: "#111827",
-                }}
-              >
-                {profile.graduationYear}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
-              }}
-            >
-              GPA
+              <GraduationCap size={16} color="#f37021" />
+              Học vị
             </label>
             <div
               style={{
@@ -1023,24 +1018,27 @@ const StudentProfilePage: React.FC = () => {
                 borderRadius: "8px",
                 fontSize: "14px",
                 color: "#111827",
-                fontWeight: "500",
               }}
             >
-              {profile.gpa.toFixed(2)}
+              {profile.degree}
             </div>
           </div>
 
+          {/* Guide Quota */}
           <div>
             <label
               style={{
-                display: "block",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
+                color: "#002855",
               }}
             >
-              Xếp loại học tập
+              <Users size={16} color="#f37021" />
+              Hạn mức hướng dẫn
             </label>
             <div
               style={{
@@ -1051,7 +1049,96 @@ const StudentProfilePage: React.FC = () => {
                 color: "#111827",
               }}
             >
-              {profile.academicStanding}
+              {profile.guideQuota} đề tài
+            </div>
+          </div>
+
+          {/* Defense Quota */}
+          <div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#002855",
+              }}
+            >
+              <BookOpen size={16} color="#f37021" />
+              Hạn mức phản biện
+            </label>
+            <div
+              style={{
+                padding: "12px",
+                background: "#F9FAFB",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#111827",
+              }}
+            >
+              {profile.defenseQuota} đề tài
+            </div>
+          </div>
+
+          {/* Current Guiding Count */}
+          <div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#002855",
+              }}
+            >
+              <Users size={16} color="#f37021" />
+              Đang hướng dẫn
+            </label>
+            <div
+              style={{
+                padding: "12px",
+                background: "#F9FAFB",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#111827",
+              }}
+            >
+              {profile.currentGuidingCount} đề tài
+            </div>
+          </div>
+
+          {/* Specialties */}
+          <div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#002855",
+              }}
+            >
+              <BookOpen size={16} color="#f37021" />
+              Chuyên ngành
+            </label>
+            <div
+              style={{
+                padding: "12px",
+                background: "#F9FAFB",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#111827",
+              }}
+            >
+              {specialtyNames.length > 0
+                ? specialtyNames.join(", ")
+                : "Chưa có chuyên ngành"}
             </div>
           </div>
         </div>
@@ -1061,10 +1148,10 @@ const StudentProfilePage: React.FC = () => {
             <label
               style={{
                 display: "block",
+                marginBottom: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
-                color: "#6B7280",
-                marginBottom: "6px",
+                color: "#002855",
               }}
             >
               Ghi chú
@@ -1082,10 +1169,12 @@ const StudentProfilePage: React.FC = () => {
                 style={{
                   width: "100%",
                   padding: "12px",
-                  border: "1px solid #D1D5DB",
+                  border: "2px solid #f37021",
                   borderRadius: "8px",
                   fontSize: "14px",
                   background: "#FFFFFF",
+                  boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                  transition: "border-color 0.2s, box-shadow 0.2s",
                   resize: "vertical",
                 }}
               />
@@ -1097,6 +1186,7 @@ const StudentProfilePage: React.FC = () => {
                   borderRadius: "8px",
                   fontSize: "14px",
                   color: "#111827",
+                  lineHeight: "1.5",
                 }}
               >
                 {profile.notes}
@@ -1109,4 +1199,4 @@ const StudentProfilePage: React.FC = () => {
   );
 };
 
-export default StudentProfilePage;
+export default LecturerProfilePage;

@@ -33,7 +33,8 @@ import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 import StudentProfilePage from "../pages/student/StudentProfile";
 import ScrollToTop from "../components/ScrollToTop";
-
+import LecturerProfilePage from "../pages/lecturer/LecturerProfile";
+import LecturerTopicReview from "../pages/lecturer/LecturerTopicReview";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -77,10 +78,12 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<LecturerDashboard />} />
           <Route path="students" element={<LecturerStudents />} />
-          <Route path="topics" element={<LecturerTopics />} />
+          <Route path="report" element={<LecturerTopics />} />
+          <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="schedule" element={<LecturerSchedule />} />
           <Route path="committees" element={<LecturerCommittees />} />
           <Route path="reports" element={<LecturerReports />} />
+          <Route path="profile" element={<LecturerProfilePage />} />
           {/* thêm các route con của lecturer ở đây */}
         </Route>
 

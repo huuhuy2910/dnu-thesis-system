@@ -36,19 +36,11 @@ namespace ThesisManagement.Api.Helpers
         {
             if (!string.IsNullOrEmpty(filter.Search))
             {
-                query = query.Where(x => x.UserCode.Contains(filter.Search) || 
-                                        x.FullName.Contains(filter.Search) ||
-                                        (x.Email != null && x.Email.Contains(filter.Search)));
+                query = query.Where(x => x.UserCode.Contains(filter.Search));
             }
 
             if (!string.IsNullOrEmpty(filter.Username))
                 query = query.Where(x => x.UserCode.Contains(filter.Username));
-
-            if (!string.IsNullOrEmpty(filter.FullName))
-                query = query.Where(x => x.FullName.Contains(filter.FullName));
-
-            if (!string.IsNullOrEmpty(filter.Email))
-                query = query.Where(x => x.Email != null && x.Email.Contains(filter.Email));
 
             if (!string.IsNullOrEmpty(filter.Role))
                 query = query.Where(x => x.Role == filter.Role);
@@ -341,10 +333,22 @@ namespace ThesisManagement.Api.Helpers
                 query = query.Where(x => x.StartedAt <= filter.StartedTo.Value);
 
             if (filter.CompletedFrom.HasValue)
-                query = query.Where(x => x.CompletedAt >= filter.CompletedFrom.Value);
+                query = query.Where(x =>
+                    (x.CompletedAt1.HasValue && x.CompletedAt1.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt2.HasValue && x.CompletedAt2.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt3.HasValue && x.CompletedAt3.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt4.HasValue && x.CompletedAt4.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt5.HasValue && x.CompletedAt5.Value >= filter.CompletedFrom.Value)
+                );
 
             if (filter.CompletedTo.HasValue)
-                query = query.Where(x => x.CompletedAt <= filter.CompletedTo.Value);
+                query = query.Where(x =>
+                    (x.CompletedAt1.HasValue && x.CompletedAt1.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt2.HasValue && x.CompletedAt2.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt3.HasValue && x.CompletedAt3.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt4.HasValue && x.CompletedAt4.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt5.HasValue && x.CompletedAt5.Value <= filter.CompletedTo.Value)
+                );
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);

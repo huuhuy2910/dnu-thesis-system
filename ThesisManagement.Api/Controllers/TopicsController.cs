@@ -84,7 +84,8 @@ namespace ThesisManagement.Api.Controllers
                 CreatedAt: now,
                 LastUpdated: now,
                 SpecialtyID: null,
-                SpecialtyCode: null
+                SpecialtyCode: null,
+                LecturerComment: null
             );
 
             return Ok(ApiResponse<TopicCreateDto>.SuccessResponse(sample));
@@ -120,7 +121,15 @@ namespace ThesisManagement.Api.Controllers
                 LastUpdated = dto.LastUpdated == default ? DateTime.UtcNow : dto.LastUpdated,
                 SpecialtyID = dto.SpecialtyID,
                 SpecialtyCode = dto.SpecialtyCode
+                ,
+                LecturerComment = dto.LecturerComment
             };
+            // If this is a self-proposed topic, ensure catalog references are cleared
+            if (string.Equals(dto.Type, "SELF", StringComparison.OrdinalIgnoreCase))
+            {
+                ent.CatalogTopicID = null;
+                ent.CatalogTopicCode = null;
+            }
             await _uow.Topics.AddAsync(ent);
             try
             {
@@ -161,7 +170,8 @@ namespace ThesisManagement.Api.Controllers
                 CreatedAt: ent.CreatedAt,
                 LastUpdated: ent.LastUpdated,
                 SpecialtyID: ent.SpecialtyID,
-                SpecialtyCode: ent.SpecialtyCode
+                SpecialtyCode: ent.SpecialtyCode,
+                LecturerComment: ent.LecturerComment
             );
             return Ok(ApiResponse<TopicUpdateDto>.SuccessResponse(sample));
         }
@@ -191,6 +201,7 @@ namespace ThesisManagement.Api.Controllers
             if (dto.ResubmitCount.HasValue) ent.ResubmitCount = dto.ResubmitCount.Value;
             if (dto.SpecialtyID.HasValue) ent.SpecialtyID = dto.SpecialtyID.Value;
             if (dto.SpecialtyCode is not null) ent.SpecialtyCode = dto.SpecialtyCode;
+            if (dto.LecturerComment is not null) ent.LecturerComment = dto.LecturerComment;
             if (dto.CreatedAt.HasValue) ent.CreatedAt = dto.CreatedAt.Value;
             ent.LastUpdated = dto.LastUpdated ?? DateTime.UtcNow;
             _uow.Topics.Update(ent);

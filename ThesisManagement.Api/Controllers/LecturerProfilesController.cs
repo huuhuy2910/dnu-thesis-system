@@ -59,6 +59,14 @@ namespace ThesisManagement.Api.Controllers
                 GuideQuota = dto.GuideQuota ?? 10,
                 DefenseQuota = dto.DefenseQuota ?? 8,
                 CurrentGuidingCount = dto.CurrentGuidingCount,
+                Gender = dto.Gender,
+                DateOfBirth = dto.DateOfBirth,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
+                ProfileImage = dto.ProfileImage,
+                Address = dto.Address,
+                Notes = dto.Notes,
+                FullName = dto.FullName,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -67,18 +75,31 @@ namespace ThesisManagement.Api.Controllers
             return StatusCode(201, ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(entity),1,201));
         }
 
-        [HttpGet("get-update/{id}")]
-        public async Task<IActionResult> GetUpdate(int id)
+        [HttpGet("get-update/{code}")]
+        public async Task<IActionResult> GetUpdate(string code)
         {
-            var ent = await _uow.LecturerProfiles.GetByIdAsync(id);
+            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(new LecturerProfileUpdateDto(ent.DepartmentCode, ent.Degree, ent.GuideQuota, ent.DefenseQuota, ent.CurrentGuidingCount)));
+            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(new LecturerProfileUpdateDto(
+                ent.DepartmentCode,
+                ent.Degree,
+                ent.GuideQuota,
+                ent.DefenseQuota,
+                ent.CurrentGuidingCount,
+                ent.Gender,
+                ent.DateOfBirth,
+                ent.Email,
+                ent.PhoneNumber,
+                ent.ProfileImage,
+                ent.Address,
+                ent.Notes,
+                ent.FullName)));
         }
 
-        [HttpPut("update/{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] LecturerProfileUpdateDto dto)
+        [HttpPut("update/{code}")]
+        public async Task<IActionResult> Update(string code, [FromBody] LecturerProfileUpdateDto dto)
         {
-            var ent = await _uow.LecturerProfiles.GetByIdAsync(id);
+            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
             // Resolve DepartmentCode to DepartmentID if provided
             if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
@@ -92,16 +113,24 @@ namespace ThesisManagement.Api.Controllers
             ent.GuideQuota = dto.GuideQuota ?? ent.GuideQuota;
             ent.DefenseQuota = dto.DefenseQuota ?? ent.DefenseQuota;
             ent.CurrentGuidingCount = dto.CurrentGuidingCount ?? ent.CurrentGuidingCount;
+            if (dto.Gender != null) ent.Gender = dto.Gender;
+            if (dto.DateOfBirth.HasValue) ent.DateOfBirth = dto.DateOfBirth;
+            if (dto.Email != null) ent.Email = dto.Email;
+            if (dto.PhoneNumber != null) ent.PhoneNumber = dto.PhoneNumber;
+            if (dto.ProfileImage != null) ent.ProfileImage = dto.ProfileImage;
+            if (dto.Address != null) ent.Address = dto.Address;
+            if (dto.Notes != null) ent.Notes = dto.Notes;
+            if (dto.FullName != null) ent.FullName = dto.FullName;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.LecturerProfiles.Update(ent);
             await _uow.SaveChangesAsync();
             return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(ent)));
         }
 
-        [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [HttpDelete("delete/{code}")]
+        public async Task<IActionResult> Delete(string code)
         {
-            var ent = await _uow.LecturerProfiles.GetByIdAsync(id);
+            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
             _uow.LecturerProfiles.Remove(ent);
             await _uow.SaveChangesAsync();

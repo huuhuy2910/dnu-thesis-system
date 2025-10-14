@@ -18,7 +18,8 @@ namespace ThesisManagement.Api.DTOs
         int? EnrollmentYear,
         string? Status,
         int? GraduationYear,
-        string? Notes);
+        string? Notes,
+        string? FullName);
 
     public record StudentProfileUpdateDto(
         string? StudentCode,
@@ -37,7 +38,8 @@ namespace ThesisManagement.Api.DTOs
         int? EnrollmentYear,
         string? Status,
         int? GraduationYear,
-        string? Notes);
+        string? Notes,
+        string? FullName);
 
     public record StudentProfileReadDto(
         int StudentProfileID,
@@ -58,6 +60,7 @@ namespace ThesisManagement.Api.DTOs
         string? Status,
         int? GraduationYear,
         string? Notes,
-    DateTime? CreatedAt,
-    DateTime? LastUpdated);
+        string? FullName,
+        DateTime? CreatedAt,
+        DateTime? LastUpdated);
 }

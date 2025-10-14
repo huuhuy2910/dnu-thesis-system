@@ -8,5 +8,7 @@ export interface User {
   email?: string;
   role?: Role;
   topicCode?: string;
+  createdAt?: string;
+  lastUpdated?: string;
   // có thể có thêm các field khác từ API
 }

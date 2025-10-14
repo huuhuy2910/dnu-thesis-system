@@ -49,6 +49,7 @@ namespace ThesisManagement.Api.Controllers
                 null,
                 "Đang học",
                 null,
+                null,
                 null);
             return Ok(ApiResponse<StudentProfileCreateDto>.SuccessResponse(sample));
         }
@@ -90,6 +91,7 @@ namespace ThesisManagement.Api.Controllers
                 Status = string.IsNullOrWhiteSpace(dto.Status) ? "Đang học" : dto.Status,
                 GraduationYear = dto.GraduationYear,
                 Notes = dto.Notes,
+                FullName = dto.FullName,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -120,7 +122,8 @@ namespace ThesisManagement.Api.Controllers
                 ent.EnrollmentYear,
                 ent.Status,
                 ent.GraduationYear,
-                ent.Notes);
+                ent.Notes,
+                ent.FullName);
             return Ok(ApiResponse<StudentProfileUpdateDto>.SuccessResponse(dto));
         }
 
@@ -163,6 +166,7 @@ namespace ThesisManagement.Api.Controllers
             ent.Status = dto.Status;
             ent.GraduationYear = dto.GraduationYear;
             ent.Notes = dto.Notes;
+            if (dto.FullName != null) ent.FullName = dto.FullName;
             ent.LastUpdated = DateTime.UtcNow;
             _uow.StudentProfiles.Update(ent);
             await _uow.SaveChangesAsync();

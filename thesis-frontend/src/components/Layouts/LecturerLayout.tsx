@@ -1,11 +1,67 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import LecturerNav from "../SideNavs/LecturerNav";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut } from "lucide-react";
+import { LogOut, ChevronDown, User, Clock, GraduationCap } from "lucide-react";
+import { fetchData } from "../../api/fetchData";
+import type { ApiResponse } from "../../types/api";
+import type { LecturerProfile } from "../../types/lecturer-profile";
 
 const LecturerLayout: React.FC = () => {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState<LecturerProfile | null>(null);
+  const [lecturerImage, setLecturerImage] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        if (!auth.user?.userCode) return;
+        const res = await fetchData(
+          `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`
+        );
+        const data = (res as ApiResponse<LecturerProfile[]>)?.data || [];
+        if (data.length > 0) {
+          setProfile(data[0]);
+          if (data[0].profileImage) {
+            setLecturerImage(data[0].profileImage as string);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading lecturer profile:", err);
+      }
+    };
+    loadProfile();
+  }, [auth.user?.userCode]);
+
+  // Update current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest("[data-dropdown]")) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDropdown]);
 
   return (
     <div
@@ -16,15 +72,29 @@ const LecturerLayout: React.FC = () => {
         fontFamily: "'Inter', 'Poppins', 'Roboto', sans-serif",
       }}
     >
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 0.7;
+              transform: scale(1.1);
+            }
+          }
+        `}
+      </style>
       <aside
         style={{
           width: 260,
-          backgroundColor: "#F5F6FA",
-          color: "#002855",
+          backgroundColor: "#002855",
+          color: "#FFFFFF",
           display: "flex",
           flexDirection: "column",
-          borderRight: "1px solid #E5E7EB",
-          boxShadow: "2px 0 8px rgba(0, 0, 0, 0.05)",
+          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+          boxShadow: "2px 0 8px rgba(0, 0, 0, 0.15)",
           position: "fixed",
           top: 0,
           left: 0,
@@ -36,8 +106,9 @@ const LecturerLayout: React.FC = () => {
           style={{
             textAlign: "center",
             padding: "24px 18px",
-            background: "linear-gradient(180deg, rgba(243, 112, 33, 0.08) 0%, #F5F6FA 100%)",
-            borderBottom: "1px solid #E5E7EB",
+            background:
+              "linear-gradient(180deg, rgba(243, 112, 33, 0.12) 0%, rgba(0, 40, 85, 0.95) 100%)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
           }}
         >
           <img
@@ -52,17 +123,18 @@ const LecturerLayout: React.FC = () => {
           />
           <h3
             style={{
-              color: "#F37021",
+              color: "#f37021",
               fontSize: 17,
               fontWeight: 700,
               margin: 0,
               letterSpacing: "0.5px",
+              textShadow: "0 1px 2px rgba(0, 0, 0, 0.3)",
             }}
           >
             Hệ thống Quản lý Đồ án
           </h3>
-          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6 }}>
-            Vai trò: <strong style={{ color: "#F37021" }}>Giảng viên</strong>
+          <div style={{ fontSize: 12, color: "#e2e8f0", marginTop: 6 }}>
+            Vai trò: <strong style={{ color: "#f37021" }}>Giảng viên</strong>
           </div>
         </div>
 
@@ -73,10 +145,11 @@ const LecturerLayout: React.FC = () => {
         <footer
           style={{
             fontSize: 11,
-            color: "#6B7280",
+            color: "#94a3b8",
             textAlign: "center",
             padding: "18px 12px",
-            borderTop: "1px solid #E5E7EB",
+            borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+            background: "rgba(0, 0, 0, 0.2)",
           }}
         >
           © 2025 Đại học Đại Nam
@@ -93,9 +166,11 @@ const LecturerLayout: React.FC = () => {
       >
         <header
           style={{
-            backgroundColor: "#002855",
-            padding: "18px 36px",
-            boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
+            background:
+              "linear-gradient(135deg, #002855 0%, #003d7a 50%, #004080 100%)",
+            padding: "16px 32px",
+            boxShadow:
+              "0 4px 20px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -104,97 +179,374 @@ const LecturerLayout: React.FC = () => {
             left: 260,
             right: 0,
             top: 0,
-            height: 72,
+            height: 80,
             zIndex: 20,
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            borderBottom: "2px solid rgba(243, 112, 33, 0.3)",
+            backdropFilter: "blur(10px)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 600,
-                color: "#FFFFFF",
-                letterSpacing: "0.5px",
-              }}
-            >
-              Bảng điều khiển Giảng viên
-            </h2>
-            <span
-              style={{
-                fontSize: 12,
-                padding: "4px 8px",
-                borderRadius: 8,
-                backgroundColor: "rgba(243, 112, 33, 0.2)",
-                color: "#F37021",
-                fontWeight: 600,
-                letterSpacing: "0.3px",
-              }}
-            >
-              Giảng viên
-            </span>
+          {/* Left Section - Title and Profile Info */}
+          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "12px",
+                  background:
+                    "linear-gradient(135deg, rgba(243, 112, 33, 0.2), rgba(243, 112, 33, 0.1))",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 12px rgba(243, 112, 33, 0.2)",
+                }}
+              >
+                <GraduationCap size={24} color="#f37021" />
+              </div>
+              <div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#FFFFFF",
+                    letterSpacing: "0.5px",
+                    textShadow: "0 2px 4px rgba(0, 0, 0, 0.3)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Giảng viên Đại học Đại Nam
+                  <br />
+                  <span
+                    style={{ fontSize: 16, fontWeight: 500, color: "#f37021" }}
+                  >
+                    Hệ thống Quản lý Đồ án Tốt nghiệp
+                  </span>
+                </h2>
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          {/* Right Section - Time and User Menu */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            {/* Current Time */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
-                padding: "6px 10px",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "20px",
                 backgroundColor: "rgba(255, 255, 255, 0.1)",
-                borderRadius: 12,
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <Clock size={16} color="#f37021" />
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "#FFFFFF",
+                  fontWeight: 600,
+                  fontFamily: "monospace",
+                }}
+              >
+                {currentTime.toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#e2e8f0",
+                  fontWeight: 500,
+                }}
+              >
+                {currentTime.toLocaleDateString("vi-VN", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
+            </div>
+
+            {/* Status Badge */}
+            <div
+              style={{
+                padding: "10px 18px",
+                borderRadius: "24px",
+                backgroundColor: "rgba(243, 112, 33, 0.15)",
+                border: "1px solid rgba(243, 112, 33, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
               <div
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: "8px",
+                  height: "8px",
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(243, 112, 33, 0.1))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  backgroundColor: "#f37021",
+                  boxShadow: "0 0 10px rgba(243, 112, 33, 0.5)",
+                  animation: "pulse 2s infinite",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "#f37021",
+                  fontWeight: 600,
+                  letterSpacing: "0.3px",
                 }}
               >
-                👤
-              </div>
-              <div style={{ color: "#FFFFFF", fontWeight: 600 }}>
-                {auth.user?.fullName || "Giảng viên"}
-              </div>
+                Giảng viên
+              </span>
             </div>
+            <div style={{ position: "relative" }} data-dropdown>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  background:
+                    "linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  padding: "8px 16px",
+                  borderRadius: "16px",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(243, 112, 33, 0.5)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 16px rgba(243, 112, 33, 0.2)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor =
+                    "rgba(255, 255, 255, 0.2)";
+                  e.currentTarget.style.boxShadow =
+                    "0 2px 8px rgba(0, 0, 0, 0.1)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+              >
+                {lecturerImage ? (
+                  <img
+                    src={lecturerImage}
+                    alt={profile?.fullName || "avatar"}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      border: "2px solid rgba(243, 112, 33, 0.1)",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      background:
+                        "linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(243, 112, 33, 0.1))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {profile?.fullName ? profile.fullName.charAt(0) : "G"}
+                  </div>
+                )}
+                <ChevronDown
+                  size={16}
+                  style={{
+                    color: "#ffffff",
+                    transition: "transform 0.3s ease, color 0.3s ease",
+                    transform: showDropdown ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </button>
 
-            <button
-              onClick={() => auth.logout()}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: "#F37021",
-                color: "#FFFFFF",
-                border: "none",
-                padding: "10px 16px",
-                borderRadius: 10,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E55A1B";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(243, 112, 33, 0.3)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F37021";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(243, 112, 33, 0.2)";
-              }}
-            >
-              <LogOut size={16} /> Đăng xuất
-            </button>
+              {/* Dropdown Menu */}
+              {showDropdown && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    background:
+                      "linear-gradient(135deg, rgba(0, 40, 85, 0.95), rgba(0, 61, 122, 0.9))",
+                    border: "1px solid rgba(243, 112, 33, 0.3)",
+                    borderRadius: "16px",
+                    boxShadow:
+                      "0 10px 25px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(243, 112, 33, 0.1)",
+                    minWidth: "240px",
+                    zIndex: 1000,
+                    marginTop: "12px",
+                    overflow: "hidden",
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "20px",
+                      borderBottom: "1px solid rgba(243, 112, 33, 0.2)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "16px",
+                      background:
+                        "linear-gradient(135deg, rgba(243, 112, 33, 0.08), rgba(243, 112, 33, 0.04))",
+                    }}
+                  >
+                    {/* Avatar */}
+                    {lecturerImage ? (
+                      <img
+                        src={lecturerImage}
+                        alt={profile?.fullName || "avatar"}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                          border: "2px solid rgba(243, 112, 33, 0.15)",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: "50%",
+                          background:
+                            "linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(243, 112, 33, 0.1))",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                          color: "#ffffff",
+                          fontSize: "20px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {profile?.fullName ? profile.fullName.charAt(0) : "G"}
+                      </div>
+                    )}
+
+                    {/* User Info */}
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          color: "#FFFFFF",
+                          marginBottom: "4px",
+                          textShadow: "0 1px 2px rgba(0, 0, 0, 0.3)",
+                        }}
+                      >
+                        {profile?.fullName || "Giảng viên"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#e2e8f0",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {profile?.degree} - {profile?.departmentCode}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#e2e8f0",
+                          fontWeight: 500,
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: "8px" }}>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        navigate("/lecturer/profile");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        width: "100%",
+                        padding: "14px 18px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#e2e8f0",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(243, 112, 33, 0.15)";
+                        e.currentTarget.style.color = "#f37021";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "#e2e8f0";
+                      }}
+                    >
+                      <User size={18} color="#6B7280" />
+                      Thông tin giảng viên
+                    </button>
+
+                    <button
+                      onClick={() => auth.logout()}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        width: "100%",
+                        padding: "14px 18px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#dc2626",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(220, 38, 38, 0.1)";
+                        e.currentTarget.style.color = "#B91C1C";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "#dc2626";
+                      }}
+                    >
+                      <LogOut size={18} color="#dc2626" />
+                      Đăng xuất
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -203,8 +555,8 @@ const LecturerLayout: React.FC = () => {
             flex: 1,
             backgroundColor: "#FFFFFF",
             padding: "24px 32px",
-            marginTop: 72,
-            height: "calc(100vh - 72px)",
+            marginTop: 80,
+            height: "calc(100vh - 80px)",
             overflowY: "auto",
           }}
         >

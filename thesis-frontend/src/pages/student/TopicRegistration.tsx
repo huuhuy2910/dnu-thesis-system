@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useCallback } from "react";
+import /* useNavigate */ "react-router-dom";
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
@@ -7,7 +7,6 @@ import type {
   CatalogTopicSpecialty,
   LecturerSpecialty,
 } from "../../types/specialty";
-import type { User } from "../../types/user";
 import type { TopicFormData } from "../../types/topic";
 import type { CatalogTopic } from "../../types/catalog-topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -22,11 +21,12 @@ import {
   Building,
   GraduationCap,
   Users,
+  CheckCircle,
 } from "lucide-react";
 
 const TopicRegistration: React.FC = () => {
   const auth = useAuth();
-  const navigate = useNavigate();
+  // navigate removed; we now show a success modal instead of navigating
   const userCode = auth.user?.userCode;
   const [registrationType, setRegistrationType] = useState<"catalog" | "self">(
     "catalog"
@@ -40,11 +40,11 @@ const TopicRegistration: React.FC = () => {
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [selectedSpecialtyInfo, setSelectedSpecialtyInfo] =
     useState<Specialty | null>(null);
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [existingTopic, setExistingTopic] = useState<Topic | null>(null);
 
   const [formData, setFormData] = useState<TopicFormData>({
@@ -59,99 +59,96 @@ const TopicRegistration: React.FC = () => {
   });
 
   // Fetch initial data
-  useEffect(() => {
-    const fetchInitialData = async () => {
+  // Extracted loader so we can call it again when refreshing UI after success
+  const loadInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [catalogRes, lecturerRes, departmentRes, specialtyRes] =
+        await Promise.all([
+          fetchData("/CatalogTopics/get-list?AssignedStatus=Ch%C6%B0a%20giao"),
+          fetchData("/LecturerProfiles/get-list"),
+          fetchData("/Departments/get-list"),
+          fetchData("/Specialties/get-list"),
+        ]);
+
+      setCatalogTopics((catalogRes as ApiResponse<CatalogTopic[]>)?.data || []);
+      setLecturers((lecturerRes as ApiResponse<LecturerProfile[]>)?.data || []);
+
+      setDepartments((departmentRes as ApiResponse<Department[]>)?.data || []);
+      setSpecialties((specialtyRes as ApiResponse<Specialty[]>)?.data || []);
+
+      // Fetch topic code template
       try {
-        setLoading(true);
-        const [catalogRes, lecturerRes, departmentRes, specialtyRes] =
-          await Promise.all([
-            fetchData(
-              "/CatalogTopics/get-list?AssignedStatus=Ch%C6%B0a%20giao"
-            ),
-            fetchData("/LecturerProfiles/get-list"),
-            fetchData("/Departments/get-list"),
-            fetchData("/Specialties/get-list"),
-          ]);
-
-        setCatalogTopics(
-          (catalogRes as ApiResponse<CatalogTopic[]>)?.data || []
-        );
-        setLecturers(
-          (lecturerRes as ApiResponse<LecturerProfile[]>)?.data || []
-        );
-
-        // Fetch user names for lecturers
-        const lecturersData =
-          (lecturerRes as ApiResponse<LecturerProfile[]>)?.data || [];
-        if (lecturersData.length > 0) {
-          const userCodes = lecturersData.map((l) => l.userCode);
-          const userPromises = userCodes.map((userCode) =>
-            fetchData(`/Users/get-list?UserCode=${userCode}`)
-          );
-          const userResponses = await Promise.all(userPromises);
-
-          const userNameMap: Record<string, string> = {};
-          userResponses.forEach((response, index) => {
-            const userData = (response as ApiResponse<User[]>)?.data;
-            if (userData && userData.length > 0) {
-              userNameMap[userCodes[index]] =
-                userData[0].fullName || userCodes[index];
-            }
-          });
-          setUserNames(userNameMap);
-        }
-        setDepartments(
-          (departmentRes as ApiResponse<Department[]>)?.data || []
-        );
-        setSpecialties((specialtyRes as ApiResponse<Specialty[]>)?.data || []);
-
-        // Fetch topic code template
-        try {
-          const templateRes = await fetchData("/Topics/get-create");
-          const templateData = (templateRes as ApiResponse)?.data as Record<
-            string,
-            unknown
-          >;
-          if (templateData?.topicCode) {
-            setFormData((prev) => ({
-              ...prev,
-              topicCode: templateData.topicCode as string,
-            }));
-          }
-        } catch (err) {
-          console.error("Error fetching topic code template:", err);
-        }
-
-        // Check if student already has a pending or approved topic
-        if (userCode) {
-          try {
-            const topicsRes = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${userCode}`
-            );
-            const topics = (topicsRes as ApiResponse<Topic[]>)?.data || [];
-            const existingTopic = topics.find(
-              (topic) =>
-                topic.status === "Đang chờ" ||
-                topic.status === "Đã duyệt" ||
-                topic.status === "Đã chấp nhận"
-            );
-            if (existingTopic) {
-              setExistingTopic(existingTopic);
-            }
-          } catch (err) {
-            console.error("Error checking existing topics:", err);
-          }
+        const templateRes = await fetchData("/Topics/get-create");
+        const templateData = (templateRes as ApiResponse)?.data as Record<
+          string,
+          unknown
+        >;
+        if (templateData?.topicCode) {
+          setFormData((prev) => ({
+            ...prev,
+            topicCode: templateData.topicCode as string,
+          }));
         }
       } catch (err) {
-        setError("Không thể tải dữ liệu ban đầu");
-        console.error("Error fetching initial data:", err);
-      } finally {
-        setLoading(false);
+        console.error("Error fetching topic code template:", err);
       }
-    };
 
-    fetchInitialData();
+      // Check if student already has a pending or approved topic
+      if (userCode) {
+        try {
+          const topicsRes = await fetchData(
+            `/Topics/get-list?ProposerUserCode=${userCode}`
+          );
+          const topics = (topicsRes as ApiResponse<Topic[]>)?.data || [];
+          const existingTopic = topics.find(
+            (topic) =>
+              topic.status === "Đang chờ" ||
+              topic.status === "Đã duyệt" ||
+              topic.status === "Đã chấp nhận"
+          );
+          if (existingTopic) {
+            setExistingTopic(existingTopic);
+          } else {
+            setExistingTopic(null);
+          }
+        } catch (err) {
+          console.error("Error checking existing topics:", err);
+        }
+      }
+    } catch (err) {
+      setError("Không thể tải dữ liệu ban đầu");
+      console.error("Error fetching initial data:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [userCode]);
+
+  const handleContinueAfterSuccess = async () => {
+    // Close modal and refresh data and form
+    setShowSuccessModal(false);
+    setSuccess(null);
+    // reload initial data (topics, lecturers, etc.)
+    await loadInitialData();
+    // reset form to initial state
+    setFormData({
+      topicCode: formData.topicCode,
+      title: "",
+      summary: "",
+      type: "CATALOG",
+      catalogTopicID: null,
+      supervisorLecturerProfileID: null,
+      departmentID: null,
+      specialtyID: null,
+    });
+    setRegistrationType("catalog");
+    setSelectedSpecialtyInfo(null);
+    setFilteredLecturers([]);
+  };
+
+  useEffect(() => {
+    void loadInitialData();
+  }, [userCode, loadInitialData]);
 
   // Handle registration type change
   const handleRegistrationTypeChange = (type: "catalog" | "self") => {
@@ -172,6 +169,46 @@ const TopicRegistration: React.FC = () => {
       setFilteredLecturers([]);
     }
   };
+
+  // Filter lecturers based on selected specialty for self-proposed topics
+  useEffect(() => {
+    if (registrationType === "self" && formData.specialtyID) {
+      const filterLecturersForSpecialty = async () => {
+        try {
+          const selectedSpecialty = specialties.find(
+            (s) => s.specialtyID === formData.specialtyID
+          );
+          if (!selectedSpecialty) return;
+
+          // Get lecturer specialties for this specialty
+          const lecturerSpecialtiesRes = await fetchData(
+            `/LecturerSpecialties/get-list?SpecialtyCode=${selectedSpecialty.specialtyCode}`
+          );
+          const lecturerSpecialties =
+            (lecturerSpecialtiesRes as ApiResponse<LecturerSpecialty[]>)
+              ?.data || [];
+
+          // Filter lecturers who can guide this specialty
+          const specialtyLecturerCodes = lecturerSpecialties.map(
+            (ls) => ls.lecturerCode
+          );
+          const availableLecturers = lecturers.filter((l) =>
+            specialtyLecturerCodes.includes(l.lecturerCode)
+          );
+
+          setFilteredLecturers(availableLecturers);
+          setSelectedSpecialtyInfo(selectedSpecialty);
+        } catch (err) {
+          console.error("Error filtering lecturers for specialty:", err);
+        }
+      };
+
+      void filterLecturersForSpecialty();
+    } else if (registrationType === "self" && !formData.specialtyID) {
+      setFilteredLecturers([]);
+      setSelectedSpecialtyInfo(null);
+    }
+  }, [registrationType, formData.specialtyID, specialties, lecturers]);
 
   // Handle catalog topic selection
   const handleCatalogTopicChange = async (catalogTopicID: number) => {
@@ -237,10 +274,6 @@ const TopicRegistration: React.FC = () => {
         catalogTopicID,
         title: selectedTopic.title,
         summary: selectedTopic.summary,
-        departmentID:
-          departments.find(
-            (d) => d.departmentCode === selectedTopic.departmentCode
-          )?.departmentID || null,
         specialtyID: specialtyInfo.specialtyID,
         supervisorLecturerProfileID: null, // Reset lecturer selection
       });
@@ -282,21 +315,8 @@ const TopicRegistration: React.FC = () => {
         (c) => c.catalogTopicID === formData.catalogTopicID
       );
 
-      // Get supervisor user ID from user API
-      let supervisorUserID = 0;
-      if (selectedLecturer?.userCode) {
-        try {
-          const userRes = await fetchData(
-            `/Users/get-list?UserCode=${selectedLecturer.userCode}`
-          );
-          const userData = (userRes as ApiResponse<User[]>)?.data || [];
-          if (userData.length > 0) {
-            supervisorUserID = userData[0].userID || 0;
-          }
-        } catch (err) {
-          console.error("Error fetching supervisor user:", err);
-        }
-      }
+      // Backend will resolve supervisorUserID from supervisorUserCode
+      const supervisorUserID = 0;
 
       // Get student profile for proposer
       let proposerStudentProfileID = 0;
@@ -322,7 +342,7 @@ const TopicRegistration: React.FC = () => {
         topicCode: templateData.topicCode || "",
         title: formData.title,
         summary: formData.summary,
-        type: formData.type,
+        type: formData.type, // "CATALOG" for existing topics, "SELF" for self-proposed topics
         proposerUserID: auth.user?.userID || 0,
         proposerUserCode: auth.user?.userCode || "",
         proposerStudentProfileID: proposerStudentProfileID,
@@ -348,25 +368,39 @@ const TopicRegistration: React.FC = () => {
         body: payload,
       });
 
+      // Create initial progress milestone after successful topic creation
+      try {
+        const milestoneTemplate = await fetchData(
+          "/ProgressMilestones/get-create"
+        );
+        const milestoneData =
+          ((milestoneTemplate as ApiResponse)?.data as Record<
+            string,
+            unknown
+          >) || {};
+
+        const milestonePayload = {
+          ...milestoneData,
+          topicCode: templateData.topicCode || "",
+          topicID: null, // Will be set by backend
+          state: "Đang tiến hành",
+          startedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+        };
+
+        await fetchData("/ProgressMilestones/create", {
+          method: "POST",
+          body: milestonePayload,
+        });
+        console.log("Progress milestone created successfully");
+      } catch (milestoneErr) {
+        console.error("Error creating progress milestone:", milestoneErr);
+        // Don't fail the entire registration if milestone creation fails
+      }
+
       setSuccess("Đăng ký đề tài thành công!");
-      // Navigate to home page after successful registration
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
-      // Reset form
-      setFormData({
-        topicCode: formData.topicCode, // Keep the same topic code
-        title: "",
-        summary: "",
-        type: "CATALOG",
-        catalogTopicID: null,
-        supervisorLecturerProfileID: null,
-        departmentID: null,
-        specialtyID: null,
-      });
-      setRegistrationType("catalog");
-      setSelectedSpecialtyInfo(null);
-      setFilteredLecturers([]);
+      setShowSuccessModal(true);
     } catch (err) {
       setError("Có lỗi xảy ra khi đăng ký đề tài");
       console.error("Error creating topic:", err);
@@ -411,7 +445,7 @@ const TopicRegistration: React.FC = () => {
         style={{
           padding: "24px",
           maxWidth: "900px",
-          margin: "50px auto",
+          margin: "10px auto",
           backgroundColor: "#fff",
           minHeight: "100vh",
         }}
@@ -660,9 +694,16 @@ const TopicRegistration: React.FC = () => {
                     color: "#333",
                   }}
                 >
-                  {userNames[existingTopic.supervisorUserCode || ""] ||
-                    existingTopic.supervisorLecturerCode ||
-                    "Chưa có"}
+                  {(() => {
+                    const supervisor = lecturers.find(
+                      (l) => l.userCode === existingTopic.supervisorUserCode
+                    );
+                    return (
+                      supervisor?.fullName ||
+                      existingTopic.supervisorLecturerCode ||
+                      "Chưa có"
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1206,13 +1247,17 @@ const TopicRegistration: React.FC = () => {
               })
             }
             required
+            disabled={registrationType === "self" && !formData.specialtyID}
             style={{
               width: "100%",
               padding: "12px 16px",
               border: "2px solid #ddd",
               borderRadius: "8px",
               fontSize: "16px",
-              backgroundColor: "#fff",
+              backgroundColor:
+                registrationType === "self" && !formData.specialtyID
+                  ? "#f5f5f5"
+                  : "#fff",
               transition: "border-color 0.3s ease",
             }}
             onFocus={(e) => (e.target.style.borderColor = "#f37021")}
@@ -1221,9 +1266,12 @@ const TopicRegistration: React.FC = () => {
             <option value="">
               {registrationType === "catalog"
                 ? "-- Chọn đề tài để xem giảng viên --"
-                : "-- Chọn giảng viên --"}
+                : formData.specialtyID
+                ? "-- Chọn giảng viên hướng dẫn --"
+                : "-- Chọn chuyên ngành trước để lọc giảng viên --"}
             </option>
-            {(registrationType === "catalog"
+            {(registrationType === "catalog" ||
+            (registrationType === "self" && filteredLecturers.length > 0)
               ? filteredLecturers
               : lecturers
             ).map((lecturer) => (
@@ -1231,9 +1279,8 @@ const TopicRegistration: React.FC = () => {
                 key={lecturer.lecturerProfileID}
                 value={lecturer.lecturerProfileID}
               >
-                {userNames[lecturer.userCode] || lecturer.lecturerCode} -{" "}
-                {lecturer.degree} ({lecturer.currentGuidingCount}/
-                {lecturer.guideQuota})
+                {lecturer.fullName || lecturer.lecturerCode} - {lecturer.degree}{" "}
+                ({lecturer.currentGuidingCount}/{lecturer.guideQuota})
               </option>
             ))}
           </select>
@@ -1262,19 +1309,14 @@ const TopicRegistration: React.FC = () => {
               setFormData({ ...formData, departmentID: Number(e.target.value) })
             }
             required
-            disabled={
-              registrationType === "catalog" && !!formData.catalogTopicID
-            }
+            disabled={false}
             style={{
               width: "100%",
               padding: "12px 16px",
               border: "2px solid #ddd",
               borderRadius: "8px",
               fontSize: "16px",
-              backgroundColor:
-                registrationType === "catalog" && formData.catalogTopicID
-                  ? "#f5f5f5"
-                  : "#fff",
+              backgroundColor: "#fff",
               transition: "border-color 0.3s ease",
             }}
             onFocus={(e) => (e.target.style.borderColor = "#f37021")}
@@ -1333,6 +1375,177 @@ const TopicRegistration: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            animation: "modalFadeIn 0.3s ease-out",
+          }}
+        >
+          <style>
+            {`
+              @keyframes modalFadeIn {
+                from {
+                  opacity: 0;
+                  transform: scale(0.8);
+                }
+                to {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+            `}
+          </style>
+          <div
+            style={{
+              width: 520,
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
+              textAlign: "center",
+              animation: "modalContentSlideIn 0.4s ease-out",
+            }}
+          >
+            <style>
+              {`
+                @keyframes modalContentSlideIn {
+                  from {
+                    opacity: 0;
+                    transform: translateY(-20px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+                @keyframes iconBounce {
+                  0% {
+                    transform: scale(0.3);
+                    opacity: 0;
+                  }
+                  50% {
+                    transform: scale(1.05);
+                  }
+                  70% {
+                    transform: scale(0.9);
+                  }
+                  100% {
+                    transform: scale(1);
+                    opacity: 1;
+                  }
+                }
+                @keyframes iconGlow {
+                  from {
+                    filter: drop-shadow(0 0 0 rgba(76, 175, 80, 0));
+                  }
+                  to {
+                    filter: drop-shadow(0 0 10px rgba(76, 175, 80, 0.5));
+                  }
+                }
+                @keyframes textFadeIn {
+                  from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+                @keyframes titleGradient {
+                  0% {
+                    background-position: 0% 50%;
+                  }
+                  50% { 
+                    background-position: 100% 50%;
+                  }
+                  100% {
+                    background-position: 0% 50%;
+                  }
+                }
+              `}
+            </style>
+            <div
+              style={{
+                marginBottom: 16,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                animation:
+                  "iconBounce 0.6s ease-out, iconGlow 2s ease-in-out infinite alternate",
+              }}
+            >
+              <CheckCircle size={64} color="#4caf50" />
+            </div>
+            <h2
+              style={{
+                margin: "0 0 12px 0",
+                background: "linear-gradient(45deg, #4caf50, #66bb6a)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                fontSize: "24px",
+                fontWeight: "bold",
+                textShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                animation:
+                  "textFadeIn 0.5s ease-out 0.2s both, titleGradient 3s ease-in-out infinite",
+              }}
+            >
+              Đăng ký thành công!
+            </h2>
+            <p
+              style={{
+                color: "#475569",
+                marginTop: 0,
+                lineHeight: 1.5,
+                animation: "textFadeIn 0.5s ease-out 0.4s both",
+              }}
+            >
+              Đề tài của bạn đã được gửi thành công! Bạn sẽ nhận được thông báo
+              qua email khi đề tài được duyệt hoặc có cập nhật.
+            </p>
+            <div
+              style={{
+                marginTop: 24,
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={handleContinueAfterSuccess}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#f37021",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  transition: "background-color 0.3s ease",
+                }}
+                onMouseOver={(e) =>
+                  ((e.target as HTMLElement).style.backgroundColor = "#e55a1b")
+                }
+                onMouseOut={(e) =>
+                  ((e.target as HTMLElement).style.backgroundColor = "#f37021")
+                }
+              >
+                Tiếp tục
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -33,13 +33,11 @@ namespace ThesisManagement.Api.Controllers
             var response = new LoginResponseDto(
                 user.UserID,
                 user.UserCode,
-                user.FullName,
-                user.Email,
                 user.Role,
                 user.CreatedAt
             );
 
-            return Ok(new { success = true, userCode = user.UserCode, role = user.Role, fullName = user.FullName, data = response });
+            return Ok(new { success = true, userCode = user.UserCode, role = user.Role, data = response });
         }
     }
 }

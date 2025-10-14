@@ -23,7 +23,12 @@ namespace ThesisManagement.Api.Mappings
                 .ForMember(dest => dest.DepartmentCode, opt => opt.MapFrom(src => src.DepartmentCode))
                 .ForMember(dest => dest.SpecialtyID, opt => opt.MapFrom(src => src.SpecialtyID))
                 .ForMember(dest => dest.SpecialtyCode, opt => opt.MapFrom(src => src.SpecialtyCode));
-            CreateMap<ProgressMilestone, ProgressMilestoneReadDto>();
+            CreateMap<ProgressMilestone, ProgressMilestoneReadDto>()
+                .ForMember(dest => dest.CompletedAt1, opt => opt.MapFrom(src => src.CompletedAt1))
+                .ForMember(dest => dest.CompletedAt2, opt => opt.MapFrom(src => src.CompletedAt2))
+                .ForMember(dest => dest.CompletedAt3, opt => opt.MapFrom(src => src.CompletedAt3))
+                .ForMember(dest => dest.CompletedAt4, opt => opt.MapFrom(src => src.CompletedAt4))
+                .ForMember(dest => dest.CompletedAt5, opt => opt.MapFrom(src => src.CompletedAt5));
             CreateMap<ProgressSubmission, ProgressSubmissionReadDto>();
             CreateMap<MilestoneTemplate, MilestoneTemplateReadDto>();
             CreateMap<MilestoneStateHistory, MilestoneStateHistoryReadDto>();

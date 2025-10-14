@@ -16,8 +16,16 @@ namespace ThesisManagement.Api.Models
         public int? GuideQuota { get; set; }
         public int? DefenseQuota { get; set; }
         public int CurrentGuidingCount { get; set; } = 0; // New: current number of guiding topics
-    public DateTime? CreatedAt { get; set; }
-    public DateTime? LastUpdated { get; set; }
+        public string? Gender { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? ProfileImage { get; set; }
+        public string? Address { get; set; }
+        public string? Notes { get; set; }
+        public string? FullName { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? LastUpdated { get; set; }
 
         // Navigation properties
         public User? User { get; set; }

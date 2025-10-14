@@ -49,18 +49,19 @@ namespace ThesisManagement.Api.Services
                         x => x.t.SupervisorLecturerCode,
                         lp => lp.LecturerCode,
                         (x, lp) => new { x.t, x.StudentUser, lp = lp.FirstOrDefault() })
-                    .GroupJoin(_context.Users,
-                        x => x.lp != null ? x.lp.UserCode : null,
-                        u => u.UserCode,
-                        (x, u) => new AvailableTopicDto
+                    .GroupJoin(_context.StudentProfiles,
+                        x => x.t.ProposerStudentCode,
+                        sp => sp.StudentCode,
+                        (x, sp) => new { x.t, x.StudentUser, x.lp, sp = sp.FirstOrDefault() })
+                    .Select(x => new AvailableTopicDto
                         {
                             TopicCode = x.t.TopicCode,
                             Title = x.t.Title,
                             Summary = x.t.Summary,
                             ProposerStudentCode = x.t.ProposerStudentCode,
-                            StudentName = x.StudentUser != null ? x.StudentUser.FullName : null,
+                            StudentName = x.sp != null ? x.sp.FullName : null,
                             SupervisorLecturerCode = x.t.SupervisorLecturerCode,
-                            SupervisorName = u.FirstOrDefault() != null ? u.FirstOrDefault()!.FullName : null,
+                            SupervisorName = x.lp != null ? x.lp.FullName : null,
                             DepartmentCode = x.t.DepartmentCode,
                             Status = x.t.Status
                         })

@@ -56,9 +56,6 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.UserCode).IsUnique();
                 b.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
-                b.Property(x => x.FullName).HasMaxLength(100).IsRequired();
-                b.Property(x => x.Email).HasMaxLength(120);
-                b.HasIndex(x => x.Email).IsUnique();
                 b.Property(x => x.Role).HasMaxLength(20).IsRequired();
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
@@ -80,6 +77,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.PhoneNumber).HasMaxLength(20);
                 b.Property(x => x.StudentEmail).HasMaxLength(150);
                 b.Property(x => x.Address).HasMaxLength(255);
+                b.Property(x => x.FullName).HasMaxLength(100);
                 b.Property(x => x.EnrollmentYear);
                 b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Đang học");
                 b.Property(x => x.GraduationYear);
@@ -102,6 +100,15 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.GuideQuota).HasDefaultValue(10);
                 b.Property(x => x.DefenseQuota).HasDefaultValue(8);
                 b.Property(x => x.CurrentGuidingCount).HasDefaultValue(0);
+                // New lecturer profile columns
+                b.Property(x => x.Gender).HasMaxLength(10);
+                b.Property(x => x.DateOfBirth).HasColumnType("date");
+                b.Property(x => x.Email).HasMaxLength(100);
+                b.Property(x => x.PhoneNumber).HasMaxLength(20);
+                b.Property(x => x.ProfileImage).HasMaxLength(255);
+                b.Property(x => x.Address).HasMaxLength(255);
+                b.Property(x => x.Notes);
+                b.Property(x => x.FullName).HasMaxLength(100);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
@@ -152,6 +159,8 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
                 b.Property(x => x.SpecialtyCode).HasMaxLength(60);
+                // Lecturer comment stored as nvarchar(max)
+                b.Property(x => x.LecturerComment);
                 
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
@@ -163,14 +172,18 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.MilestoneID);
                 b.Property(x => x.MilestoneCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.MilestoneCode).IsUnique();
-                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicID).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicID).OnDelete(DeleteBehavior.Restrict);
                 b.Property(x => x.TopicCode).HasMaxLength(60);
                 b.Property(x => x.MilestoneTemplateCode).HasMaxLength(40);
                 b.HasOne(x => x.MilestoneTemplate).WithMany(x => x.ProgressMilestones).HasForeignKey(x => x.MilestoneTemplateCode).HasPrincipalKey(x => x.MilestoneTemplateCode).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.Ordinal);
                 b.Property(x => x.State).HasMaxLength(50).HasDefaultValue("Chưa bắt đầu");
                 b.Property(x => x.StartedAt);
-                b.Property(x => x.CompletedAt);
+                b.Property(x => x.CompletedAt1);
+                b.Property(x => x.CompletedAt2);
+                b.Property(x => x.CompletedAt3);
+                b.Property(x => x.CompletedAt4);
+                b.Property(x => x.CompletedAt5);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });

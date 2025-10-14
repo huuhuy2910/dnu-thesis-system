@@ -56,18 +56,12 @@ const Progress: React.FC = () => {
         )) as ApiResponse<Topic[]>;
         console.log("Topics response:", topicsRes);
         console.log("Topics data:", topicsRes.data);
-        if (!topicsRes.data || topicsRes.data.length === 0) {
-          // No topic found, set empty milestones
-          console.log("No topics found");
-          setMilestones([]);
-          setLoading(false);
-          return;
-        }
-        const topic = topicsRes.data[0]; // Assume first topic
-        const topicCode = topic.topicCode;
+        const hasTopic = topicsRes.data && topicsRes.data.length > 0;
+        const topic = hasTopic && topicsRes.data ? topicsRes.data[0] : null;
+        const topicCode = topic?.topicCode;
         console.log("Topic code:", topicCode);
 
-        // Fetch all milestone templates
+        // Fetch all milestone templates - always show templates even without topic
         console.log("Fetching milestone templates...");
         const templatesRes = (await fetchData(
           "/MilestoneTemplates/get-list"
@@ -82,27 +76,24 @@ const Progress: React.FC = () => {
         const templates = templatesRes.data;
         console.log("Templates:", templates.length);
 
-        // Fetch progress milestones for the topic
-        console.log("Fetching progress milestones...");
-        const progressRes = (await fetchData(
-          `/ProgressMilestones/get-list?TopicCode=${topicCode}`
-        )) as ApiResponse<ProgressMilestone[]>;
-        console.log("Progress response:", progressRes);
-        if (!progressRes.data || progressRes.data.length === 0) {
-          console.error("Failed to fetch progress milestones");
-          setMilestones([]);
-          setLoading(false);
-          return;
+        let progressMilestones: ProgressMilestone[] = [];
+        if (hasTopic && topicCode) {
+          // Fetch progress milestones only if student has a topic
+          console.log("Fetching progress milestones...");
+          const progressRes = (await fetchData(
+            `/ProgressMilestones/get-list?TopicCode=${topicCode}`
+          )) as ApiResponse<ProgressMilestone[]>;
+          console.log("Progress response:", progressRes);
+          progressMilestones = progressRes.data || [];
+          console.log("Progress milestones:", progressMilestones.length);
         }
-        const progressMilestones = progressRes.data;
-        console.log("Progress milestones:", progressMilestones.length);
 
-        // Create milestones array
+        // Create milestones array - always show all templates
         const milestonesData: Milestone[] = templates.map(
           (template: MilestoneTemplate) => {
+            // Find progress milestone by ordinal since milestoneTemplateCode might be null
             const progressMilestone = progressMilestones.find(
-              (pm) =>
-                pm.milestoneTemplateCode === template.milestoneTemplateCode
+              (pm) => pm.ordinal === template.ordinal
             );
 
             let status: "completed" | "in-progress" | "pending" | "overdue" =
@@ -111,25 +102,52 @@ const Progress: React.FC = () => {
             const deadline: string = getDeadlineByOrdinal(template.ordinal);
 
             if (progressMilestone) {
-              const state = progressMilestone.state.toLowerCase();
-              if (state === "hoàn thành" || state === "completed") {
+              // Map completedAt based on milestoneTemplateCode
+              let specificCompletedAt: string | null = null;
+              switch (template.milestoneTemplateCode) {
+                case "MS_REG":
+                  specificCompletedAt = progressMilestone.completedAt1;
+                  break;
+                case "MS_PROG1":
+                  specificCompletedAt = progressMilestone.completedAt2;
+                  break;
+                case "MS_PROG2":
+                  specificCompletedAt = progressMilestone.completedAt3;
+                  break;
+                case "MS_FULL":
+                  specificCompletedAt = progressMilestone.completedAt4;
+                  break;
+                case "MS_DEF":
+                  specificCompletedAt = progressMilestone.completedAt5;
+                  break;
+                default:
+                  // Fallback: check if any completedAt is set
+                  specificCompletedAt =
+                    progressMilestone.completedAt1 ||
+                    progressMilestone.completedAt2 ||
+                    progressMilestone.completedAt3 ||
+                    progressMilestone.completedAt4 ||
+                    progressMilestone.completedAt5;
+                  break;
+              }
+
+              if (specificCompletedAt) {
                 status = "completed";
-                completedDate = progressMilestone.completedAt
-                  ? progressMilestone.completedAt.split("T")[0]
-                  : undefined;
-              } else if (
-                state === "đang thực hiện" ||
-                state === "hoạt động" ||
-                state === "in progress" ||
-                state === "active"
-              ) {
-                status = "in-progress";
-              } else if (
-                state === "chưa bắt đầu" ||
-                state === "not started" ||
-                state === "pending"
-              ) {
-                status = "pending";
+                completedDate = specificCompletedAt.split("T")[0];
+              } else {
+                // Check if this milestone should be in progress based on state
+                const state = progressMilestone.state.toLowerCase();
+                if (
+                  state === "đang thực hiện" ||
+                  state === "đang tiến hành" ||
+                  state === "hoạt động" ||
+                  state === "in progress" ||
+                  state === "active"
+                ) {
+                  status = "in-progress";
+                } else {
+                  status = "pending";
+                }
               }
             }
 
@@ -145,26 +163,123 @@ const Progress: React.FC = () => {
           }
         );
 
-        // Logic: Mark all lower ordinals as completed if there's any higher ordinal milestone
-        const sortedMilestones = milestonesData.sort(
-          (a, b) => a.ordinal - b.ordinal
-        );
-        const highestOrdinal = Math.max(
-          ...progressMilestones.map((pm) => pm.ordinal)
-        );
+        // Logic: Mark milestones as completed based on completedAt fields
+        // Only apply this logic if there are actual progress milestones
+        let finalMilestones = milestonesData;
+        if (progressMilestones.length > 0) {
+          // Find the progress milestone (assuming there's only one per topic)
+          const progressMilestone = progressMilestones[0];
 
-        const finalMilestones = sortedMilestones.map((milestone) => {
-          if (milestone.ordinal < highestOrdinal) {
-            return {
-              ...milestone,
-              status: "completed" as const,
-              completedDate:
-                milestone.completedDate ||
-                new Date().toISOString().split("T")[0],
-            };
-          }
-          return milestone;
-        });
+          finalMilestones = milestonesData.map((milestone) => {
+            let isCompleted = false;
+            let completedDate: string | undefined;
+
+            // Check completion based on completedAt fields
+            switch (milestone.ordinal) {
+              case 1: // MS_REG
+                isCompleted = !!progressMilestone.completedAt1;
+                if (isCompleted) {
+                  completedDate = progressMilestone.completedAt1?.split("T")[0];
+                }
+                break;
+              case 2: // MS_PROG1
+                isCompleted = !!progressMilestone.completedAt2;
+                if (isCompleted) {
+                  completedDate = progressMilestone.completedAt2?.split("T")[0];
+                }
+                break;
+              case 3: // MS_PROG2
+                isCompleted = !!progressMilestone.completedAt3;
+                if (isCompleted) {
+                  completedDate = progressMilestone.completedAt3?.split("T")[0];
+                }
+                break;
+              case 4: // MS_FULL
+                isCompleted = !!progressMilestone.completedAt4;
+                if (isCompleted) {
+                  completedDate = progressMilestone.completedAt4?.split("T")[0];
+                }
+                break;
+              case 5: // MS_DEF
+                isCompleted = !!progressMilestone.completedAt5;
+                if (isCompleted) {
+                  completedDate = progressMilestone.completedAt5?.split("T")[0];
+                }
+                break;
+              default:
+                isCompleted = false;
+                break;
+            }
+
+            // If this milestone is completed, all previous milestones should also be completed
+            if (isCompleted) {
+              return {
+                ...milestone,
+                status: "completed" as const,
+                completedDate: completedDate || milestone.completedDate,
+              };
+            }
+
+            // Check if any higher ordinal milestone is completed (meaning this one should be completed too)
+            const higherOrdinalsCompleted = [1, 2, 3, 4, 5]
+              .filter((ord) => ord > milestone.ordinal)
+              .some((ord) => {
+                switch (ord) {
+                  case 1:
+                    return !!progressMilestone.completedAt1;
+                  case 2:
+                    return !!progressMilestone.completedAt2;
+                  case 3:
+                    return !!progressMilestone.completedAt3;
+                  case 4:
+                    return !!progressMilestone.completedAt4;
+                  case 5:
+                    return !!progressMilestone.completedAt5;
+                  default:
+                    return false;
+                }
+              });
+
+            if (higherOrdinalsCompleted) {
+              // Find the earliest completion date from higher ordinals
+              let earliestCompletedDate: string | undefined;
+              for (let ord = milestone.ordinal + 1; ord <= 5; ord++) {
+                let date: string | null = null;
+                switch (ord) {
+                  case 1:
+                    date = progressMilestone.completedAt1;
+                    break;
+                  case 2:
+                    date = progressMilestone.completedAt2;
+                    break;
+                  case 3:
+                    date = progressMilestone.completedAt3;
+                    break;
+                  case 4:
+                    date = progressMilestone.completedAt4;
+                    break;
+                  case 5:
+                    date = progressMilestone.completedAt5;
+                    break;
+                }
+                if (
+                  date &&
+                  (!earliestCompletedDate || date < earliestCompletedDate)
+                ) {
+                  earliestCompletedDate = date.split("T")[0];
+                }
+              }
+
+              return {
+                ...milestone,
+                status: "completed" as const,
+                completedDate: earliestCompletedDate || milestone.completedDate,
+              };
+            }
+
+            return milestone;
+          });
+        }
 
         console.log("Milestones data:", finalMilestones);
         setMilestones(finalMilestones);

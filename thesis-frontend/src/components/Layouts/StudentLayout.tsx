@@ -10,6 +10,7 @@ import type { StudentProfile } from "../../types/studentProfile";
 const StudentLayout: React.FC = () => {
   const auth = useAuth();
   const [studentImage, setStudentImage] = useState<string | null>(null);
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
@@ -20,11 +21,14 @@ const StudentLayout: React.FC = () => {
           `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`
         );
         const data = (res as ApiResponse<StudentProfile[]>)?.data || [];
-        if (data.length > 0 && data[0].studentImage) {
-          setStudentImage(data[0].studentImage as string);
+        if (data.length > 0) {
+          setProfile(data[0]);
+          if (data[0].studentImage) {
+            setStudentImage(data[0].studentImage as string);
+          }
         }
       } catch (err) {
-        console.error("Error loading student profile image:", err);
+        console.error("Error loading student profile:", err);
       }
     };
     loadProfile();
@@ -141,7 +145,7 @@ const StudentLayout: React.FC = () => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            color: "#002855",
+            color: "#1a2736",
             position: "fixed",
             left: 260,
             right: 0,
@@ -149,65 +153,120 @@ const StudentLayout: React.FC = () => {
             height: 72,
             zIndex: 20,
             borderBottom: "1px solid #E5E7EB",
+            background: "linear-gradient(135deg, #ffffff 0%, #fefefe 100%)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h2
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div
               style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 600,
-                color: "#002855",
-                letterSpacing: "0.5px",
+                width: "40px",
+                height: "40px",
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #f37021, #ff8c42)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(243, 112, 33, 0.2)",
               }}
             >
-              Sinh viên Đại học Đại Nam
-            </h2>
-            <span
-              style={{
-                fontSize: 12,
-                padding: "4px 8px",
-                borderRadius: 8,
-                backgroundColor: "rgba(0, 123, 255, 0.1)",
-                color: "#007BFF",
-                fontWeight: 600,
-                letterSpacing: "0.3px",
-              }}
-            >
-              Sinh viên
-            </span>
+              <User size={20} color="#fff" />
+            </div>
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "#1a2736",
+                  letterSpacing: "0.5px",
+                  lineHeight: "1.2",
+                }}
+              >
+                Sinh viên Đại học Đại Nam
+              </h2>
+              <p
+                style={{
+                  margin: "4px 0 0 0",
+                  fontSize: 12,
+                  color: "#64748b",
+                  fontWeight: 500,
+                  letterSpacing: "0.3px",
+                }}
+              >
+                Hệ thống Quản lý Đồ án Tốt nghiệp
+              </p>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div
+              style={{
+                padding: "8px 16px",
+                borderRadius: "20px",
+                backgroundColor: "rgba(243, 112, 33, 0.1)",
+                border: "1px solid rgba(243, 112, 33, 0.2)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: "#f37021",
+                  boxShadow: "0 0 8px rgba(197, 110, 34, 0.4)",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "#f37021",
+                  fontWeight: 600,
+                  letterSpacing: "0.3px",
+                }}
+              >
+                Sinh viên
+              </span>
+            </div>
+
             <div style={{ position: "relative" }} data-dropdown>
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
-                  background: "none",
-                  border: "none",
-                  padding: "6px",
-                  borderRadius: "12px",
+                  gap: "12px",
+                  background:
+                    "linear-gradient(135deg, #ffffff 0%, #fefefe 100%)",
+                  border: "1px solid #e5e7eb",
+                  padding: "8px 16px",
+                  borderRadius: "16px",
                   cursor: "pointer",
-                  transition: "background-color 0.2s",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor =
-                    "rgba(243, 112, 33, 0.05)";
+                  e.currentTarget.style.borderColor = "#f37021";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 16px rgba(243, 112, 33, 0.15)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                  e.currentTarget.style.boxShadow =
+                    "0 2px 8px rgba(0, 0, 0, 0.04)";
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 {studentImage ? (
                   <img
                     src={studentImage}
-                    alt={auth.user?.fullName || "avatar"}
+                    alt={profile?.fullName || "avatar"}
                     style={{
-                      width: 48,
-                      height: 48,
+                      width: 40,
+                      height: 40,
                       borderRadius: "50%",
                       objectFit: "cover",
                       boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
@@ -217,28 +276,27 @@ const StudentLayout: React.FC = () => {
                 ) : (
                   <div
                     style={{
-                      width: 48,
-                      height: 48,
+                      width: 40,
+                      height: 40,
                       borderRadius: "50%",
-                      background:
-                        "linear-gradient(135deg, #FFFFFF, rgba(243, 112, 33, 0.1))",
+                      background: "linear-gradient(135deg, #f37021, #ff8c42)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                      color: "#002855",
-                      fontSize: "20px",
-                      fontWeight: "600",
+                      boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: 700,
                     }}
                   >
-                    {auth.user?.fullName ? auth.user.fullName.charAt(0) : "S"}
+                    {profile?.fullName ? profile.fullName.charAt(0) : "S"}
                   </div>
                 )}
                 <ChevronDown
                   size={16}
                   style={{
-                    color: "#6B7280",
-                    transition: "transform 0.2s",
+                    color: "#64748b",
+                    transition: "transform 0.3s ease, color 0.3s ease",
                     transform: showDropdown ? "rotate(180deg)" : "rotate(0deg)",
                   }}
                 />
@@ -251,58 +309,61 @@ const StudentLayout: React.FC = () => {
                     position: "absolute",
                     top: "100%",
                     right: 0,
-                    background: "#FFFFFF",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-                    minWidth: "200px",
+                    background:
+                      "linear-gradient(135deg, #ffffff 0%, #fefefe 100%)",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "16px",
+                    boxShadow:
+                      "0 10px 25px rgba(0, 0, 0, 0.1), 0 6px 16px rgba(243, 112, 33, 0.08)",
+                    minWidth: "240px",
                     zIndex: 1000,
-                    marginTop: "8px",
+                    marginTop: "12px",
+                    overflow: "hidden",
                   }}
                 >
                   <div
                     style={{
-                      padding: "16px",
-                      borderBottom: "1px solid #E5E7EB",
+                      padding: "20px",
+                      borderBottom: "1px solid #e5e7eb",
                       display: "flex",
                       alignItems: "center",
-                      gap: "12px",
+                      gap: "16px",
+                      background:
+                        "linear-gradient(135deg, rgba(243, 112, 33, 0.02) 0%, rgba(243, 112, 33, 0.01) 100%)",
                     }}
                   >
                     {/* Avatar */}
                     {studentImage ? (
                       <img
                         src={studentImage}
-                        alt={auth.user?.fullName || "avatar"}
+                        alt={profile?.fullName || "avatar"}
                         style={{
-                          width: 40,
-                          height: 40,
+                          width: 48,
+                          height: 48,
                           borderRadius: "50%",
                           objectFit: "cover",
                           boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                          border: "2px solid rgba(243, 112, 33, 0.1)",
+                          border: "2px solid rgba(243, 112, 33, 0.15)",
                         }}
                       />
                     ) : (
                       <div
                         style={{
-                          width: 40,
-                          height: 40,
+                          width: 48,
+                          height: 48,
                           borderRadius: "50%",
                           background:
-                            "linear-gradient(135deg, #FFFFFF, rgba(243, 112, 33, 0.1))",
+                            "linear-gradient(135deg, #f37021, #ff8c42)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                          color: "#002855",
-                          fontSize: "18px",
-                          fontWeight: "600",
+                          boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
+                          color: "#ffffff",
+                          fontSize: "20px",
+                          fontWeight: 700,
                         }}
                       >
-                        {auth.user?.fullName
-                          ? auth.user.fullName.charAt(0)
-                          : "S"}
+                        {profile?.fullName ? profile.fullName.charAt(0) : "S"}
                       </div>
                     )}
 
@@ -311,20 +372,32 @@ const StudentLayout: React.FC = () => {
                       <div
                         style={{
                           fontSize: "16px",
-                          fontWeight: "600",
-                          color: "#111827",
-                          marginBottom: "2px",
+                          fontWeight: 700,
+                          color: "#1a2736",
+                          marginBottom: "4px",
+                          lineHeight: "1.2",
                         }}
                       >
-                        {auth.user?.fullName || "Sinh viên"}
+                        {profile?.fullName || "Sinh viên"}
                       </div>
                       <div
                         style={{
-                          fontSize: "14px",
-                          color: "#6B7280",
+                          fontSize: "13px",
+                          color: "#64748b",
+                          fontWeight: 500,
                         }}
                       >
-                        {auth.user?.userCode || ""}
+                        Mã SV: {profile?.studentCode || ""}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#f37021",
+                          fontWeight: 600,
+                          marginTop: "2px",
+                        }}
+                      >
+                        Vai trò: Sinh viên
                       </div>
                     </div>
                   </div>
@@ -339,26 +412,32 @@ const StudentLayout: React.FC = () => {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "12px",
+                        gap: "14px",
                         width: "100%",
-                        padding: "12px 16px",
+                        padding: "14px 18px",
                         background: "none",
                         border: "none",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         textAlign: "left",
                         cursor: "pointer",
                         fontSize: "14px",
                         color: "#374151",
-                        transition: "background-color 0.2s",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#F9FAFB";
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(243, 112, 33, 0.08)";
+                        e.currentTarget.style.color = "#f37021";
+                        e.currentTarget.style.transform = "translateX(4px)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "#374151";
+                        e.currentTarget.style.transform = "translateX(0)";
                       }}
                     >
-                      <User size={16} color="#6B7280" />
+                      <User size={18} color="#64748b" />
                       Thông tin sinh viên
                     </button>
 
@@ -370,26 +449,30 @@ const StudentLayout: React.FC = () => {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "12px",
+                        gap: "14px",
                         width: "100%",
-                        padding: "12px 16px",
+                        padding: "14px 18px",
                         background: "none",
                         border: "none",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         textAlign: "left",
                         cursor: "pointer",
                         fontSize: "14px",
-                        color: "#DC2626",
-                        transition: "background-color 0.2s",
+                        color: "#dc2626",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#FEF2F2";
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(220, 38, 38, 0.08)";
+                        e.currentTarget.style.transform = "translateX(4px)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.transform = "translateX(0)";
                       }}
                     >
-                      <LogOut size={16} color="#DC2626" />
+                      <LogOut size={18} color="#dc2626" />
                       Đăng xuất
                     </button>
                   </div>
