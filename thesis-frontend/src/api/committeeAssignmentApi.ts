@@ -397,16 +397,17 @@ export const committeeAssignmentApi = {
 		});
 	},
 
-	async getAvailableLecturers(filter?: { tag?: string }, options?: { signal?: AbortSignal }): Promise<ApiResponse<CommitteeAssignmentAvailableLecturer[]>> {
-		const params = new URLSearchParams();
-		if (filter?.tag) params.append("tag", filter.tag);
-		const query = params.toString();
-		const url = query ? `/CommitteeAssignment/available-lecturers?${query}` : "/CommitteeAssignment/available-lecturers";
-		return await fetchData<ApiResponse<CommitteeAssignmentAvailableLecturer[]>>(url, {
-			method: "GET",
-			signal: options?.signal,
-		});
-	},
+	async getAvailableLecturers(filter?: { tag?: string; committeeCode?: string }, options?: { signal?: AbortSignal }): Promise<ApiResponse<CommitteeAssignmentAvailableLecturer[]>> {
+			const params = new URLSearchParams();
+			if (filter?.tag) params.append("tag", filter.tag);
+			if (filter?.committeeCode) params.append("committeeCode", filter.committeeCode);
+			const query = params.toString();
+			const url = query ? `/CommitteeAssignment/available-lecturers?${query}` : "/CommitteeAssignment/available-lecturers";
+			return await fetchData<ApiResponse<CommitteeAssignmentAvailableLecturer[]>>(url, {
+				method: "GET",
+				signal: options?.signal,
+			});
+		},
 
 	async deleteCommittee(committeeCode: string, force = true, options?: { signal?: AbortSignal }): Promise<ApiResponse<boolean>> {
 		const suffix = force ? "?force=true" : "";
@@ -486,6 +487,8 @@ export interface AvailableLecturerDto {
 	currentDefenseLoad: number;
 	availability: boolean;
 	isEligibleChair?: boolean;
+	tagCodes?: string[];
+	tagNames?: string[];
 }
 
 export interface AvailableTopicDto {
@@ -525,9 +528,10 @@ export async function createCommittee(request: CommitteeCreateRequestDto, option
 	});
 }
 
-export async function getAvailableLecturers(filter?: { tag?: string }, options?: { signal?: AbortSignal }): Promise<ApiResponse<AvailableLecturerDto[]>> {
+export async function getAvailableLecturers(filter?: { tag?: string; committeeCode?: string }, options?: { signal?: AbortSignal }): Promise<ApiResponse<AvailableLecturerDto[]>> {
 	const params = new URLSearchParams();
 	if (filter?.tag) params.set("tag", filter.tag);
+	if (filter?.committeeCode) params.set("committeeCode", filter.committeeCode);
 	const query = params.toString();
 	return await fetchData<ApiResponse<AvailableLecturerDto[]>>(`/CommitteeAssignment/available-lecturers${query ? `?${query}` : ""}`, {
 		method: "GET",

@@ -13,6 +13,7 @@ namespace ThesisManagement.Api.Models
         public string? DepartmentCode { get; set; } // New: reference by code
         public string? Degree { get; set; }
         public string? Specialties { get; set; } // Keep for backward compatibility
+        public string? FullName { get; set; }
         public int? GuideQuota { get; set; }
         public int? DefenseQuota { get; set; }
         public int CurrentGuidingCount { get; set; } = 0; // New: current number of guiding topics
@@ -24,5 +25,6 @@ namespace ThesisManagement.Api.Models
         public Department? Department { get; set; }
         public ICollection<LecturerSpecialty>? LecturerSpecialties { get; set; }
         public ICollection<TopicLecturer>? TopicLecturers { get; set; }
+        public ICollection<LecturerTag>? LecturerTags { get; set; }
     }
 }

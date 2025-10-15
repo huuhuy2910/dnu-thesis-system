@@ -114,8 +114,8 @@ namespace ThesisManagement.Api.DTOs
         public string Role { get; set; } = string.Empty;
         public bool IsChair { get; set; }
         public string? Degree { get; set; }
-        public List<string> SpecialtyCodes { get; set; } = new();
-        public List<string> SpecialtyNames { get; set; } = new();
+        public List<string> TagCodes { get; set; } = new();
+        public List<string> TagNames { get; set; } = new();
     }
 
     public class CommitteeAssignmentItemDto
@@ -224,9 +224,6 @@ namespace ThesisManagement.Api.DTOs
         // Backwards compatible alias
         public string Name { get => FullName; set { FullName = value; } }
         public string? DepartmentCode { get; set; }
-        public string? Specialties { get; set; }
-        // Optional single specialty code for frontend convenience
-        public string? SpecialtyCode { get; set; }
         // New: academic degree, e.g. "Tiến sĩ", "Thạc sĩ"
         public string? Degree { get; set; }
         // New: whether lecturer is eligible to be chair (computed by service)
@@ -234,6 +231,8 @@ namespace ThesisManagement.Api.DTOs
         public int DefenseQuota { get; set; }
         public int CurrentDefenseLoad { get; set; }
         public bool Availability { get; set; } = true;
+        public List<string> TagCodes { get; set; } = new();
+        public List<string> TagNames { get; set; } = new();
     }
 
     public class AvailableTopicDto
@@ -245,7 +244,6 @@ namespace ThesisManagement.Api.DTOs
         public string? SupervisorCode { get; set; }
         public string? SupervisorName { get; set; }
         public string? DepartmentCode { get; set; }
-        public string? SpecialtyCode { get; set; }
         public List<string> Tags { get; set; } = new();
         public List<string> TagDescriptions { get; set; } = new();
         public string? Status { get; set; }

@@ -848,37 +848,73 @@ namespace ThesisManagement.Api.Services
                                             from user in userGroup.DefaultIfEmpty()
                                             select new
                                             {
-                                                LecturerProfileId = m.MemberLecturerProfileID ?? 0,
+                                                LecturerProfileId = (m.MemberLecturerProfileID ?? 0) != 0 ? m.MemberLecturerProfileID!.Value : lp.LecturerProfileID,
                                                 LecturerCode = lp.LecturerCode,
-                                                FullName = user != null ? user.FullName : lp.LecturerCode,
+                                                FullName = !string.IsNullOrWhiteSpace(lp.FullName)
+                                                    ? lp.FullName!
+                                                    : user != null
+                                                        ? user.FullName
+                                                        : lp.LecturerCode,
                                                 Role = m.Role ?? string.Empty,
                                                 IsChair = m.IsChair ?? false,
-                                                Degree = lp.Degree,
-                                                Specialties = lp.Specialties
+                                                Degree = lp.Degree
                                             })
                     .OrderBy(x => x.IsChair ? 0 : 1)
                     .ThenBy(x => x.FullName)
                     .ToListAsync(cancellationToken);
 
-                var members = memberRecords.Select(x => new CommitteeMemberSummaryDto
+                var memberProfileIds = memberRecords.Select(x => x.LecturerProfileId).Where(id => id > 0).Distinct().ToList();
+                var memberTagMap = new Dictionary<int, (List<string> Codes, List<string> Names)>();
+
+                if (memberProfileIds.Count > 0)
                 {
-                    LecturerProfileId = x.LecturerProfileId,
-                    LecturerCode = x.LecturerCode,
-                    FullName = x.FullName,
-                    Role = x.Role,
-                    IsChair = x.IsChair,
-                    Degree = x.Degree,
-                    SpecialtyCodes = SplitValues(x.Specialties),
-                    SpecialtyNames = SplitValues(x.Specialties)
+                    var memberTagRows = await _db.LecturerTags.AsNoTracking()
+                        .Where(lt => memberProfileIds.Contains(lt.LecturerProfileID))
+                        .Join(_db.Tags.AsNoTracking(), lt => lt.TagID, t => t.TagID,
+                            (lt, t) => new { lt.LecturerProfileID, lt.TagCode, t.TagName })
+                        .ToListAsync(cancellationToken);
+
+                    memberTagMap = memberTagRows
+                        .GroupBy(x => x.LecturerProfileID)
+                        .ToDictionary(
+                            g => g.Key,
+                            g =>
+                            (
+                                Codes: g.Select(v => string.IsNullOrWhiteSpace(v.TagCode) ? null : v.TagCode!.Trim())
+                                    .Where(v => v != null)
+                                    .Cast<string>()
+                                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                                    .ToList(),
+                                Names: g.Select(v => v.TagName)
+                                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                                    .Distinct()
+                                    .ToList()
+                            ));
+                }
+
+                var members = memberRecords.Select(x =>
+                {
+                    if (!memberTagMap.TryGetValue(x.LecturerProfileId, out var tagInfo))
+                    {
+                        tagInfo = (new List<string>(), new List<string>());
+                    }
+
+                    return new CommitteeMemberSummaryDto
+                    {
+                        LecturerProfileId = x.LecturerProfileId,
+                        LecturerCode = x.LecturerCode,
+                        FullName = x.FullName,
+                        Role = x.Role,
+                        IsChair = x.IsChair,
+                        Degree = x.Degree,
+                        TagCodes = tagInfo.Codes,
+                        TagNames = tagInfo.Names
+                    };
                 }).ToList();
 
                 var assignmentRecords = await (from a in _db.DefenseAssignments.AsNoTracking()
                                                 where a.CommitteeCode == committeeCode
                                                 join t in _db.Topics.AsNoTracking() on a.TopicCode equals t.TopicCode
-                                                join proposer in _db.Users.AsNoTracking() on t.ProposerUserCode equals proposer.UserCode into proposerGroup
-                                                from proposer in proposerGroup.DefaultIfEmpty()
-                                                join supervisor in _db.Users.AsNoTracking() on t.SupervisorUserCode equals supervisor.UserCode into supervisorGroup
-                                                from supervisor in supervisorGroup.DefaultIfEmpty()
                                                 select new
                                                 {
                                                     a.AssignmentCode,
@@ -889,13 +925,102 @@ namespace ThesisManagement.Api.Services
                                                     t.TopicCode,
                                                     t.Title,
                                                     t.ProposerStudentCode,
-                                                    StudentName = proposer != null ? proposer.FullName : null,
-                                                    SupervisorCode = t.SupervisorUserCode,
-                                                    SupervisorName = supervisor != null ? supervisor.FullName : null
+                                                    t.SupervisorLecturerCode,
+                                                    t.SupervisorUserCode
                                                 })
                     .OrderBy(x => x.Session)
                     .ThenBy(x => x.StartTime)
                     .ToListAsync(cancellationToken);
+
+                var assignmentStudentCodes = assignmentRecords
+                    .Select(x => x.ProposerStudentCode)
+                    .Where(code => !string.IsNullOrWhiteSpace(code))
+                    .Cast<string>()
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var studentNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var studentUserFallback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                if (assignmentStudentCodes.Count > 0)
+                {
+                    var studentRows = await _db.StudentProfiles.AsNoTracking()
+                        .Where(sp => assignmentStudentCodes.Contains(sp.StudentCode))
+                        .Select(sp => new { sp.StudentCode, sp.FullName, sp.UserCode })
+                        .ToListAsync(cancellationToken);
+
+                    var fallbackUserCodes = studentRows
+                        .Where(sp => string.IsNullOrWhiteSpace(sp.FullName) && !string.IsNullOrWhiteSpace(sp.UserCode))
+                        .Select(sp => sp.UserCode!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (fallbackUserCodes.Count > 0)
+                    {
+                        var userRows = await _db.Users.AsNoTracking()
+                            .Where(u => fallbackUserCodes.Contains(u.UserCode))
+                            .Select(u => new { u.UserCode, u.FullName })
+                            .ToListAsync(cancellationToken);
+
+                        studentUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    foreach (var row in studentRows)
+                    {
+                        var resolvedName = !string.IsNullOrWhiteSpace(row.FullName)
+                            ? row.FullName!
+                            : (!string.IsNullOrWhiteSpace(row.UserCode) && studentUserFallback.TryGetValue(row.UserCode!, out var name)
+                                ? name
+                                : row.StudentCode);
+
+                        studentNameMap[row.StudentCode] = resolvedName;
+                    }
+                }
+
+                var supervisorCodes = assignmentRecords
+                    .Select(x => x.SupervisorLecturerCode)
+                    .Where(code => !string.IsNullOrWhiteSpace(code))
+                    .Cast<string>()
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var supervisorNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var supervisorUserFallback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                if (supervisorCodes.Count > 0)
+                {
+                    var supervisorRows = await _db.LecturerProfiles.AsNoTracking()
+                        .Where(lp => supervisorCodes.Contains(lp.LecturerCode))
+                        .Select(lp => new { lp.LecturerCode, lp.FullName, lp.UserCode })
+                        .ToListAsync(cancellationToken);
+
+                    var fallbackUserCodes = supervisorRows
+                        .Where(lp => string.IsNullOrWhiteSpace(lp.FullName) && !string.IsNullOrWhiteSpace(lp.UserCode))
+                        .Select(lp => lp.UserCode!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (fallbackUserCodes.Count > 0)
+                    {
+                        var userRows = await _db.Users.AsNoTracking()
+                            .Where(u => fallbackUserCodes.Contains(u.UserCode))
+                            .Select(u => new { u.UserCode, u.FullName })
+                            .ToListAsync(cancellationToken);
+
+                        supervisorUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    foreach (var row in supervisorRows)
+                    {
+                        var resolvedName = !string.IsNullOrWhiteSpace(row.FullName)
+                            ? row.FullName!
+                            : (!string.IsNullOrWhiteSpace(row.UserCode) && supervisorUserFallback.TryGetValue(row.UserCode!, out var name)
+                                ? name
+                                : row.LecturerCode);
+
+                        supervisorNameMap[row.LecturerCode] = resolvedName;
+                    }
+                }
 
                 var assignments = assignmentRecords.Select(x => new CommitteeAssignmentItemDto
                 {
@@ -903,16 +1028,20 @@ namespace ThesisManagement.Api.Services
                     TopicCode = x.TopicCode,
                     Title = x.Title,
                     StudentCode = x.ProposerStudentCode,
-                    StudentName = x.StudentName,
-                    SupervisorCode = x.SupervisorCode,
-                    SupervisorName = x.SupervisorName,
+                    StudentName = x.ProposerStudentCode != null && studentNameMap.TryGetValue(x.ProposerStudentCode, out var student)
+                        ? student
+                        : null,
+                    SupervisorCode = x.SupervisorLecturerCode ?? x.SupervisorUserCode,
+                    SupervisorName = x.SupervisorLecturerCode != null && supervisorNameMap.TryGetValue(x.SupervisorLecturerCode, out var supervisor)
+                        ? supervisor
+                        : null,
                     Session = x.Session,
                     StartTime = x.StartTime,
                     EndTime = x.EndTime,
                     ScheduledAt = x.ScheduledAt
                 }).ToList();
 
-                var sessions = assignmentRecords
+                var sessions = assignments
                     .GroupBy(x => x.Session ?? 0)
                     .OrderBy(g => g.Key)
                     .Select(g => new CommitteeSessionDto
@@ -924,7 +1053,7 @@ namespace ThesisManagement.Api.Services
                                 AssignmentCode = x.AssignmentCode,
                                 TopicCode = x.TopicCode,
                                 Title = x.Title,
-                                StudentCode = x.ProposerStudentCode,
+                                StudentCode = x.StudentCode,
                                 StudentName = x.StudentName,
                                 SupervisorCode = x.SupervisorCode,
                                 SupervisorName = x.SupervisorName,
@@ -962,8 +1091,6 @@ namespace ThesisManagement.Api.Services
         {
             try
             {
-                var targetDate = date?.Date;
-
                 var tagFilters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 if (!string.IsNullOrWhiteSpace(tag))
                 {
@@ -989,31 +1116,36 @@ namespace ThesisManagement.Api.Services
                 IQueryable<LecturerProfile> lecturerQuery = _db.LecturerProfiles
                     .AsNoTracking()
                     .Include(lp => lp.User)
-                    .Include(lp => lp.LecturerSpecialties);
+                    .Include(lp => lp.LecturerTags)!.ThenInclude(lt => lt.Tag);
 
-                var lecturers = await lecturerQuery.ToListAsync(cancellationToken);
-
+                // If tag filters were provided (or committeeCode implied tags), filter at DB level
+                List<LecturerProfile> lecturers;
                 if (tagFilters.Count > 0)
                 {
-                    var filterSet = tagFilters;
-                    lecturers = lecturers
-                        .Where(lp =>
-                        {
-                            var specialtyCodes = new HashSet<string>(SplitValues(lp.Specialties), StringComparer.OrdinalIgnoreCase);
-                            if (lp.LecturerSpecialties != null)
-                            {
-                                foreach (var spec in lp.LecturerSpecialties)
-                                {
-                                    if (!string.IsNullOrWhiteSpace(spec.SpecialtyCode))
-                                    {
-                                        specialtyCodes.Add(spec.SpecialtyCode!.Trim());
-                                    }
-                                }
-                            }
+                    // normalize filter values
+                    var normalizedFilters = tagFilters.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-                            return specialtyCodes.Count > 0 && specialtyCodes.Any(code => filterSet.Contains(code));
-                        })
-                        .ToList();
+                    // find lecturer profile ids that have matching lecturer-tags (either explicit TagCode on LecturerTag or referenced Tag.TagCode)
+                    var matchingLecturerIds = await _db.LecturerTags.AsNoTracking()
+                        .Where(lt => (!string.IsNullOrWhiteSpace(lt.TagCode) && normalizedFilters.Contains(lt.TagCode!))
+                                     || (lt.Tag != null && !string.IsNullOrWhiteSpace(lt.Tag.TagCode) && normalizedFilters.Contains(lt.Tag.TagCode)))
+                        .Select(lt => lt.LecturerProfileID)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+
+                    if (matchingLecturerIds.Count == 0)
+                    {
+                        lecturers = new List<LecturerProfile>();
+                    }
+                    else
+                    {
+                        lecturerQuery = lecturerQuery.Where(lp => matchingLecturerIds.Contains(lp.LecturerProfileID));
+                        lecturers = await lecturerQuery.ToListAsync(cancellationToken);
+                    }
+                }
+                else
+                {
+                    lecturers = await lecturerQuery.ToListAsync(cancellationToken);
                 }
 
                 var lecturerCodes = lecturers.Select(l => l.LecturerCode).Where(code => !string.IsNullOrWhiteSpace(code)).ToList();
@@ -1021,12 +1153,7 @@ namespace ThesisManagement.Api.Services
                 var loadQuery = from cm in _db.CommitteeMembers.AsNoTracking()
                                 join da in _db.DefenseAssignments.AsNoTracking() on cm.CommitteeCode equals da.CommitteeCode
                                 where cm.MemberLecturerCode != null && lecturerCodes.Contains(cm.MemberLecturerCode)
-                                select new { cm.MemberLecturerCode, da.ScheduledAt };
-
-                if (targetDate.HasValue)
-                {
-                    loadQuery = loadQuery.Where(x => x.ScheduledAt.HasValue && x.ScheduledAt.Value.Date == targetDate.Value);
-                }
+                                select new { cm.MemberLecturerCode };
 
                 var loadList = await loadQuery
                     .GroupBy(x => x.MemberLecturerCode!)
@@ -1039,23 +1166,45 @@ namespace ThesisManagement.Api.Services
                 foreach (var lecturer in lecturers)
                 {
                     var lecturerCode = lecturer.LecturerCode ?? string.Empty;
-                    var user = lecturer.User;
                     var load = loadMap.TryGetValue(lecturerCode, out var count) ? count : 0;
                     var eligibleChair = IsEligibleChairDegree(lecturer.Degree);
+
+            var tagCodes = (lecturer.LecturerTags?
+                .Select(lt => string.IsNullOrWhiteSpace(lt.TagCode) ? lt.Tag?.TagCode : lt.TagCode)
+                ?? Enumerable.Empty<string?>())
+                        .Where(code => !string.IsNullOrWhiteSpace(code))
+                        .Select(code => code!.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+            var tagNames = (lecturer.LecturerTags?
+                .Select(lt => lt.Tag?.TagName)
+                ?? Enumerable.Empty<string?>())
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Cast<string>()
+                        .Distinct()
+                        .ToList();
+
+                    var fullName = !string.IsNullOrWhiteSpace(lecturer.FullName)
+                        ? lecturer.FullName!
+                        : lecturer.User?.FullName ?? lecturerCode;
+
+                    var defenseQuota = lecturer.DefenseQuota ?? 0;
+                    var availability = defenseQuota <= 0 || load < defenseQuota;
 
                     var dto = new AvailableLecturerDto
                     {
                         LecturerProfileId = lecturer.LecturerProfileID,
                         LecturerCode = lecturerCode,
-                        FullName = user?.FullName ?? lecturerCode,
+                        FullName = fullName,
                         DepartmentCode = lecturer.DepartmentCode,
-                        Specialties = lecturer.Specialties,
-                        SpecialtyCode = lecturer.Specialties,
                         Degree = lecturer.Degree,
                         IsEligibleChair = eligibleChair,
-                        DefenseQuota = lecturer.DefenseQuota ?? 0,
+                        DefenseQuota = defenseQuota,
                         CurrentDefenseLoad = load,
-                        Availability = !targetDate.HasValue || load == 0
+                        Availability = availability,
+                        TagCodes = tagCodes,
+                        TagNames = tagNames
                     };
 
                     result.Add(dto);
@@ -1116,30 +1265,134 @@ namespace ThesisManagement.Api.Services
 
                 // Only topics that are eligible and not currently assigned to any committee
                 var q = _db.Topics.AsNoTracking().Where(t => t.Status == "Đủ điều kiện bảo vệ");
-                if (!string.IsNullOrWhiteSpace(department)) q = q.Where(t => t.DepartmentCode == department);
+                if (!string.IsNullOrWhiteSpace(department))
+                {
+                    q = q.Where(t => t.DepartmentCode == department);
+                }
 
                 // Exclude topics that already have defense assignments (defensive safety)
                 q = q.Where(t => !_db.DefenseAssignments.Any(a => a.TopicCode == t.TopicCode));
 
-                // Fetch base topic info with proposer and supervisor names
-                var topics = await q
-                    .GroupJoin(_db.Users.AsNoTracking(), t => t.ProposerUserCode, u => u.UserCode, (t, pu) => new { t, proposer = pu.FirstOrDefault() })
-                    .SelectMany(tmp => _db.Users.AsNoTracking().Where(u => u.UserCode == tmp.t.SupervisorUserCode).DefaultIfEmpty(), (tmp, sup) => new { tmp.t, tmp.proposer, supervisor = sup })
-                    .Select(x => new AvailableTopicDto
+                // Fetch base topic info
+                var topicRows = await q
+                    .Select(t => new
                     {
-                        TopicCode = x.t.TopicCode,
-                        Title = x.t.Title,
-                        StudentCode = x.t.ProposerStudentCode,
-                        StudentName = x.proposer != null ? x.proposer.FullName : null,
-                        SupervisorCode = x.t.SupervisorUserCode,
-                        SupervisorName = x.supervisor != null ? x.supervisor.FullName : null,
-                        DepartmentCode = x.t.DepartmentCode,
-                        SpecialtyCode = x.t.SpecialtyCode,
-                        Tags = new List<string>(),
-                        TagDescriptions = new List<string>()
+                        t.TopicCode,
+                        t.Title,
+                        t.ProposerStudentCode,
+                        t.SupervisorLecturerCode,
+                        t.SupervisorUserCode,
+                        t.DepartmentCode
                     })
                     .OrderBy(t => t.Title)
                     .ToListAsync(cancellationToken);
+
+                var topicStudentCodes = topicRows
+                    .Select(x => x.ProposerStudentCode)
+                    .Where(code => !string.IsNullOrWhiteSpace(code))
+                    .Cast<string>()
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var topicStudentNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var topicStudentFallback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                if (topicStudentCodes.Count > 0)
+                {
+                    var studentRows = await _db.StudentProfiles.AsNoTracking()
+                        .Where(sp => topicStudentCodes.Contains(sp.StudentCode))
+                        .Select(sp => new { sp.StudentCode, sp.FullName, sp.UserCode })
+                        .ToListAsync(cancellationToken);
+
+                    var fallbackCodes = studentRows
+                        .Where(sp => string.IsNullOrWhiteSpace(sp.FullName) && !string.IsNullOrWhiteSpace(sp.UserCode))
+                        .Select(sp => sp.UserCode!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (fallbackCodes.Count > 0)
+                    {
+                        var userRows = await _db.Users.AsNoTracking()
+                            .Where(u => fallbackCodes.Contains(u.UserCode))
+                            .Select(u => new { u.UserCode, u.FullName })
+                            .ToListAsync(cancellationToken);
+
+                        topicStudentFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    foreach (var row in studentRows)
+                    {
+                        var resolvedName = !string.IsNullOrWhiteSpace(row.FullName)
+                            ? row.FullName!
+                            : (!string.IsNullOrWhiteSpace(row.UserCode) && topicStudentFallback.TryGetValue(row.UserCode!, out var name)
+                                ? name
+                                : row.StudentCode);
+
+                        topicStudentNameMap[row.StudentCode] = resolvedName;
+                    }
+                }
+
+                var topicSupervisorCodes = topicRows
+                    .Select(x => x.SupervisorLecturerCode)
+                    .Where(code => !string.IsNullOrWhiteSpace(code))
+                    .Cast<string>()
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var topicSupervisorNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var topicSupervisorFallback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                if (topicSupervisorCodes.Count > 0)
+                {
+                    var supervisorRows = await _db.LecturerProfiles.AsNoTracking()
+                        .Where(lp => topicSupervisorCodes.Contains(lp.LecturerCode))
+                        .Select(lp => new { lp.LecturerCode, lp.FullName, lp.UserCode })
+                        .ToListAsync(cancellationToken);
+
+                    var fallbackCodes = supervisorRows
+                        .Where(lp => string.IsNullOrWhiteSpace(lp.FullName) && !string.IsNullOrWhiteSpace(lp.UserCode))
+                        .Select(lp => lp.UserCode!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (fallbackCodes.Count > 0)
+                    {
+                        var userRows = await _db.Users.AsNoTracking()
+                            .Where(u => fallbackCodes.Contains(u.UserCode))
+                            .Select(u => new { u.UserCode, u.FullName })
+                            .ToListAsync(cancellationToken);
+
+                        topicSupervisorFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    foreach (var row in supervisorRows)
+                    {
+                        var resolvedName = !string.IsNullOrWhiteSpace(row.FullName)
+                            ? row.FullName!
+                            : (!string.IsNullOrWhiteSpace(row.UserCode) && topicSupervisorFallback.TryGetValue(row.UserCode!, out var name)
+                                ? name
+                                : row.LecturerCode);
+
+                        topicSupervisorNameMap[row.LecturerCode] = resolvedName;
+                    }
+                }
+
+                var topics = topicRows.Select(x => new AvailableTopicDto
+                {
+                    TopicCode = x.TopicCode,
+                    Title = x.Title,
+                    StudentCode = x.ProposerStudentCode,
+                    StudentName = x.ProposerStudentCode != null && topicStudentNameMap.TryGetValue(x.ProposerStudentCode, out var studentName)
+                        ? studentName
+                        : null,
+                    SupervisorCode = x.SupervisorLecturerCode ?? x.SupervisorUserCode,
+                    SupervisorName = x.SupervisorLecturerCode != null && topicSupervisorNameMap.TryGetValue(x.SupervisorLecturerCode, out var supervisorName)
+                        ? supervisorName
+                        : null,
+                    DepartmentCode = x.DepartmentCode,
+                    Tags = new List<string>(),
+                    TagDescriptions = new List<string>()
+                }).ToList();
 
                 // Populate tag names for the returned topics
                 var topicCodes = topics.Select(t => t.TopicCode).ToList();

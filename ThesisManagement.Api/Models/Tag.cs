@@ -15,5 +15,6 @@ namespace ThesisManagement.Api.Models
         public ICollection<CatalogTopicTag>? CatalogTopicTags { get; set; }
         public ICollection<TopicTag>? TopicTags { get; set; }
         public ICollection<CommitteeTag>? CommitteeTags { get; set; }
+        public ICollection<LecturerTag>? LecturerTags { get; set; }
     }
 }

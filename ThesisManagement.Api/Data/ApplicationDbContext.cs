@@ -35,6 +35,7 @@ namespace ThesisManagement.Api.Data
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<CatalogTopicTag> CatalogTopicTags => Set<CatalogTopicTag>();
         public DbSet<TopicTag> TopicTags => Set<TopicTag>();
+    public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -75,6 +76,7 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.User).WithOne(x => x.StudentProfile).HasForeignKey<StudentProfile>(x => x.UserID);
                 b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentID).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.StudentImage).HasMaxLength(255);
+                b.Property(x => x.FullName).HasMaxLength(150);
 
                 // New columns added to StudentProfiles
                 b.Property(x => x.Gender).HasMaxLength(10);
@@ -99,6 +101,7 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.LecturerCode).IsUnique();
                 b.Property(x => x.Degree).HasMaxLength(50);
                 b.Property(x => x.Specialties).HasMaxLength(500);
+                b.Property(x => x.FullName).HasMaxLength(150);
                 b.HasOne(x => x.User).WithOne(x => x.LecturerProfile).HasForeignKey<LecturerProfile>(x => x.UserCode).HasPrincipalKey<User>(x => x.UserCode);
                 b.HasOne(x => x.Department).WithMany(x => x.LecturerProfiles).HasForeignKey(x => x.DepartmentCode).HasPrincipalKey(x => x.DepartmentCode);
                 b.Property(x => x.GuideQuota).HasDefaultValue(10);
@@ -406,6 +409,20 @@ namespace ThesisManagement.Api.Data
                     .WithMany(x => x.TopicTags)
                     .HasForeignKey(x => x.TagID)
                     .OnDelete(DeleteBehavior.Cascade);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            modelBuilder.Entity<LecturerTag>(b =>
+            {
+                b.HasKey(x => new { x.LecturerProfileID, x.TagID });
+                b.HasOne(x => x.LecturerProfile)
+                    .WithMany(x => x.LecturerTags)
+                    .HasForeignKey(x => x.LecturerProfileID);
+                b.HasOne(x => x.Tag)
+                    .WithMany(x => x.LecturerTags)
+                    .HasForeignKey(x => x.TagID);
+                b.Property(x => x.TagCode).HasMaxLength(50);
+                b.Property(x => x.LecturerCode).HasMaxLength(30);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             });
         }
