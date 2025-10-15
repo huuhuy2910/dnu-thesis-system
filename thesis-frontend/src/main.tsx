@@ -5,7 +5,9 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
 import PageLoader from "./components/PageLoader";
+import ToastContainer from "./components/ToastContainer";
 
 function Root() {
   const [loading, setLoading] = useState(true);
@@ -33,13 +35,18 @@ function Root() {
   return (
     <React.StrictMode>
       {loading && <PageLoader />}
-      <AuthProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </AuthProvider>
+        <ToastContainer />
+      </ToastProvider>
     </React.StrictMode>
   );
 }
+
+export default Root;
 
 createRoot(document.getElementById("root")!).render(<Root />);

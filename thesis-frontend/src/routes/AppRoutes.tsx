@@ -1,5 +1,5 @@
 // src/routes/AppRoutes.tsx
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import LoginPage from "../pages/auth/LoginPage";
@@ -21,17 +21,16 @@ import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
 import TopicsManagement from "../pages/admin/TopicsManagement";
-import CommitteesManagement from "../pages/admin/CommitteesManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
 
-// Committee Management
-import CommitteeList from "../pages/admin/CommitteeList";
-import CreateCommittee from "../pages/admin/CreateCommittee";
-import CommitteeDetail from "../pages/admin/CommitteeDetail";
 import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 import StudentProfilePage from "../pages/student/StudentProfile";
+
+// Lazy load heavy components for better performance
+const CommitteeManagement = lazy(() => import("../pages/admin/committee/CommitteeManagement"));
+const CommitteeCreationPage = lazy(() => import("../pages/admin/committee/CommitteeCreationPage"));
 
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
@@ -92,15 +91,22 @@ const AppRoutes: React.FC = () => {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="users" element={<UsersManagement />} />
-        <Route path="topics" element={<TopicsManagement />} />
-        <Route path="committees" element={<CommitteesManagement />} />
-        <Route path="system-config" element={<SystemConfig />} />
-        <Route path="committees-new" element={<CommitteeList />} />
-        <Route path="committees-new/create" element={<CreateCommittee />} />
+  <Route path="topics" element={<TopicsManagement />} />
+  <Route path="committees" element={
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#1F3C88]"></div></div>}>
+      <CommitteeManagement />
+    </Suspense>
+  } />
+        <Route path="committees/create" element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#1F3C88]"></div></div>}>
+            <CommitteeCreationPage />
+          </Suspense>
+        } />
         <Route
-          path="committees-new/detail/:code"
-          element={<CommitteeDetail />}
+          path="defense-assignments"
+          element={<Navigate to="/admin/committees" replace />}
         />
+        <Route path="system-config" element={<SystemConfig />} />
         <Route path="notifications/create" element={<CreateNotification />} />
         {/* thêm các route con khác của admin ở đây */}
       </Route>

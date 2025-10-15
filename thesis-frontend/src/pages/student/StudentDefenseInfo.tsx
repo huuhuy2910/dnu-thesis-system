@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Calendar,
   Users,
@@ -6,95 +6,44 @@ import {
   GraduationCap,
   AlertCircle,
   User,
-  Award,
 } from "lucide-react";
-
-interface CommitteeMember {
-  committeeMemberID: number;
-  lecturerName: string;
-  lecturerCode: string;
-  role: string;
-  isChair: boolean;
-  degree?: string;
-}
-
-interface Committee {
-  name: string;
-  committeeCode: string;
-  room: string;
-  members: CommitteeMember[];
-}
-
-interface Topic {
-  title: string;
-}
-
-interface StudentDefenseInfoDto {
-  studentName: string;
-  studentCode: string;
-  topic?: Topic;
-  scheduledAt?: string;
-  committee?: Committee;
-}
+import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
+import type { StudentDefenseInfoDto } from "../../api/committeeAssignmentApi";
 
 const StudentDefenseInfo: React.FC = () => {
-  const [data] = useState<StudentDefenseInfoDto>({
-    studentName: "Nguyễn Văn A",
-    studentCode: "SV2024001",
-    topic: {
-      title: "Ứng dụng trí tuệ nhân tạo trong phân tích dữ liệu lớn",
-    },
-    scheduledAt: "2025-12-15T14:00:00",
-    committee: {
-      name: "Hội đồng bảo vệ khóa luận CNTT 2025",
-      committeeCode: "HD2025001",
-      room: "A101",
-      members: [
-        {
-          committeeMemberID: 1,
-          lecturerName: "PGS.TS Nguyễn Thị B",
-          lecturerCode: "GV001",
-          role: "Chủ tịch",
-          isChair: true,
-          degree: "PGS.TS",
-        },
-        {
-          committeeMemberID: 2,
-          lecturerName: "TS Trần Văn C",
-          lecturerCode: "GV002",
-          role: "Thư ký",
-          isChair: false,
-          degree: "TS",
-        },
-        {
-          committeeMemberID: 3,
-          lecturerName: "TS Lê Thị D",
-          lecturerCode: "GV003",
-          role: "Phản biện",
-          isChair: false,
-          degree: "TS",
-        },
-        {
-          committeeMemberID: 4,
-          lecturerName: "ThS Phạm Văn E",
-          lecturerCode: "GV004",
-          role: "Ủy viên",
-          isChair: false,
-          degree: "ThS",
-        },
-        {
-          committeeMemberID: 5,
-          lecturerName: "TS Hoàng Thị F",
-          lecturerCode: "GV005",
-          role: "Ủy viên",
-          isChair: false,
-          degree: "TS",
-        },
-      ],
-    },
-  });
+  const [data, setData] = useState<StudentDefenseInfoDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const hasDefenseScheduled = data && data.scheduledAt && data.committee;
+  useEffect(() => {
+    const fetchDefenseInfo = async () => {
+      try {
+        // Assuming studentCode is available, e.g., from context or props. For now, hardcode or get from auth.
+        const studentCode = "STU01"; // Replace with actual student code from auth/context
+        const response = await committeeAssignmentApi.getStudentDefense(studentCode);
+        if (response.success && response.data) {
+          setData(response.data);
+        } else {
+          setError("Không thể tải thông tin bảo vệ");
+        }
+      } catch {
+        setError("Lỗi khi tải dữ liệu");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDefenseInfo();
+  }, []);
+
+  if (loading) {
+    return <div>Đang tải...</div>;
+  }
+
+  if (error) {
+    return <div>{error}</div>;
+  }
+
+  const hasDefenseScheduled = data && data.committee;
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
@@ -145,7 +94,7 @@ const StudentDefenseInfo: React.FC = () => {
             boxShadow: "0 4px 12px rgba(243, 112, 33, 0.3)",
           }}
         >
-          {data.studentName.charAt(0)}
+          {data?.studentCode.charAt(0)}
         </div>
         <div>
           <h2
@@ -156,14 +105,14 @@ const StudentDefenseInfo: React.FC = () => {
               marginBottom: "6px",
             }}
           >
-            {data.studentName}
+            {data?.studentCode}
           </h2>
           <p style={{ fontSize: "14px", color: "#666", marginBottom: "4px" }}>
-            Mã sinh viên: <strong>{data.studentCode}</strong>
+            Mã sinh viên: <strong>{data?.studentCode}</strong>
           </p>
-          {data.topic && (
+          {data?.title && (
             <p style={{ fontSize: "14px", color: "#666" }}>
-              Đề tài: <strong>{data.topic.title}</strong>
+              Đề tài: <strong>{data.title}</strong>
             </p>
           )}
         </div>
@@ -189,11 +138,10 @@ const StudentDefenseInfo: React.FC = () => {
               marginBottom: "8px",
             }}
           >
-            Chưa có lịch bảo vệ
+            Ôi, đề tài của bạn chưa đủ điều kiện bảo vệ! 😊
           </h3>
           <p style={{ color: "#666" }}>
-            Lịch bảo vệ của bạn chưa được sắp xếp. Vui lòng liên hệ với khoa để
-            biết thêm chi tiết.
+            Đừng lo lắng nhé! Lịch bảo vệ của bạn chưa được sắp xếp. Hãy tiếp tục hoàn thiện đề tài và liên hệ với giảng viên hướng dẫn để được hỗ trợ thêm. Chúc bạn cố gắng! 💪
           </p>
         </div>
       ) : (
@@ -272,15 +220,20 @@ const StudentDefenseInfo: React.FC = () => {
                     color: "#1a1a1a",
                   }}
                 >
-                  {new Date(data.scheduledAt!).toLocaleString("vi-VN", {
+                  {data.committee?.defenseDate ? new Date(data.committee.defenseDate).toLocaleString("vi-VN", {
                     weekday: "long",
                     year: "numeric",
                     month: "long",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
-                  })}
+                  }) : "Chưa có"}
                 </p>
+                {data.committee?.startTime && data.committee?.endTime && (
+                  <p style={{ fontSize: "14px", color: "#666", marginTop: "4px" }}>
+                    {data.committee.startTime} - {data.committee.endTime}
+                  </p>
+                )}
               </div>
 
               {data.committee?.room && (
@@ -419,17 +372,13 @@ const StudentDefenseInfo: React.FC = () => {
                     gap: "16px",
                   }}
                 >
-                  {data.committee.members.map((member) => (
+                  {data.committee.members.map((member, index) => (
                     <div
-                      key={member.committeeMemberID}
+                      key={index}
                       style={{
                         padding: "20px",
-                        background: member.isChair
-                          ? "linear-gradient(135deg, #FFF5F0 0%, #FFE8DC 100%)"
-                          : "#F9FAFB",
-                        border: `2px solid ${
-                          member.isChair ? "#F37021" : "#E5E7EB"
-                        }`,
+                        background: "#F9FAFB",
+                        border: "2px solid #E5E7EB",
                         borderRadius: "12px",
                         transition: "all 0.2s ease",
                       }}
@@ -456,9 +405,7 @@ const StudentDefenseInfo: React.FC = () => {
                             width: "48px",
                             height: "48px",
                             borderRadius: "50%",
-                            background: member.isChair
-                              ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
-                              : "#E5E7EB",
+                            background: "#E5E7EB",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -467,25 +414,17 @@ const StudentDefenseInfo: React.FC = () => {
                             fontSize: "18px",
                           }}
                         >
-                          {member.isChair ? (
-                            <Award size={24} />
-                          ) : (
-                            <User size={24} />
-                          )}
+                          <User size={24} />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <h3
+                          <p
                             style={{
-                              fontSize: "15px",
+                              fontSize: "16px",
                               fontWeight: "600",
                               color: "#1a1a1a",
-                              marginBottom: "2px",
                             }}
                           >
-                            {member.lecturerName}
-                          </h3>
-                          <p style={{ fontSize: "12px", color: "#999" }}>
-                            {member.lecturerCode}
+                            {member.name}
                           </p>
                         </div>
                       </div>
@@ -501,20 +440,9 @@ const StudentDefenseInfo: React.FC = () => {
                           style={{
                             display: "inline-block",
                             padding: "6px 12px",
-                            background: member.isChair
-                              ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
-                              : member.role === "Thư ký"
-                              ? "#E0F2FE"
-                              : "white",
-                            color: member.isChair
-                              ? "white"
-                              : member.role === "Thư ký"
-                              ? "#0369A1"
-                              : "#666",
-                            border:
-                              member.isChair || member.role === "Thư ký"
-                                ? "none"
-                                : "1px solid #E5E7EB",
+                            background: member.role === "Chủ tịch" ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)" : "white",
+                            color: member.role === "Chủ tịch" ? "white" : "#666",
+                            border: member.role === "Chủ tịch" ? "none" : "1px solid #E5E7EB",
                             borderRadius: "6px",
                             fontSize: "13px",
                             fontWeight: "600",
@@ -523,20 +451,6 @@ const StudentDefenseInfo: React.FC = () => {
                         >
                           {member.role}
                         </span>
-                        {member.degree && (
-                          <p
-                            style={{
-                              fontSize: "12px",
-                              color: "#666",
-                              textAlign: "center",
-                              padding: "4px 8px",
-                              background: "white",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            {member.degree}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))}

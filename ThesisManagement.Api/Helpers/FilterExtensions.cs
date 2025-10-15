@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
@@ -270,36 +271,6 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<Committee> ApplyFilter(this IQueryable<Committee> query, CommitteeFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => x.CommitteeCode.Contains(filter.Search) ||
-                                        (x.Name != null && x.Name.Contains(filter.Search)) ||
-                                        (x.Room != null && x.Room.Contains(filter.Search)));
-            }
-
-            if (!string.IsNullOrEmpty(filter.Name))
-                query = query.Where(x => x.Name != null && x.Name.Contains(filter.Name));
-
-            if (!string.IsNullOrEmpty(filter.CommitteeCode))
-                query = query.Where(x => x.CommitteeCode.Contains(filter.CommitteeCode));
-
-            if (!string.IsNullOrEmpty(filter.Room))
-                query = query.Where(x => x.Room != null && x.Room.Contains(filter.Room));
-
-            if (filter.DefenseDate.HasValue)
-                query = query.Where(x => x.DefenseDate.HasValue && x.DefenseDate.Value.Date == filter.DefenseDate.Value.Date);
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
-
         public static IQueryable<ProgressMilestone> ApplyFilter(this IQueryable<ProgressMilestone> query, ProgressMilestoneFilter filter)
         {
             if (!string.IsNullOrEmpty(filter.Search))
@@ -387,52 +358,36 @@ namespace ThesisManagement.Api.Helpers
 
         private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, BaseFilter filter)
         {
-            if (string.IsNullOrEmpty(filter.SortBy))
+            if (string.IsNullOrWhiteSpace(filter.SortBy))
+            {
                 return query;
+            }
+
+            var sortBy = filter.SortBy.Trim();
+
+            var propertyInfo = typeof(T)
+                .GetProperties()
+                .FirstOrDefault(p => string.Equals(p.Name, sortBy, StringComparison.OrdinalIgnoreCase));
+
+            if (propertyInfo == null)
+            {
+                return query;
+            }
 
             var parameter = Expression.Parameter(typeof(T), "x");
-            var property = Expression.Property(parameter, filter.SortBy);
+            var property = Expression.Property(parameter, propertyInfo);
             var lambda = Expression.Lambda(property, parameter);
 
-            string methodName = filter.SortDescending ? "OrderByDescending" : "OrderBy";
-            
+            var methodName = filter.SortDescending ? "OrderByDescending" : "OrderBy";
+
             var resultExpression = Expression.Call(
                 typeof(Queryable),
                 methodName,
-                new Type[] { typeof(T), property.Type },
+                new[] { typeof(T), propertyInfo.PropertyType },
                 query.Expression,
-                Expression.Quote(lambda)
-            );
+                Expression.Quote(lambda));
 
             return query.Provider.CreateQuery<T>(resultExpression);
-        }
-
-        public static IQueryable<CommitteeMember> ApplyFilter(this IQueryable<CommitteeMember> query, CommitteeMemberFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Search));
-            }
-
-            if (!string.IsNullOrWhiteSpace(filter.CommitteeCode))
-                query = query.Where(x => x.Committee!.CommitteeCode == filter.CommitteeCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.LecturerUserCode))
-                query = query.Where(x => x.MemberUser!.UserCode == filter.LecturerUserCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
-                query = query.Where(x => x.MemberLecturerProfile!.LecturerCode == filter.LecturerCode);
-
-            if (!string.IsNullOrEmpty(filter.Role))
-                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
         }
 
         public static IQueryable<DefenseScore> ApplyFilter(this IQueryable<DefenseScore> query, DefenseScoreFilter filter)

@@ -11,7 +11,7 @@ namespace ThesisManagement.Api.DTOs
         public int TotalCount { get; set; }
         public bool IsRedirect { get; set; } = false;
         public string? RedirectUrl { get; set; }
-        public object? Errors { get; set; } = new { };
+        public object? Errors { get; set; }
 
         public static ApiResponse<T> SuccessResponse(T? data, int totalCount = 0, int httpStatusCode = 200)
         {
@@ -20,7 +20,8 @@ namespace ThesisManagement.Api.DTOs
                 Success = true,
                 HttpStatusCode = httpStatusCode,
                 Data = data,
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                Errors = null
             };
         }
 
@@ -31,7 +32,7 @@ namespace ThesisManagement.Api.DTOs
                 Success = false,
                 Message = message,
                 HttpStatusCode = httpStatusCode,
-                Errors = errors ?? new { }
+                Errors = errors
             };
         }
     }

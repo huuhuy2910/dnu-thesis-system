@@ -5,7 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { LogOut, ChevronDown, User } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
-import type { StudentProfile } from "../../types/student-profile";
+import type { StudentProfile } from "../../types/studentProfile";
 
 const StudentLayout: React.FC = () => {
   const auth = useAuth();

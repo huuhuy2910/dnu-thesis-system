@@ -15,8 +15,11 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
         IGenericRepository<Committee> Committees { get; }
         IGenericRepository<CommitteeMember> CommitteeMembers { get; }
+        IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
+    IGenericRepository<CommitteeTag> CommitteeTags { get; }
+    IGenericRepository<Tag> Tags { get; }
         
         // New repositories for specialty-related models
         IGenericRepository<Specialty> Specialties { get; }

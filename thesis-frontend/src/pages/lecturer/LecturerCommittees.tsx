@@ -1,157 +1,57 @@
-import React, { useState } from "react";
-import { Calendar, Users, GraduationCap, MapPin } from "lucide-react";
-
-interface CommitteeMember {
-  committeeMemberID: number;
-  lecturerCode: string;
-  lecturerName: string;
-  degree?: string;
-  role: string;
-  isChair: boolean;
-}
-
-interface DefenseTopic {
-  topicCode: string;
-  title: string;
-  studentCode?: string;
-  studentName?: string;
-  scheduledAt?: string;
-}
-
-interface Committee {
-  committeeCode: string;
-  name: string;
-  defenseDate?: string;
-  room?: string;
-  members: CommitteeMember[];
-  assignedTopics: DefenseTopic[];
-}
-
-interface LecturerCommitteesDto {
-  lecturerName: string;
-  lecturerCode: string;
-  committees: Committee[];
-}
+import React, { useEffect, useState } from "react";
+import { Calendar, Users, GraduationCap, MapPin, Eye } from "lucide-react";
+import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
+import type { LecturerCommitteeItem, CommitteeAssignmentDetail } from "../../api/committeeAssignmentApi";
+import { ModalShell } from "../../pages/admin/committee/components/ModalShell";
 
 const LecturerCommittees: React.FC = () => {
-  const [data] = useState<LecturerCommitteesDto>({
-    lecturerName: "PGS.TS Nguyễn Thị B",
-    lecturerCode: "GV001",
-    committees: [
-      {
-        committeeCode: "HD2025001",
-        name: "Hội đồng bảo vệ CNTT 2025",
-        defenseDate: "2025-12-15",
-        room: "A101",
-        members: [
-          {
-            committeeMemberID: 1,
-            lecturerCode: "GV001",
-            lecturerName: "PGS.TS Nguyễn Thị B",
-            degree: "PGS.TS",
-            role: "Chủ tịch",
-            isChair: true,
-          },
-          {
-            committeeMemberID: 2,
-            lecturerCode: "GV002",
-            lecturerName: "TS Trần Văn C",
-            degree: "TS",
-            role: "Thư ký",
-            isChair: false,
-          },
-          {
-            committeeMemberID: 3,
-            lecturerCode: "GV003",
-            lecturerName: "TS Lê Thị D",
-            degree: "TS",
-            role: "Phản biện",
-            isChair: false,
-          },
-          {
-            committeeMemberID: 4,
-            lecturerCode: "GV004",
-            lecturerName: "ThS Phạm Văn E",
-            degree: "ThS",
-            role: "Ủy viên",
-            isChair: false,
-          },
-          {
-            committeeMemberID: 5,
-            lecturerCode: "GV005",
-            lecturerName: "TS Hoàng Thị F",
-            degree: "TS",
-            role: "Ủy viên",
-            isChair: false,
-          },
-        ],
-        assignedTopics: [
-          {
-            topicCode: "DT2024001",
-            title: "Ứng dụng trí tuệ nhân tạo trong phân tích dữ liệu lớn",
-            studentCode: "SV2024001",
-            studentName: "Nguyễn Văn A",
-            scheduledAt: "2025-12-15T14:00:00",
-          },
-          {
-            topicCode: "DT2024003",
-            title: "Hệ thống quản lý thư viện thông minh",
-            studentCode: "SV2024003",
-            studentName: "Lê Văn C",
-            scheduledAt: "2025-12-15T15:30:00",
-          },
-        ],
-      },
-      {
-        committeeCode: "HD2025002",
-        name: "Hội đồng bảo vệ CNTT 2025 (Đợt 2)",
-        defenseDate: "2025-12-20",
-        room: "A102",
-        members: [
-          {
-            committeeMemberID: 6,
-            lecturerCode: "GV006",
-            lecturerName: "PGS.TS Trần Văn G",
-            degree: "PGS.TS",
-            role: "Chủ tịch",
-            isChair: true,
-          },
-          {
-            committeeMemberID: 7,
-            lecturerCode: "GV001",
-            lecturerName: "PGS.TS Nguyễn Thị B",
-            degree: "PGS.TS",
-            role: "Thư ký",
-            isChair: false,
-          },
-          {
-            committeeMemberID: 8,
-            lecturerCode: "GV007",
-            lecturerName: "TS Phạm Thị H",
-            degree: "TS",
-            role: "Phản biện",
-            isChair: false,
-          },
-        ],
-        assignedTopics: [
-          {
-            topicCode: "DT2024002",
-            title: "Phát triển ứng dụng di động cho giáo dục",
-            studentCode: "SV2024002",
-            studentName: "Trần Thị B",
-            scheduledAt: "2025-12-20T09:00:00",
-          },
-          {
-            topicCode: "DT2024005",
-            title: "Phân tích cảm xúc trong mạng xã hội",
-            studentCode: "SV2024005",
-            studentName: "Hoàng Văn E",
-            scheduledAt: "2025-12-20T10:30:00",
-          },
-        ],
-      },
-    ],
-  });
+  const [committees, setCommittees] = useState<LecturerCommitteeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCommittee, setSelectedCommittee] = useState<CommitteeAssignmentDetail | null>(
+    null
+  );
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchCommittees = async () => {
+      try {
+        // Assuming lecturerCode is available, e.g., from context or props. For now, hardcode or get from auth.
+        const lecturerCode = "LECT01"; // Replace with actual lecturer code from auth/context
+        const response = await committeeAssignmentApi.getLecturerCommittees(lecturerCode);
+        if (response.success && response.data) {
+          setCommittees(response.data.committees);
+        } else {
+          setError("Không thể tải danh sách hội đồng");
+        }
+      } catch {
+        setError("Lỗi khi tải dữ liệu");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCommittees();
+  }, []);
+
+  const handleViewDetails = async (committeeCode: string) => {
+    try {
+      const response = await committeeAssignmentApi.getCommitteeDetail(committeeCode);
+      if (response.success && response.data) {
+        setSelectedCommittee(response.data);
+        setModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Lỗi khi tải chi tiết hội đồng", err);
+    }
+  };
+
+  if (loading) {
+    return <div>Đang tải...</div>;
+  }
+
+  if (error) {
+    return <div>{error}</div>;
+  }
 
   return (
     <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
@@ -176,58 +76,8 @@ const LecturerCommittees: React.FC = () => {
         </p>
       </div>
 
-      {/* Lecturer Info */}
-      {data && (
-        <div
-          style={{
-            background: "linear-gradient(135deg, #FFF5F0 0%, #FFE8DC 100%)",
-            border: "1px solid #F37021",
-            borderRadius: "12px",
-            padding: "20px",
-            marginBottom: "32px",
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-          }}
-        >
-          <div
-            style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: "24px",
-              fontWeight: "700",
-              boxShadow: "0 4px 12px rgba(243, 112, 33, 0.3)",
-            }}
-          >
-            {data.lecturerName.charAt(0)}
-          </div>
-          <div>
-            <h2
-              style={{
-                fontSize: "20px",
-                fontWeight: "600",
-                color: "#1a1a1a",
-                marginBottom: "4px",
-              }}
-            >
-              {data.lecturerName}
-            </h2>
-            <p style={{ fontSize: "14px", color: "#666" }}>
-              Mã giảng viên: <strong>{data.lecturerCode}</strong> • Tham gia{" "}
-              <strong>{data.committees.length}</strong> hội đồng
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Committees List */}
-      {data && data.committees.length === 0 ? (
+      {committees.length === 0 ? (
         <div
           style={{
             textAlign: "center",
@@ -246,15 +96,15 @@ const LecturerCommittees: React.FC = () => {
               marginBottom: "8px",
             }}
           >
-            Chưa có hội đồng nào
+            Chưa có hội đồng bảo vệ
           </h3>
           <p style={{ color: "#666" }}>
-            Bạn chưa được phân công tham gia hội đồng bảo vệ nào.
+            Hiện tại bạn chưa được phân công tham gia hội đồng bảo vệ nào. Vui lòng liên hệ với khoa để được hỗ trợ.
           </p>
         </div>
       ) : (
         <div style={{ display: "grid", gap: "24px" }}>
-          {data?.committees.map((committee) => (
+          {committees.map((committee) => (
             <div
               key={committee.committeeCode}
               style={{
@@ -309,39 +159,22 @@ const LecturerCommittees: React.FC = () => {
                     >
                       {committee.committeeCode}
                     </span>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "4px 12px",
-                        background: committee.members.find(
-                          (m) => m.lecturerCode === data.lecturerCode
-                        )?.isChair
-                          ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
-                          : committee.members.find(
-                              (m) => m.lecturerCode === data.lecturerCode
-                            )?.role === "Thư ký"
-                          ? "#E0F2FE"
-                          : "#F3F4F6",
-                        color: committee.members.find(
-                          (m) => m.lecturerCode === data.lecturerCode
-                        )?.isChair
-                          ? "white"
-                          : committee.members.find(
-                              (m) => m.lecturerCode === data.lecturerCode
-                            )?.role === "Thư ký"
-                          ? "#0369A1"
-                          : "#666",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {
-                        committee.members.find(
-                          (m) => m.lecturerCode === data.lecturerCode
-                        )?.role
-                      }
-                    </span>
+                    {committee.members && committee.members.find((m) => m.isChair) && (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          background:
+                            "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
+                          color: "white",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Chủ tịch
+                      </span>
+                    )}
                   </div>
                   <h3
                     style={{
@@ -401,15 +234,32 @@ const LecturerCommittees: React.FC = () => {
                     >
                       <GraduationCap size={16} color="#F37021" />
                       <span style={{ fontSize: "13px", color: "#666" }}>
-                        {committee.assignedTopics.length} đề tài
+                        {committee.assignments?.length || 0} đề tài
                       </span>
                     </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => handleViewDetails(committee.committeeCode)}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#F37021",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <Eye size={16} />
+                  Xem Chi Tiết
+                </button>
               </div>
 
               {/* Topics List */}
-              {committee.assignedTopics.length > 0 && (
+              {committee.assignments && committee.assignments.length > 0 && (
                 <div
                   style={{
                     marginTop: "20px",
@@ -427,10 +277,10 @@ const LecturerCommittees: React.FC = () => {
                       letterSpacing: "0.5px",
                     }}
                   >
-                    Đề tài bảo vệ ({committee.assignedTopics.length})
+                    Đề tài bảo vệ ({committee.assignments.length})
                   </h4>
                   <div style={{ display: "grid", gap: "12px" }}>
-                    {committee.assignedTopics.map((topic) => (
+                    {committee.assignments.slice(0, 3).map((topic) => (
                       <div
                         key={topic.topicCode}
                         style={{
@@ -471,28 +321,6 @@ const LecturerCommittees: React.FC = () => {
                           >
                             {topic.topicCode}
                           </span>
-                          {topic.scheduledAt && (
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                              }}
-                            >
-                              <Calendar size={14} color="#F37021" />
-                              <span style={{ fontSize: "12px", color: "#666" }}>
-                                {new Date(topic.scheduledAt).toLocaleString(
-                                  "vi-VN",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                  }
-                                )}
-                              </span>
-                            </div>
-                          )}
                         </div>
                         <h5
                           style={{
@@ -512,12 +340,249 @@ const LecturerCommittees: React.FC = () => {
                         )}
                       </div>
                     ))}
+                    {committee.assignments.length > 3 && (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "8px",
+                          color: "#666",
+                          fontSize: "12px",
+                        }}
+                      >
+                        Và {committee.assignments.length - 3} đề tài khác...
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+
+      {modalOpen && selectedCommittee && (
+        <ModalShell onClose={() => setModalOpen(false)} title="Chi Tiết Hội Đồng" wide>
+          <div style={{ padding: "20px" }}>
+            <h2 style={{ marginBottom: "20px", color: "#1a1a1a" }}>
+              {selectedCommittee.name || selectedCommittee.committeeCode}
+            </h2>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#F9FAFB",
+                  borderRadius: "8px",
+                }}
+              >
+                <strong>Mã hội đồng:</strong> {selectedCommittee.committeeCode}
+              </div>
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#F9FAFB",
+                  borderRadius: "8px",
+                }}
+              >
+                <strong>Ngày bảo vệ:</strong>{" "}
+                {selectedCommittee.defenseDate
+                  ? new Date(selectedCommittee.defenseDate).toLocaleDateString("vi-VN")
+                  : "Chưa có"}
+              </div>
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#F9FAFB",
+                  borderRadius: "8px",
+                }}
+              >
+                <strong>Phòng:</strong> {selectedCommittee.room || "Chưa có"}
+              </div>
+              <div
+                style={{
+                  padding: "16px",
+                  background: "#F9FAFB",
+                  borderRadius: "8px",
+                }}
+              >
+                <strong>Trạng thái:</strong> {selectedCommittee.status || "Chưa có"}
+              </div>
+            </div>
+
+            {selectedCommittee.tags && selectedCommittee.tags.length > 0 && (
+              <div style={{ marginBottom: "24px" }}>
+                <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Tags:</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {selectedCommittee.tags.map((tag) => (
+                    <span
+                      key={tag.tagCode}
+                      style={{
+                        padding: "4px 8px",
+                        background: "#F37021",
+                        color: "white",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {tag.tagName}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Thành Viên:</h3>
+            <div style={{ marginBottom: "24px" }}>
+              {selectedCommittee.members.map((member) => (
+                <div
+                  key={member.lecturerCode}
+                  style={{
+                    padding: "12px",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "8px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <strong>{member.fullName}</strong> ({member.lecturerCode})
+                      {member.isChair && (
+                        <span style={{ color: "#F37021", marginLeft: "8px" }}>
+                          {" "}
+                          - Chủ tịch
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "12px", color: "#666" }}>
+                        {member.role}
+                      </span>
+                      {member.degree && (
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#666",
+                            marginLeft: "8px",
+                          }}
+                        >
+                          - {member.degree}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {member.specialtyNames && member.specialtyNames.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: "4px",
+                        fontSize: "12px",
+                        color: "#666",
+                      }}
+                    >
+                      Chuyên ngành: {member.specialtyNames.join(", ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Phiên Bảo Vệ:</h3>
+            <div>
+              {selectedCommittee.sessions && selectedCommittee.sessions.length > 0 ? (
+                selectedCommittee.sessions.map((session) => (
+                  <div key={session.session} style={{ marginBottom: "24px" }}>
+                    <h4 style={{ marginBottom: "16px", color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
+                      Phiên {session.session}
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      {session.topics.map((topic) => {
+                        // Find the corresponding assignment for more details
+                        const assignment = selectedCommittee.assignments?.find(a => a.topicCode === topic.topicCode);
+                        return (
+                          <div
+                            key={topic.topicCode}
+                            style={{
+                              padding: "16px",
+                              border: "1px solid #E5E7EB",
+                              borderRadius: "8px",
+                              background: "#F9FAFB",
+                            }}
+                          >
+                            <div style={{ marginBottom: "12px" }}>
+                              <strong style={{ fontSize: "16px", color: "#1a1a1a" }}>{topic.title}</strong>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", color: "#666" }}>
+                              <div>
+                                <strong>Mã:</strong> {topic.topicCode} | <strong>SV:</strong> {topic.studentName} ({topic.studentCode})
+                              </div>
+                              <div>
+                                <strong>GVHD:</strong> {topic.supervisorName} ({topic.supervisorCode})
+                              </div>
+                              <div>
+                                <strong>Ngày:</strong> {assignment?.scheduledAt ? new Date(assignment.scheduledAt).toLocaleDateString("vi-VN") : "Chưa có"}
+                              </div>
+                              <div>
+                                <strong>Thời gian:</strong> {topic.startTime} - {topic.endTime}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                // Fallback: show assignments without sessions
+                selectedCommittee.assignments && selectedCommittee.assignments.length > 0 && (
+                  <div>
+                    {selectedCommittee.assignments.map((assignment) => (
+                      <div
+                        key={assignment.topicCode}
+                        style={{
+                          padding: "16px",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: "8px",
+                          marginBottom: "12px",
+                          background: "#F9FAFB",
+                        }}
+                      >
+                        <div style={{ marginBottom: "12px" }}>
+                          <strong style={{ fontSize: "16px", color: "#1a1a1a" }}>{assignment.title}</strong>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", color: "#666" }}>
+                          <div>
+                            <strong>Mã:</strong> {assignment.topicCode} | <strong>SV:</strong> {assignment.studentName} ({assignment.studentCode})
+                          </div>
+                          <div>
+                            <strong>GVHD:</strong> {assignment.supervisorName} ({assignment.supervisorCode})
+                          </div>
+                          <div>
+                            <strong>Ngày:</strong> {assignment.scheduledAt ? new Date(assignment.scheduledAt).toLocaleDateString("vi-VN") : "Chưa có"}
+                          </div>
+                          <div>
+                            <strong>Thời gian:</strong> {assignment.startTime} - {assignment.endTime}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </ModalShell>
       )}
     </div>
   );

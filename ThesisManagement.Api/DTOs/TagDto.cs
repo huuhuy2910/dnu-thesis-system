@@ -1,5 +1,13 @@
 namespace ThesisManagement.Api.DTOs
 {
+    public class TagDto
+    {
+        public string TagCode { get; set; } = string.Empty;
+        public string TagName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int UsageCount { get; set; }
+    }
+
     public class TagReadDto
     {
         public int TagID { get; set; }

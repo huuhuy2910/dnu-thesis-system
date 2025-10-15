@@ -13,7 +13,7 @@ import type { CatalogTopic } from "../../types/catalog-topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { Department } from "../../types/department";
 import type { Specialty } from "../../types/specialty-type";
-import type { StudentProfile } from "../../types/student-profile";
+import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import {
   BookOpen,

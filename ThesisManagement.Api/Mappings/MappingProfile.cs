@@ -25,9 +25,7 @@ namespace ThesisManagement.Api.Mappings
                 .ForMember(dest => dest.SpecialtyCode, opt => opt.MapFrom(src => src.SpecialtyCode));
             CreateMap<ProgressMilestone, ProgressMilestoneReadDto>();
             CreateMap<ProgressSubmission, ProgressSubmissionReadDto>();
-            CreateMap<Committee, CommitteeReadDto>();
-            CreateMap<CommitteeMember, CommitteeMemberReadDto>();
-            CreateMap<DefenseAssignment, DefenseAssignmentReadDto>();
+            CreateMap<Tag, TagDto>();
             CreateMap<DefenseScore, DefenseScoreReadDto>();
             
             // New mappings for specialty-related models

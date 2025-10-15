@@ -1,13 +1,23 @@
-const envBase = (
-  import.meta.env.VITE_API_BASE_URL || "http://192.168.0.102:5180/"
+const envBaseRaw = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5180"
 ).toString();
+const ensureScheme = (value: string) => {
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return `http://${value}`;
+};
+
+const envBase = ensureScheme(envBaseRaw.trim());
 const normalizedBase = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
 const apiBase = `${normalizedBase}/api`;
 
 type BodyInitCompatible = BodyInit | object | undefined;
 
-type FetchDataOptions = Omit<RequestInit, "body"> & {
+type FetchDataOptions = Omit<RequestInit, "body" | "signal"> & {
   body?: BodyInitCompatible;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export class FetchDataError extends Error {
@@ -75,12 +85,55 @@ export async function fetchData<TResponse = unknown>(
   path: string,
   options: FetchDataOptions = {}
 ): Promise<TResponse> {
-  const { body, headers, ...rest } = options;
+  const { body, headers, timeoutMs, signal, ...rest } = options;
   const url = resolveUrl(path);
+
+  // inject default user headers from localStorage if available
+  try {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("app_user");
+      if (raw) {
+        const u = JSON.parse(raw as string) as { userCode?: string; role?: string };
+        const extra: Record<string, string> = {};
+        if (u?.role) extra["X-User-Role"] = u.role;
+        if (u?.userCode) extra["X-User-Code"] = u.userCode;
+        // merge into provided headers (headers param may be undefined)
+        options.headers = mergeHeaders(extra, headers) as HeadersInit;
+      }
+    }
+  } catch {
+    // ignore parsing errors; do not block requests
+  }
+
+  const controller = new AbortController();
+  const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 20000;
+  let abortTimer: ReturnType<typeof setTimeout> | undefined;
+  const linkedAbort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener("abort", linkedAbort, { once: true });
+    }
+  }
+
+  if (ms !== Number.POSITIVE_INFINITY) {
+    abortTimer = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+    }, ms);
+  }
 
   const init: RequestInit = {
     ...rest,
     headers: mergeHeaders({ "Content-Type": "application/json" }, headers),
+    signal: controller.signal,
   };
 
   const resolvedBody = resolveBody(body);
@@ -99,7 +152,36 @@ export async function fetchData<TResponse = unknown>(
     }
   }
 
-  const response = await fetch(url, init);
+  let response: Response;
+
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
+      throw new FetchDataError(
+        `Request to ${url} aborted: ${error.message}`,
+        408,
+        error.name,
+        null
+      );
+    }
+    if ((error as Error).name === "AbortError") {
+      throw new FetchDataError(
+        `Request to ${url} aborted`,
+        408,
+        (error as Error).name,
+        null
+      );
+    }
+    throw error;
+  } finally {
+    if (abortTimer !== undefined) {
+      clearTimeout(abortTimer);
+    }
+    if (signal) {
+      signal.removeEventListener("abort", linkedAbort);
+    }
+  }
 
   const contentType = response.headers.get("content-type") ?? "";
   let parsed: unknown = null;
