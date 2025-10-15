@@ -1,4 +1,4 @@
-export type Role = 'STUDENT' | 'LECTURER' | 'ADMIN' | string;
+export type Role = "STUDENT" | "LECTURER" | "ADMIN" | string;
 
 export interface User {
   userID?: number;
@@ -7,5 +7,8 @@ export interface User {
   fullName?: string;
   email?: string;
   role?: Role;
+  topicCode?: string;
+  createdAt?: string;
+  lastUpdated?: string;
   // có thể có thêm các field khác từ API
 }

@@ -20,8 +20,13 @@ export interface Topic {
   resubmitCount: number | null;
   createdAt: string;
   lastUpdated: string;
-  specialtyID: number | null;
-  specialtyCode: string | null;
+  tagID: number | null;
+  tagCode: string | null;
+  lecturerComment?: string;
+}
+
+export interface ApiResponseTopics {
+  data: Topic[];
 }
 
 export interface TopicFormData {
@@ -32,6 +37,6 @@ export interface TopicFormData {
   catalogTopicID: number | null;
   supervisorLecturerProfileID: number | null;
   departmentID: number | null;
-  specialtyID: number | null;
+  tagID: number | null;
   status?: string; // Auto set to "Đang chờ"
 }

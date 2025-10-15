@@ -97,7 +97,7 @@ namespace ThesisManagement.Api.DTOs
         public DateTime? DefenseDate { get; set; }
         public string? Room { get; set; }
         public string? Status { get; set; }
-        public List<TagDto> Tags { get; set; } = new();
+        public List<TagReadDto> Tags { get; set; } = new();
         public List<CommitteeMemberSummaryDto> Members { get; set; } = new();
         /// <summary>
         /// Legacy flat assignment list. Prefer using <see cref="Sessions"/> for grouped schedule data.

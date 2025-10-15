@@ -18,6 +18,9 @@ namespace ThesisManagement.Api.Services
             Topics = new GenericRepository<Topic>(_db);
             ProgressMilestones = new GenericRepository<ProgressMilestone>(_db);
             ProgressSubmissions = new GenericRepository<ProgressSubmission>(_db);
+            MilestoneTemplates = new GenericRepository<MilestoneTemplate>(_db);
+            MilestoneStateHistories = new GenericRepository<MilestoneStateHistory>(_db);
+            SubmissionFiles = new GenericRepository<SubmissionFile>(_db);
             Committees = new GenericRepository<Committee>(_db);
             CommitteeMembers = new GenericRepository<CommitteeMember>(_db);
             CommitteeSessions = new GenericRepository<CommitteeSession>(_db);
@@ -25,12 +28,10 @@ namespace ThesisManagement.Api.Services
             DefenseScores = new GenericRepository<DefenseScore>(_db);
             CommitteeTags = new GenericRepository<CommitteeTag>(_db);
             Tags = new GenericRepository<Tag>(_db);
-            
-            // Initialize new repositories
-            Specialties = new GenericRepository<Specialty>(_db);
-            LecturerSpecialties = new GenericRepository<LecturerSpecialty>(_db);
-            CatalogTopicSpecialties = new GenericRepository<CatalogTopicSpecialty>(_db);
+            CatalogTopicTags = new GenericRepository<CatalogTopicTag>(_db);
+            TopicTags = new GenericRepository<TopicTag>(_db);
             TopicLecturers = new GenericRepository<TopicLecturer>(_db);
+            LecturerTags = new GenericRepository<LecturerTag>(_db);
         }
 
         public IGenericRepository<Department> Departments { get; }
@@ -41,19 +42,20 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<Topic> Topics { get; }
         public IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         public IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
+    public IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
+    public IGenericRepository<MilestoneStateHistory> MilestoneStateHistories { get; }
+    public IGenericRepository<SubmissionFile> SubmissionFiles { get; }
         public IGenericRepository<Committee> Committees { get; }
         public IGenericRepository<CommitteeMember> CommitteeMembers { get; }
     public IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         public IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         public IGenericRepository<DefenseScore> DefenseScores { get; }
-    public IGenericRepository<CommitteeTag> CommitteeTags { get; }
-    public IGenericRepository<Tag> Tags { get; }
-        
-        // New repository properties
-        public IGenericRepository<Specialty> Specialties { get; }
-        public IGenericRepository<LecturerSpecialty> LecturerSpecialties { get; }
-        public IGenericRepository<CatalogTopicSpecialty> CatalogTopicSpecialties { get; }
+        public IGenericRepository<CommitteeTag> CommitteeTags { get; }
+        public IGenericRepository<Tag> Tags { get; }
+        public IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
+        public IGenericRepository<TopicTag> TopicTags { get; }
         public IGenericRepository<TopicLecturer> TopicLecturers { get; }
+        public IGenericRepository<LecturerTag> LecturerTags { get; }
 
         public async Task<int> SaveChangesAsync()
         {

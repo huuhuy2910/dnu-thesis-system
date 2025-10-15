@@ -25,16 +25,15 @@ namespace ThesisManagement.Api.Data
         public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
         public DbSet<CommitteeTag> CommitteeTags => Set<CommitteeTag>();
         
-        // New DbSets for specialty-related models
-        public DbSet<Specialty> Specialties => Set<Specialty>();
-        public DbSet<LecturerSpecialty> LecturerSpecialties => Set<LecturerSpecialty>();
-        public DbSet<CatalogTopicSpecialty> CatalogTopicSpecialties => Set<CatalogTopicSpecialty>();
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
         
         // New DbSets for Tag system
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<CatalogTopicTag> CatalogTopicTags => Set<CatalogTopicTag>();
         public DbSet<TopicTag> TopicTags => Set<TopicTag>();
+        public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
+        public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
+        public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -58,9 +57,6 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.UserCode).IsUnique();
                 b.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
-                b.Property(x => x.FullName).HasMaxLength(100).IsRequired();
-                b.Property(x => x.Email).HasMaxLength(120);
-                b.HasIndex(x => x.Email).IsUnique();
                 b.Property(x => x.Role).HasMaxLength(20).IsRequired();
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
@@ -82,6 +78,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.PhoneNumber).HasMaxLength(20);
                 b.Property(x => x.StudentEmail).HasMaxLength(150);
                 b.Property(x => x.Address).HasMaxLength(255);
+                b.Property(x => x.FullName).HasMaxLength(100);
                 b.Property(x => x.EnrollmentYear);
                 b.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("Đang học");
                 b.Property(x => x.GraduationYear);
@@ -104,6 +101,15 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.GuideQuota).HasDefaultValue(10);
                 b.Property(x => x.DefenseQuota).HasDefaultValue(8);
                 b.Property(x => x.CurrentGuidingCount).HasDefaultValue(0);
+                // New lecturer profile columns
+                b.Property(x => x.Gender).HasMaxLength(10);
+                b.Property(x => x.DateOfBirth).HasColumnType("date");
+                b.Property(x => x.Email).HasMaxLength(100);
+                b.Property(x => x.PhoneNumber).HasMaxLength(20);
+                b.Property(x => x.ProfileImage).HasMaxLength(255);
+                b.Property(x => x.Address).HasMaxLength(255);
+                b.Property(x => x.Notes);
+                b.Property(x => x.FullName).HasMaxLength(100);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
@@ -153,10 +159,14 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.SupervisorLecturerCode).HasMaxLength(30);
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
-                b.Property(x => x.SpecialtyCode).HasMaxLength(60);
+                // Lecturer comment stored as nvarchar(max)
+                b.Property(x => x.LecturerComment);
                 
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                
+                // Configure CatalogTopic navigation
+                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
             });
 
             // ProgressMilestones
@@ -165,8 +175,18 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.MilestoneID);
                 b.Property(x => x.MilestoneCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.MilestoneCode).IsUnique();
-                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
-                b.Property(x => x.State).HasMaxLength(20).HasDefaultValue("NOT_STARTED");
+                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicID).OnDelete(DeleteBehavior.Restrict);
+                b.Property(x => x.TopicCode).HasMaxLength(60);
+                b.Property(x => x.MilestoneTemplateCode).HasMaxLength(40);
+                b.HasOne(x => x.MilestoneTemplate).WithMany(x => x.ProgressMilestones).HasForeignKey(x => x.MilestoneTemplateCode).HasPrincipalKey(x => x.MilestoneTemplateCode).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.Ordinal);
+                b.Property(x => x.State).HasMaxLength(50).HasDefaultValue("Chưa bắt đầu");
+                b.Property(x => x.StartedAt);
+                b.Property(x => x.CompletedAt1);
+                b.Property(x => x.CompletedAt2);
+                b.Property(x => x.CompletedAt3);
+                b.Property(x => x.CompletedAt4);
+                b.Property(x => x.CompletedAt5);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
@@ -187,15 +207,68 @@ namespace ThesisManagement.Api.Data
             // ProgressSubmissions
             modelBuilder.Entity<ProgressSubmission>(b =>
             {
+                // Inform EF Core that triggers exist on this table so it avoids using a bare OUTPUT clause.
+                // Update the trigger names below to match the actual triggers defined in the database.
+                b.ToTable("ProgressSubmissions", tb =>
+                {
+                    tb.HasTrigger("TR_ProgressSubmissions_Insert");
+                    tb.HasTrigger("TR_ProgressSubmissions_Update");
+                    tb.HasTrigger("TR_ProgressSubmissions_Delete");
+                });
+
                 b.HasKey(x => x.SubmissionID);
                 b.Property(x => x.SubmissionCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.SubmissionCode).IsUnique();
-                b.HasOne(x => x.Milestone).WithMany().HasForeignKey(x => x.MilestoneCode).HasPrincipalKey(x => x.MilestoneCode).OnDelete(DeleteBehavior.SetNull);
-                b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserCode).HasPrincipalKey(x => x.UserCode).OnDelete(DeleteBehavior.SetNull);
-                // StudentProfile navigation removed to prevent shadow properties
-                // b.HasOne(x => x.StudentProfile).WithMany().HasForeignKey(x => x.StudentProfileCode).HasPrincipalKey(x => x.StudentCode).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.Milestone).WithMany(x => x.ProgressSubmissions).HasForeignKey(x => x.MilestoneID).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.MilestoneCode).HasMaxLength(60);
+                b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserID).OnDelete(DeleteBehavior.SetNull);
+                b.Property(x => x.StudentUserCode).HasMaxLength(40);
+                b.Property(x => x.StudentProfileCode).HasMaxLength(60);
                 b.Property(x => x.SubmittedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.AttemptNumber).HasDefaultValue(1);
+                // File columns are stored in SubmissionFiles table; do not configure file columns on ProgressSubmission
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // MilestoneTemplates
+            modelBuilder.Entity<MilestoneTemplate>(b =>
+            {
+                b.HasKey(x => x.MilestoneTemplateID);
+                b.Property(x => x.MilestoneTemplateCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.MilestoneTemplateCode).IsUnique();
+                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+                b.Property(x => x.Description);
+                b.Property(x => x.Ordinal).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.LastUpdated);
+            });
+
+            // MilestoneStateHistory (table name is singular in DB)
+            modelBuilder.Entity<MilestoneStateHistory>(b =>
+            {
+                b.ToTable("MilestoneStateHistory");
+                b.HasKey(x => x.HistoryID);
+                b.HasOne(x => x.Milestone).WithMany(x => x.StateHistories).HasForeignKey(x => x.MilestoneID);
+                b.Property(x => x.MilestoneCode).HasMaxLength(60);
+                b.Property(x => x.TopicCode).HasMaxLength(40);
+                b.Property(x => x.OldState).HasMaxLength(50);
+                b.Property(x => x.NewState).HasMaxLength(50).IsRequired();
+                b.Property(x => x.ChangedByUserCode).HasMaxLength(40);
+                b.Property(x => x.Comment);
+                b.Property(x => x.ChangedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // SubmissionFiles
+            modelBuilder.Entity<SubmissionFile>(b =>
+            {
+                b.HasKey(x => x.FileID);
+                b.HasOne(x => x.Submission).WithMany(x => x.SubmissionFiles).HasForeignKey(x => x.SubmissionID);
+                b.Property(x => x.SubmissionCode).HasMaxLength(60);
+                b.Property(x => x.FileURL).HasMaxLength(1024).IsRequired();
+                b.Property(x => x.FileName).HasMaxLength(255);
+                b.Property(x => x.MimeType).HasMaxLength(100);
+                b.Property(x => x.UploadedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.UploadedByUserCode).HasMaxLength(40);
             });
 
             // Committees
@@ -333,34 +406,9 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
-            // Specialties
-            modelBuilder.Entity<Specialty>(b =>
-            {
-                b.HasKey(x => x.SpecialtyID);
-                b.Property(x => x.SpecialtyCode).HasMaxLength(60).IsRequired();
-                b.HasIndex(x => x.SpecialtyCode).IsUnique();
-                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
-
-            // LecturerSpecialties (Many-to-Many)
-            modelBuilder.Entity<LecturerSpecialty>(b =>
-            {
-                b.HasKey(x => new { x.LecturerProfileID, x.SpecialtyID });
-                b.HasOne(x => x.LecturerProfile).WithMany(x => x.LecturerSpecialties).HasForeignKey(x => x.LecturerProfileID);
-                b.HasOne(x => x.Specialty).WithMany(x => x.LecturerSpecialties).HasForeignKey(x => x.SpecialtyID);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
-
-            // CatalogTopicSpecialties (Many-to-Many)
-            modelBuilder.Entity<CatalogTopicSpecialty>(b =>
-            {
-                b.HasKey(x => new { x.CatalogTopicID, x.SpecialtyID });
-                b.HasOne(x => x.CatalogTopic).WithMany(x => x.CatalogTopicSpecialties).HasForeignKey(x => x.CatalogTopicID);
-                b.HasOne(x => x.Specialty).WithMany(x => x.CatalogTopicSpecialties).HasForeignKey(x => x.SpecialtyID);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
+            // Specialties - DELETED
+            // LecturerSpecialties - DELETED
+            // CatalogTopicSpecialties - DELETED
 
             // TopicLecturers (Many-to-Many)
             modelBuilder.Entity<TopicLecturer>(b =>
@@ -397,7 +445,7 @@ namespace ThesisManagement.Api.Data
             modelBuilder.Entity<TopicTag>(b =>
             {
                 b.HasKey(x => x.TopicTagID);
-                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode);
+                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
                 // Topic navigation removed to prevent shadow properties
                 // b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
                 b.Property(x => x.TagID).IsRequired();
@@ -407,6 +455,24 @@ namespace ThesisManagement.Api.Data
                     .HasForeignKey(x => x.TagID)
                     .OnDelete(DeleteBehavior.Cascade);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // LecturerTags
+            modelBuilder.Entity<LecturerTag>(b =>
+            {
+                b.HasKey(x => x.LecturerTagID);
+                b.HasOne(x => x.LecturerProfile).WithMany().HasForeignKey(x => x.LecturerProfileID).OnDelete(DeleteBehavior.Cascade);
+                // Map Tag relationship explicitly to Tag.LecturerTags to avoid shadow FK creation
+                b.HasOne(x => x.Tag).WithMany(t => t.LecturerTags).HasForeignKey(x => x.TagID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.AssignedByUser).WithMany().HasForeignKey(x => x.AssignedByUserCode).HasPrincipalKey(x => x.UserCode).OnDelete(DeleteBehavior.SetNull);
+
+                b.Property(x => x.LecturerCode).HasMaxLength(40);
+                b.Property(x => x.TagCode).HasMaxLength(40);
+                b.Property(x => x.AssignedByUserCode).HasMaxLength(40);
+                b.Property(x => x.AssignedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+
+                // Unique constraint: one lecturer can only have one assignment of the same tag
+                b.HasIndex(x => new { x.LecturerProfileID, x.TagID }).IsUnique();
             });
         }
 

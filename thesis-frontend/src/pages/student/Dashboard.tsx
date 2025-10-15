@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { fetchData } from "../../api/fetchData";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
-import type { Milestone } from "../../types/milestone";
+import type { LecturerProfile } from "../../types/lecturer-profile";
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -12,7 +12,12 @@ const Dashboard: React.FC = () => {
   const [supervisorNames, setSupervisorNames] = useState<
     Record<string, string>
   >({});
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [progressSummary, setProgressSummary] = useState<{
+    total: number;
+    completed: number;
+    percentage: number;
+    nextMilestone?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +48,7 @@ const Dashboard: React.FC = () => {
         const fetchedTopics = topicsResponse.data || [];
         setTopics(fetchedTopics);
 
-        // Fetch supervisor names
+        // Fetch supervisor names from LecturerProfiles
         const uniqueCodes = Array.from(
           new Set(
             fetchedTopics
@@ -54,26 +59,76 @@ const Dashboard: React.FC = () => {
         const names: Record<string, string> = {};
         for (const code of uniqueCodes) {
           try {
-            const userResponse = await fetchData<{
-              data: { fullName: string };
-            }>(`/Users/get-detail/${code}`);
-            names[code] = userResponse.data?.fullName || code;
+            const lecturerResponse = await fetchData<{
+              data: LecturerProfile[];
+            }>(`/LecturerProfiles/get-list?UserCode=${code}`);
+            const lecturerData = lecturerResponse.data || [];
+            if (lecturerData.length > 0) {
+              names[code] = lecturerData[0].fullName || code;
+            }
           } catch {
             names[code] = code; // fallback to code
           }
         }
         setSupervisorNames(names);
 
-        // Fetch milestones for first topic
+        // Fetch progress summary for first topic
         if (fetchedTopics.length > 0) {
           try {
-            const milestonesResponse = await fetchData<{ data: Milestone[] }>(
-              `/ProgressMilestones/get-list?TopicCode=${fetchedTopics[0].topicCode}`
+            const topicCode = fetchedTopics[0].topicCode;
+
+            // Fetch milestone templates
+            const templatesRes = await fetchData(
+              "/MilestoneTemplates/get-list"
             );
-            setMilestones(milestonesResponse.data || []);
+            const templates = (templatesRes as { data?: unknown[] }).data || [];
+
+            // Fetch progress milestones
+            const progressRes = await fetchData(
+              `/ProgressMilestones/get-list?TopicCode=${topicCode}`
+            );
+            const progressMilestones =
+              (progressRes as { data?: unknown[] }).data || [];
+
+            // Calculate progress summary
+            const highestOrdinal = Math.max(
+              ...progressMilestones.map((pm: unknown) => {
+                const template = templates.find(
+                  (t: unknown) =>
+                    (t as { milestoneTemplateCode?: string })
+                      .milestoneTemplateCode ===
+                    (pm as { milestoneTemplateCode?: string })
+                      .milestoneTemplateCode
+                );
+                return (template as { ordinal?: number })?.ordinal || 0;
+              })
+            );
+
+            let completedCount = 0;
+            let nextMilestone: string | undefined;
+
+            for (const template of templates) {
+              const t = template as { ordinal?: number; name?: string };
+              if (t.ordinal && t.ordinal < highestOrdinal) {
+                completedCount++;
+              } else if (t.ordinal === highestOrdinal && !nextMilestone) {
+                nextMilestone = t.name;
+              }
+            }
+
+            const total = templates.length;
+            const percentage =
+              total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+            setProgressSummary({
+              total,
+              completed: completedCount,
+              percentage,
+              nextMilestone,
+            });
           } catch (err) {
-            console.error("Error fetching milestones:", err);
-            setMilestones([]);
+            console.error("Error fetching progress:", err);
+            setProgressSummary(null);
           }
         }
       } catch (err) {
@@ -141,7 +196,6 @@ const Dashboard: React.FC = () => {
         gridTemplateColumns: "2fr 1fr",
         gap: "20px",
         padding: "10px 0",
-        margin: "50px 0 0 0 ",
       }}
     >
       {/* LEFT COLUMN */}
@@ -217,7 +271,7 @@ const Dashboard: React.FC = () => {
                     Họ tên:
                   </span>
                   <span style={{ color: "#333" }}>
-                    {auth.user?.fullName || "N/A"}
+                    {profile?.fullName || auth.user?.fullName || "N/A"}
                   </span>
                 </div>
                 <div
@@ -233,7 +287,7 @@ const Dashboard: React.FC = () => {
                     Email:
                   </span>
                   <span style={{ color: "#333" }}>
-                    {auth.user?.email || "N/A"}
+                    {profile.studentEmail || "N/A"}
                   </span>
                 </div>
                 <div
@@ -505,10 +559,10 @@ const Dashboard: React.FC = () => {
                       }}
                     >
                       <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Chuyên ngành:
+                        Thẻ:
                       </span>
                       <span style={{ color: "#718096" }}>
-                        {topic.specialtyCode || "N/A"}
+                        {topic.tagCode || "N/A"}
                       </span>
                     </div>
                     <div
@@ -545,107 +599,62 @@ const Dashboard: React.FC = () => {
           <h3 style={{ color: "#f37021", marginBottom: 16, fontSize: 18 }}>
             Tiến độ đồ án
           </h3>
-          {milestones.length === 0 ? (
-            <p style={{ color: "#888" }}>Chưa có mốc tiến độ.</p>
+          {!progressSummary ? (
+            <p style={{ color: "#888" }}>Chưa có dữ liệu tiến độ.</p>
           ) : (
             <>
               {/* Progress Bar */}
-              {(() => {
-                const completed = milestones.filter(
-                  (m) => m.state === "Hoàn thành"
-                ).length;
-                const progress = (completed / milestones.length) * 100;
-                return (
-                  <div style={{ marginBottom: 20 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Hoàn thành: {Math.round(progress)}%
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {completed}/{milestones.length} mốc
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: "#eee",
-                        borderRadius: 8,
-                        height: 14,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${progress}%`,
-                          backgroundColor: "#f37021",
-                          height: "100%",
-                          transition: "width 0.4s ease",
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Milestones List */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                {milestones.map((milestone) => (
+              <div style={{ marginBottom: 20 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: "#2d3748" }}>
+                    Hoàn thành: {progressSummary.percentage}%
+                  </span>
+                  <span style={{ color: "#718096" }}>
+                    {progressSummary.completed}/{progressSummary.total} mốc
+                  </span>
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#eee",
+                    borderRadius: 8,
+                    height: 14,
+                    overflow: "hidden",
+                  }}
+                >
                   <div
-                    key={milestone.milestoneID}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: 12,
-                      border: "1px solid #e0e0e0",
-                      borderRadius: 8,
-                      backgroundColor: "#fafafa",
+                      width: `${progressSummary.percentage}%`,
+                      backgroundColor: "#f37021",
+                      height: "100%",
+                      transition: "width 0.4s ease",
                     }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, color: "#2d3748" }}>
-                        {milestone.note}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#718096" }}>
-                        Deadline:{" "}
-                        {new Date(milestone.deadline).toLocaleDateString(
-                          "vi-VN"
-                        )}
-                      </div>
-                    </div>
-                    <span
-                      style={{
-                        backgroundColor:
-                          milestone.state === "Hoàn thành"
-                            ? "#f37021"
-                            : milestone.state === "Hoạt động"
-                            ? "#ed8936"
-                            : milestone.state === "Chờ nộp"
-                            ? "#4299e1"
-                            : "#a0aec0",
-                        color: "#fff",
-                        padding: "4px 8px",
-                        borderRadius: 12,
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {milestone.state}
-                    </span>
-                  </div>
-                ))}
+                  />
+                </div>
               </div>
+
+              {/* Next Milestone */}
+              {progressSummary.nextMilestone && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    backgroundColor: "#fff5f0",
+                    border: "1px solid #f37021",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    color: "#2d3748",
+                  }}
+                >
+                  <strong style={{ color: "#f37021" }}>Mốc tiếp theo:</strong>{" "}
+                  {progressSummary.nextMilestone}
+                </div>
+              )}
             </>
           )}
         </div>

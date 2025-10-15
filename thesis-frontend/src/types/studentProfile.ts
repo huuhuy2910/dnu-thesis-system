@@ -17,6 +17,7 @@ export interface StudentProfile {
   status: string;
   graduationYear: number;
   notes: string;
+  fullName: string;
   createdAt: string;
   lastUpdated: string;
 }

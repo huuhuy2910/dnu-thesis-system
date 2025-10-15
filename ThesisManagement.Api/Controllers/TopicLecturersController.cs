@@ -31,34 +31,92 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { TopicID = 0, LecturerProfileID = 0, IsPrimary = false }));
+        public IActionResult GetCreate()
+        {
+            var sample = new TopicLecturerCreateDto(
+                TopicID: null,
+                TopicCode: null,
+                LecturerProfileID: null,
+                LecturerCode: null,
+                IsPrimary: false,
+                CreatedAt: DateTime.UtcNow);
+            return Ok(ApiResponse<TopicLecturerCreateDto>.SuccessResponse(sample));
+        }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] TopicLecturerCreateDto dto)
         {
-            // Resolve TopicCode to TopicID
-            var topic = await _uow.Topics.Query().FirstOrDefaultAsync(t => t.TopicCode == dto.TopicCode);
-            if (topic == null)
-                return BadRequest(ApiResponse<object>.Fail("Topic not found", 400));
+            // Resolve TopicID from TopicCode if not provided
+            int topicId;
+            string? topicCode;
+            Topic? topicEntity = null;
+            if (dto.TopicID.HasValue)
+            {
+                topicId = dto.TopicID.Value;
+                topicCode = dto.TopicCode;
+                topicEntity = await _uow.Topics.Query().FirstOrDefaultAsync(t => t.TopicID == topicId);
+                if (topicEntity == null)
+                    return BadRequest(ApiResponse<object>.Fail("Topic not found", 400));
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.TopicCode))
+            {
+                topicEntity = await _uow.Topics.Query().FirstOrDefaultAsync(t => t.TopicCode.Trim() == dto.TopicCode.Trim());
+                if (topicEntity == null)
+                    return BadRequest(ApiResponse<object>.Fail("Topic not found", 400));
+                topicId = topicEntity.TopicID;
+                topicCode = topicEntity.TopicCode;
+            }
+            else
+            {
+                return BadRequest(ApiResponse<object>.Fail("Either TopicID or TopicCode must be provided", 400));
+            }
 
-            // Resolve LecturerCode to LecturerProfileID
-            var lecturerProfile = await _uow.LecturerProfiles.Query().FirstOrDefaultAsync(l => l.LecturerCode == dto.LecturerCode);
-            if (lecturerProfile == null)
-                return BadRequest(ApiResponse<object>.Fail("Lecturer profile not found", 400));
+            // Resolve LecturerProfileID from LecturerCode if not provided
+            int lecturerProfileId;
+            string? lecturerCode;
+            LecturerProfile? lecturerEntity = null;
+            if (dto.LecturerProfileID.HasValue)
+            {
+                lecturerProfileId = dto.LecturerProfileID.Value;
+                lecturerCode = dto.LecturerCode;
+                lecturerEntity = await _uow.LecturerProfiles.Query().FirstOrDefaultAsync(l => l.LecturerProfileID == lecturerProfileId);
+                if (lecturerEntity == null)
+                    return BadRequest(ApiResponse<object>.Fail("Lecturer profile not found", 400));
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.LecturerCode))
+            {
+                lecturerEntity = await _uow.LecturerProfiles.Query().FirstOrDefaultAsync(l => l.LecturerCode.Trim() == dto.LecturerCode.Trim());
+                if (lecturerEntity == null)
+                    return BadRequest(ApiResponse<object>.Fail("Lecturer profile not found", 400));
+                lecturerProfileId = lecturerEntity.LecturerProfileID;
+                lecturerCode = lecturerEntity.LecturerCode;
+            }
+            else
+            {
+                return BadRequest(ApiResponse<object>.Fail("Either LecturerProfileID or LecturerCode must be provided", 400));
+            }
             
             var ent = new TopicLecturer
             {
-                TopicID = topic.TopicID,
-                TopicCode = topic.TopicCode,
-                LecturerProfileID = lecturerProfile.LecturerProfileID,
-                LecturerCode = lecturerProfile.LecturerCode,
+                TopicID = topicId,
+                TopicCode = topicCode,
+                LecturerProfileID = lecturerProfileId,
+                LecturerCode = lecturerCode,
                 IsPrimary = dto.IsPrimary,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = dto.CreatedAt == default(DateTime) ? DateTime.UtcNow : dto.CreatedAt,
+                Topic = topicEntity,
+                LecturerProfile = lecturerEntity
             };
 
             await _uow.TopicLecturers.AddAsync(ent);
             await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<TopicLecturerReadDto>.SuccessResponse(_mapper.Map<TopicLecturerReadDto>(ent)));
+            return Ok(ApiResponse<TopicLecturerCreateDto>.SuccessResponse(new TopicLecturerCreateDto(
+                TopicID: ent.TopicID,
+                TopicCode: ent.TopicCode,
+                LecturerProfileID: ent.LecturerProfileID,
+                LecturerCode: ent.LecturerCode,
+                IsPrimary: ent.IsPrimary,
+                CreatedAt: ent.CreatedAt)));
         }
 
         [HttpGet("get-update/{topicId}/{lecturerProfileId}")]
@@ -67,7 +125,13 @@ namespace ThesisManagement.Api.Controllers
             var item = await _uow.TopicLecturers.Query()
                 .FirstOrDefaultAsync(x => x.TopicID == topicId && x.LecturerProfileID == lecturerProfileId);
             if (item == null) return NotFound(ApiResponse<object>.Fail("TopicLecturer not found", 404));
-            return Ok(ApiResponse<TopicLecturerUpdateDto>.SuccessResponse(new TopicLecturerUpdateDto(item.IsPrimary)));
+            return Ok(ApiResponse<TopicLecturerUpdateDto>.SuccessResponse(new TopicLecturerUpdateDto(
+                item.TopicID,
+                item.TopicCode,
+                item.LecturerProfileID,
+                item.LecturerCode,
+                item.IsPrimary,
+                item.CreatedAt)));
         }
 
         [HttpPut("update/{topicId}/{lecturerProfileId}")]
@@ -77,7 +141,36 @@ namespace ThesisManagement.Api.Controllers
                 .FirstOrDefaultAsync(x => x.TopicID == topicId && x.LecturerProfileID == lecturerProfileId);
             if (item == null) return NotFound(ApiResponse<object>.Fail("TopicLecturer not found", 404));
 
+            // Update TopicID if provided, else resolve from TopicCode if provided
+            if (dto.TopicID.HasValue)
+            {
+                item.TopicID = dto.TopicID.Value;
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.TopicCode))
+            {
+                var topic = await _uow.Topics.Query().FirstOrDefaultAsync(t => t.TopicCode.Trim() == dto.TopicCode.Trim());
+                if (topic == null)
+                    return BadRequest(ApiResponse<object>.Fail("Topic not found", 400));
+                item.TopicID = topic.TopicID;
+                item.TopicCode = topic.TopicCode;
+            }
+
+            // Update LecturerProfileID if provided, else resolve from LecturerCode if provided
+            if (dto.LecturerProfileID.HasValue)
+            {
+                item.LecturerProfileID = dto.LecturerProfileID.Value;
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.LecturerCode))
+            {
+                var lecturerProfile = await _uow.LecturerProfiles.Query().FirstOrDefaultAsync(l => l.LecturerCode.Trim() == dto.LecturerCode.Trim());
+                if (lecturerProfile == null)
+                    return BadRequest(ApiResponse<object>.Fail("Lecturer profile not found", 400));
+                item.LecturerProfileID = lecturerProfile.LecturerProfileID;
+                item.LecturerCode = lecturerProfile.LecturerCode;
+            }
+
             if (dto.IsPrimary.HasValue) item.IsPrimary = dto.IsPrimary.Value;
+            if (dto.CreatedAt.HasValue) item.CreatedAt = dto.CreatedAt.Value;
 
             _uow.TopicLecturers.Update(item);
             await _uow.SaveChangesAsync();

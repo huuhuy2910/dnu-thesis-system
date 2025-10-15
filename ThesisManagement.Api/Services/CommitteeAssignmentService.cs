@@ -838,7 +838,7 @@ namespace ThesisManagement.Api.Services
                 var tags = await _db.CommitteeTags.AsNoTracking()
                     .Where(ct => ct.CommitteeCode == committeeCode)
                     .Join(_db.Tags.AsNoTracking(), ct => ct.TagID, t => t.TagID,
-                        (ct, t) => new TagDto { TagCode = t.TagCode, TagName = t.TagName, Description = t.Description })
+                        (ct, t) => new TagReadDto(t.TagID, t.TagCode, t.TagName, t.Description, t.CreatedAt))
                     .ToListAsync(cancellationToken);
 
                 var memberRecords = await (from m in _db.CommitteeMembers.AsNoTracking()
@@ -850,7 +850,7 @@ namespace ThesisManagement.Api.Services
                                             {
                                                 LecturerProfileId = m.MemberLecturerProfileID ?? 0,
                                                 LecturerCode = lp.LecturerCode,
-                                                FullName = user != null ? user.FullName : lp.LecturerCode,
+                                                FullName = lp.FullName ?? lp.LecturerCode,
                                                 Role = m.Role ?? string.Empty,
                                                 IsChair = m.IsChair ?? false,
                                                 Degree = lp.Degree,
@@ -875,10 +875,10 @@ namespace ThesisManagement.Api.Services
                 var assignmentRecords = await (from a in _db.DefenseAssignments.AsNoTracking()
                                                 where a.CommitteeCode == committeeCode
                                                 join t in _db.Topics.AsNoTracking() on a.TopicCode equals t.TopicCode
-                                                join proposer in _db.Users.AsNoTracking() on t.ProposerUserCode equals proposer.UserCode into proposerGroup
-                                                from proposer in proposerGroup.DefaultIfEmpty()
-                                                join supervisor in _db.Users.AsNoTracking() on t.SupervisorUserCode equals supervisor.UserCode into supervisorGroup
-                                                from supervisor in supervisorGroup.DefaultIfEmpty()
+                                                join sp in _db.StudentProfiles.AsNoTracking() on t.ProposerStudentCode equals sp.StudentCode into studentGroup
+                                                from proposer in studentGroup.DefaultIfEmpty()
+                                                join lp in _db.LecturerProfiles.AsNoTracking() on t.SupervisorLecturerCode equals lp.LecturerCode into lecturerGroup
+                                                from supervisor in lecturerGroup.DefaultIfEmpty()
                                                 select new
                                                 {
                                                     a.AssignmentCode,
@@ -890,7 +890,7 @@ namespace ThesisManagement.Api.Services
                                                     t.Title,
                                                     t.ProposerStudentCode,
                                                     StudentName = proposer != null ? proposer.FullName : null,
-                                                    SupervisorCode = t.SupervisorUserCode,
+                                                    SupervisorCode = t.SupervisorLecturerCode,
                                                     SupervisorName = supervisor != null ? supervisor.FullName : null
                                                 })
                     .OrderBy(x => x.Session)
@@ -988,8 +988,7 @@ namespace ThesisManagement.Api.Services
 
                 IQueryable<LecturerProfile> lecturerQuery = _db.LecturerProfiles
                     .AsNoTracking()
-                    .Include(lp => lp.User)
-                    .Include(lp => lp.LecturerSpecialties);
+                    .Include(lp => lp.User);
 
                 var lecturers = await lecturerQuery.ToListAsync(cancellationToken);
 
@@ -1000,17 +999,6 @@ namespace ThesisManagement.Api.Services
                         .Where(lp =>
                         {
                             var specialtyCodes = new HashSet<string>(SplitValues(lp.Specialties), StringComparer.OrdinalIgnoreCase);
-                            if (lp.LecturerSpecialties != null)
-                            {
-                                foreach (var spec in lp.LecturerSpecialties)
-                                {
-                                    if (!string.IsNullOrWhiteSpace(spec.SpecialtyCode))
-                                    {
-                                        specialtyCodes.Add(spec.SpecialtyCode!.Trim());
-                                    }
-                                }
-                            }
-
                             return specialtyCodes.Count > 0 && specialtyCodes.Any(code => filterSet.Contains(code));
                         })
                         .ToList();
@@ -1047,7 +1035,7 @@ namespace ThesisManagement.Api.Services
                     {
                         LecturerProfileId = lecturer.LecturerProfileID,
                         LecturerCode = lecturerCode,
-                        FullName = user?.FullName ?? lecturerCode,
+                        FullName = lecturer.FullName ?? lecturerCode,
                         DepartmentCode = lecturer.DepartmentCode,
                         Specialties = lecturer.Specialties,
                         SpecialtyCode = lecturer.Specialties,
@@ -1123,18 +1111,18 @@ namespace ThesisManagement.Api.Services
 
                 // Fetch base topic info with proposer and supervisor names
                 var topics = await q
-                    .GroupJoin(_db.Users.AsNoTracking(), t => t.ProposerUserCode, u => u.UserCode, (t, pu) => new { t, proposer = pu.FirstOrDefault() })
-                    .SelectMany(tmp => _db.Users.AsNoTracking().Where(u => u.UserCode == tmp.t.SupervisorUserCode).DefaultIfEmpty(), (tmp, sup) => new { tmp.t, tmp.proposer, supervisor = sup })
+                    .GroupJoin(_db.StudentProfiles.AsNoTracking(), t => t.ProposerStudentCode, sp => sp.StudentCode, (t, sp) => new { t, proposer = sp.FirstOrDefault() })
+                    .SelectMany(tmp => _db.LecturerProfiles.AsNoTracking().Where(lp => lp.LecturerCode == tmp.t.SupervisorLecturerCode).DefaultIfEmpty(), (tmp, sup) => new { tmp.t, tmp.proposer, supervisor = sup })
                     .Select(x => new AvailableTopicDto
                     {
                         TopicCode = x.t.TopicCode,
                         Title = x.t.Title,
                         StudentCode = x.t.ProposerStudentCode,
                         StudentName = x.proposer != null ? x.proposer.FullName : null,
-                        SupervisorCode = x.t.SupervisorUserCode,
+                        SupervisorCode = x.t.SupervisorLecturerCode,
                         SupervisorName = x.supervisor != null ? x.supervisor.FullName : null,
                         DepartmentCode = x.t.DepartmentCode,
-                        SpecialtyCode = x.t.SpecialtyCode,
+                        SpecialtyCode = null, // Topic doesn't have SpecialtyCode property
                         Tags = new List<string>(),
                         TagDescriptions = new List<string>()
                     })
@@ -1184,34 +1172,29 @@ namespace ThesisManagement.Api.Services
         }
 
         // Tags
-        public async Task<ApiResponse<List<ThesisManagement.Api.DTOs.TagDto>>> GetTagsAsync(CancellationToken cancellationToken = default)
+        public async Task<ApiResponse<List<ThesisManagement.Api.DTOs.TagReadDto>>> GetTagsAsync(CancellationToken cancellationToken = default)
         {
             try
             {
                 var tags = await _db.Tags.AsNoTracking()
                     .OrderBy(t => t.TagName)
-                    .Select(t => new
-                    {
-                        Tag = t,
-                        UsageCount = _db.CommitteeTags.Count(ct => ct.TagID == t.TagID)
-                    })
-                    .Select(x => new ThesisManagement.Api.DTOs.TagDto
-                    {
-                        TagCode = x.Tag.TagCode,
-                        TagName = x.Tag.TagName,
-                        Description = x.Tag.Description,
-                        UsageCount = x.UsageCount
-                    })
+                    .Select(t => new ThesisManagement.Api.DTOs.TagReadDto(
+                        t.TagID,
+                        t.TagCode,
+                        t.TagName,
+                        t.Description,
+                        t.CreatedAt
+                    ))
                     .ToListAsync(cancellationToken);
 
-                var res = ApiResponse<List<ThesisManagement.Api.DTOs.TagDto>>.SuccessResponse(tags);
+                var res = ApiResponse<List<ThesisManagement.Api.DTOs.TagReadDto>>.SuccessResponse(tags);
                 res.HttpStatusCode = StatusCodes.Status200OK;
                 return res;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "get tags failed");
-                return ApiResponse<List<ThesisManagement.Api.DTOs.TagDto>>.Fail("Không thể lấy danh sách tag", StatusCodes.Status500InternalServerError);
+                return ApiResponse<List<ThesisManagement.Api.DTOs.TagReadDto>>.Fail("Không thể lấy danh sách tag", StatusCodes.Status500InternalServerError);
             }
         }
 
@@ -1679,9 +1662,9 @@ namespace ThesisManagement.Api.Services
                 {
                     members = await _db.CommitteeMembers.AsNoTracking().Where(m => m.CommitteeCode == committee.CommitteeCode)
                         .Join(_db.LecturerProfiles.AsNoTracking(), m => m.MemberLecturerCode, p => p.LecturerCode, (m, p) => new { m, p })
-                        .Join(_db.Users.AsNoTracking(), mp => mp.p.UserCode, u => u.UserCode, (mp, u) => new StudentCommitteeMemberDto
+                        .Select(mp => new StudentCommitteeMemberDto
                         {
-                            Name = u.FullName,
+                            Name = mp.p.FullName ?? mp.p.LecturerCode,
                             Role = mp.m.Role ?? string.Empty
                         }).ToListAsync(cancellationToken);
                 }
