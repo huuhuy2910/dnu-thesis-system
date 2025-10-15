@@ -387,29 +387,7 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<Specialty> ApplyFilter(this IQueryable<Specialty> query, SpecialtyFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => x.Name.Contains(filter.Search) ||
-                                        x.SpecialtyCode.Contains(filter.Search) ||
-                                        (x.Description != null && x.Description.Contains(filter.Search)));
-            }
-
-            if (!string.IsNullOrEmpty(filter.Name))
-                query = query.Where(x => x.Name.Contains(filter.Name));
-
-            if (!string.IsNullOrEmpty(filter.SpecialtyCode))
-                query = query.Where(x => x.SpecialtyCode.Contains(filter.SpecialtyCode));
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
+        // Specialty filter removed - table deleted from database
 
         private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, BaseFilter filter)
         {
@@ -496,22 +474,7 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<LecturerSpecialty> ApplyFilter(this IQueryable<LecturerSpecialty> query, LecturerSpecialtyFilter filter)
-        {
-            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
-                query = query.Where(x => x.LecturerProfile!.LecturerCode == filter.LecturerCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.SpecialtyCode))
-                query = query.Where(x => x.Specialty!.SpecialtyCode == filter.SpecialtyCode);
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
+        // LecturerSpecialty filter removed - table deleted from database
 
         public static IQueryable<TopicLecturer> ApplyFilter(this IQueryable<TopicLecturer> query, TopicLecturerFilter filter)
         {
@@ -704,6 +667,118 @@ namespace ThesisManagement.Api.Helpers
 
             if (filter.ToDate.HasValue)
                 query = query.Where(x => x.UploadedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<LecturerTag> ApplyFilter(this IQueryable<LecturerTag> query, LecturerTagFilter filter)
+        {
+            if (filter.LecturerProfileID.HasValue)
+                query = query.Where(x => x.LecturerProfileID == filter.LecturerProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.LecturerCode == filter.LecturerCode);
+
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            // Support multiple TagCodes: either filter.TagCodes (collection) or comma-separated filter.TagCode
+            var tagCodes = new List<string>();
+            if (filter.TagCodes != null)
+                tagCodes.AddRange(filter.TagCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+            {
+                // allow comma-separated values in TagCode for backward compatibility
+                tagCodes.AddRange(filter.TagCode.Split(',').Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)));
+            }
+
+            if (tagCodes.Any())
+                query = query.Where(x => x.TagCode != null && tagCodes.Contains(x.TagCode));
+
+            if (filter.AssignedByUserID.HasValue)
+                query = query.Where(x => x.AssignedByUserID == filter.AssignedByUserID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.AssignedByUserCode))
+                query = query.Where(x => x.AssignedByUserCode == filter.AssignedByUserCode);
+
+            if (filter.AssignedFromDate.HasValue)
+                query = query.Where(x => x.AssignedAt >= filter.AssignedFromDate.Value);
+
+            if (filter.AssignedToDate.HasValue)
+                query = query.Where(x => x.AssignedAt <= filter.AssignedToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<Tag> ApplyFilter(this IQueryable<Tag> query, TagFilter filter)
+        {
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                query = query.Where(x => x.TagName.Contains(filter.Search) ||
+                                        x.TagCode.Contains(filter.Search) ||
+                                        (x.Description != null && x.Description.Contains(filter.Search)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode.Contains(filter.TagCode));
+
+            if (!string.IsNullOrWhiteSpace(filter.TagName))
+                query = query.Where(x => x.TagName.Contains(filter.TagName));
+
+            if (!string.IsNullOrWhiteSpace(filter.Description))
+                query = query.Where(x => x.Description != null && x.Description.Contains(filter.Description));
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<CatalogTopicTag> ApplyFilter(this IQueryable<CatalogTopicTag> query, CatalogTopicTagFilter filter)
+        {
+            if (filter.CatalogTopicID.HasValue)
+                query = query.Where(x => x.CatalogTopicID == filter.CatalogTopicID.Value);
+
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.CatalogTopicCode))
+                query = query.Where(x => x.CatalogTopicCode == filter.CatalogTopicCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode == filter.TagCode);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<TopicTag> ApplyFilter(this IQueryable<TopicTag> query, TopicTagFilter filter)
+        {
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode == filter.TagCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.CatalogTopicCode))
+                query = query.Where(x => x.CatalogTopicCode == filter.CatalogTopicCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.TopicCode))
+                query = query.Where(x => x.TopicCode == filter.TopicCode);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
 
             return ApplySorting(query, filter);
         }

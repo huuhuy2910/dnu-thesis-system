@@ -1,12 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import {
-  Home,
-  ClipboardList,
-  Users,
-  CalendarCheck,
-  FileText,
-} from "lucide-react";
+import { Home, Users, CalendarCheck, FileText, Bell } from "lucide-react";
 import "./SideNav.css";
 import "./LecturerNav.css";
 
@@ -19,16 +13,6 @@ const LecturerNav: React.FC = () => {
       icon: <Users size={18} />,
     },
     {
-      path: "/lecturer/topic-review",
-      label: "Duyệt đề tài",
-      icon: <ClipboardList size={18} />,
-    },
-    {
-      path: "/lecturer/report",
-      label: "Lịch sử duyêt đề tài",
-      icon: <ClipboardList size={18} />,
-    },
-        {
       path: "/lecturer/reports",
       label: "Nhận xét báo cáo",
       icon: <FileText size={18} />,
@@ -43,6 +27,11 @@ const LecturerNav: React.FC = () => {
       path: "/lecturer/committees",
       label: "Hội đồng của tôi",
       icon: <Users size={18} />,
+    },
+    {
+      path: "/lecturer/notifications",
+      label: "Thông báo",
+      icon: <Bell size={18} />,
     },
   ];
 

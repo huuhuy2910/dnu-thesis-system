@@ -18,7 +18,6 @@ namespace ThesisManagement.Api.Models
 
         // Navigation properties
         public Department? Department { get; set; }
-        public ICollection<CatalogTopicSpecialty>? CatalogTopicSpecialties { get; set; }
         public ICollection<CatalogTopicTag>? CatalogTopicTags { get; set; }
         public ICollection<Topic>? Topics { get; set; }
     }

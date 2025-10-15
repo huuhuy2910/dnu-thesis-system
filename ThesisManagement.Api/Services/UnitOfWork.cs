@@ -26,11 +26,11 @@ namespace ThesisManagement.Api.Services
             DefenseAssignments = new GenericRepository<DefenseAssignment>(_db);
             DefenseScores = new GenericRepository<DefenseScore>(_db);
             
-            // Initialize new repositories
-            Specialties = new GenericRepository<Specialty>(_db);
-            LecturerSpecialties = new GenericRepository<LecturerSpecialty>(_db);
-            CatalogTopicSpecialties = new GenericRepository<CatalogTopicSpecialty>(_db);
+            Tags = new GenericRepository<Tag>(_db);
+            CatalogTopicTags = new GenericRepository<CatalogTopicTag>(_db);
+            TopicTags = new GenericRepository<TopicTag>(_db);
             TopicLecturers = new GenericRepository<TopicLecturer>(_db);
+            LecturerTags = new GenericRepository<LecturerTag>(_db);
         }
 
         public IGenericRepository<Department> Departments { get; }
@@ -49,11 +49,11 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         public IGenericRepository<DefenseScore> DefenseScores { get; }
         
-        // New repository properties
-        public IGenericRepository<Specialty> Specialties { get; }
-        public IGenericRepository<LecturerSpecialty> LecturerSpecialties { get; }
-        public IGenericRepository<CatalogTopicSpecialty> CatalogTopicSpecialties { get; }
+        public IGenericRepository<Tag> Tags { get; }
+        public IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
+        public IGenericRepository<TopicTag> TopicTags { get; }
         public IGenericRepository<TopicLecturer> TopicLecturers { get; }
+        public IGenericRepository<LecturerTag> LecturerTags { get; }
 
         public async Task<int> SaveChangesAsync()
         {

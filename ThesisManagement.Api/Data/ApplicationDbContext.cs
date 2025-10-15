@@ -20,16 +20,13 @@ namespace ThesisManagement.Api.Data
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
         
-        // New DbSets for specialty-related models
-        public DbSet<Specialty> Specialties => Set<Specialty>();
-        public DbSet<LecturerSpecialty> LecturerSpecialties => Set<LecturerSpecialty>();
-        public DbSet<CatalogTopicSpecialty> CatalogTopicSpecialties => Set<CatalogTopicSpecialty>();
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
         
         // New DbSets for Tag system
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<CatalogTopicTag> CatalogTopicTags => Set<CatalogTopicTag>();
         public DbSet<TopicTag> TopicTags => Set<TopicTag>();
+        public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
     public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
     public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
@@ -158,12 +155,14 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.SupervisorLecturerCode).HasMaxLength(30);
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
-                b.Property(x => x.SpecialtyCode).HasMaxLength(60);
                 // Lecturer comment stored as nvarchar(max)
                 b.Property(x => x.LecturerComment);
                 
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                
+                // Configure CatalogTopic navigation
+                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
             });
 
             // ProgressMilestones
@@ -317,34 +316,9 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
-            // Specialties
-            modelBuilder.Entity<Specialty>(b =>
-            {
-                b.HasKey(x => x.SpecialtyID);
-                b.Property(x => x.SpecialtyCode).HasMaxLength(60).IsRequired();
-                b.HasIndex(x => x.SpecialtyCode).IsUnique();
-                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
-
-            // LecturerSpecialties (Many-to-Many)
-            modelBuilder.Entity<LecturerSpecialty>(b =>
-            {
-                b.HasKey(x => new { x.LecturerProfileID, x.SpecialtyID });
-                b.HasOne(x => x.LecturerProfile).WithMany(x => x.LecturerSpecialties).HasForeignKey(x => x.LecturerProfileID);
-                b.HasOne(x => x.Specialty).WithMany(x => x.LecturerSpecialties).HasForeignKey(x => x.SpecialtyID);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
-
-            // CatalogTopicSpecialties (Many-to-Many)
-            modelBuilder.Entity<CatalogTopicSpecialty>(b =>
-            {
-                b.HasKey(x => new { x.CatalogTopicID, x.SpecialtyID });
-                b.HasOne(x => x.CatalogTopic).WithMany(x => x.CatalogTopicSpecialties).HasForeignKey(x => x.CatalogTopicID);
-                b.HasOne(x => x.Specialty).WithMany(x => x.CatalogTopicSpecialties).HasForeignKey(x => x.SpecialtyID);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-            });
+            // Specialties - DELETED
+            // LecturerSpecialties - DELETED
+            // CatalogTopicSpecialties - DELETED
 
             // TopicLecturers (Many-to-Many)
             modelBuilder.Entity<TopicLecturer>(b =>
@@ -381,11 +355,29 @@ namespace ThesisManagement.Api.Data
             modelBuilder.Entity<TopicTag>(b =>
             {
                 b.HasKey(x => x.TopicTagID);
-                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode);
+                b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
                 // Topic navigation removed to prevent shadow properties
                 // b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
                 b.HasOne(x => x.Tag).WithMany(x => x.TopicTags).HasForeignKey(x => x.TagCode).HasPrincipalKey(x => x.TagCode);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            });
+
+            // LecturerTags
+            modelBuilder.Entity<LecturerTag>(b =>
+            {
+                b.HasKey(x => x.LecturerTagID);
+                b.HasOne(x => x.LecturerProfile).WithMany().HasForeignKey(x => x.LecturerProfileID).OnDelete(DeleteBehavior.Cascade);
+                // Map Tag relationship explicitly to Tag.LecturerTags to avoid shadow FK creation
+                b.HasOne(x => x.Tag).WithMany(t => t.LecturerTags).HasForeignKey(x => x.TagID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.AssignedByUser).WithMany().HasForeignKey(x => x.AssignedByUserCode).HasPrincipalKey(x => x.UserCode).OnDelete(DeleteBehavior.SetNull);
+
+                b.Property(x => x.LecturerCode).HasMaxLength(40);
+                b.Property(x => x.TagCode).HasMaxLength(40);
+                b.Property(x => x.AssignedByUserCode).HasMaxLength(40);
+                b.Property(x => x.AssignedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+
+                // Unique constraint: one lecturer can only have one assignment of the same tag
+                b.HasIndex(x => new { x.LecturerProfileID, x.TagID }).IsUnique();
             });
         }
     }

@@ -167,7 +167,7 @@ const LecturerLayout: React.FC = () => {
         <header
           style={{
             background:
-              "linear-gradient(135deg, #002855 0%, #003d7a 50%, #004080 100%)",
+              "linear-gradient(135deg, #002855 0%, #003d7a 30%, #f37021 70%, #e55a0f 100%)",
             padding: "16px 32px",
             boxShadow:
               "0 4px 20px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)",
@@ -242,7 +242,7 @@ const LecturerLayout: React.FC = () => {
                 backdropFilter: "blur(10px)",
               }}
             >
-              <Clock size={16} color="#f37021" />
+              <Clock size={16} color="#fff" />
               <span
                 style={{
                   fontSize: 13,
@@ -275,13 +275,14 @@ const LecturerLayout: React.FC = () => {
             {/* Status Badge */}
             <div
               style={{
-                padding: "10px 18px",
-                borderRadius: "24px",
-                backgroundColor: "rgba(243, 112, 33, 0.15)",
-                border: "1px solid rgba(243, 112, 33, 0.3)",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "20px",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
               }}
             >
               <div
@@ -289,7 +290,7 @@ const LecturerLayout: React.FC = () => {
                   width: "8px",
                   height: "8px",
                   borderRadius: "50%",
-                  backgroundColor: "#f37021",
+                  backgroundColor: "#fff",
                   boxShadow: "0 0 10px rgba(243, 112, 33, 0.5)",
                   animation: "pulse 2s infinite",
                 }}
@@ -297,7 +298,7 @@ const LecturerLayout: React.FC = () => {
               <span
                 style={{
                   fontSize: 12,
-                  color: "#f37021",
+                  color: "#fff",
                   fontWeight: 600,
                   letterSpacing: "0.3px",
                 }}

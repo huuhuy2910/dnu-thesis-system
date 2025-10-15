@@ -26,11 +26,10 @@ namespace ThesisManagement.Api.Models
         public int? ResubmitCount { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? LastUpdated { get; set; }
-        public int? SpecialtyID { get; set; } // Keep for internal use
-        public string? SpecialtyCode { get; set; } // New: reference by code
     public string? LecturerComment { get; set; }
 
         // Navigation properties - Only keep essential ones to avoid shadow properties
         public User? ProposerUser { get; set; }
+        public CatalogTopic? CatalogTopic { get; set; }
     }
 }

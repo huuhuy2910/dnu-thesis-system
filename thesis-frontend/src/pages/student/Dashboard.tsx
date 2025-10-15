@@ -559,10 +559,10 @@ const Dashboard: React.FC = () => {
                       }}
                     >
                       <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Chuyên ngành:
+                        Thẻ:
                       </span>
                       <span style={{ color: "#718096" }}>
-                        {topic.specialtyCode || "N/A"}
+                        {topic.tagCode || "N/A"}
                       </span>
                     </div>
                     <div

@@ -21,11 +21,11 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
         
-        // New repositories for specialty-related models
-        IGenericRepository<Specialty> Specialties { get; }
-        IGenericRepository<LecturerSpecialty> LecturerSpecialties { get; }
-        IGenericRepository<CatalogTopicSpecialty> CatalogTopicSpecialties { get; }
+        IGenericRepository<Tag> Tags { get; }
+        IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
+        IGenericRepository<TopicTag> TopicTags { get; }
         IGenericRepository<TopicLecturer> TopicLecturers { get; }
+        IGenericRepository<LecturerTag> LecturerTags { get; }
         
         Task<int> SaveChangesAsync();
     }

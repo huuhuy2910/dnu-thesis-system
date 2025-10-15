@@ -15,7 +15,6 @@ import Notifications from "../pages/student/Notifications";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import LecturerStudents from "../pages/lecturer/LecturerStudents";
-import LecturerTopics from "../pages/lecturer/LecturerTopics";
 import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -34,7 +33,8 @@ import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 import StudentProfilePage from "../pages/student/StudentProfile";
 import ScrollToTop from "../components/ScrollToTop";
 import LecturerProfilePage from "../pages/lecturer/LecturerProfile";
-import LecturerTopicReview from "../pages/lecturer/LecturerTopicReview";
+import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
+import LecturerNotifications from "../pages/lecturer/Notifications";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -78,12 +78,11 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<LecturerDashboard />} />
           <Route path="students" element={<LecturerStudents />} />
-          <Route path="report" element={<LecturerTopics />} />
-          <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="schedule" element={<LecturerSchedule />} />
           <Route path="committees" element={<LecturerCommittees />} />
           <Route path="reports" element={<LecturerReports />} />
           <Route path="profile" element={<LecturerProfilePage />} />
+          <Route path="notifications" element={<LecturerNotifications />} />
           {/* thêm các route con của lecturer ở đây */}
         </Route>
 
@@ -101,6 +100,7 @@ const AppRoutes: React.FC = () => {
           <Route path="topics" element={<TopicsManagement />} />
           <Route path="committees" element={<CommitteesManagement />} />
           <Route path="system-config" element={<SystemConfig />} />
+          <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="committees-new" element={<CommitteeList />} />
           <Route path="committees-new/create" element={<CreateCommittee />} />
           <Route

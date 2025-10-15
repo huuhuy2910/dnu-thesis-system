@@ -12,7 +12,7 @@ import {
   Users,
   Target,
   Hash,
-  Tag,
+  Tag as TagIcon,
   CheckCircle2,
   AlertCircle,
   X,
@@ -25,11 +25,8 @@ import type { ApiResponse } from "../../types/api";
 import type { SubmissionFile } from "../../types/submissionFile";
 import type { Report } from "../../types/report";
 import type { Topic } from "../../types/topic";
-import type {
-  LecturerProfile,
-  Specialty,
-  Milestone,
-} from "../../types/lecturer";
+import type { LecturerProfile, Milestone } from "../../types/lecturer";
+import type { Tag } from "../../types/tag";
 
 const Reports: React.FC = () => {
   const auth = useAuth();
@@ -45,7 +42,7 @@ const Reports: React.FC = () => {
   const [topic, setTopic] = useState<Topic | null>(null);
   const [lecturerProfile, setLecturerProfile] =
     useState<LecturerProfile | null>(null);
-  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     [key: string]: string;
@@ -94,22 +91,20 @@ const Reports: React.FC = () => {
             if (lecturerRes.data) {
               setLecturerProfile(lecturerRes.data);
 
-              // Fetch lecturer specialties
-              const specialtiesRes = (await fetchData(
-                `/LecturerSpecialties/get-list?LecturerCode=${userTopic.supervisorLecturerCode}`
+              // Fetch lecturer tags
+              const tagsRes = (await fetchData(
+                `/LecturerTags/list?LecturerCode=${userTopic.supervisorLecturerCode}`
               )) as ApiResponse<Record<string, unknown>[]>;
 
-              if (specialtiesRes.data) {
-                // Fetch specialty details
-                const specialtyCodes = specialtiesRes.data
-                  .map((s) => s.specialtyCode)
-                  .join(",");
-                const specialtyDetailsRes = (await fetchData(
-                  `/Specialties/get-list?SpecialtyCode=${specialtyCodes}`
-                )) as ApiResponse<Specialty[]>;
+              if (tagsRes.data) {
+                // Fetch tag details
+                const tagCodes = tagsRes.data.map((s) => s.tagCode).join(",");
+                const tagDetailsRes = (await fetchData(
+                  `/Tags/list?TagCode=${tagCodes}`
+                )) as ApiResponse<Tag[]>;
 
-                if (specialtyDetailsRes.data) {
-                  setSpecialties(specialtyDetailsRes.data);
+                if (tagDetailsRes.data) {
+                  setTags(tagDetailsRes.data);
                 }
               }
             }
@@ -210,7 +205,9 @@ const Reports: React.FC = () => {
     // First priority: no topic registered
     if (!topic) {
       setCanSubmit(false);
-      setSubmitMessage("Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo.");
+      setSubmitMessage(
+        "Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo."
+      );
       return;
     }
 
@@ -713,7 +710,7 @@ const Reports: React.FC = () => {
                       border: "1px solid #e2e8f0",
                     }}
                   >
-                    <Tag size={16} color="#f37021" />
+                    <TagIcon size={16} color="#f37021" />
                     <div style={{ flex: 1 }}>
                       <div
                         style={{
@@ -1201,8 +1198,8 @@ const Reports: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Specialties */}
-                  {specialties.length > 0 && (
+                  {/* Tags */}
+                  {tags.length > 0 && (
                     <div
                       style={{
                         padding: "16px",
@@ -1232,9 +1229,9 @@ const Reports: React.FC = () => {
                           gap: "8px",
                         }}
                       >
-                        {specialties.map((specialty) => (
+                        {tags.map((tag) => (
                           <span
-                            key={specialty.specialtyID}
+                            key={tag.tagID}
                             style={{
                               padding: "6px 12px",
                               background:
@@ -1248,8 +1245,8 @@ const Reports: React.FC = () => {
                               gap: "6px",
                             }}
                           >
-                            <Tag size={12} />
-                            {specialty.name}
+                            <TagIcon size={12} />
+                            {tag.tagName}
                           </span>
                         ))}
                       </div>
@@ -1401,7 +1398,7 @@ const Reports: React.FC = () => {
                   gap: "6px",
                 }}
               >
-                <Tag size={16} color="#f37021" />
+                <TagIcon size={16} color="#f37021" />
                 Tiêu đề báo cáo *
               </label>
               <input

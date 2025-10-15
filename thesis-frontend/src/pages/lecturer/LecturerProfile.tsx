@@ -5,8 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { Department } from "../../types/department";
-import type { LecturerSpecialty } from "../../types/specialty";
-import type { Specialty } from "../../types/specialty-type";
+import type { LecturerTag, Tag } from "../../types/tag";
 import {
   ArrowLeft,
   User,
@@ -30,7 +29,7 @@ const LecturerProfilePage: React.FC = () => {
   );
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [specialtyNames, setSpecialtyNames] = useState<string[]>([]);
+  const [tagNames, setTagNames] = useState<string[]>([]);
 
   const loadLecturerProfile = React.useCallback(async () => {
     try {
@@ -95,53 +94,48 @@ const LecturerProfilePage: React.FC = () => {
     }
   }, [loadLecturerProfile, auth.user?.userCode]);
 
-  // Load specialty names
+  // Load tag names
   useEffect(() => {
-    const loadSpecialtyNames = async () => {
+    const loadTagNames = async () => {
       if (!profile?.lecturerCode) {
         return;
       }
 
       try {
-        // Get lecturer specialties
-        const lecturerSpecRes = await fetchData(
-          `/LecturerSpecialties/get-list?LecturerCode=${profile.lecturerCode}`
+        // Get lecturer tags
+        const lecturerTagRes = await fetchData(
+          `/LecturerTags/list?LecturerCode=${profile.lecturerCode}`
         );
-        const lecturerSpecialties =
-          (lecturerSpecRes as ApiResponse<LecturerSpecialty[]>)?.data || [];
+        const lecturerTags =
+          (lecturerTagRes as ApiResponse<LecturerTag[]>)?.data || [];
 
-        if (lecturerSpecialties.length === 0) {
-          setSpecialtyNames([]);
+        if (lecturerTags.length === 0) {
+          setTagNames([]);
           return;
         }
 
-        // Get specialty names for each specialty code
-        const specialtyNamesPromises = lecturerSpecialties.map(async (ls) => {
+        // Get tag names for each tag code
+        const tagNamesPromises = lecturerTags.map(async (lt) => {
           try {
-            const specRes = await fetchData(
-              `/Specialties/get-list?SpecialtyCode=${ls.specialtyCode}`
-            );
-            const specialtyData =
-              (specRes as ApiResponse<Specialty[]>)?.data || [];
-            return specialtyData.length > 0
-              ? specialtyData[0].name
-              : ls.specialtyCode;
+            const tagRes = await fetchData(`/Tags/list?TagCode=${lt.tagCode}`);
+            const tagData = (tagRes as ApiResponse<Tag[]>)?.data || [];
+            return tagData.length > 0 ? tagData[0].tagName : lt.tagCode;
           } catch (err) {
-            console.error(`Error loading specialty ${ls.specialtyCode}:`, err);
-            return ls.specialtyCode;
+            console.error(`Error loading tag ${lt.tagCode}:`, err);
+            return lt.tagCode;
           }
         });
 
-        const names = await Promise.all(specialtyNamesPromises);
-        setSpecialtyNames(names);
+        const names = await Promise.all(tagNamesPromises);
+        setTagNames(names);
       } catch (err) {
-        console.error("Error loading specialty names:", err);
-        setSpecialtyNames([]);
+        console.error("Error loading tag names:", err);
+        setTagNames([]);
       }
     };
 
     if (profile?.lecturerCode) {
-      loadSpecialtyNames();
+      loadTagNames();
     }
   }, [profile?.lecturerCode]);
 
@@ -1136,9 +1130,7 @@ const LecturerProfilePage: React.FC = () => {
                 color: "#111827",
               }}
             >
-              {specialtyNames.length > 0
-                ? specialtyNames.join(", ")
-                : "Chưa có chuyên ngành"}
+              {tagNames.length > 0 ? tagNames.join(", ") : "Chưa có thẻ"}
             </div>
           </div>
         </div>

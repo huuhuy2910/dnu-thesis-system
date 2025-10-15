@@ -30,7 +30,6 @@ namespace ThesisManagement.Api.Models
         // Navigation properties
         public User? User { get; set; }
         public Department? Department { get; set; }
-        public ICollection<LecturerSpecialty>? LecturerSpecialties { get; set; }
         public ICollection<TopicLecturer>? TopicLecturers { get; set; }
     }
 }

@@ -23,19 +23,6 @@ export interface ApiResponseLecturerProfile {
   data: LecturerProfile;
 }
 
-export interface Specialty {
-  specialtyID: number;
-  specialtyCode: string;
-  name: string;
-  description: string;
-  createdAt: string;
-  lastUpdated: string | null;
-}
-
-export interface ApiResponseSpecialties {
-  data: Specialty[];
-}
-
 export interface User {
   userID: number;
   userCode: string;

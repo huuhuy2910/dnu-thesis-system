@@ -23,8 +23,6 @@ namespace ThesisManagement.Api.DTOs
         int? ResubmitCount,
     DateTime? CreatedAt,
     DateTime? LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode,
         string? LecturerComment
     );
 
@@ -48,8 +46,6 @@ namespace ThesisManagement.Api.DTOs
         int? ResubmitCount,
         DateTime? CreatedAt,
         DateTime? LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode,
         string? LecturerComment
     );
 
@@ -75,8 +71,6 @@ namespace ThesisManagement.Api.DTOs
         int? ResubmitCount,
     DateTime? CreatedAt,
     DateTime? LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode,
         string? LecturerComment
     );
 }

@@ -1,23 +1,23 @@
+using System;
+
 namespace ThesisManagement.Api.DTOs
 {
-    public class TagReadDto
-    {
-        public int TagID { get; set; }
-        public string TagCode { get; set; } = null!;
-        public string TagName { get; set; } = null!;
-        public string? Description { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
+    public record TagReadDto(
+        int TagID,
+        string TagCode,
+        string TagName,
+        string? Description,
+        DateTime CreatedAt
+    );
 
-    public class TagCreateDto
-    {
-        public string TagName { get; set; } = null!;
-        public string? Description { get; set; }
-    }
+    public record TagCreateDto(
+        string TagCode,
+        string TagName,
+        string? Description
+    );
 
-    public class TagUpdateDto
-    {
-        public string TagName { get; set; } = null!;
-        public string? Description { get; set; }
-    }
+    public record TagUpdateDto(
+        string? TagName,
+        string? Description
+    );
 }
