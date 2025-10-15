@@ -32,9 +32,8 @@ namespace ThesisManagement.Api.Data
         public DbSet<CatalogTopicTag> CatalogTopicTags => Set<CatalogTopicTag>();
         public DbSet<TopicTag> TopicTags => Set<TopicTag>();
         public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
-    public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
-    public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
-    public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+        public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
+        public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

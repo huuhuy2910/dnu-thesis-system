@@ -21,9 +21,7 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
-    IGenericRepository<CommitteeTag> CommitteeTags { get; }
-    IGenericRepository<Tag> Tags { get; }
-        
+        IGenericRepository<CommitteeTag> CommitteeTags { get; }
         IGenericRepository<Tag> Tags { get; }
         IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
         IGenericRepository<TopicTag> TopicTags { get; }

@@ -28,8 +28,6 @@ namespace ThesisManagement.Api.Services
             DefenseScores = new GenericRepository<DefenseScore>(_db);
             CommitteeTags = new GenericRepository<CommitteeTag>(_db);
             Tags = new GenericRepository<Tag>(_db);
-            
-            Tags = new GenericRepository<Tag>(_db);
             CatalogTopicTags = new GenericRepository<CatalogTopicTag>(_db);
             TopicTags = new GenericRepository<TopicTag>(_db);
             TopicLecturers = new GenericRepository<TopicLecturer>(_db);
@@ -52,9 +50,7 @@ namespace ThesisManagement.Api.Services
     public IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         public IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         public IGenericRepository<DefenseScore> DefenseScores { get; }
-    public IGenericRepository<CommitteeTag> CommitteeTags { get; }
-    public IGenericRepository<Tag> Tags { get; }
-        
+        public IGenericRepository<CommitteeTag> CommitteeTags { get; }
         public IGenericRepository<Tag> Tags { get; }
         public IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
         public IGenericRepository<TopicTag> TopicTags { get; }

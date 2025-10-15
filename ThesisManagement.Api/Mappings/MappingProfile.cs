@@ -31,9 +31,9 @@ namespace ThesisManagement.Api.Mappings
             CreateMap<MilestoneTemplate, MilestoneTemplateReadDto>();
             CreateMap<MilestoneStateHistory, MilestoneStateHistoryReadDto>();
             CreateMap<SubmissionFile, SubmissionFileReadDto>();
-            CreateMap<Committee, CommitteeReadDto>();
-            CreateMap<CommitteeMember, CommitteeMemberReadDto>();
-            CreateMap<DefenseAssignment, DefenseAssignmentReadDto>();
+            // TODO: CreateMap<Committee, CommitteeReadDto>();
+            // TODO: CreateMap<CommitteeMember, CommitteeMemberReadDto>();
+            // TODO: CreateMap<DefenseAssignment, DefenseAssignmentReadDto>();
             CreateMap<DefenseScore, DefenseScoreReadDto>();
             
             CreateMap<Tag, TagReadDto>();
