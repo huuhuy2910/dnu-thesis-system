@@ -13,11 +13,11 @@ namespace ThesisManagement.Api.Models
         public int ProposerUserID { get; set; } // Keep for internal use
         public string? ProposerUserCode { get; set; } // New: reference by code
         public string? ProposerStudentCode { get; set; } // New: reference by code
-    public int? ProposerStudentProfileID { get; set; } // internal reference to student profile
+        public int? ProposerStudentProfileID { get; set; } // internal reference to student profile
         public int? SupervisorUserID { get; set; } // Keep for internal use
         public string? SupervisorUserCode { get; set; } // New: reference by code
         public string? SupervisorLecturerCode { get; set; } // New: reference by code
-    public int? SupervisorLecturerProfileID { get; set; } // internal reference to lecturer profile
+        public int? SupervisorLecturerProfileID { get; set; } // internal reference to lecturer profile
         public int? CatalogTopicID { get; set; } // Keep for internal use
         public string? CatalogTopicCode { get; set; } // New: reference by code
         public int? DepartmentID { get; set; } // Keep for internal use

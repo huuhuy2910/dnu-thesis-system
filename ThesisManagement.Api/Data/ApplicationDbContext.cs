@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Linq;
 using ThesisManagement.Api.Models;
 
 namespace ThesisManagement.Api.Data
@@ -17,8 +19,11 @@ namespace ThesisManagement.Api.Data
         public DbSet<ProgressSubmission> ProgressSubmissions => Set<ProgressSubmission>();
         public DbSet<Committee> Committees => Set<Committee>();
         public DbSet<CommitteeMember> CommitteeMembers => Set<CommitteeMember>();
+        public DbSet<CommitteeSession> CommitteeSessions => Set<CommitteeSession>();
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
+        public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
+        public DbSet<CommitteeTag> CommitteeTags => Set<CommitteeTag>();
         
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
         
@@ -187,6 +192,19 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
+            // MilestoneStateHistory
+            modelBuilder.Entity<MilestoneStateHistory>(b =>
+            {
+                b.HasKey(x => x.HistoryID);
+                b.Property(x => x.MilestoneCode).HasMaxLength(60);
+                b.Property(x => x.TopicCode).HasMaxLength(40);
+                b.Property(x => x.OldState).HasMaxLength(50);
+                b.Property(x => x.NewState).HasMaxLength(50);
+                b.Property(x => x.ChangedByUserCode).HasMaxLength(40);
+                b.Property(x => x.ChangedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.Comment).HasMaxLength(500);
+            });
+
             // ProgressSubmissions
             modelBuilder.Entity<ProgressSubmission>(b =>
             {
@@ -257,6 +275,12 @@ namespace ThesisManagement.Api.Data
             // Committees
             modelBuilder.Entity<Committee>(b =>
             {
+                b.ToTable("Committees", tb =>
+                {
+                    tb.HasTrigger("TR_Committees_Insert");
+                    tb.HasTrigger("TR_Committees_Update");
+                    tb.HasTrigger("TR_Committees_Delete");
+                });
                 b.HasKey(x => x.CommitteeID);
                 b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.CommitteeCode).IsUnique();
@@ -264,10 +288,60 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
+            modelBuilder.Entity<CommitteeSession>(b =>
+            {
+                b.ToTable("CommitteeSessions");
+                b.HasKey(x => x.CommitteeSessionID);
+                b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.SessionNumber).IsRequired();
+                b.Property(x => x.TopicCount).HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.HasOne(x => x.Committee)
+                    .WithMany()
+                    .HasForeignKey(x => x.CommitteeCode)
+                    .HasPrincipalKey(x => x.CommitteeCode)
+                    .OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => new { x.CommitteeCode, x.SessionNumber }).IsUnique();
+            });
+
+            modelBuilder.Entity<CommitteeTag>(b =>
+            {
+                b.ToTable("CommitteeTags", tb =>
+                {
+                    tb.HasTrigger("TR_CommitteeTags_Insert");
+                    tb.HasTrigger("TR_CommitteeTags_Update");
+                    tb.HasTrigger("TR_CommitteeTags_Delete");
+                });
+                b.HasKey(x => x.CommitteeTagID);
+                b.Property(x => x.CommitteeID).IsRequired();
+                b.Property(x => x.CommitteeCode).HasMaxLength(50).IsRequired();
+                b.Property(x => x.TagID).IsRequired();
+                b.Property(x => x.TagCode).HasMaxLength(50).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+
+                b.HasOne(x => x.Committee)
+                    .WithMany(x => x.CommitteeTags)
+                    .HasForeignKey(x => x.CommitteeID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.Tag)
+                    .WithMany(x => x.CommitteeTags)
+                    .HasForeignKey(x => x.TagID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.CommitteeCode, x.TagID }).IsUnique();
+            });
+
             // CommitteeMembers with new schema
             modelBuilder.Entity<CommitteeMember>(b =>
             {
-                b.ToTable("CommitteeMembers");
+                b.ToTable("CommitteeMembers", tb =>
+                {
+                    tb.HasTrigger("TR_CommitteeMembers_Insert");
+                    tb.HasTrigger("TR_CommitteeMembers_Update");
+                    tb.HasTrigger("TR_CommitteeMembers_Delete");
+                });
                 b.HasKey(x => x.CommitteeMemberID);
                 
                 // Configure navigation properties with Code-based foreign keys
@@ -283,9 +357,19 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.IsChair).HasDefaultValue(false);
             });
 
+            var sessionConverter = new ValueConverter<int?, string?>(
+                v => FormatSessionValue(v),
+                v => ParseSessionValue(v));
+
             // DefenseAssignments
             modelBuilder.Entity<DefenseAssignment>(b =>
             {
+                b.ToTable("DefenseAssignments", tb =>
+                {
+                    tb.HasTrigger("TR_DefenseAssignments_Insert");
+                    tb.HasTrigger("TR_DefenseAssignments_Update");
+                    tb.HasTrigger("TR_DefenseAssignments_Delete");
+                });
                 b.HasKey(x => x.AssignmentID);
                 b.Property(x => x.AssignmentCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.AssignmentCode).IsUnique();
@@ -293,6 +377,13 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.Committee).WithMany().HasForeignKey(x => x.CommitteeCode).HasPrincipalKey(x => x.CommitteeCode);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.Session)
+                    .HasConversion(sessionConverter)
+                    .HasMaxLength(20);
+                b.Property(x => x.StartTime).HasColumnType("time(0)");
+                b.Property(x => x.EndTime).HasColumnType("time(0)");
+                b.Property(x => x.AssignedBy).HasMaxLength(40);
+                b.Property(x => x.AssignedAt);
             });
 
             // DefenseScores
@@ -358,7 +449,12 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
                 // Topic navigation removed to prevent shadow properties
                 // b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
-                b.HasOne(x => x.Tag).WithMany(x => x.TopicTags).HasForeignKey(x => x.TagCode).HasPrincipalKey(x => x.TagCode);
+                b.Property(x => x.TagID).IsRequired();
+                b.Property(x => x.TagCode).HasMaxLength(50);
+                b.HasOne(x => x.Tag)
+                    .WithMany(x => x.TopicTags)
+                    .HasForeignKey(x => x.TagID)
+                    .OnDelete(DeleteBehavior.Cascade);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
@@ -379,6 +475,25 @@ namespace ThesisManagement.Api.Data
                 // Unique constraint: one lecturer can only have one assignment of the same tag
                 b.HasIndex(x => new { x.LecturerProfileID, x.TagID }).IsUnique();
             });
+        }
+
+        private static string? FormatSessionValue(int? value)
+            => value.HasValue ? value.Value.ToString() : null;
+
+        private static int? ParseSessionValue(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var digits = new string(value.Where(char.IsDigit).ToArray());
+            if (string.IsNullOrEmpty(digits))
+            {
+                return null;
+            }
+
+            return int.TryParse(digits, out var parsed) ? parsed : null;
         }
     }
 }

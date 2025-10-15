@@ -18,8 +18,11 @@ namespace ThesisManagement.Api.Services
     IGenericRepository<SubmissionFile> SubmissionFiles { get; }
         IGenericRepository<Committee> Committees { get; }
         IGenericRepository<CommitteeMember> CommitteeMembers { get; }
+        IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
+    IGenericRepository<CommitteeTag> CommitteeTags { get; }
+    IGenericRepository<Tag> Tags { get; }
         
         IGenericRepository<Tag> Tags { get; }
         IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }

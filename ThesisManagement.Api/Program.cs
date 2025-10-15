@@ -5,13 +5,14 @@ using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Mappings;
 using AutoMapper;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
+// Controllers
 builder.Services.AddControllers();
 
-// Add CORS
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -25,6 +26,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -45,24 +47,31 @@ builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepositor
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ICodeGenerator, CodeGeneratorService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ICommitteeManagementService, CommitteeManagementService>();
-builder.Services.AddScoped<IDefenseAssignmentService, DefenseAssignmentService>();
+builder.Services.AddScoped<ICommitteeAssignmentService, CommitteeAssignmentService>();
 
 var app = builder.Build();
 
-// Ensure DB created (optional)
-// using (var scope = app.Services.CreateScope())
-// {
-//     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-//     db.Database.Migrate(); // or EnsureCreated()
-// }
-
+// Development: Swagger + Fake Admin user
 if (app.Environment.IsDevelopment())
 {
+    // Swagger UI
     app.UseSwagger();
-    app.UseSwaggerUI(c => {
+    app.UseSwaggerUI(c =>
+    {
         c.DocumentTitle = "ThesisManagement API - Swagger";
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
+    });
+
+    // Fake Admin identity for testing
+    app.Use(async (context, next) =>
+    {
+        context.User = new ClaimsPrincipal(
+            new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "AdminDev"),
+                new Claim(ClaimTypes.Role, "Admin")
+            }, "DevBypass"));
+        await next();
     });
 }
 

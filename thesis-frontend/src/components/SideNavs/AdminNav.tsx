@@ -32,7 +32,7 @@ const AdminNav: React.FC = () => {
     },
     {
       path: "/admin/committees",
-      label: "Quản lý hội đồng",
+      label: "Hội đồng & phân công",
       icon: <ShieldCheck size={18} />,
     },
     {

@@ -12,8 +12,10 @@ namespace ThesisManagement.Api.Models
         public string? Room { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
+        public string? Status { get; set; }
 
         public ICollection<CommitteeMember>? Members { get; set; }
+        public ICollection<CommitteeTag>? CommitteeTags { get; set; }
         // Navigation property removed to prevent EF shadow properties
         // public ICollection<DefenseAssignment>? DefenseAssignments { get; set; }
     }
