@@ -1,24 +1,23 @@
 import React, { useEffect, useState } from "react";
 import { Calendar, Users, GraduationCap, MapPin, Eye } from "lucide-react";
 import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
-import type { LecturerCommitteeItem, CommitteeAssignmentDetail } from "../../api/committeeAssignmentApi";
-import { ModalShell } from "../../pages/admin/committee/components/ModalShell";
+import type { LecturerCommitteeItem } from "../../api/committeeAssignmentApi";
+// ModalShell removed: we will inline details or navigate to a detail page in future
 
 const LecturerCommittees: React.FC = () => {
   const [committees, setCommittees] = useState<LecturerCommitteeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCommittee, setSelectedCommittee] = useState<CommitteeAssignmentDetail | null>(
-    null
-  );
-  const [modalOpen, setModalOpen] = useState(false);
+  // detail view removed for now
 
   useEffect(() => {
     const fetchCommittees = async () => {
       try {
         // Assuming lecturerCode is available, e.g., from context or props. For now, hardcode or get from auth.
         const lecturerCode = "LECT01"; // Replace with actual lecturer code from auth/context
-        const response = await committeeAssignmentApi.getLecturerCommittees(lecturerCode);
+        const response = await committeeAssignmentApi.getLecturerCommittees(
+          lecturerCode
+        );
         if (response.success && response.data) {
           setCommittees(response.data.committees);
         } else {
@@ -35,10 +34,12 @@ const LecturerCommittees: React.FC = () => {
 
   const handleViewDetails = async (committeeCode: string) => {
     try {
-      const response = await committeeAssignmentApi.getCommitteeDetail(committeeCode);
+      const response = await committeeAssignmentApi.getCommitteeDetail(
+        committeeCode
+      );
       if (response.success && response.data) {
-        setSelectedCommittee(response.data);
-        setModalOpen(true);
+        // details fetched; currently we don't display a modal. Consider navigating to a detail page.
+        // console.log('committee details', response.data);
       }
     } catch (err) {
       console.error("Lỗi khi tải chi tiết hội đồng", err);
@@ -99,7 +100,8 @@ const LecturerCommittees: React.FC = () => {
             Chưa có hội đồng bảo vệ
           </h3>
           <p style={{ color: "#666" }}>
-            Hiện tại bạn chưa được phân công tham gia hội đồng bảo vệ nào. Vui lòng liên hệ với khoa để được hỗ trợ.
+            Hiện tại bạn chưa được phân công tham gia hội đồng bảo vệ nào. Vui
+            lòng liên hệ với khoa để được hỗ trợ.
           </p>
         </div>
       ) : (
@@ -159,22 +161,23 @@ const LecturerCommittees: React.FC = () => {
                     >
                       {committee.committeeCode}
                     </span>
-                    {committee.members && committee.members.find((m) => m.isChair) && (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "4px 12px",
-                          background:
-                            "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
-                          color: "white",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Chủ tịch
-                      </span>
-                    )}
+                    {committee.members &&
+                      committee.members.find((m) => m.isChair) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "4px 12px",
+                            background:
+                              "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
+                            color: "white",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Chủ tịch
+                        </span>
+                      )}
                   </div>
                   <h3
                     style={{
@@ -358,231 +361,6 @@ const LecturerCommittees: React.FC = () => {
             </div>
           ))}
         </div>
-      )}
-
-      {modalOpen && selectedCommittee && (
-        <ModalShell onClose={() => setModalOpen(false)} title="Chi Tiết Hội Đồng" wide>
-          <div style={{ padding: "20px" }}>
-            <h2 style={{ marginBottom: "20px", color: "#1a1a1a" }}>
-              {selectedCommittee.name || selectedCommittee.committeeCode}
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                }}
-              >
-                <strong>Mã hội đồng:</strong> {selectedCommittee.committeeCode}
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                }}
-              >
-                <strong>Ngày bảo vệ:</strong>{" "}
-                {selectedCommittee.defenseDate
-                  ? new Date(selectedCommittee.defenseDate).toLocaleDateString("vi-VN")
-                  : "Chưa có"}
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                }}
-              >
-                <strong>Phòng:</strong> {selectedCommittee.room || "Chưa có"}
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#F9FAFB",
-                  borderRadius: "8px",
-                }}
-              >
-                <strong>Trạng thái:</strong> {selectedCommittee.status || "Chưa có"}
-              </div>
-            </div>
-
-            {selectedCommittee.tags && selectedCommittee.tags.length > 0 && (
-              <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Tags:</h3>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  {selectedCommittee.tags.map((tag) => (
-                    <span
-                      key={tag.tagCode}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#F37021",
-                        color: "white",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                      }}
-                    >
-                      {tag.tagName}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Thành Viên:</h3>
-            <div style={{ marginBottom: "24px" }}>
-              {selectedCommittee.members.map((member) => (
-                <div
-                  key={member.lecturerCode}
-                  style={{
-                    padding: "12px",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <strong>{member.fullName}</strong> ({member.lecturerCode})
-                      {member.isChair && (
-                        <span style={{ color: "#F37021", marginLeft: "8px" }}>
-                          {" "}
-                          - Chủ tịch
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <span style={{ fontSize: "12px", color: "#666" }}>
-                        {member.role}
-                      </span>
-                      {member.degree && (
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            color: "#666",
-                            marginLeft: "8px",
-                          }}
-                        >
-                          - {member.degree}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {member.specialtyNames && member.specialtyNames.length > 0 && (
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        fontSize: "12px",
-                        color: "#666",
-                      }}
-                    >
-                      Chuyên ngành: {member.specialtyNames.join(", ")}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <h3 style={{ marginBottom: "12px", color: "#1a1a1a" }}>Phiên Bảo Vệ:</h3>
-            <div>
-              {selectedCommittee.sessions && selectedCommittee.sessions.length > 0 ? (
-                selectedCommittee.sessions.map((session) => (
-                  <div key={session.session} style={{ marginBottom: "24px" }}>
-                    <h4 style={{ marginBottom: "16px", color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
-                      Phiên {session.session}
-                    </h4>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                      {session.topics.map((topic) => {
-                        // Find the corresponding assignment for more details
-                        const assignment = selectedCommittee.assignments?.find(a => a.topicCode === topic.topicCode);
-                        return (
-                          <div
-                            key={topic.topicCode}
-                            style={{
-                              padding: "16px",
-                              border: "1px solid #E5E7EB",
-                              borderRadius: "8px",
-                              background: "#F9FAFB",
-                            }}
-                          >
-                            <div style={{ marginBottom: "12px" }}>
-                              <strong style={{ fontSize: "16px", color: "#1a1a1a" }}>{topic.title}</strong>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", color: "#666" }}>
-                              <div>
-                                <strong>Mã:</strong> {topic.topicCode} | <strong>SV:</strong> {topic.studentName} ({topic.studentCode})
-                              </div>
-                              <div>
-                                <strong>GVHD:</strong> {topic.supervisorName} ({topic.supervisorCode})
-                              </div>
-                              <div>
-                                <strong>Ngày:</strong> {assignment?.scheduledAt ? new Date(assignment.scheduledAt).toLocaleDateString("vi-VN") : "Chưa có"}
-                              </div>
-                              <div>
-                                <strong>Thời gian:</strong> {topic.startTime} - {topic.endTime}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                // Fallback: show assignments without sessions
-                selectedCommittee.assignments && selectedCommittee.assignments.length > 0 && (
-                  <div>
-                    {selectedCommittee.assignments.map((assignment) => (
-                      <div
-                        key={assignment.topicCode}
-                        style={{
-                          padding: "16px",
-                          border: "1px solid #E5E7EB",
-                          borderRadius: "8px",
-                          marginBottom: "12px",
-                          background: "#F9FAFB",
-                        }}
-                      >
-                        <div style={{ marginBottom: "12px" }}>
-                          <strong style={{ fontSize: "16px", color: "#1a1a1a" }}>{assignment.title}</strong>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", color: "#666" }}>
-                          <div>
-                            <strong>Mã:</strong> {assignment.topicCode} | <strong>SV:</strong> {assignment.studentName} ({assignment.studentCode})
-                          </div>
-                          <div>
-                            <strong>GVHD:</strong> {assignment.supervisorName} ({assignment.supervisorCode})
-                          </div>
-                          <div>
-                            <strong>Ngày:</strong> {assignment.scheduledAt ? new Date(assignment.scheduledAt).toLocaleDateString("vi-VN") : "Chưa có"}
-                          </div>
-                          <div>
-                            <strong>Thời gian:</strong> {assignment.startTime} - {assignment.endTime}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </ModalShell>
       )}
     </div>
   );
