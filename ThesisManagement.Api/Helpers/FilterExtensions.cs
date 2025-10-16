@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
@@ -37,19 +36,11 @@ namespace ThesisManagement.Api.Helpers
         {
             if (!string.IsNullOrEmpty(filter.Search))
             {
-                query = query.Where(x => x.UserCode.Contains(filter.Search) || 
-                                        x.FullName.Contains(filter.Search) ||
-                                        (x.Email != null && x.Email.Contains(filter.Search)));
+                query = query.Where(x => x.UserCode.Contains(filter.Search));
             }
 
             if (!string.IsNullOrEmpty(filter.Username))
                 query = query.Where(x => x.UserCode.Contains(filter.Username));
-
-            if (!string.IsNullOrEmpty(filter.FullName))
-                query = query.Where(x => x.FullName.Contains(filter.FullName));
-
-            if (!string.IsNullOrEmpty(filter.Email))
-                query = query.Where(x => x.Email != null && x.Email.Contains(filter.Email));
 
             if (!string.IsNullOrEmpty(filter.Role))
                 query = query.Where(x => x.Role == filter.Role);
@@ -271,20 +262,54 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
+        public static IQueryable<Committee> ApplyFilter(this IQueryable<Committee> query, CommitteeFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => x.CommitteeCode.Contains(filter.Search) ||
+                                        (x.Name != null && x.Name.Contains(filter.Search)) ||
+                                        (x.Room != null && x.Room.Contains(filter.Search)));
+            }
+
+            if (!string.IsNullOrEmpty(filter.Name))
+                query = query.Where(x => x.Name != null && x.Name.Contains(filter.Name));
+
+            if (!string.IsNullOrEmpty(filter.CommitteeCode))
+                query = query.Where(x => x.CommitteeCode.Contains(filter.CommitteeCode));
+
+            if (!string.IsNullOrEmpty(filter.Room))
+                query = query.Where(x => x.Room != null && x.Room.Contains(filter.Room));
+
+            if (filter.DefenseDate.HasValue)
+                query = query.Where(x => x.DefenseDate.HasValue && x.DefenseDate.Value.Date == filter.DefenseDate.Value.Date);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
         public static IQueryable<ProgressMilestone> ApplyFilter(this IQueryable<ProgressMilestone> query, ProgressMilestoneFilter filter)
         {
             if (!string.IsNullOrEmpty(filter.Search))
             {
                 query = query.Where(x => x.MilestoneCode.Contains(filter.Search) ||
-                                        x.Type.Contains(filter.Search) ||
-                                        (x.Note != null && x.Note.Contains(filter.Search)));
+                                        (x.TopicCode != null && x.TopicCode.Contains(filter.Search)));
             }
+
+            if (filter.TopicID.HasValue)
+                query = query.Where(x => x.TopicID == filter.TopicID.Value);
 
             if (!string.IsNullOrWhiteSpace(filter.TopicCode))
                 query = query.Where(x => x.TopicCode == filter.TopicCode);
 
-            if (!string.IsNullOrEmpty(filter.Type))
-                query = query.Where(x => x.Type == filter.Type);
+            // Type field removed from ProgressMilestone - skip type-based filtering
+
+            if (!string.IsNullOrEmpty(filter.MilestoneTemplateCode))
+                query = query.Where(x => x.MilestoneTemplateCode == filter.MilestoneTemplateCode);
 
             if (!string.IsNullOrEmpty(filter.State))
                 query = query.Where(x => x.State == filter.State);
@@ -294,6 +319,36 @@ namespace ThesisManagement.Api.Helpers
 
             if (filter.Deadline.HasValue)
                 query = query.Where(x => x.Deadline.HasValue && x.Deadline.Value.Date == filter.Deadline.Value.Date);
+
+            if (filter.MinOrdinal.HasValue)
+                query = query.Where(x => x.Ordinal >= filter.MinOrdinal.Value);
+
+            if (filter.MaxOrdinal.HasValue)
+                query = query.Where(x => x.Ordinal <= filter.MaxOrdinal.Value);
+
+            if (filter.StartedFrom.HasValue)
+                query = query.Where(x => x.StartedAt >= filter.StartedFrom.Value);
+
+            if (filter.StartedTo.HasValue)
+                query = query.Where(x => x.StartedAt <= filter.StartedTo.Value);
+
+            if (filter.CompletedFrom.HasValue)
+                query = query.Where(x =>
+                    (x.CompletedAt1.HasValue && x.CompletedAt1.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt2.HasValue && x.CompletedAt2.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt3.HasValue && x.CompletedAt3.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt4.HasValue && x.CompletedAt4.Value >= filter.CompletedFrom.Value) ||
+                    (x.CompletedAt5.HasValue && x.CompletedAt5.Value >= filter.CompletedFrom.Value)
+                );
+
+            if (filter.CompletedTo.HasValue)
+                query = query.Where(x =>
+                    (x.CompletedAt1.HasValue && x.CompletedAt1.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt2.HasValue && x.CompletedAt2.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt3.HasValue && x.CompletedAt3.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt4.HasValue && x.CompletedAt4.Value <= filter.CompletedTo.Value) ||
+                    (x.CompletedAt5.HasValue && x.CompletedAt5.Value <= filter.CompletedTo.Value)
+                );
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
@@ -332,20 +387,48 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<Specialty> ApplyFilter(this IQueryable<Specialty> query, SpecialtyFilter filter)
+        // Specialty filter removed - table deleted from database
+
+        private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, BaseFilter filter)
+        {
+            if (string.IsNullOrEmpty(filter.SortBy))
+                return query;
+
+            var parameter = Expression.Parameter(typeof(T), "x");
+            var property = Expression.Property(parameter, filter.SortBy);
+            var lambda = Expression.Lambda(property, parameter);
+
+            string methodName = filter.SortDescending ? "OrderByDescending" : "OrderBy";
+            
+            var resultExpression = Expression.Call(
+                typeof(Queryable),
+                methodName,
+                new Type[] { typeof(T), property.Type },
+                query.Expression,
+                Expression.Quote(lambda)
+            );
+
+            return query.Provider.CreateQuery<T>(resultExpression);
+        }
+
+        public static IQueryable<CommitteeMember> ApplyFilter(this IQueryable<CommitteeMember> query, CommitteeMemberFilter filter)
         {
             if (!string.IsNullOrEmpty(filter.Search))
             {
-                query = query.Where(x => x.Name.Contains(filter.Search) ||
-                                        x.SpecialtyCode.Contains(filter.Search) ||
-                                        (x.Description != null && x.Description.Contains(filter.Search)));
+                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Search));
             }
 
-            if (!string.IsNullOrEmpty(filter.Name))
-                query = query.Where(x => x.Name.Contains(filter.Name));
+            if (!string.IsNullOrWhiteSpace(filter.CommitteeCode))
+                query = query.Where(x => x.Committee!.CommitteeCode == filter.CommitteeCode);
 
-            if (!string.IsNullOrEmpty(filter.SpecialtyCode))
-                query = query.Where(x => x.SpecialtyCode.Contains(filter.SpecialtyCode));
+            if (!string.IsNullOrWhiteSpace(filter.LecturerUserCode))
+                query = query.Where(x => x.MemberUser!.UserCode == filter.LecturerUserCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.MemberLecturerProfile!.LecturerCode == filter.LecturerCode);
+
+            if (!string.IsNullOrEmpty(filter.Role))
+                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
@@ -354,40 +437,6 @@ namespace ThesisManagement.Api.Helpers
                 query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
 
             return ApplySorting(query, filter);
-        }
-
-        private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, BaseFilter filter)
-        {
-            if (string.IsNullOrWhiteSpace(filter.SortBy))
-            {
-                return query;
-            }
-
-            var sortBy = filter.SortBy.Trim();
-
-            var propertyInfo = typeof(T)
-                .GetProperties()
-                .FirstOrDefault(p => string.Equals(p.Name, sortBy, StringComparison.OrdinalIgnoreCase));
-
-            if (propertyInfo == null)
-            {
-                return query;
-            }
-
-            var parameter = Expression.Parameter(typeof(T), "x");
-            var property = Expression.Property(parameter, propertyInfo);
-            var lambda = Expression.Lambda(property, parameter);
-
-            var methodName = filter.SortDescending ? "OrderByDescending" : "OrderBy";
-
-            var resultExpression = Expression.Call(
-                typeof(Queryable),
-                methodName,
-                new[] { typeof(T), propertyInfo.PropertyType },
-                query.Expression,
-                Expression.Quote(lambda));
-
-            return query.Provider.CreateQuery<T>(resultExpression);
         }
 
         public static IQueryable<DefenseScore> ApplyFilter(this IQueryable<DefenseScore> query, DefenseScoreFilter filter)
@@ -425,22 +474,7 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<LecturerSpecialty> ApplyFilter(this IQueryable<LecturerSpecialty> query, LecturerSpecialtyFilter filter)
-        {
-            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
-                query = query.Where(x => x.LecturerProfile!.LecturerCode == filter.LecturerCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.SpecialtyCode))
-                query = query.Where(x => x.Specialty!.SpecialtyCode == filter.SpecialtyCode);
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
+        // LecturerSpecialty filter removed - table deleted from database
 
         public static IQueryable<TopicLecturer> ApplyFilter(this IQueryable<TopicLecturer> query, TopicLecturerFilter filter)
         {
@@ -473,17 +507,26 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrEmpty(filter.SubmissionCode))
                 query = query.Where(x => x.SubmissionCode.Contains(filter.SubmissionCode));
 
+            if (filter.MilestoneID.HasValue)
+                query = query.Where(x => x.MilestoneID == filter.MilestoneID.Value);
+
             if (!string.IsNullOrWhiteSpace(filter.MilestoneCode))
                 query = query.Where(x => x.MilestoneCode == filter.MilestoneCode);
 
+            if (filter.StudentUserID.HasValue)
+                query = query.Where(x => x.StudentUserID == filter.StudentUserID.Value);
+
             if (!string.IsNullOrWhiteSpace(filter.StudentUserCode))
                 query = query.Where(x => x.StudentUserCode == filter.StudentUserCode);
+
+            if (filter.StudentProfileID.HasValue)
+                query = query.Where(x => x.StudentProfileID == filter.StudentProfileID.Value);
 
             if (!string.IsNullOrWhiteSpace(filter.StudentProfileCode))
                 query = query.Where(x => x.StudentProfileCode == filter.StudentProfileCode);
 
             if (!string.IsNullOrEmpty(filter.LecturerState))
-                query = query.Where(x => x.LecturerState != null && x.LecturerState.Contains(filter.LecturerState));
+                query = query.Where(x => x.LecturerState == filter.LecturerState);
 
             if (filter.SubmittedFrom.HasValue)
                 query = query.Where(x => x.SubmittedAt >= filter.SubmittedFrom.Value);
@@ -491,11 +534,251 @@ namespace ThesisManagement.Api.Helpers
             if (filter.SubmittedTo.HasValue)
                 query = query.Where(x => x.SubmittedAt <= filter.SubmittedTo.Value);
 
+            if (filter.MinAttemptNumber.HasValue)
+                query = query.Where(x => x.AttemptNumber >= filter.MinAttemptNumber.Value);
+
+            if (filter.MaxAttemptNumber.HasValue)
+                query = query.Where(x => x.AttemptNumber <= filter.MaxAttemptNumber.Value);
+
+            // MimeType and file columns live in SubmissionFiles. If caller wants to filter by mime/file, use SubmissionFile endpoints.
+
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.LastUpdated >= filter.FromDate.Value);
 
             if (filter.ToDate.HasValue)
                 query = query.Where(x => x.LastUpdated <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<MilestoneTemplate> ApplyFilter(this IQueryable<MilestoneTemplate> query, MilestoneTemplateFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => x.MilestoneTemplateCode.Contains(filter.Search) ||
+                                        x.Name.Contains(filter.Search));
+            }
+
+            if (!string.IsNullOrEmpty(filter.MilestoneTemplateCode))
+                query = query.Where(x => x.MilestoneTemplateCode.Contains(filter.MilestoneTemplateCode));
+
+            if (!string.IsNullOrEmpty(filter.Name))
+                query = query.Where(x => x.Name.Contains(filter.Name));
+
+            if (filter.MinOrdinal.HasValue)
+                query = query.Where(x => x.Ordinal >= filter.MinOrdinal.Value);
+
+            if (filter.MaxOrdinal.HasValue)
+                query = query.Where(x => x.Ordinal <= filter.MaxOrdinal.Value);
+
+            if (filter.CreatedFrom.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.CreatedFrom.Value);
+
+            if (filter.CreatedTo.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.CreatedTo.Value);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<MilestoneStateHistory> ApplyFilter(this IQueryable<MilestoneStateHistory> query, MilestoneStateHistoryFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => (x.NewState != null && x.NewState.Contains(filter.Search)) ||
+                                        (x.Comment != null && x.Comment.Contains(filter.Search)));
+            }
+
+            if (filter.MilestoneID.HasValue)
+                query = query.Where(x => x.MilestoneID == filter.MilestoneID.Value);
+
+            if (!string.IsNullOrEmpty(filter.MilestoneCode))
+                query = query.Where(x => x.MilestoneCode != null && x.MilestoneCode.Contains(filter.MilestoneCode));
+
+            if (!string.IsNullOrEmpty(filter.TopicCode))
+                query = query.Where(x => x.TopicCode != null && x.TopicCode.Contains(filter.TopicCode));
+
+            if (!string.IsNullOrEmpty(filter.OldState))
+                query = query.Where(x => x.OldState != null && x.OldState == filter.OldState);
+
+            if (!string.IsNullOrEmpty(filter.NewState))
+                query = query.Where(x => x.NewState == filter.NewState);
+
+            if (!string.IsNullOrEmpty(filter.ChangedByUserCode))
+                query = query.Where(x => x.ChangedByUserCode != null && x.ChangedByUserCode == filter.ChangedByUserCode);
+
+            if (filter.ChangedByUserID.HasValue)
+                query = query.Where(x => x.ChangedByUserID == filter.ChangedByUserID.Value);
+
+            if (filter.ChangedFrom.HasValue)
+                query = query.Where(x => x.ChangedAt >= filter.ChangedFrom.Value);
+
+            if (filter.ChangedTo.HasValue)
+                query = query.Where(x => x.ChangedAt <= filter.ChangedTo.Value);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.ChangedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.ChangedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<SubmissionFile> ApplyFilter(this IQueryable<SubmissionFile> query, SubmissionFileFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => x.FileURL.Contains(filter.Search) ||
+                                        (x.FileName != null && x.FileName.Contains(filter.Search)));
+            }
+
+            if (filter.SubmissionID.HasValue)
+                query = query.Where(x => x.SubmissionID == filter.SubmissionID.Value);
+
+            if (!string.IsNullOrEmpty(filter.SubmissionCode))
+                query = query.Where(x => x.SubmissionCode != null && x.SubmissionCode.Contains(filter.SubmissionCode));
+
+            if (!string.IsNullOrEmpty(filter.FileName))
+                query = query.Where(x => x.FileName != null && x.FileName.Contains(filter.FileName));
+
+            if (!string.IsNullOrEmpty(filter.MimeType))
+                query = query.Where(x => x.MimeType != null && x.MimeType.Contains(filter.MimeType));
+
+            if (!string.IsNullOrEmpty(filter.UploadedByUserCode))
+                query = query.Where(x => x.UploadedByUserCode != null && x.UploadedByUserCode.Contains(filter.UploadedByUserCode));
+
+            if (filter.UploadedByUserID.HasValue)
+                query = query.Where(x => x.UploadedByUserID == filter.UploadedByUserID.Value);
+
+            if (filter.UploadedFrom.HasValue)
+                query = query.Where(x => x.UploadedAt >= filter.UploadedFrom.Value);
+
+            if (filter.UploadedTo.HasValue)
+                query = query.Where(x => x.UploadedAt <= filter.UploadedTo.Value);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.UploadedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.UploadedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<LecturerTag> ApplyFilter(this IQueryable<LecturerTag> query, LecturerTagFilter filter)
+        {
+            if (filter.LecturerProfileID.HasValue)
+                query = query.Where(x => x.LecturerProfileID == filter.LecturerProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.LecturerCode == filter.LecturerCode);
+
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            // Support multiple TagCodes: either filter.TagCodes (collection) or comma-separated filter.TagCode
+            var tagCodes = new List<string>();
+            if (filter.TagCodes != null)
+                tagCodes.AddRange(filter.TagCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+            {
+                // allow comma-separated values in TagCode for backward compatibility
+                tagCodes.AddRange(filter.TagCode.Split(',').Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)));
+            }
+
+            if (tagCodes.Any())
+                query = query.Where(x => x.TagCode != null && tagCodes.Contains(x.TagCode));
+
+            if (filter.AssignedByUserID.HasValue)
+                query = query.Where(x => x.AssignedByUserID == filter.AssignedByUserID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.AssignedByUserCode))
+                query = query.Where(x => x.AssignedByUserCode == filter.AssignedByUserCode);
+
+            if (filter.AssignedFromDate.HasValue)
+                query = query.Where(x => x.AssignedAt >= filter.AssignedFromDate.Value);
+
+            if (filter.AssignedToDate.HasValue)
+                query = query.Where(x => x.AssignedAt <= filter.AssignedToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<Tag> ApplyFilter(this IQueryable<Tag> query, TagFilter filter)
+        {
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                query = query.Where(x => x.TagName.Contains(filter.Search) ||
+                                        x.TagCode.Contains(filter.Search) ||
+                                        (x.Description != null && x.Description.Contains(filter.Search)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode.Contains(filter.TagCode));
+
+            if (!string.IsNullOrWhiteSpace(filter.TagName))
+                query = query.Where(x => x.TagName.Contains(filter.TagName));
+
+            if (!string.IsNullOrWhiteSpace(filter.Description))
+                query = query.Where(x => x.Description != null && x.Description.Contains(filter.Description));
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<CatalogTopicTag> ApplyFilter(this IQueryable<CatalogTopicTag> query, CatalogTopicTagFilter filter)
+        {
+            if (filter.CatalogTopicID.HasValue)
+                query = query.Where(x => x.CatalogTopicID == filter.CatalogTopicID.Value);
+
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.CatalogTopicCode))
+                query = query.Where(x => x.CatalogTopicCode == filter.CatalogTopicCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode == filter.TagCode);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<TopicTag> ApplyFilter(this IQueryable<TopicTag> query, TopicTagFilter filter)
+        {
+            if (filter.TagID.HasValue)
+                query = query.Where(x => x.TagID == filter.TagID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.TagCode))
+                query = query.Where(x => x.TagCode == filter.TagCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.CatalogTopicCode))
+                query = query.Where(x => x.CatalogTopicCode == filter.CatalogTopicCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.TopicCode))
+                query = query.Where(x => x.TopicCode == filter.TopicCode);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
 
             return ApplySorting(query, filter);
         }

@@ -15,7 +15,6 @@ import Notifications from "../pages/student/Notifications";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import LecturerStudents from "../pages/lecturer/LecturerStudents";
-import LecturerTopics from "../pages/lecturer/LecturerTopics";
 import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -23,10 +22,14 @@ import UsersManagement from "../pages/admin/UsersManagement";
 import TopicsManagement from "../pages/admin/TopicsManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
+import ScrollToTop from "../components/ScrollToTop";
 
 import CreateNotification from "../pages/admin/CreateNotification";
 import StudentDefenseInfo from "../pages/student/StudentDefenseInfo";
 import StudentProfilePage from "../pages/student/StudentProfile";
+import LecturerProfilePage from "../pages/lecturer/LecturerProfile";
+import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
+import LecturerNotifications from "../pages/lecturer/Notifications";
 
 // Lazy load heavy components for better performance
 const CommitteeManagement = lazy(() => import("../pages/admin/committee/CommitteeManagement"));
@@ -38,48 +41,69 @@ const CommitteeCreationPage = lazy(() => import("../pages/admin/committee/Commit
  */
 const AppRoutes: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<LoginPage />} />
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<LoginPage />} />
 
-      {/* STUDENT */}
-      <Route
-        path="/student/*"
-        element={
-          <ProtectedRoute allowedRoles={["STUDENT"]}>
-            <StudentLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<StudentDashboard />} />
-        <Route path="topics" element={<TopicRegistration />} />
-        <Route path="progress" element={<Progress />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="schedule" element={<Schedule />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="defense-info" element={<StudentDefenseInfo />} />
-        <Route path="profile" element={<StudentProfilePage />} />
-        {/* thêm các route con của student ở đây */}
-      </Route>
+        {/* STUDENT */}
+        <Route
+          path="/student/*"
+          element={
+            <ProtectedRoute allowedRoles={["STUDENT"]}>
+              <StudentLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<StudentDashboard />} />
+          <Route path="topics" element={<TopicRegistration />} />
+          <Route path="progress" element={<Progress />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="schedule" element={<Schedule />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="defense-info" element={<StudentDefenseInfo />} />
+          <Route path="profile" element={<StudentProfilePage />} />
+          {/* thêm các route con của student ở đây */}
+        </Route>
 
-      {/* LECTURER */}
-      <Route
-        path="/lecturer/*"
-        element={
-          <ProtectedRoute allowedRoles={["LECTURER"]}>
-            <LecturerLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<LecturerDashboard />} />
-        <Route path="students" element={<LecturerStudents />} />
-        <Route path="topics" element={<LecturerTopics />} />
-        <Route path="schedule" element={<LecturerSchedule />} />
-        <Route path="committees" element={<LecturerCommittees />} />
-        <Route path="reports" element={<LecturerReports />} />
-        {/* thêm các route con của lecturer ở đây */}
-      </Route>
+        {/* LECTURER */}
+        <Route
+          path="/lecturer/*"
+          element={
+            <ProtectedRoute allowedRoles={["LECTURER"]}>
+              <LecturerLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<LecturerDashboard />} />
+          <Route path="students" element={<LecturerStudents />} />
+          <Route path="schedule" element={<LecturerSchedule />} />
+          <Route path="committees" element={<LecturerCommittees />} />
+          <Route path="reports" element={<LecturerReports />} />
+          <Route path="profile" element={<LecturerProfilePage />} />
+          <Route path="notifications" element={<LecturerNotifications />} />
+          {/* thêm các route con của lecturer ở đây */}
+        </Route>
 
+        {/* ADMIN */}
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UsersManagement />} />
+          <Route path="topics" element={<TopicsManagement />} />
+          <Route path="committees" element={<CommitteeManagement />} />
+          <Route path="system-config" element={<SystemConfig />} />
+          <Route path="topic-review" element={<LecturerTopicReview />} />
+          <Route path="notifications/create" element={<CreateNotification />} />
+          {/* thêm các route con khác của admin ở đây */}
+        </Route>
       {/* ADMIN */}
       <Route
         path="/admin/*"
@@ -111,9 +135,10 @@ const AppRoutes: React.FC = () => {
         {/* thêm các route con khác của admin ở đây */}
       </Route>
 
-      {/* fallback: nếu không match => điều hướng về /login */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+        {/* fallback: nếu không match => điều hướng về /login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </>
   );
 };
 

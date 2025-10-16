@@ -1,19 +1,31 @@
 /* Lecturer SideNav Theme */
 .sidenav.lecturer-theme {
   --accent: #f37021;
-  --text-color: #2a3446;
-  --hover-text: #f37021;
-  --hover-bg: rgba(243, 112, 33, 0.14);
+  --text-color: #e2e8f0;
+  --hover-text: #fbbf24;
+  --hover-bg: rgba(243, 112, 33, 0.15);
   --inactive-bg: rgba(243, 112, 33, 0.08);
   --active-bg: #f37021;
   --active-text: #ffffff;
-  --active-shadow: 0 6px 14px rgba(243, 112, 33, 0.26);
+  --active-shadow: 0 6px 14px rgba(243, 112, 33, 0.3);
+  --border-color: rgba(255, 255, 255, 0.1);
 }
 
 .sidenav.lecturer-theme a {
   color: var(--text-color);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.sidenav.lecturer-theme a:hover {
+  background: var(--hover-bg);
+  color: var(--hover-text);
+  transform: translateX(4px);
 }
 
 .sidenav.lecturer-theme a.active {
-  color: #ffffff;
+  background: var(--active-bg);
+  color: var(--active-text);
+  box-shadow: var(--active-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }

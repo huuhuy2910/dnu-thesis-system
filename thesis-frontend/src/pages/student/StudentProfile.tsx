@@ -203,7 +203,7 @@ const StudentProfilePage: React.FC = () => {
         padding: "32px",
         maxWidth: "1200px",
         margin: "0 auto",
-        background: "#F9FAFB",
+        background: "#fff",
         minHeight: "100vh",
       }}
     >
@@ -271,70 +271,78 @@ const StudentProfilePage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
-            disabled={loading}
+          <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              padding: "12px 20px",
-              background: isEditing ? "#10B981" : "#4F46E5",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontWeight: "500",
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "background-color 0.2s",
-              opacity: loading ? 0.6 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) {
-                e.currentTarget.style.backgroundColor = isEditing
-                  ? "#059669"
-                  : "#4338CA";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) {
-                e.currentTarget.style.backgroundColor = isEditing
-                  ? "#10B981"
-                  : "#4F46E5";
-              }
+              gap: "12px",
             }}
           >
-            {isEditing ? <Save size={16} /> : <Edit size={16} />}
-            {isEditing ? "Lưu thay đổi" : "Chỉnh sửa"}
-          </button>
-
-          {isEditing && (
             <button
-              onClick={handleCancel}
+              onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
+              disabled={loading}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
                 padding: "12px 20px",
-                background: "#F3F4F6",
-                color: "#374151",
-                border: "1px solid #D1D5DB",
+                background: isEditing ? "#10B981" : "#4F46E5",
+                color: "white",
+                border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
                 fontWeight: "500",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
                 transition: "background-color 0.2s",
+                opacity: loading ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#E5E7EB";
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = isEditing
+                    ? "#059669"
+                    : "#4338CA";
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "#F3F4F6";
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = isEditing
+                    ? "#10B981"
+                    : "#4F46E5";
+                }
               }}
             >
-              Hủy
+              {isEditing ? <Save size={16} /> : <Edit size={16} />}
+              {isEditing ? "Lưu thay đổi" : "Chỉnh sửa"}
             </button>
-          )}
+
+            {isEditing && (
+              <button
+                onClick={handleCancel}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "12px 20px",
+                  background: "#F3F4F6",
+                  color: "#374151",
+                  border: "1px solid #D1D5DB",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "background-color 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#E5E7EB";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#F3F4F6";
+                }}
+              >
+                Hủy
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -371,7 +379,7 @@ const StudentProfilePage: React.FC = () => {
             {imagePreview || profile.studentImage ? (
               <img
                 src={imagePreview || profile.studentImage}
-                alt={auth.user?.fullName || "Student"}
+                alt={profile.fullName || auth.user?.fullName || "Student"}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -392,7 +400,11 @@ const StudentProfilePage: React.FC = () => {
                   fontWeight: "600",
                 }}
               >
-                {auth.user?.fullName ? auth.user.fullName.charAt(0) : "S"}
+                {profile.fullName
+                  ? profile.fullName.charAt(0)
+                  : auth.user?.fullName
+                  ? auth.user.fullName.charAt(0)
+                  : "S"}
               </div>
             )}
           </div>
@@ -405,7 +417,7 @@ const StudentProfilePage: React.FC = () => {
               marginBottom: "8px",
             }}
           >
-            {auth.user?.fullName || "Sinh viên"}
+            {profile.fullName || auth.user?.fullName || "Sinh viên"}
           </h2>
           <p
             style={{

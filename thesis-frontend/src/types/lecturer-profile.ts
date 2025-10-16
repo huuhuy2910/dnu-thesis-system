@@ -9,4 +9,12 @@ export interface LecturerProfile {
   currentGuidingCount: number;
   createdAt: string;
   lastUpdated: string;
+  gender: string;
+  dateOfBirth: string;
+  email: string;
+  phoneNumber: string;
+  profileImage: string;
+  address: string;
+  notes: string;
+  fullName: string;
 }

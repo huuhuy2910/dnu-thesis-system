@@ -21,38 +21,79 @@ interface ScheduleEvent {
 
 const Schedule: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showEventPopup, setShowEventPopup] = useState(false);
+  const [selectedEventsForPopup, setSelectedEventsForPopup] = useState<
+    ScheduleEvent[]
+  >([]);
 
   const [events] = useState<ScheduleEvent[]>([
     {
       id: 1,
-      title: "Bảo vệ đồ án tốt nghiệp",
-      date: "2025-06-10",
-      time: "09:00 - 11:00",
-      location: "Phòng A201",
-      type: "defense",
-      description: "Bảo vệ đồ án tốt nghiệp trước hội đồng khoa",
-      participants: ["PGS.TS Nguyễn Văn A", "TS. Trần Thị B", "ThS. Lê Văn C"],
+      title: "Đăng ký đề tài",
+      date: "2026-01-15",
+      time: "23:59",
+      location: "Hệ thống trực tuyến",
+      type: "meeting",
+      description:
+        "Sinh viên lựa chọn và đăng ký đề tài khóa luận, điền thông tin chi tiết và chờ giảng viên hướng dẫn phê duyệt.",
     },
     {
       id: 2,
+      title: "Nộp báo cáo tiến độ lần 1",
+      date: "2026-02-28",
+      time: "23:59",
+      location: "Hệ thống trực tuyến",
+      type: "meeting",
+      description:
+        "Sinh viên nộp báo cáo tiến độ lần 1, mô tả tình hình thực hiện, khó khăn và kế hoạch tiếp theo.",
+    },
+    {
+      id: 3,
+      title: "Nộp báo cáo tiến độ lần 2",
+      date: "2026-04-15",
+      time: "23:59",
+      location: "Hệ thống trực tuyến",
+      type: "meeting",
+      description:
+        "Sinh viên nộp báo cáo tiến độ lần 2, trình bày kết quả đạt được và hoàn thiện các nội dung còn thiếu.",
+    },
+    {
+      id: 4,
+      title: "Nộp khóa luận hoàn chỉnh",
+      date: "2026-05-20",
+      time: "23:59",
+      location: "Hệ thống trực tuyến",
+      type: "meeting",
+      description:
+        "Sinh viên hoàn thiện và nộp toàn bộ khóa luận đúng quy định về hình thức và nội dung.",
+    },
+    {
+      id: 5,
+      title: "Bảo vệ khóa luận",
+      date: "2026-06-10",
+      time: "09:00 - 11:00",
+      location: "Phòng A201",
+      type: "defense",
+      description:
+        "Sinh viên chuẩn bị slide, thuyết trình và tham gia buổi bảo vệ khóa luận trước hội đồng.",
+    },
+    {
+      id: 6,
       title: "Họp hướng dẫn định kỳ",
-      date: "2025-04-20",
+      date: "2026-04-20",
       time: "14:00 - 15:30",
       location: "Phòng B102",
       type: "meeting",
       description: "Báo cáo tiến độ và trao đổi với giảng viên hướng dẫn",
-      participants: ["TS. Nguyễn Văn A"],
     },
     {
-      id: 3,
+      id: 7,
       title: "Thuyết trình tiến độ",
-      date: "2025-05-05",
+      date: "2026-05-05",
       time: "10:00 - 11:00",
       location: "Hội trường A",
       type: "presentation",
       description: "Thuyết trình tiến độ đồ án trước khoa",
-      participants: ["Sinh viên năm cuối"],
     },
   ]);
 
@@ -136,6 +177,19 @@ const Schedule: React.FC = () => {
     );
   };
 
+  const handleEventClick = (event: ScheduleEvent) => {
+    const eventDate = new Date(event.date);
+    setCurrentDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
+  };
+
+  const handleDateClick = (date: Date) => {
+    const eventsForDate = getEventsForDate(date);
+    if (eventsForDate.length > 0) {
+      setSelectedEventsForPopup(eventsForDate);
+      setShowEventPopup(true);
+    }
+  };
+
   const isToday = (date: Date) => {
     const today = new Date();
     return (
@@ -184,6 +238,9 @@ const Schedule: React.FC = () => {
             padding: "32px",
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
             border: "2px solid #f0f0f0",
+            height: "690px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {/* Calendar Header */}
@@ -269,7 +326,7 @@ const Schedule: React.FC = () => {
               {days.map((date, index) => (
                 <div
                   key={index}
-                  onClick={() => date && setSelectedDate(date)}
+                  onClick={() => date && handleDateClick(date)}
                   style={{
                     minHeight: "80px",
                     padding: "8px",
@@ -329,78 +386,6 @@ const Schedule: React.FC = () => {
               ))}
             </div>
           </div>
-
-          {/* Selected Date Events */}
-          {selectedDate && (
-            <div
-              style={{
-                marginTop: "24px",
-                padding: "20px",
-                background: "#fff5f0",
-                border: "2px solid #f37021",
-                borderRadius: "12px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  color: "#1a1a1a",
-                  marginBottom: "12px",
-                }}
-              >
-                Sự kiện ngày {selectedDate.getDate()}/
-                {selectedDate.getMonth() + 1}/{selectedDate.getFullYear()}
-              </h3>
-              {getEventsForDate(selectedDate).length > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                  }}
-                >
-                  {getEventsForDate(selectedDate).map((event) => {
-                    const colors = getEventTypeColor(event.type);
-                    return (
-                      <div
-                        key={event.id}
-                        style={{
-                          padding: "12px",
-                          background: colors.bg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            color: "#1a1a1a",
-                          }}
-                        >
-                          {event.title}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "13px",
-                            color: "#666",
-                            marginTop: "4px",
-                          }}
-                        >
-                          {event.time}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p style={{ fontSize: "14px", color: "#666" }}>
-                  Không có sự kiện nào
-                </p>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Upcoming Events */}
@@ -411,7 +396,9 @@ const Schedule: React.FC = () => {
             padding: "32px",
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
             border: "2px solid #f0f0f0",
-            height: "fit-content",
+            height: "690px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           <h2
@@ -430,7 +417,14 @@ const Schedule: React.FC = () => {
           </h2>
 
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              flex: 1,
+              overflowY: "auto",
+              paddingRight: "8px",
+            }}
           >
             {upcomingEvents.map((event) => {
               const colors = getEventTypeColor(event.type);
@@ -443,15 +437,19 @@ const Schedule: React.FC = () => {
                     border: `2px solid ${colors.border}`,
                     borderRadius: "12px",
                     transition: "all 0.3s ease",
+                    cursor: "pointer",
                   }}
+                  onClick={() => handleEventClick(event)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "translateY(-2px)";
                     e.currentTarget.style.boxShadow =
                       "0 4px 12px rgba(0,0,0,0.1)";
+                    e.currentTarget.style.borderColor = "#f37021";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "translateY(0)";
                     e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = colors.border;
                   }}
                 >
                   <span
@@ -474,9 +472,21 @@ const Schedule: React.FC = () => {
                       fontWeight: "600",
                       color: "#1a1a1a",
                       marginBottom: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                     }}
                   >
                     {event.title}
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: colors.border,
+                        fontWeight: "500",
+                      }}
+                    >
+                      Nhấn để xem
+                    </span>
                   </h3>
                   <div
                     style={{
@@ -555,6 +565,195 @@ const Schedule: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Event Popup */}
+      {showEventPopup && selectedEventsForPopup.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
+          }}
+          onClick={() => setShowEventPopup(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "16px",
+              padding: "32px",
+              maxWidth: "600px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 10px 40px rgba(0, 0, 0, 0.2)",
+              border: "2px solid #f0f0f0",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "24px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1a1a1a",
+                  margin: 0,
+                }}
+              >
+                Chi tiết sự kiện
+              </h2>
+              <button
+                onClick={() => setShowEventPopup(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#666",
+                  padding: "4px",
+                  borderRadius: "4px",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#f0f0f0";
+                  e.currentTarget.style.color = "#333";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "#666";
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
+              }}
+            >
+              {selectedEventsForPopup.map((event) => {
+                const colors = getEventTypeColor(event.type);
+                return (
+                  <div
+                    key={event.id}
+                    style={{
+                      padding: "20px",
+                      background: colors.bg,
+                      border: `2px solid ${colors.border}`,
+                      borderRadius: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: "600",
+                          color: "#1a1a1a",
+                          flex: 1,
+                        }}
+                      >
+                        {event.title}
+                      </div>
+                      <span
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: colors.border,
+                          color: "#fff",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          marginLeft: "16px",
+                        }}
+                      >
+                        {getEventTypeText(event.type)}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                        color: "#666",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <CalendarIcon size={16} />
+                      {new Date(event.date).toLocaleDateString("vi-VN")}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                        color: "#666",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <Clock size={16} />
+                      {event.time}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                        color: "#666",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <MapPin size={16} />
+                      {event.location}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        color: "#333",
+                        lineHeight: "1.6",
+                        padding: "16px",
+                        background: "#fff",
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.border}20`,
+                      }}
+                    >
+                      {event.description}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

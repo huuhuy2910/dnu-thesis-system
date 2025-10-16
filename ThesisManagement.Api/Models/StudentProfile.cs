@@ -25,8 +25,9 @@ namespace ThesisManagement.Api.Models
         public string? Status { get; set; }
         public int? GraduationYear { get; set; }
         public string? Notes { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime LastUpdated { get; set; }
+        public string? FullName { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? LastUpdated { get; set; }
 
         public User? User { get; set; }
         public Department? Department { get; set; }

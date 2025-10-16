@@ -31,7 +31,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-create")]
         public IActionResult GetCreate()
         {
-                        var sample = new { UserCode = "", PasswordHash = "", FullName = "", Email = "", Role = "" };
+            var sample = new { UserCode = "", PasswordHash = "", Role = "" };
             return Ok(ApiResponse<object>.SuccessResponse(sample));
         }
 
@@ -46,8 +46,6 @@ namespace ThesisManagement.Api.Controllers
             {
                 UserCode = dto.UserCode,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password), // simple hashing (add package if needed) - or replace with any hash
-                FullName = dto.FullName,
-                Email = dto.Email,
                 Role = dto.Role,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
@@ -64,7 +62,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.Users.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("User not found", 404));
-            var sample = new UserUpdateDto(ent.FullName, ent.Email, ent.Role);
+            var sample = new UserUpdateDto(ent.Role);
             return Ok(ApiResponse<UserUpdateDto>.SuccessResponse(sample));
         }
 
@@ -74,8 +72,6 @@ namespace ThesisManagement.Api.Controllers
             var ent = await _uow.Users.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("User not found", 404));
 
-            if (!string.IsNullOrWhiteSpace(dto.FullName)) ent.FullName = dto.FullName;
-            if (!string.IsNullOrWhiteSpace(dto.Email)) ent.Email = dto.Email;
             if (!string.IsNullOrWhiteSpace(dto.Role)) ent.Role = dto.Role;
             ent.LastUpdated = DateTime.UtcNow;
 

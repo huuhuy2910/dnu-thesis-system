@@ -23,7 +23,7 @@ namespace ThesisManagement.Api.Services
     Task<ApiResponse<List<AvailableTopicDto>>> GetAvailableTopicsAsync(string? tag, string? department, string? committeeCode, CancellationToken cancellationToken = default);
         
         // Tags
-        Task<ApiResponse<List<TagDto>>> GetTagsAsync(CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<TagReadDto>>> GetTagsAsync(CancellationToken cancellationToken = default);
 
         // Assignments
         Task<ApiResponse<CommitteeDetailDto>> AssignTopicsAsync(AssignTopicRequestDto request, CancellationToken cancellationToken = default);

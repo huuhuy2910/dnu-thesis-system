@@ -21,10 +21,9 @@ namespace ThesisManagement.Api.DTOs
         string? DepartmentCode,
         string Status,
         int? ResubmitCount,
-        DateTime CreatedAt,
-        DateTime LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode
+    DateTime? CreatedAt,
+    DateTime? LastUpdated,
+        string? LecturerComment
     );
 
     public record TopicUpdateDto(
@@ -47,8 +46,7 @@ namespace ThesisManagement.Api.DTOs
         int? ResubmitCount,
         DateTime? CreatedAt,
         DateTime? LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode
+        string? LecturerComment
     );
 
     public record TopicReadDto(
@@ -71,9 +69,8 @@ namespace ThesisManagement.Api.DTOs
         string? DepartmentCode,
         string Status,
         int? ResubmitCount,
-        DateTime CreatedAt,
-        DateTime LastUpdated,
-        int? SpecialtyID,
-        string? SpecialtyCode
+    DateTime? CreatedAt,
+    DateTime? LastUpdated,
+        string? LecturerComment
     );
 }

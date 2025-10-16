@@ -14,10 +14,10 @@ namespace ThesisManagement.Api.Controllers
 
         private async Task<string> GenerateTopicCodeAsync()
         {
-            int currentYear = DateTime.Now.Year;
-            string prefix = $"TOP{currentYear}_SELF_";
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            string prefix = $"TOP{today}";
 
-            // Lấy tất cả các mã bắt đầu bằng prefix trong năm hiện tại
+            // Lấy tất cả các mã bắt đầu bằng prefix trong ngày hiện tại
             var lastTopic = await _uow.Topics.Query()
                 .Where(t => t.TopicCode.StartsWith(prefix))
                 .OrderByDescending(t => t.TopicCode)
@@ -29,8 +29,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 // Cắt phần số ở cuối để +1
                 string lastCode = lastTopic.TopicCode;
-                string[] parts = lastCode.Split('_');
-                if (parts.Length >= 3 && int.TryParse(parts[^1], out int lastNum))
+                if (lastCode.Length > prefix.Length && int.TryParse(lastCode.Substring(prefix.Length), out int lastNum))
                 {
                     nextNumber = lastNum + 1;
                 }
@@ -83,8 +82,7 @@ namespace ThesisManagement.Api.Controllers
                 ResubmitCount: 0,
                 CreatedAt: now,
                 LastUpdated: now,
-                SpecialtyID: null,
-                SpecialtyCode: null
+                LecturerComment: null
             );
 
             return Ok(ApiResponse<TopicCreateDto>.SuccessResponse(sample));
@@ -118,9 +116,14 @@ namespace ThesisManagement.Api.Controllers
                 ResubmitCount = dto.ResubmitCount ?? 0,
                 CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt,
                 LastUpdated = dto.LastUpdated == default ? DateTime.UtcNow : dto.LastUpdated,
-                SpecialtyID = dto.SpecialtyID,
-                SpecialtyCode = dto.SpecialtyCode
+                LecturerComment = dto.LecturerComment
             };
+            // If this is a self-proposed topic, ensure catalog references are cleared
+            if (string.Equals(dto.Type, "SELF", StringComparison.OrdinalIgnoreCase))
+            {
+                ent.CatalogTopicID = null;
+                ent.CatalogTopicCode = null;
+            }
             await _uow.Topics.AddAsync(ent);
             try
             {
@@ -160,8 +163,7 @@ namespace ThesisManagement.Api.Controllers
                 ResubmitCount: ent.ResubmitCount,
                 CreatedAt: ent.CreatedAt,
                 LastUpdated: ent.LastUpdated,
-                SpecialtyID: ent.SpecialtyID,
-                SpecialtyCode: ent.SpecialtyCode
+                LecturerComment: ent.LecturerComment
             );
             return Ok(ApiResponse<TopicUpdateDto>.SuccessResponse(sample));
         }
@@ -183,16 +185,46 @@ namespace ThesisManagement.Api.Controllers
             if (dto.SupervisorUserCode is not null) ent.SupervisorUserCode = dto.SupervisorUserCode;
             if (dto.SupervisorLecturerProfileID.HasValue) ent.SupervisorLecturerProfileID = dto.SupervisorLecturerProfileID.Value;
             if (dto.SupervisorLecturerCode is not null) ent.SupervisorLecturerCode = dto.SupervisorLecturerCode;
-            if (dto.CatalogTopicID.HasValue) ent.CatalogTopicID = dto.CatalogTopicID.Value;
-            if (dto.CatalogTopicCode is not null) ent.CatalogTopicCode = dto.CatalogTopicCode;
+            if (dto.CatalogTopicCode is not null)
+            {
+                if (string.IsNullOrWhiteSpace(dto.CatalogTopicCode))
+                {
+                    ent.CatalogTopicID = null;
+                    ent.CatalogTopicCode = null;
+                }
+                else
+                {
+                    var catalog = await _uow.CatalogTopics.GetByCodeAsync(dto.CatalogTopicCode);
+                    if (catalog == null)
+                    {
+                        return BadRequest(ApiResponse<object>.Fail($"Catalog topic code '{dto.CatalogTopicCode}' không tồn tại", 400));
+                    }
+                    ent.CatalogTopicID = catalog.CatalogTopicID;
+                    ent.CatalogTopicCode = catalog.CatalogTopicCode;
+                }
+            }
+            else if (dto.CatalogTopicID.HasValue)
+            {
+                var catalog = await _uow.CatalogTopics.GetByIdAsync(dto.CatalogTopicID.Value);
+                if (catalog == null)
+                {
+                    return BadRequest(ApiResponse<object>.Fail($"Catalog topic ID '{dto.CatalogTopicID.Value}' không tồn tại", 400));
+                }
+                ent.CatalogTopicID = catalog.CatalogTopicID;
+                ent.CatalogTopicCode = catalog.CatalogTopicCode;
+            }
             if (dto.DepartmentID.HasValue) ent.DepartmentID = dto.DepartmentID.Value;
             if (dto.DepartmentCode is not null) ent.DepartmentCode = dto.DepartmentCode;
             if (dto.Status is not null) ent.Status = dto.Status;
             if (dto.ResubmitCount.HasValue) ent.ResubmitCount = dto.ResubmitCount.Value;
-            if (dto.SpecialtyID.HasValue) ent.SpecialtyID = dto.SpecialtyID.Value;
-            if (dto.SpecialtyCode is not null) ent.SpecialtyCode = dto.SpecialtyCode;
+            if (dto.LecturerComment is not null) ent.LecturerComment = dto.LecturerComment;
             if (dto.CreatedAt.HasValue) ent.CreatedAt = dto.CreatedAt.Value;
             ent.LastUpdated = dto.LastUpdated ?? DateTime.UtcNow;
+            if (string.Equals(ent.Type, "SELF", StringComparison.OrdinalIgnoreCase))
+            {
+                ent.CatalogTopicID = null;
+                ent.CatalogTopicCode = null;
+            }
             _uow.Topics.Update(ent);
             await _uow.SaveChangesAsync();
             return Ok(ApiResponse<TopicReadDto>.SuccessResponse(_mapper.Map<TopicReadDto>(ent)));

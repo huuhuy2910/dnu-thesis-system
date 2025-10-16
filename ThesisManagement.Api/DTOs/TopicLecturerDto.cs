@@ -2,8 +2,21 @@ using System;
 
 namespace ThesisManagement.Api.DTOs
 {
-    public record TopicLecturerCreateDto(string TopicCode, string LecturerCode, bool IsPrimary = false);
-    public record TopicLecturerUpdateDto(bool? IsPrimary);
+    public record TopicLecturerCreateDto(
+        int? TopicID,
+        string? TopicCode,
+        int? LecturerProfileID,
+        string? LecturerCode,
+        bool IsPrimary = false,
+        DateTime CreatedAt = default);
+
+    public record TopicLecturerUpdateDto(
+        int? TopicID,
+        string? TopicCode,
+        int? LecturerProfileID,
+        string? LecturerCode,
+        bool? IsPrimary,
+        DateTime? CreatedAt);
 
     // Changed to a class with a parameterless constructor so AutoMapper can construct and populate it.
     public class TopicLecturerReadDto

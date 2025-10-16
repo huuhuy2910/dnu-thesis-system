@@ -30,15 +30,14 @@ namespace ThesisManagement.Api.Controllers
                 return Unauthorized(ApiResponse<object>.Fail("Tên đăng nhập hoặc mật khẩu không đúng", 401));
             }
 
-            // Return minimal user info as requested (no JWT)
-            var payload = new {
-                userCode = user.UserCode,
-                role = user.Role,
-                fullName = user.FullName
-            };
-            var res = ApiResponse<object>.SuccessResponse(payload);
-            res.HttpStatusCode = StatusCodes.Status200OK;
-            return Ok(res);
+            var response = new LoginResponseDto(
+                user.UserID,
+                user.UserCode,
+                user.Role,
+                user.CreatedAt
+            );
+
+            return Ok(new { success = true, userCode = user.UserCode, role = user.Role, data = response });
         }
     }
 }
