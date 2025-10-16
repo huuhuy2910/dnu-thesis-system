@@ -3,6 +3,7 @@ import { Calendar, Users, GraduationCap, MapPin, Eye } from "lucide-react";
 import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
 import type { LecturerCommitteeItem } from "../../types/committee-assignment";
 
+
 const LecturerCommittees: React.FC = () => {
   const [committees, setCommittees] = useState<LecturerCommitteeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +14,9 @@ const LecturerCommittees: React.FC = () => {
       try {
         // Assuming lecturerCode is available, e.g., from context or props. For now, hardcode or get from auth.
         const lecturerCode = "LECT01"; // Replace with actual lecturer code from auth/context
-        const response = await committeeAssignmentApi.getLecturerCommittees(lecturerCode);
+        const response = await committeeAssignmentApi.getLecturerCommittees(
+          lecturerCode
+        );
         if (response.success && response.data) {
           setCommittees(response.data.committees);
         } else {
@@ -27,6 +30,20 @@ const LecturerCommittees: React.FC = () => {
     };
     fetchCommittees();
   }, []);
+
+  const handleViewDetails = async (committeeCode: string) => {
+    try {
+      const response = await committeeAssignmentApi.getCommitteeDetail(
+        committeeCode
+      );
+      if (response.success && response.data) {
+        // details fetched; currently we don't display a modal. Consider navigating to a detail page.
+        // console.log('committee details', response.data);
+      }
+    } catch (err) {
+      console.error("Lỗi khi tải chi tiết hội đồng", err);
+    }
+  };
 
   if (loading) {
     return <div>Đang tải...</div>;
@@ -82,7 +99,8 @@ const LecturerCommittees: React.FC = () => {
             Chưa có hội đồng bảo vệ
           </h3>
           <p style={{ color: "#666" }}>
-            Hiện tại bạn chưa được phân công tham gia hội đồng bảo vệ nào. Vui lòng liên hệ với khoa để được hỗ trợ.
+            Hiện tại bạn chưa được phân công tham gia hội đồng bảo vệ nào. Vui
+            lòng liên hệ với khoa để được hỗ trợ.
           </p>
         </div>
       ) : (
@@ -142,22 +160,23 @@ const LecturerCommittees: React.FC = () => {
                     >
                       {committee.committeeCode}
                     </span>
-                    {committee.members && committee.members.find((m) => m.isChair) && (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "4px 12px",
-                          background:
-                            "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
-                          color: "white",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Chủ tịch
-                      </span>
-                    )}
+                    {committee.members &&
+                      committee.members.find((m) => m.isChair) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "4px 12px",
+                            background:
+                              "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
+                            color: "white",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Chủ tịch
+                        </span>
+                      )}
                   </div>
                   <h3
                     style={{

@@ -42,10 +42,81 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] TopicFilter filter)
         {
-            var result = await _uow.Topics.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                (query, f) => query.ApplyFilter(f));
-            var dtos = result.Items.Select(x => _mapper.Map<TopicReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<TopicReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            // Build tag codes set from both TagCodes collection and Tags string parameter
+            var tagCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (filter.TagCodes != null)
+            {
+                foreach (var code in filter.TagCodes)
+                {
+                    if (!string.IsNullOrWhiteSpace(code))
+                        tagCodes.Add(code.Trim());
+                }
+            }
+            if (!string.IsNullOrEmpty(filter.Tags))
+            {
+                var tagValues = filter.Tags.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var tag in tagValues)
+                {
+                    var value = tag.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        tagCodes.Add(value);
+                }
+            }
+
+            // If tag filtering is needed, handle via join with TopicTag table
+            IEnumerable<Topic> items;
+            int totalCount;
+
+            if (tagCodes.Count > 0)
+            {
+                // Get topics with tag filtering via TopicTag join
+                var baseQuery = _uow.Topics.Query();
+                var filteredTopics = await baseQuery
+                    .Where(t => _uow.TopicTags.Query()
+                        .Any(tt => tt.TopicCode == t.TopicCode && tt.Tag != null && tagCodes.Contains(tt.Tag.TagCode)))
+                    .ToListAsync();
+
+                // Apply other filters after tag filtering
+                var topicQuery = filteredTopics.AsQueryable();
+                
+                // Reapply the filter without tag codes to apply other filters
+                var tempFilter = new TopicFilter
+                {
+                    Page = filter.Page,
+                    PageSize = filter.PageSize,
+                    Search = filter.Search,
+                    Title = filter.Title,
+                    TopicCode = filter.TopicCode,
+                    Tags = null,
+                    TagCodes = null,
+                    Type = filter.Type,
+                    Status = filter.Status,
+                    ProposerUserCode = filter.ProposerUserCode,
+                    ProposerStudentCode = filter.ProposerStudentCode,
+                    SupervisorUserCode = filter.SupervisorUserCode,
+                    DepartmentCode = filter.DepartmentCode,
+                    CatalogTopicCode = filter.CatalogTopicCode,
+                    FromDate = filter.FromDate,
+                    ToDate = filter.ToDate,
+                    SortBy = filter.SortBy
+                };
+
+                var result = await _uow.Topics.GetPagedWithFilterAsync(filter.Page, filter.PageSize, tempFilter,
+                    (query, f) => query.Where(t => filteredTopics.Select(ft => ft.TopicID).Contains(t.TopicID)).ApplyFilter(f));
+                items = result.Items;
+                totalCount = result.TotalCount;
+            }
+            else
+            {
+                // No tag filtering, use standard filter
+                var result = await _uow.Topics.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
+                    (query, f) => query.ApplyFilter(f));
+                items = result.Items;
+                totalCount = result.TotalCount;
+            }
+
+            var dtos = items.Select(x => _mapper.Map<TopicReadDto>(x));
+            return Ok(ApiResponse<IEnumerable<TopicReadDto>>.SuccessResponse(dtos, totalCount));
         }
 
         [HttpGet("get-detail/{code}")]

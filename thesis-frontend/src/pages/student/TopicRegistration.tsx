@@ -374,23 +374,15 @@ const TopicRegistration: React.FC = () => {
           // Build query parameters for multiple tags
           const tagCodes = selectedTags.map((t) => t.tagCode);
           const queryParams = tagCodes
-            .map((code, index) =>
-              index === 0 ? `TagCode=${code}` : `TagCodes=${code}`
-            )
+            .map((code) => `TagCodes=${code}`)
             .join("&");
 
-          // Get lecturer tags for these tags
-          const lecturerTagsRes = await fetchData(
-            `/LecturerTags/list?${queryParams}`
+          // Get lecturers directly filtered by tags
+          const lecturersRes = await fetchData(
+            `/LecturerProfiles/get-list?${queryParams}`
           );
-          const lecturerTags =
-            (lecturerTagsRes as ApiResponse<LecturerTag[]>)?.data || [];
-
-          // Filter lecturers who can guide any of these tags
-          const tagLecturerCodes = lecturerTags.map((lt) => lt.lecturerCode);
-          const availableLecturers = lecturers.filter((l) =>
-            tagLecturerCodes.includes(l.lecturerCode)
-          );
+          const availableLecturers =
+            (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
 
           setFilteredLecturers(availableLecturers);
           // Set first selected tag as selectedTagInfo for display
@@ -502,17 +494,11 @@ const TopicRegistration: React.FC = () => {
       const tagInfo = tagData[0];
 
       // Step 3: Get lecturers for this tag
-      const lecturerTagsRes = await fetchData(
-        `/LecturerTags/list?TagCode=${tagCode}`
+      const lecturersRes = await fetchData(
+        `/LecturerProfiles/get-list?TagCodes=${tagCode}`
       );
-      const lecturerTags =
-        (lecturerTagsRes as ApiResponse<LecturerTag[]>)?.data || [];
-
-      // Filter lecturers who can guide this tag
-      const tagLecturerCodes = lecturerTags.map((lt) => lt.lecturerCode);
-      const availableLecturers = lecturers.filter((l) =>
-        tagLecturerCodes.includes(l.lecturerCode)
-      );
+      const availableLecturers =
+        (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
 
       // Update state
       setSelectedTagInfo(tagInfo);
@@ -1256,10 +1242,49 @@ const TopicRegistration: React.FC = () => {
                   key={lecturer.lecturerProfileID}
                   value={lecturer.lecturerProfileID}
                 >
-                  {lecturer.fullName}
+                  {lecturer.fullName || lecturer.lecturerCode} -{" "}
+                  {lecturer.degree} ({lecturer.currentGuidingCount}/
+                  {lecturer.guideQuota})
                 </option>
               ))}
             </select>
+
+            {/* Quota Info */}
+            {editFormData.supervisorLecturerProfileID && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "12px",
+                  backgroundColor: "#f0f7ff",
+                  border: "1px solid #2196f3",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  color: "#1565c0",
+                }}
+              >
+                {(() => {
+                  const lecturer = filteredLecturers.find(
+                    (l) =>
+                      l.lecturerProfileID ===
+                      editFormData.supervisorLecturerProfileID
+                  );
+                  if (!lecturer) return null;
+                  const available =
+                    lecturer.guideQuota - lecturer.currentGuidingCount;
+                  return (
+                    <>
+                      <strong>{lecturer.fullName}</strong> - {lecturer.degree}
+                      <br />
+                      Sinh viên hướng dẫn: {lecturer.currentGuidingCount}/
+                      {lecturer.guideQuota}
+                      {available > 0
+                        ? ` (Còn ${available} slot)`
+                        : " (Hạn chế)"}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}
@@ -2364,6 +2389,45 @@ const TopicRegistration: React.FC = () => {
               </option>
             ))}
           </select>
+
+          {/* Quota Info for Main Form */}
+          {formData.supervisorLecturerProfileID && (
+            <div
+              style={{
+                marginTop: "12px",
+                padding: "12px",
+                backgroundColor: "#f0f7ff",
+                border: "1px solid #2196f3",
+                borderRadius: "6px",
+                fontSize: "13px",
+                color: "#1565c0",
+              }}
+            >
+              {(() => {
+                const displayLecturers =
+                  registrationType === "catalog" ||
+                  (registrationType === "self" && filteredLecturers.length > 0)
+                    ? filteredLecturers
+                    : lecturers;
+                const lecturer = displayLecturers.find(
+                  (l) =>
+                    l.lecturerProfileID === formData.supervisorLecturerProfileID
+                );
+                if (!lecturer) return null;
+                const available =
+                  lecturer.guideQuota - lecturer.currentGuidingCount;
+                return (
+                  <>
+                    <strong>{lecturer.fullName}</strong> - {lecturer.degree}
+                    <br />
+                    Sinh viên hướng dẫn: {lecturer.currentGuidingCount}/
+                    {lecturer.guideQuota}
+                    {available > 0 ? ` (Còn ${available} slot)` : " (Hạn chế)"}
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Department */}
