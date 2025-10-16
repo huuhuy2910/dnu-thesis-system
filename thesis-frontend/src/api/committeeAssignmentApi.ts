@@ -1,263 +1,39 @@
 import { fetchData } from "./fetchData";
 import type { ApiResponse } from "../types/api";
-
-export interface PagedResult<T> {
-	items: T[];
-	totalCount: number;
-}
-
-export interface CommitteeAssignmentInitialization {
-	committeeCode: string;
-	availableRooms: string[];
-	lecturers: CommitteeAssignmentAvailableLecturer[];
-	tags: TagSummary[];
-}
-
-export interface CommitteeAssignmentAvailableLecturer {
-	lecturerProfileId: number;
-	lecturerCode: string;
-	fullName: string;
-	name: string;
-	degree?: string | null;
-	departmentCode?: string | null;
-	specialties?: string | null;
-	specialtyCode?: string | null;
-	defenseQuota: number;
-	currentDefenseLoad: number;
-	availability: boolean;
-	isEligibleChair?: boolean;
-}
-
-export interface TagSummary {
-	tagCode: string;
-	tagName: string;
-	description?: string | null;
-	usageCount?: number;
-}
-
-export interface CommitteeAssignmentMemberInput {
-	lecturerProfileId: number;
-	role: string;
-	isChair: boolean;
-}
-
-export interface CommitteeAssignmentCreateRequest {
-	committeeCode: string;
-	name?: string | null;
-	defenseDate?: string | null;
-	room?: string | null;
-	tagCodes: string[];
-	members: CommitteeAssignmentMemberInput[];
-	sessions?: CommitteeAssignmentSessionPayload[];
-	topics?: CommitteeAssignmentTopicPayload[];
-}
-
-export interface CommitteeAssignmentTopicPayload {
-	topicCode: string;
-	session?: number;
-	scheduledAt?: string | null;
-	startTime?: string | null;
-	endTime?: string | null;
-}
-
-export interface CommitteeAssignmentSessionPayload {
-	session: number;
-	topics: CommitteeAssignmentTopicPayload[];
-}
-
-export interface CommitteeAssignmentUpdateRequest {
-	committeeCode: string;
-	name?: string | null;
-	defenseDate?: string | null;
-	room?: string | null;
-	tagCodes?: string[];
-	members?: CommitteeAssignmentMemberInput[];
-	topics?: CommitteeAssignmentTopicPayload[];
-}
-
-export interface CommitteeMembersUpdateRequestDto {
-	committeeCode: string;
-	members: CommitteeMemberRoleUpdateDto[];
-}
-
-export interface CommitteeMemberRoleUpdateDto {
-	role: string;
-	lecturerCode: string;
-}
-
-export interface CommitteeAssignmentFilter {
-	search?: string;
-	committeeCode?: string;
-	room?: string;
-	defenseDate?: string; // ISO date string (yyyy-MM-dd)
-	tagCode?: string;
-	page?: number;
-	pageSize?: number;
-}
-
-export interface CommitteeAssignmentListItem {
-	committeeCode: string;
-	name?: string | null;
-	defenseDate?: string | null;
-	room?: string | null;
-	memberCount: number;
-	topicCount: number;
-	tagCodes: string[];
-	createdAt: string;
-	lastUpdated: string;
-	status?: string | null;
-}
-
-export interface CommitteeAssignmentDetail {
-	committeeCode: string;
-	name?: string | null;
-	defenseDate?: string | null;
-	room?: string | null;
-	status?: string | null;
-	tags: TagSummary[];
-	members: CommitteeAssignmentMemberDetail[];
-	assignments: CommitteeAssignmentDefenseItem[];
-	sessions: CommitteeSessionDto[];
-}
-
-export interface CommitteeAssignmentMemberDetail {
-	lecturerProfileId: number;
-	lecturerCode: string;
-	fullName: string;
-	role: string;
-	isChair: boolean;
-	degree?: string | null;
-	specialtyCodes: string[];
-	specialtyNames: string[];
-}
-
-export interface CommitteeAssignmentDefenseItem {
-	assignmentCode?: string;
-	topicCode: string;
-	title: string;
-	studentCode?: string | null;
-	studentName?: string | null;
-	supervisorCode?: string | null;
-	supervisorName?: string | null;
-	session?: number | null;
-	scheduledAt?: string | null;
-	startTime?: string | null;
-	endTime?: string | null;
-	room?: string | null;
-	tagCodes: string[];
-	status?: string | null;
-}
-
-export interface CommitteeSessionDto {
-	session: number;
-	topics: CommitteeSessionTopicDto[];
-}
-
-export interface CommitteeSessionTopicDto {
-	assignmentCode: string;
-	topicCode: string;
-	title: string;
-	studentCode?: string | null;
-	studentName?: string | null;
-	supervisorCode?: string | null;
-	supervisorName?: string | null;
-	startTime?: string | null;
-	endTime?: string | null;
-}
-
-export interface CommitteeAssignmentTopicSlot {
-	topicCode: string;
-	scheduledAt: string; // ISO datetime string
-	session: number;
-	startTime: string; // HH:mm:ss
-	endTime: string; // HH:mm:ss
-}
-
-export interface CommitteeAssignmentAssignRequest {
-	committeeCode: string;
-	scheduledAt: string; // ISO date string for the session
-	session: number;
-	items: { topicCode: string; startTime?: string | null; endTime?: string | null }[];
-}
-
-export interface CommitteeAssignmentAutoAssignRequest {
-	committeeCodes: string[];
-	slotMinutes?: number;
-}
-
-export interface CommitteeAssignmentAutoAssignResult {
-	committees: CommitteeAssignmentAutoAssignCommittee[];
-}
-
-export interface CommitteeAssignmentAutoAssignCommittee {
-	committeeCode: string;
-	assignedCount: number;
-	assigned: CommitteeAssignmentDefenseItem[];
-	skippedTopics: string[];
-}
-
-export interface CommitteeAssignmentChangeRequest {
-	committeeCode: string;
-	topicCode: string;
-	scheduledAt: string; // ISO datetime string
-	session: number;
-	startTime?: string; // HH:mm:ss
-	endTime?: string; // HH:mm:ss
-}
-
-export interface StudentDefenseInfoDto {
-	studentCode: string;
-	topicCode?: string;
-	title?: string;
-	committee?: {
-		committeeCode: string;
-		name: string;
-		defenseDate?: string;
-		room?: string;
-		session?: number;
-		startTime?: string;
-		endTime?: string;
-		members: {
-			name: string;
-			role: string;
-		}[];
-	};
-}
-
-export interface CommitteeAssignmentAvailableTopic {
-	topicCode: string;
-	title: string;
-	studentCode?: string | null;
-	studentName?: string | null;
-	supervisorCode?: string | null;
-	supervisorName?: string | null;
-	departmentCode?: string | null;
-	specialtyCode?: string | null;
-	tagCodes: string[];
-	tagDescriptions?: string[];
-	status?: string | null;
-}
-
-export interface LecturerCommitteeItem {
-	committeeCode: string;
-	name?: string | null;
-	defenseDate?: string | null;
-	room?: string | null;
-	status?: string | null;
-	tags?: TagSummary[];
-	members?: CommitteeAssignmentMemberDetail[];
-	assignments?: CommitteeAssignmentDefenseItem[];
-	sessions?: CommitteeSessionDto[];
-}
+import type {
+	PagedResult,
+	CommitteeAssignmentInitialization,
+	CommitteeAssignmentAvailableLecturer,
+	TagSummary,
+	CommitteeAssignmentCreateRequest,
+	CommitteeAssignmentUpdateRequest,
+	CommitteeMembersUpdateRequestDto,
+	CommitteeAssignmentFilter,
+	CommitteeAssignmentListItem,
+	CommitteeAssignmentDetail,
+	CommitteeAssignmentAssignRequest,
+	CommitteeAssignmentAutoAssignRequest,
+	CommitteeAssignmentAutoAssignResult,
+	CommitteeAssignmentChangeRequest,
+	StudentDefenseInfoDto,
+	CommitteeAssignmentAvailableTopic,
+	LecturerCommitteeItem,
+	CommitteeCreateRequestDto,
+	CommitteeMembersCreateRequestDto,
+	AssignTopicRequestDto,
+	AvailableLecturerDto,
+	AvailableTopicDto,
+	CommitteeCreateInitDto,
+} from "../types/committee-assignment";
 
 function buildQueryString(filter?: CommitteeAssignmentFilter): string {
 	if (!filter) return "";
 	const params = new URLSearchParams();
 
-	if (filter.search) params.set("search", filter.search);
+	if (filter.search) params.set("keyword", filter.search);
 	if (filter.committeeCode) params.set("committeeCode", filter.committeeCode);
 	if (filter.room) params.set("room", filter.room);
-	if (filter.defenseDate) params.set("defenseDate", filter.defenseDate);
+	if (filter.defenseDate) params.set("date", filter.defenseDate);
 	if (filter.tagCode) params.set("tagCode", filter.tagCode);
 	if (typeof filter.page === "number") params.set("page", String(filter.page));
 	if (typeof filter.pageSize === "number") params.set("pageSize", String(filter.pageSize));
@@ -327,12 +103,19 @@ export const committeeAssignmentApi = {
 	},
 
 	async assignTopics(request: CommitteeAssignmentAssignRequest, options?: { signal?: AbortSignal }): Promise<ApiResponse<boolean>> {
-		// backend expects AssignTopicRequestDto: { committeeCode, scheduledAt, session, items: [{topicCode, startTime, endTime}] }
+		// Build a strict payload matching the backend contract: top-level committeeCode, scheduledAt, session, assignedBy?, items[]
 		const payload = {
 			committeeCode: request.committeeCode,
 			scheduledAt: request.scheduledAt,
 			session: request.session,
-			items: request.items.map(i => ({ topicCode: i.topicCode, startTime: i.startTime ?? null, endTime: i.endTime ?? null }))
+			assignedBy: request.assignedBy,
+			items: (request.items || []).map(i => ({
+				topicCode: i.topicCode,
+				session: i.session ?? request.session,
+				scheduledAt: i.scheduledAt ?? request.scheduledAt ?? null,
+				startTime: i.startTime ?? null,
+				endTime: i.endTime ?? null,
+			})),
 		};
 		return await fetchData<ApiResponse<boolean>>("/CommitteeAssignment/assign", {
 			method: "POST",
@@ -441,77 +224,6 @@ export const committeeAssignmentApi = {
 	},
 };
 
-// New interfaces for multi-phase creation
-export interface CommitteeCreateRequestDto {
-	committeeCode?: string;
-	name?: string;
-	defenseDate?: Date;
-	room?: string;
-	tagCodes: string[];
-	members: CommitteeAssignmentMemberInput[];
-	sessions?: CommitteeAssignmentSessionPayload[];
-	topics?: CommitteeAssignmentTopicPayload[];
-}
-
-export interface CommitteeMembersCreateRequestDto {
-	committeeCode: string;
-	members: CommitteeAssignmentMemberInput[];
-}
-
-export interface AssignTopicRequestDto {
-	committeeCode: string;
-	scheduledAt?: Date;
-	session?: number;
-	assignedBy?: string;
-	items: AssignTopicItemDto[];
-}
-
-export interface AssignTopicItemDto {
-	topicCode: string;
-	session?: number;
-	scheduledAt?: Date;
-	startTime?: string;
-	endTime?: string;
-}
-
-export interface AvailableLecturerDto {
-	lecturerProfileId: number;
-	lecturerCode: string;
-	fullName: string;
-	name: string;
-	degree?: string | null;
-	departmentCode?: string | null;
-	specialties?: string | null;
-	specialtyCode?: string | null;
-	defenseQuota: number;
-	currentDefenseLoad: number;
-	availability: boolean;
-	isEligibleChair?: boolean;
-	tagCodes?: string[];
-	tagNames?: string[];
-}
-
-export interface AvailableTopicDto {
-	topicCode: string;
-	title: string;
-	studentCode?: string | null;
-	studentName?: string | null;
-	supervisorCode?: string | null;
-	supervisorName?: string | null;
-	departmentCode?: string | null;
-	specialtyCode?: string | null;
-	tags: string[];
-	tagDescriptions?: string[];
-	status?: string | null;
-}
-
-export interface CommitteeCreateInitDto {
-	nextCode: string;
-	defaultDefenseDate?: Date;
-	rooms: string[];
-	suggestedTags: TagSummary[];
-}
-
 // New functions
 export async function getCommitteeCreateInit(options?: { signal?: AbortSignal }): Promise<ApiResponse<CommitteeCreateInitDto>> {
 	return await fetchData<ApiResponse<CommitteeCreateInitDto>>("/CommitteeAssignment/get-create", {
@@ -560,9 +272,23 @@ export async function getAvailableTopics(filter?: { tag?: string; department?: s
 }
 
 export async function assignTopics(request: AssignTopicRequestDto, options?: { signal?: AbortSignal }): Promise<ApiResponse<CommitteeAssignmentDetail>> {
+	// Ensure exported helper also sends the full items[] shape
+	const payload = {
+		committeeCode: request.committeeCode,
+		scheduledAt: request.scheduledAt,
+		session: request.session,
+		assignedBy: (request as any).assignedBy,
+		items: (request as any).items?.map((i: any) => ({
+			topicCode: i.topicCode,
+			session: i.session ?? request.session,
+			scheduledAt: i.scheduledAt ?? request.scheduledAt ?? null,
+			startTime: i.startTime ?? null,
+			endTime: i.endTime ?? null,
+		})) ?? []
+	};
 	return await fetchData<ApiResponse<CommitteeAssignmentDetail>>("/CommitteeAssignment/assign", {
 		method: "POST",
-		body: request,
+		body: payload,
 		signal: options?.signal,
 	});
 }

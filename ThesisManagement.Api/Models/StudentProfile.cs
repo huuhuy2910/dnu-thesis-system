@@ -15,7 +15,6 @@ namespace ThesisManagement.Api.Models
         public string? StudentImage { get; set; }
         public decimal? GPA { get; set; }
         public string? AcademicStanding { get; set; }
-    public string? FullName { get; set; }
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? PhoneNumber { get; set; }

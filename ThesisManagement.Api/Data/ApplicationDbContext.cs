@@ -463,7 +463,8 @@ namespace ThesisManagement.Api.Data
             modelBuilder.Entity<LecturerTag>(b =>
             {
                 b.HasKey(x => x.LecturerTagID);
-                b.HasOne(x => x.LecturerProfile).WithMany().HasForeignKey(x => x.LecturerProfileID).OnDelete(DeleteBehavior.Cascade);
+                // Use the explicit navigation collection on LecturerProfile to avoid EF creating a shadow FK (LecturerProfileID1)
+                b.HasOne(x => x.LecturerProfile).WithMany(lp => lp.LecturerTags).HasForeignKey(x => x.LecturerProfileID).OnDelete(DeleteBehavior.Cascade);
                 // Map Tag relationship explicitly to Tag.LecturerTags to avoid shadow FK creation
                 b.HasOne(x => x.Tag).WithMany(t => t.LecturerTags).HasForeignKey(x => x.TagID).OnDelete(DeleteBehavior.Cascade);
                 b.HasOne(x => x.AssignedByUser).WithMany().HasForeignKey(x => x.AssignedByUserCode).HasPrincipalKey(x => x.UserCode).OnDelete(DeleteBehavior.SetNull);

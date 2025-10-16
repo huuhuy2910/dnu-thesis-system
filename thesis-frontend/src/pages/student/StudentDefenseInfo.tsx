@@ -8,7 +8,7 @@ import {
   User,
 } from "lucide-react";
 import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
-import type { StudentDefenseInfoDto } from "../../api/committeeAssignmentApi";
+import type { StudentDefenseInfoDto } from "../../types/committee-assignment";
 
 const StudentDefenseInfo: React.FC = () => {
   const [data, setData] = useState<StudentDefenseInfoDto | null>(null);

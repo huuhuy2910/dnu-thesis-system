@@ -177,13 +177,6 @@ namespace ThesisManagement.Api.DTOs
 
         [JsonPropertyName("items")]
         public List<AssignTopicItemDto> Items { get; set; } = new();
-
-        [JsonPropertyName("topics")]
-        public List<AssignTopicItemDto> Topics
-        {
-            get => Items;
-            set => Items = value ?? new List<AssignTopicItemDto>();
-        }
     }
 
     public class AssignTopicItemDto

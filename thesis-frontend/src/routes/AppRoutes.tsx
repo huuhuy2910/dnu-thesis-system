@@ -32,9 +32,7 @@ import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
 import LecturerNotifications from "../pages/lecturer/Notifications";
 
 // Lazy load heavy components for better performance
-const CommitteeManagement = lazy(() => import("../pages/admin/committee/CommitteeManagement"));
-const CommitteeCreationPage = lazy(() => import("../pages/admin/committee/CommitteeCreationPage"));
-
+import CommitteeManagement from "../pages/admin/CommitteeManagement";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -121,11 +119,6 @@ const AppRoutes: React.FC = () => {
       <CommitteeManagement />
     </Suspense>
   } />
-        <Route path="committees/create" element={
-          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#1F3C88]"></div></div>}>
-            <CommitteeCreationPage />
-          </Suspense>
-        } />
         <Route
           path="defense-assignments"
           element={<Navigate to="/admin/committees" replace />}

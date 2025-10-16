@@ -222,11 +222,10 @@ namespace ThesisManagement.Api.Services
 
                 var studentProfiles = await _context.StudentProfiles
                     .Where(sp => studentCodes.Contains(sp.StudentCode))
-                    .Include(sp => sp.User)
                     .ToListAsync();
 
                 var studentLookup = studentProfiles
-                    .ToDictionary(sp => sp.StudentCode, sp => sp.User?.FullName ?? sp.StudentCode);
+                    .ToDictionary(sp => sp.StudentCode, sp => sp.FullName ?? sp.StudentCode);
 
                 var supervisorCodes = topics
                     .Where(t => !string.IsNullOrEmpty(t.SupervisorLecturerCode))
@@ -245,11 +244,10 @@ namespace ThesisManagement.Api.Services
 
                 var lecturerProfiles = await _context.LecturerProfiles
                     .Where(lp => lecturerCodes.Contains(lp.LecturerCode))
-                    .Include(lp => lp.User)
                     .ToListAsync();
 
                 var lecturerLookup = lecturerProfiles
-                    .ToDictionary(lp => lp.LecturerCode, lp => lp.User?.FullName ?? lp.LecturerCode);
+                    .ToDictionary(lp => lp.LecturerCode, lp => lp.FullName ?? lp.LecturerCode);
 
                 var usedSlots = committeeCodes.ToDictionary(
                     code => code,

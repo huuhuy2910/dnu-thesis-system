@@ -956,15 +956,15 @@ namespace ThesisManagement.Api.Services
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    if (fallbackUserCodes.Count > 0)
-                    {
-                        var userRows = await _db.Users.AsNoTracking()
-                            .Where(u => fallbackUserCodes.Contains(u.UserCode))
-                            .Select(u => new { u.UserCode, u.FullName })
-                            .ToListAsync(cancellationToken);
-
-                        studentUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
-                    }
+                    // User no longer has FullName, skip fallback lookup
+                    // if (fallbackUserCodes.Count > 0)
+                    // {
+                    //     var userRows = await _db.Users.AsNoTracking()
+                    //         .Where(u => fallbackUserCodes.Contains(u.UserCode))
+                    //         .Select(u => new { u.UserCode })
+                    //         .ToListAsync(cancellationToken);
+                    //     studentUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.UserCode, StringComparer.OrdinalIgnoreCase);
+                    // }
 
                     foreach (var row in studentRows)
                     {
@@ -979,7 +979,7 @@ namespace ThesisManagement.Api.Services
                 }
 
                 var supervisorCodes = assignmentRecords
-                    .Select(x => x.SupervisorLecturerCode)
+                    .Select(x => x.SupervisorCode)
                     .Where(code => !string.IsNullOrWhiteSpace(code))
                     .Cast<string>()
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1001,15 +1001,15 @@ namespace ThesisManagement.Api.Services
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    if (fallbackUserCodes.Count > 0)
-                    {
-                        var userRows = await _db.Users.AsNoTracking()
-                            .Where(u => fallbackUserCodes.Contains(u.UserCode))
-                            .Select(u => new { u.UserCode, u.FullName })
-                            .ToListAsync(cancellationToken);
-
-                        supervisorUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
-                    }
+                    // User no longer has FullName, skip fallback lookup
+                    // if (fallbackUserCodes.Count > 0)
+                    // {
+                    //     var userRows = await _db.Users.AsNoTracking()
+                    //         .Where(u => fallbackUserCodes.Contains(u.UserCode))
+                    //         .Select(u => new { u.UserCode })
+                    //         .ToListAsync(cancellationToken);
+                    //     supervisorUserFallback = userRows.ToDictionary(x => x.UserCode, x => x.UserCode, StringComparer.OrdinalIgnoreCase);
+                    // }
 
                     foreach (var row in supervisorRows)
                     {
@@ -1029,13 +1029,13 @@ namespace ThesisManagement.Api.Services
                     TopicCode = x.TopicCode,
                     Title = x.Title,
                     StudentCode = x.ProposerStudentCode,
-                    StudentName = x.ProposerStudentCode != null && studentNameMap.TryGetValue(x.ProposerStudentCode, out var student)
+                    StudentName = x.StudentName ?? (x.ProposerStudentCode != null && studentNameMap.TryGetValue(x.ProposerStudentCode, out var student)
                         ? student
-                        : null,
-                    SupervisorCode = x.SupervisorLecturerCode ?? x.SupervisorUserCode,
-                    SupervisorName = x.SupervisorLecturerCode != null && supervisorNameMap.TryGetValue(x.SupervisorLecturerCode, out var supervisor)
+                        : null),
+                    SupervisorCode = x.SupervisorCode,
+                    SupervisorName = x.SupervisorName ?? (x.SupervisorCode != null && supervisorNameMap.TryGetValue(x.SupervisorCode, out var supervisor)
                         ? supervisor
-                        : null,
+                        : null),
                     Session = x.Session,
                     StartTime = x.StartTime,
                     EndTime = x.EndTime,
@@ -1118,18 +1118,25 @@ namespace ThesisManagement.Api.Services
                     .AsNoTracking()
                     .Include(lp => lp.User);
 
-                // If tag filters were provided (or committeeCode implied tags), filter at DB level
+                // Load all lecturers first
+                var allLecturers = await lecturerQuery.ToListAsync(cancellationToken);
+
+                // If tag filters were provided (or committeeCode implied tags), filter in memory
                 List<LecturerProfile> lecturers;
                 if (tagFilters.Count > 0)
                 {
                     var filterSet = tagFilters;
-                    lecturers = lecturers
+                    lecturers = allLecturers
                         .Where(lp =>
                         {
                             var specialtyCodes = new HashSet<string>(SplitValues(lp.Specialties), StringComparer.OrdinalIgnoreCase);
                             return specialtyCodes.Count > 0 && specialtyCodes.Any(code => filterSet.Contains(code));
                         })
                         .ToList();
+                }
+                else
+                {
+                    lecturers = allLecturers;
                 }
 
                 var lecturerCodes = lecturers.Select(l => l.LecturerCode).Where(code => !string.IsNullOrWhiteSpace(code)).ToList();
@@ -1171,7 +1178,7 @@ namespace ThesisManagement.Api.Services
 
                     var fullName = !string.IsNullOrWhiteSpace(lecturer.FullName)
                         ? lecturer.FullName!
-                        : lecturer.User?.FullName ?? lecturerCode;
+                        : lecturerCode;
 
                     var defenseQuota = lecturer.DefenseQuota ?? 0;
                     var availability = defenseQuota <= 0 || load < defenseQuota;
@@ -1270,15 +1277,14 @@ namespace ThesisManagement.Api.Services
                         SupervisorCode = x.t.SupervisorLecturerCode,
                         SupervisorName = x.supervisor != null ? x.supervisor.FullName : null,
                         DepartmentCode = x.t.DepartmentCode,
-                        SpecialtyCode = null, // Topic doesn't have SpecialtyCode property
                         Tags = new List<string>(),
                         TagDescriptions = new List<string>()
                     })
                     .OrderBy(t => t.Title)
                     .ToListAsync(cancellationToken);
 
-                var topicStudentCodes = topicRows
-                    .Select(x => x.ProposerStudentCode)
+                var topicStudentCodes = topics
+                    .Select(x => x.StudentCode)
                     .Where(code => !string.IsNullOrWhiteSpace(code))
                     .Cast<string>()
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1300,15 +1306,15 @@ namespace ThesisManagement.Api.Services
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    if (fallbackCodes.Count > 0)
-                    {
-                        var userRows = await _db.Users.AsNoTracking()
-                            .Where(u => fallbackCodes.Contains(u.UserCode))
-                            .Select(u => new { u.UserCode, u.FullName })
-                            .ToListAsync(cancellationToken);
-
-                        topicStudentFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
-                    }
+                    // User no longer has FullName, skip fallback lookup
+                    // if (fallbackCodes.Count > 0)
+                    // {
+                    //     var userRows = await _db.Users.AsNoTracking()
+                    //         .Where(u => fallbackCodes.Contains(u.UserCode))
+                    //         .Select(u => new { u.UserCode })
+                    //         .ToListAsync(cancellationToken);
+                    //     topicStudentFallback = userRows.ToDictionary(x => x.UserCode, x => x.UserCode, StringComparer.OrdinalIgnoreCase);
+                    // }
 
                     foreach (var row in studentRows)
                     {
@@ -1322,8 +1328,8 @@ namespace ThesisManagement.Api.Services
                     }
                 }
 
-                var topicSupervisorCodes = topicRows
-                    .Select(x => x.SupervisorLecturerCode)
+                var topicSupervisorCodes = topics
+                    .Select(x => x.SupervisorCode)
                     .Where(code => !string.IsNullOrWhiteSpace(code))
                     .Cast<string>()
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1345,15 +1351,15 @@ namespace ThesisManagement.Api.Services
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    if (fallbackCodes.Count > 0)
-                    {
-                        var userRows = await _db.Users.AsNoTracking()
-                            .Where(u => fallbackCodes.Contains(u.UserCode))
-                            .Select(u => new { u.UserCode, u.FullName })
-                            .ToListAsync(cancellationToken);
-
-                        topicSupervisorFallback = userRows.ToDictionary(x => x.UserCode, x => x.FullName, StringComparer.OrdinalIgnoreCase);
-                    }
+                    // User no longer has FullName, skip fallback lookup
+                    // if (fallbackCodes.Count > 0)
+                    // {
+                    //     var userRows = await _db.Users.AsNoTracking()
+                    //         .Where(u => fallbackCodes.Contains(u.UserCode))
+                    //         .Select(u => new { u.UserCode })
+                    //         .ToListAsync(cancellationToken);
+                    //     topicSupervisorFallback = userRows.ToDictionary(x => x.UserCode, x => x.UserCode, StringComparer.OrdinalIgnoreCase);
+                    // }
 
                     foreach (var row in supervisorRows)
                     {
@@ -1367,22 +1373,18 @@ namespace ThesisManagement.Api.Services
                     }
                 }
 
-                var topics = topicRows.Select(x => new AvailableTopicDto
+                // Update topics with resolved names from maps
+                foreach (var topic in topics)
                 {
-                    TopicCode = x.TopicCode,
-                    Title = x.Title,
-                    StudentCode = x.ProposerStudentCode,
-                    StudentName = x.ProposerStudentCode != null && topicStudentNameMap.TryGetValue(x.ProposerStudentCode, out var studentName)
-                        ? studentName
-                        : null,
-                    SupervisorCode = x.SupervisorLecturerCode ?? x.SupervisorUserCode,
-                    SupervisorName = x.SupervisorLecturerCode != null && topicSupervisorNameMap.TryGetValue(x.SupervisorLecturerCode, out var supervisorName)
-                        ? supervisorName
-                        : null,
-                    DepartmentCode = x.DepartmentCode,
-                    Tags = new List<string>(),
-                    TagDescriptions = new List<string>()
-                }).ToList();
+                    if (!string.IsNullOrWhiteSpace(topic.StudentCode) && topicStudentNameMap.TryGetValue(topic.StudentCode, out var studentName))
+                    {
+                        topic.StudentName = studentName;
+                    }
+                    if (!string.IsNullOrWhiteSpace(topic.SupervisorCode) && topicSupervisorNameMap.TryGetValue(topic.SupervisorCode, out var supervisorName))
+                    {
+                        topic.SupervisorName = supervisorName;
+                    }
+                }
 
                 // Populate tag names for the returned topics
                 var topicCodes = topics.Select(t => t.TopicCode).ToList();

@@ -24,7 +24,6 @@ namespace ThesisManagement.Api.Models
         public string? ProfileImage { get; set; }
         public string? Address { get; set; }
         public string? Notes { get; set; }
-        public string? FullName { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? LastUpdated { get; set; }
 
