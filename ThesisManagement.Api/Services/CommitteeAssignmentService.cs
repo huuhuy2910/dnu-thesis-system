@@ -156,41 +156,12 @@ namespace ThesisManagement.Api.Services
                     ScheduledAt = g.Min(a => a.ScheduledAt)
                 })
                 .ToList();
-
-            var existing = await _db.CommitteeSessions
-                .Where(cs => cs.CommitteeCode == committee.CommitteeCode)
-                .ToListAsync(cancellationToken);
-
+            // Previously this method synchronized CommitteeSessions table from DefenseAssignments.
+            // CommitteeSessions is deprecated; keep compute-only behavior (no DB writes).
             var now = DateTime.UtcNow;
             foreach (var group in groups)
             {
-                var entity = existing.FirstOrDefault(cs => cs.SessionNumber == group.Session);
-                if (entity == null)
-                {
-                    await _uow.CommitteeSessions.AddAsync(new CommitteeSession
-                    {
-                        CommitteeID = committee.CommitteeID,
-                        CommitteeCode = committee.CommitteeCode,
-                        SessionNumber = group.Session,
-                        ScheduledAt = group.ScheduledAt,
-                        TopicCount = group.Count,
-                        CreatedAt = now,
-                        LastUpdated = now
-                    });
-                }
-                else
-                {
-                    entity.TopicCount = group.Count;
-                    entity.ScheduledAt = group.ScheduledAt;
-                    entity.LastUpdated = now;
-                }
-            }
-
-            var validSessions = groups.Select(g => g.Session).ToHashSet();
-            var toRemove = existing.Where(cs => !validSessions.Contains(cs.SessionNumber)).ToList();
-            if (toRemove.Count > 0)
-            {
-                _db.CommitteeSessions.RemoveRange(toRemove);
+                _logger.LogInformation("Committee {code} session {session}: count={count}, scheduledAt={scheduled}", committee.CommitteeCode, group.Session, group.Count, group.ScheduledAt);
             }
         }
 
@@ -199,7 +170,6 @@ namespace ThesisManagement.Api.Services
         {
             try
             {
-                var nextCode = await GenerateCommitteeCodeAsync(cancellationToken);
                 var rooms = await _db.Committees.AsNoTracking()
                     .Where(c => c.Room != null && c.Room != string.Empty)
                     .Select(c => c.Room!)
@@ -207,6 +177,7 @@ namespace ThesisManagement.Api.Services
                     .ToListAsync(cancellationToken);
                 var suggestedTags = await _db.Tags.AsNoTracking().OrderBy(t => t.TagName).Select(t => t.TagCode).ToListAsync(cancellationToken);
 
+                var nextCode = await GenerateCommitteeCodeAsync(cancellationToken);
                 var payload = new CommitteeCreateInitDto
                 {
                     NextCode = nextCode,
@@ -228,23 +199,31 @@ namespace ThesisManagement.Api.Services
 
         private async Task<string> GenerateCommitteeCodeAsync(CancellationToken cancellationToken)
         {
-            var year = DateTime.UtcNow.Year;
-            var prefix = $"COM{year}_";
-            var last = await _db.Committees.AsNoTracking()
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            string prefix = $"COM{today}";
+
+            // Lấy tất cả các mã bắt đầu bằng prefix trong ngày hiện tại
+            var lastCommittee = await _db.Committees.AsNoTracking()
                 .Where(c => c.CommitteeCode.StartsWith(prefix))
                 .OrderByDescending(c => c.CommitteeCode)
-                .Select(c => c.CommitteeCode)
                 .FirstOrDefaultAsync(cancellationToken);
-            var next = 1;
-            if (!string.IsNullOrEmpty(last))
+
+            int nextNumber = 1;
+
+            if (lastCommittee != null)
             {
-                var parts = last.Split('_');
-                if (parts.Length > 1 && int.TryParse(parts[^1], out var n)) next = n + 1;
+                // Cắt phần số ở cuối để +1
+                string lastCode = lastCommittee.CommitteeCode;
+                if (lastCode.Length > prefix.Length && int.TryParse(lastCode.Substring(prefix.Length), out int lastNum))
+                {
+                    nextNumber = lastNum + 1;
+                }
             }
-            return $"{prefix}{next:D3}";
+
+            string newCode = $"{prefix}{nextNumber:D3}"; // D3 -> padding 3 số 001,002,...
+            return newCode;
         }
 
-        // ============ CRUD ============
         public async Task<ApiResponse<CommitteeDetailDto>> CreateCommitteeAsync(CommitteeCreateRequestDto request, CancellationToken cancellationToken = default)
         {
             if (request == null)
@@ -252,12 +231,12 @@ namespace ThesisManagement.Api.Services
                 return ApiResponse<CommitteeDetailDto>.Fail("Dữ liệu không hợp lệ", StatusCodes.Status400BadRequest);
             }
 
+            // Require CommitteeCode from client - must be provided
+            var code = request.CommitteeCode?.Trim() ?? throw new ArgumentException("CommitteeCode is required");
+
             await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                var providedCode = string.IsNullOrWhiteSpace(request.CommitteeCode) ? null : request.CommitteeCode.Trim();
-                var code = providedCode ?? await GenerateCommitteeCodeAsync(cancellationToken);
-
                 var exists = await _db.Committees.AsNoTracking().AnyAsync(c => c.CommitteeCode == code, cancellationToken);
                 if (exists)
                 {
@@ -486,8 +465,8 @@ namespace ThesisManagement.Api.Services
                 await _uow.SaveChangesAsync();
                 if (topicsTouched)
                 {
-                    await RefreshCommitteeSessionsAsync(committee, cancellationToken);
-                    await _uow.SaveChangesAsync();
+                    // CommitteeSessions deprecated; no DB synchronization required. Log summary instead.
+                    _logger.LogInformation("Topics touched for committee {code}, DefenseAssignments are authoritative.", committee.CommitteeCode);
                 }
                 await tx.CommitAsync(cancellationToken);
                 return await GetCommitteeDetailAsync(committeeCode, cancellationToken);
@@ -516,7 +495,9 @@ namespace ThesisManagement.Api.Services
                 return ApiResponse<CommitteeDetailDto>.Fail("Hội đồng phải có tối thiểu 4 thành viên", StatusCodes.Status400BadRequest);
             }
 
-            var chairCount = incomingMembers.Count(m => m.IsChair);
+            // Some clients may omit IsChair and instead only provide the role string.
+            // Treat a member as chair if IsChair == true OR Role equals "Chủ tịch" (case-insensitive).
+            int chairCount = incomingMembers.Count(m => m.IsChair || string.Equals(m.Role?.Trim(), "Chủ tịch", StringComparison.OrdinalIgnoreCase));
             if (chairCount != 1)
             {
                 return ApiResponse<CommitteeDetailDto>.Fail("Hội đồng phải có đúng 1 Chủ tịch", StatusCodes.Status400BadRequest);
@@ -563,12 +544,14 @@ namespace ThesisManagement.Api.Services
                         return ApiResponse<CommitteeDetailDto>.Fail("Vai trò của thành viên không được bỏ trống", StatusCodes.Status400BadRequest);
                     }
 
-                    if (member.IsChair && !IsEligibleChairDegree(profile.Degree))
+                    // Determine chair status from IsChair flag or role string
+                    var isChairLocal = member.IsChair || string.Equals(role, "Chủ tịch", StringComparison.OrdinalIgnoreCase);
+                    if (isChairLocal && !IsEligibleChairDegree(profile.Degree))
                     {
                         return ApiResponse<CommitteeDetailDto>.Fail("Chủ tịch phải có học vị Tiến sĩ hoặc Phó giáo sư", StatusCodes.Status400BadRequest);
                     }
 
-                    replacements.Add((profile, role, member.IsChair));
+                    replacements.Add((profile, role, isChairLocal));
                 }
 
                 await ReplaceCommitteeMembersInternalAsync(committee, replacements, cancellationToken);
@@ -1603,8 +1586,8 @@ namespace ThesisManagement.Api.Services
                 }
 
                 await _uow.SaveChangesAsync();
-                await RefreshCommitteeSessionsAsync(committee, cancellationToken);
-                await _uow.SaveChangesAsync();
+                // RefreshCommitteeSessionsAsync removed from this path — CommitteeSessions is deprecated.
+                // No DB writes required here; DefenseAssignments are the source of truth.
                 await tx.CommitAsync(cancellationToken);
                 return await GetCommitteeDetailAsync(committee.CommitteeCode, cancellationToken);
             }
@@ -1662,10 +1645,11 @@ namespace ThesisManagement.Api.Services
 
                 static IEnumerable<(int Session, TimeSpan Start, TimeSpan End)> DefaultSlots()
                 {
+                    // Four 60-minute slots per session: morning 07:30-11:30 and afternoon 13:30-17:30
                     var morning = new[] { new TimeSpan(7,30,0), new TimeSpan(8,30,0), new TimeSpan(9,30,0), new TimeSpan(10,30,0) };
                     var afternoon = new[] { new TimeSpan(13,30,0), new TimeSpan(14,30,0), new TimeSpan(15,30,0), new TimeSpan(16,30,0) };
-                    foreach (var s in morning) yield return (1, s, s.Add(TimeSpan.FromMinutes(90)));
-                    foreach (var s in afternoon) yield return (2, s, s.Add(TimeSpan.FromMinutes(90)));
+                    foreach (var s in morning) yield return (1, s, s.Add(TimeSpan.FromMinutes(60)));
+                    foreach (var s in afternoon) yield return (2, s, s.Add(TimeSpan.FromMinutes(60)));
                 }
 
                 bool HasOverlap(string committeeCode, int session, DateTime dateLocal, TimeSpan start, TimeSpan end)
@@ -1759,14 +1743,8 @@ namespace ThesisManagement.Api.Services
                 await _uow.SaveChangesAsync();
                 if (touchedCommittees.Count > 0)
                 {
-                    var refreshTargets = await _db.Committees
-                        .Where(c => touchedCommittees.Contains(c.CommitteeCode))
-                        .ToListAsync(cancellationToken);
-                    foreach (var committee in refreshTargets)
-                    {
-                        await RefreshCommitteeSessionsAsync(committee, cancellationToken);
-                    }
-                    await _uow.SaveChangesAsync();
+                    // Previously refreshed CommitteeSessions for touched committees. CommitteeSessions is deprecated.
+                    _logger.LogInformation("Auto-assign touched committees: {codes}", string.Join(',', touchedCommittees));
                 }
                 await tx.CommitAsync(cancellationToken);
                 var payload = new { assignedCount, skipped };
@@ -1826,8 +1804,8 @@ namespace ThesisManagement.Api.Services
                 var committee = await _db.Committees.FirstOrDefaultAsync(c => c.CommitteeCode == request.CommitteeCode, cancellationToken);
                 if (committee != null)
                 {
-                    await RefreshCommitteeSessionsAsync(committee, cancellationToken);
-                    await _uow.SaveChangesAsync();
+                    // CommitteeSessions deprecated; no synchronization required.
+                    _logger.LogInformation("ChangeAssignment: updated DefenseAssignment for committee {code}", committee.CommitteeCode);
                 }
                 return await GetCommitteeDetailAsync(request.CommitteeCode, cancellationToken);
             }
@@ -1856,12 +1834,8 @@ namespace ThesisManagement.Api.Services
                 await _uow.SaveChangesAsync();
                 if (!string.IsNullOrWhiteSpace(committeeCode))
                 {
-                    var committee = await _db.Committees.FirstOrDefaultAsync(c => c.CommitteeCode == committeeCode, cancellationToken);
-                    if (committee != null)
-                    {
-                        await RefreshCommitteeSessionsAsync(committee, cancellationToken);
-                        await _uow.SaveChangesAsync();
-                    }
+                    // CommitteeSessions deprecated; DefenseAssignments are the source of truth.
+                    _logger.LogInformation("RemoveAssignment: removed DefenseAssignment for committee {code}", committeeCode);
                 }
                 return await GetCommitteeDetailAsync(committeeCode, cancellationToken);
             }
