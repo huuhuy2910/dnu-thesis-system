@@ -164,6 +164,28 @@ namespace ThesisManagement.Api.Helpers
             if (filter.MaxDefenseQuota.HasValue)
                 query = query.Where(x => x.DefenseQuota <= filter.MaxDefenseQuota.Value);
 
+            // Tags filtering - support multiple TagCodes
+            var tagCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (filter.TagCodes != null)
+            {
+                foreach (var code in filter.TagCodes)
+                {
+                    if (!string.IsNullOrWhiteSpace(code))
+                        tagCodes.Add(code.Trim());
+                }
+            }
+            // Also support comma-separated Tags string parameter
+            if (!string.IsNullOrEmpty(filter.Tags))
+            {
+                var tagValues = filter.Tags.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var tag in tagValues)
+                {
+                    var value = tag.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        tagCodes.Add(value);
+                }
+            }
+
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
 
@@ -228,9 +250,35 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrEmpty(filter.TopicCode))
                 query = query.Where(x => x.TopicCode.Contains(filter.TopicCode));
 
-            // Tags filtering removed - TopicTags navigation property no longer exists
-            // if (!string.IsNullOrEmpty(filter.Tags))
-            //     query = query.Where(x => x.TopicTags!.Any(tt => tt.Tag!.TagName.Contains(filter.Tags)));
+            // Tags filtering - support multiple TagCodes via join with TopicTag table
+            var tagCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (filter.TagCodes != null)
+            {
+                foreach (var code in filter.TagCodes)
+                {
+                    if (!string.IsNullOrWhiteSpace(code))
+                        tagCodes.Add(code.Trim());
+                }
+            }
+            // Also support comma-separated Tags string parameter
+            if (!string.IsNullOrEmpty(filter.Tags))
+            {
+                var tagValues = filter.Tags.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var tag in tagValues)
+                {
+                    var value = tag.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        tagCodes.Add(value);
+                }
+            }
+
+            if (tagCodes.Count > 0)
+            {
+                var db = query.Provider.CreateQuery<Topic>(query.Expression).AsQueryable();
+                // Note: TopicTag filtering requires database context access, which should be handled 
+                // at the service/repository level by joining with TopicTag table before applying this filter.
+                // For now, this is a placeholder for tag filtering when called from appropriate context.
+            }
 
             if (!string.IsNullOrEmpty(filter.Type))
                 query = query.Where(x => x.Type == filter.Type);

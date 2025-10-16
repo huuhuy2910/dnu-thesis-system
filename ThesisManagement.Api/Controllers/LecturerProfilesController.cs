@@ -15,10 +15,80 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] LecturerProfileFilter filter)
         {
-            var result = await _uow.LecturerProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                (query, f) => query.ApplyFilter(f));
-            var dtos = result.Items.Select(x => _mapper.Map<LecturerProfileReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<LecturerProfileReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            // Build tag codes set from both TagCodes collection and Tags string parameter
+            var tagCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (filter.TagCodes != null)
+            {
+                foreach (var code in filter.TagCodes)
+                {
+                    if (!string.IsNullOrWhiteSpace(code))
+                        tagCodes.Add(code.Trim());
+                }
+            }
+            if (!string.IsNullOrEmpty(filter.Tags))
+            {
+                var tagValues = filter.Tags.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var tag in tagValues)
+                {
+                    var value = tag.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        tagCodes.Add(value);
+                }
+            }
+
+            // If tag filtering is needed, handle via join with LecturerTag table
+            IEnumerable<LecturerProfile> items;
+            int totalCount;
+
+            if (tagCodes.Count > 0)
+            {
+                // Get lecturer profiles with tag filtering via LecturerTag join
+                var baseQuery = _uow.LecturerProfiles.Query();
+                var filteredLecturers = await baseQuery
+                    .Where(lp => _uow.LecturerTags.Query()
+                        .Any(lt => lt.LecturerCode == lp.LecturerCode && lt.Tag != null && tagCodes.Contains(lt.Tag.TagCode)))
+                    .ToListAsync();
+
+                // Apply other filters after tag filtering
+                var lecturerQuery = filteredLecturers.AsQueryable();
+                
+                // Reapply the filter without tag codes to apply other filters
+                var tempFilter = new LecturerProfileFilter
+                {
+                    Page = filter.Page,
+                    PageSize = filter.PageSize,
+                    Search = filter.Search,
+                    UserCode = filter.UserCode,
+                    DepartmentCode = filter.DepartmentCode,
+                    LecturerCode = filter.LecturerCode,
+                    Degree = filter.Degree,
+                    MinGuideQuota = filter.MinGuideQuota,
+                    MaxGuideQuota = filter.MaxGuideQuota,
+                    MinDefenseQuota = filter.MinDefenseQuota,
+                    MaxDefenseQuota = filter.MaxDefenseQuota,
+                    TagCodes = null,
+                    Tags = null,
+                    FromDate = filter.FromDate,
+                    ToDate = filter.ToDate,
+                    SortBy = filter.SortBy
+                };
+
+                var result = await _uow.LecturerProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, tempFilter,
+                    (query, f) => query.Where(lp => filteredLecturers.Select(fl => fl.LecturerProfileID).Contains(lp.LecturerProfileID)).ApplyFilter(f));
+                items = result.Items;
+                totalCount = result.TotalCount;
+            }
+            else
+            {
+                // No tag filtering, use standard filter
+                var result = await _uow.LecturerProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
+                    (query, f) => query.ApplyFilter(f));
+                items = result.Items;
+                totalCount = result.TotalCount;
+            }
+
+            var dtos = items.Select(x => _mapper.Map<LecturerProfileReadDto>(x));
+            return Ok(ApiResponse<IEnumerable<LecturerProfileReadDto>>.SuccessResponse(dtos, totalCount));
         }
 
         [HttpGet("get-detail/{code}")]

@@ -10,5 +10,7 @@ namespace ThesisManagement.Api.DTOs
         public int? MaxGuideQuota { get; set; }
         public int? MinDefenseQuota { get; set; }
         public int? MaxDefenseQuota { get; set; }
+        public IEnumerable<string>? TagCodes { get; set; }
+        public string? Tags { get; set; }
     }
 }

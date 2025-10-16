@@ -1,5 +1,4 @@
-// src/routes/AppRoutes.tsx
-import React, { Suspense, lazy } from "react";
+import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import LoginPage from "../pages/auth/LoginPage";
@@ -30,10 +29,6 @@ import StudentProfilePage from "../pages/student/StudentProfile";
 import LecturerProfilePage from "../pages/lecturer/LecturerProfile";
 import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
 import LecturerNotifications from "../pages/lecturer/Notifications";
-
-// Lazy load heavy components for better performance
-const CommitteeManagement = lazy(() => import("../pages/admin/committee/CommitteeManagement"));
-const CommitteeCreationPage = lazy(() => import("../pages/admin/committee/CommitteeCreationPage"));
 
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
@@ -98,42 +93,11 @@ const AppRoutes: React.FC = () => {
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UsersManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
-          <Route path="committees" element={<CommitteeManagement />} />
           <Route path="system-config" element={<SystemConfig />} />
           <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="notifications/create" element={<CreateNotification />} />
           {/* thêm các route con khác của admin ở đây */}
         </Route>
-      {/* ADMIN */}
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute allowedRoles={["ADMIN"]}>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<AdminDashboard />} />
-        <Route path="users" element={<UsersManagement />} />
-  <Route path="topics" element={<TopicsManagement />} />
-  <Route path="committees" element={
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#1F3C88]"></div></div>}>
-      <CommitteeManagement />
-    </Suspense>
-  } />
-        <Route path="committees/create" element={
-          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#1F3C88]"></div></div>}>
-            <CommitteeCreationPage />
-          </Suspense>
-        } />
-        <Route
-          path="defense-assignments"
-          element={<Navigate to="/admin/committees" replace />}
-        />
-        <Route path="system-config" element={<SystemConfig />} />
-        <Route path="notifications/create" element={<CreateNotification />} />
-        {/* thêm các route con khác của admin ở đây */}
-      </Route>
 
         {/* fallback: nếu không match => điều hướng về /login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
