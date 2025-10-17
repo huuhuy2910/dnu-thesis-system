@@ -573,6 +573,12 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.StudentProfileCode))
                 query = query.Where(x => x.StudentProfileCode == filter.StudentProfileCode);
 
+            if (filter.LecturerProfileID.HasValue)
+                query = query.Where(x => x.LecturerProfileID == filter.LecturerProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.LecturerCode == filter.LecturerCode);
+
             if (!string.IsNullOrEmpty(filter.LecturerState))
                 query = query.Where(x => x.LecturerState == filter.LecturerState);
 

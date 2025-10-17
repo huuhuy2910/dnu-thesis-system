@@ -43,6 +43,8 @@ namespace ThesisManagement.Api.Controllers
                 StudentUserCode = string.Empty,
                 StudentProfileID = (int?)null,
                 StudentProfileCode = (string?)null,
+                LecturerProfileID = (int?)null,
+                LecturerCode = (string?)null,
                 AttemptNumber = (int?)1,
                 ReportTitle = (string?)null,
                 ReportDescription = (string?)null
@@ -67,6 +69,9 @@ namespace ThesisManagement.Api.Controllers
             if (dto.StudentProfileID.HasValue && dto.StudentProfileID <= 0)
                 return BadRequest(ApiResponse<object>.Fail("StudentProfileID must be positive", 400));
 
+            if (dto.LecturerProfileID.HasValue && dto.LecturerProfileID <= 0)
+                return BadRequest(ApiResponse<object>.Fail("LecturerProfileID must be positive", 400));
+
             var code = await GenerateSubmissionCodeAsync();
             var ent = new ProgressSubmission
             {
@@ -77,6 +82,8 @@ namespace ThesisManagement.Api.Controllers
                 StudentUserCode = dto.StudentUserCode,
                 StudentProfileID = dto.StudentProfileID,
                 StudentProfileCode = dto.StudentProfileCode,
+                LecturerProfileID = dto.LecturerProfileID,
+                LecturerCode = dto.LecturerCode,
                 AttemptNumber = dto.AttemptNumber ?? 1,
                 ReportTitle = dto.ReportTitle,
                 ReportDescription = dto.ReportDescription,
@@ -131,10 +138,7 @@ namespace ThesisManagement.Api.Controllers
             var dto = new ProgressSubmissionUpdateDto(
                 ent.LecturerComment,
                 ent.LecturerState,
-                ent.FeedbackLevel,
-                ent.AttemptNumber,
-                ent.ReportTitle,
-                ent.ReportDescription);
+                ent.FeedbackLevel);
             return Ok(ApiResponse<ProgressSubmissionUpdateDto>.SuccessResponse(dto));
         }
 
@@ -143,15 +147,12 @@ namespace ThesisManagement.Api.Controllers
         {
             var ent = await _uow.ProgressSubmissions.GetByIdAsync(id);
             if (ent == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
+            
+            // Only allow updating lecturer-related fields
             ent.LecturerComment = dto.LecturerComment ?? ent.LecturerComment;
             ent.LecturerState = dto.LecturerState ?? ent.LecturerState;
             ent.FeedbackLevel = dto.FeedbackLevel ?? ent.FeedbackLevel;
-            if (dto.AttemptNumber.HasValue)
-                ent.AttemptNumber = dto.AttemptNumber;
-            if (dto.ReportTitle != null)
-                ent.ReportTitle = dto.ReportTitle;
-            if (dto.ReportDescription != null)
-                ent.ReportDescription = dto.ReportDescription;
+            
             ent.LastUpdated = DateTime.UtcNow;
             _uow.ProgressSubmissions.Update(ent);
             await _uow.SaveChangesAsync();

@@ -394,6 +394,8 @@ const Reports: React.FC = () => {
         reportDescription,
         studentUserCode: auth.user.userCode,
         studentUserID: auth.user.userID,
+        lecturerProfileID: lecturerProfile?.lecturerProfileID || null,
+        lecturerCode: lecturerProfile?.lecturerCode || null,
         submittedAt: new Date().toISOString(),
         milestoneCode: milestones.length > 0 ? milestones[0].milestoneCode : "",
         milestoneID: milestones.length > 0 ? milestones[0].milestoneID : null,

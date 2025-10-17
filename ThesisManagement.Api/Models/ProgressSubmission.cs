@@ -13,6 +13,8 @@ namespace ThesisManagement.Api.Models
         public string? StudentUserCode { get; set; } // New: reference by code
     public int? StudentProfileID { get; set; }
         public string? StudentProfileCode { get; set; } // New: reference by code
+        public int? LecturerProfileID { get; set; } // New: reference by code
+        public string? LecturerCode { get; set; } // New: reference by code
         public DateTime? SubmittedAt { get; set; }
         public int? AttemptNumber { get; set; }
     // File attachments are stored in SubmissionFiles table; do not map file columns on ProgressSubmission
@@ -25,6 +27,7 @@ namespace ThesisManagement.Api.Models
 
         public ProgressMilestone? Milestone { get; set; }
         public User? StudentUser { get; set; }
+        public LecturerProfile? LecturerProfile { get; set; }
         public ICollection<SubmissionFile>? SubmissionFiles { get; set; }
         // Navigation property removed to prevent EF shadow properties
         // public StudentProfile? StudentProfile { get; set; }

@@ -30,21 +30,6 @@ const LecturerCommittees: React.FC = () => {
     };
     fetchCommittees();
   }, []);
-
-  const handleViewDetails = async (committeeCode: string) => {
-    try {
-      const response = await committeeAssignmentApi.getCommitteeDetail(
-        committeeCode
-      );
-      if (response.success && response.data) {
-        // details fetched; currently we don't display a modal. Consider navigating to a detail page.
-        // console.log('committee details', response.data);
-      }
-    } catch (err) {
-      console.error("Lỗi khi tải chi tiết hội đồng", err);
-    }
-  };
-
   if (loading) {
     return <div>Đang tải...</div>;
   }

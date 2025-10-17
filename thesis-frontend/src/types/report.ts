@@ -9,6 +9,8 @@ export interface Report {
   studentUserCode: string;
   studentProfileID: number;
   studentProfileCode: string;
+  lecturerProfileID: number | null;
+  lecturerCode: string | null;
   submittedAt: string;
   attemptNumber: number;
   lecturerComment?: string;
