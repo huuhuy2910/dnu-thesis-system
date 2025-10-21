@@ -36,7 +36,10 @@ const LecturerCommittees: React.FC = () => {
       }
     };
     fetchCommittees();
-  }, [auth.user?.userCode]);
+  }, []);
+
+  // viewing details is not implemented in this component; details API call available if needed
+
   if (loading) {
     return <div>Đang tải...</div>;
   }
