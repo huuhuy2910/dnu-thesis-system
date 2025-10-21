@@ -160,7 +160,7 @@ namespace ThesisManagement.Api.Controllers
                 ent.DateOfBirth,
                 ent.Email,
                 ent.PhoneNumber,
-                ent.ProfileImage,
+                // ent.ProfileImage, // Không bao gồm vì không update qua PUT
                 ent.Address,
                 ent.Notes,
                 ent.FullName)));
@@ -187,7 +187,7 @@ namespace ThesisManagement.Api.Controllers
             if (dto.DateOfBirth.HasValue) ent.DateOfBirth = dto.DateOfBirth;
             if (dto.Email != null) ent.Email = dto.Email;
             if (dto.PhoneNumber != null) ent.PhoneNumber = dto.PhoneNumber;
-            if (dto.ProfileImage != null) ent.ProfileImage = dto.ProfileImage;
+            // ProfileImage không được update ở đây, sử dụng endpoint POST /upload-avatar thay thế
             if (dto.Address != null) ent.Address = dto.Address;
             if (dto.Notes != null) ent.Notes = dto.Notes;
             if (dto.FullName != null) ent.FullName = dto.FullName;
@@ -195,6 +195,76 @@ namespace ThesisManagement.Api.Controllers
             _uow.LecturerProfiles.Update(ent);
             await _uow.SaveChangesAsync();
             return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(ent)));
+        }
+
+        /// <summary>
+        /// Upload avatar cho giảng viên
+        /// </summary>
+        [HttpPost("upload-avatar/{code}")]
+        [Consumes("multipart/form-data")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> UploadAvatar(string code, [FromForm] IFormFile file)
+        {
+            // Kiểm tra giảng viên có tồn tại không
+            var lecturer = await _uow.LecturerProfiles.GetByCodeAsync(code);
+            if (lecturer == null) return NotFound(ApiResponse<object>.Fail("Giảng viên không tồn tại", 404));
+
+            // Kiểm tra file
+            if (file == null || file.Length == 0)
+                return BadRequest(ApiResponse<object>.Fail("File ảnh là bắt buộc", 400));
+
+            // Kiểm tra loại file (chỉ cho phép ảnh)
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(fileExtension))
+                return BadRequest(ApiResponse<object>.Fail("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)", 400));
+
+            // Kiểm tra kích thước file (giới hạn 5MB)
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(ApiResponse<object>.Fail("Kích thước file không được vượt quá 5MB", 400));
+
+            // Tạo thư mục lưu ảnh nếu chưa có
+            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "lecturers");
+            if (!Directory.Exists(avatarsRoot)) Directory.CreateDirectory(avatarsRoot);
+
+            // Xóa ảnh cũ nếu có
+            if (!string.IsNullOrEmpty(lecturer.ProfileImage))
+            {
+                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", lecturer.ProfileImage.TrimStart('/').Replace("/", "\\"));
+                if (System.IO.File.Exists(oldImagePath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(oldImagePath);
+                    }
+                    catch { /* Ignore errors when deleting old file */ }
+                }
+            }
+
+            // Tạo tên file duy nhất
+            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
+            var savePath = Path.Combine(avatarsRoot, uniqueName);
+
+            // Lưu file
+            using (var stream = new FileStream(savePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Cập nhật đường dẫn ảnh vào database
+            var imageUrl = $"/avatars/lecturers/{uniqueName}";
+            lecturer.ProfileImage = imageUrl;
+            lecturer.LastUpdated = DateTime.UtcNow;
+            
+            _uow.LecturerProfiles.Update(lecturer);
+            await _uow.SaveChangesAsync();
+
+            return Ok(ApiResponse<object>.SuccessResponse(new 
+            { 
+                lecturerCode = code,
+                imageUrl = imageUrl,
+                message = "Upload avatar thành công"
+            }));
         }
 
         [HttpDelete("delete/{code}")]

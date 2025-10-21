@@ -27,6 +27,7 @@ const StudentProfilePage: React.FC = () => {
     {}
   );
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const loadStudentProfile = React.useCallback(async () => {
     try {
@@ -72,26 +73,56 @@ const StudentProfilePage: React.FC = () => {
     }
   }, [loadStudentProfile, auth.user?.userCode]);
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     if (!profile) return;
 
     try {
       setLoading(true);
+      setError(null);
+
+      const updatedProfile = { ...editedProfile };
+
+      // If there's a selected file, upload it first
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        // Upload avatar
+        await fetchData(
+          `/StudentProfiles/upload-avatar/${profile.studentCode}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        // Reload profile to get the new avatar URL
+        await loadStudentProfile();
+      }
+
+      // Save profile changes (exclude studentImage since it's handled by upload API)
+      const profileDataToUpdate = { ...updatedProfile };
+      delete profileDataToUpdate.studentImage;
       await fetchData(`/StudentProfiles/update/${profile.studentCode}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editedProfile),
+        body: JSON.stringify(profileDataToUpdate),
       });
 
-      setProfile({ ...profile, ...editedProfile });
+      setProfile({ ...profile, ...updatedProfile });
       setIsEditing(false);
-      // Reload to get updated data
-      await loadStudentProfile();
+      setSelectedFile(null);
+      setImagePreview(null);
+      alert("Cập nhật thông tin thành công!");
     } catch (err) {
       console.error("Error updating profile:", err);
-      setError("Có lỗi xảy ra khi cập nhật thông tin");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Có lỗi xảy ra khi cập nhật thông tin"
+      );
     } finally {
       setLoading(false);
     }
@@ -101,20 +132,39 @@ const StudentProfilePage: React.FC = () => {
     setEditedProfile(profile || {});
     setIsEditing(false);
     setImagePreview(null);
+    setSelectedFile(null);
   };
 
-  const handleImageUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    if (url) {
-      setImagePreview(url);
-      // Store the URL into the edited profile so the payload contains the image
-      setEditedProfile({
-        ...editedProfile,
-        studentImage: url,
-      });
-    } else {
-      // If no URL entered, clear preview
-      setImagePreview(null);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Kiểm tra loại file
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/bmp",
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)");
+        return;
+      }
+
+      // Kiểm tra kích thước file (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Kích thước file không được vượt quá 5MB");
+        return;
+      }
+
+      setSelectedFile(file);
+      // Tạo preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setError(null);
     }
   };
 
@@ -279,7 +329,7 @@ const StudentProfilePage: React.FC = () => {
             }}
           >
             <button
-              onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
+              onClick={() => (isEditing ? handleSubmit() : setIsEditing(true))}
               disabled={loading}
               style={{
                 display: "flex",
@@ -377,15 +427,35 @@ const StudentProfilePage: React.FC = () => {
             }}
           >
             {imagePreview || profile.studentImage ? (
-              <img
-                src={imagePreview || profile.studentImage}
-                alt={profile.fullName || auth.user?.fullName || "Student"}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
+              imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt={profile.fullName || auth.user?.fullName || "Student"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    background: "#F9FAFB",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "12px",
+                    color: "#6B7280",
+                    padding: "8px",
+                    textAlign: "center",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {profile.studentImage}
+                </div>
+              )
             ) : (
               <div
                 style={{
@@ -467,16 +537,15 @@ const StudentProfilePage: React.FC = () => {
                   marginBottom: "8px",
                 }}
               >
-                Đường dẫn ảnh đại diện
+                Tải ảnh đại diện
               </label>
               <input
-                type="text"
-                value={editedProfile.studentImage || ""}
-                onChange={handleImageUrlChange}
-                placeholder="Nhập URL ảnh..."
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/bmp"
+                onChange={handleFileChange}
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "8px",
                   border: "1px solid #D1D5DB",
                   borderRadius: "8px",
                   fontSize: "14px",
@@ -484,6 +553,12 @@ const StudentProfilePage: React.FC = () => {
                   marginBottom: "8px",
                 }}
               />
+
+              <p
+                style={{ fontSize: "12px", color: "#6B7280", marginTop: "4px" }}
+              >
+                Chấp nhận: JPG, JPEG, PNG, GIF, BMP (tối đa 5MB)
+              </p>
             </div>
           )}
         </div>

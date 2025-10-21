@@ -111,7 +111,7 @@ namespace ThesisManagement.Api.Controllers
                 ent.DepartmentCode,
                 ent.ClassCode,
                 ent.FacultyCode,
-                ent.StudentImage,
+                // ent.StudentImage, // Không bao gồm vì không update qua PUT
                 ent.GPA,
                 ent.AcademicStanding,
                 ent.Gender,
@@ -154,7 +154,7 @@ namespace ThesisManagement.Api.Controllers
             ent.DepartmentID = department?.DepartmentID;
             ent.ClassCode = dto.ClassCode;
             ent.FacultyCode = dto.FacultyCode;
-            ent.StudentImage = dto.StudentImage;
+            // StudentImage không được update ở đây, sử dụng endpoint POST /upload-avatar thay thế
             ent.GPA = dto.GPA;
             ent.AcademicStanding = dto.AcademicStanding;
             ent.Gender = dto.Gender;
@@ -171,6 +171,76 @@ namespace ThesisManagement.Api.Controllers
             _uow.StudentProfiles.Update(ent);
             await _uow.SaveChangesAsync();
             return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(ent)));
+        }
+
+        /// <summary>
+        /// Upload avatar cho sinh viên
+        /// </summary>
+        [HttpPost("upload-avatar/{code}")]
+        [Consumes("multipart/form-data")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> UploadAvatar(string code, [FromForm] IFormFile file)
+        {
+            // Kiểm tra sinh viên có tồn tại không
+            var student = await _uow.StudentProfiles.GetByCodeAsync(code);
+            if (student == null) return NotFound(ApiResponse<object>.Fail("Sinh viên không tồn tại", 404));
+
+            // Kiểm tra file
+            if (file == null || file.Length == 0)
+                return BadRequest(ApiResponse<object>.Fail("File ảnh là bắt buộc", 400));
+
+            // Kiểm tra loại file (chỉ cho phép ảnh)
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(fileExtension))
+                return BadRequest(ApiResponse<object>.Fail("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)", 400));
+
+            // Kiểm tra kích thước file (giới hạn 5MB)
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(ApiResponse<object>.Fail("Kích thước file không được vượt quá 5MB", 400));
+
+            // Tạo thư mục lưu ảnh nếu chưa có
+            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "students");
+            if (!Directory.Exists(avatarsRoot)) Directory.CreateDirectory(avatarsRoot);
+
+            // Xóa ảnh cũ nếu có
+            if (!string.IsNullOrEmpty(student.StudentImage))
+            {
+                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", student.StudentImage.TrimStart('/').Replace("/", "\\"));
+                if (System.IO.File.Exists(oldImagePath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(oldImagePath);
+                    }
+                    catch { /* Ignore errors when deleting old file */ }
+                }
+            }
+
+            // Tạo tên file duy nhất
+            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
+            var savePath = Path.Combine(avatarsRoot, uniqueName);
+
+            // Lưu file
+            using (var stream = new FileStream(savePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Cập nhật đường dẫn ảnh vào database
+            var imageUrl = $"/avatars/students/{uniqueName}";
+            student.StudentImage = imageUrl;
+            student.LastUpdated = DateTime.UtcNow;
+            
+            _uow.StudentProfiles.Update(student);
+            await _uow.SaveChangesAsync();
+
+            return Ok(ApiResponse<object>.SuccessResponse(new 
+            { 
+                studentCode = code,
+                imageUrl = imageUrl,
+                message = "Upload avatar thành công"
+            }));
         }
 
         [HttpDelete("delete/{code}")]
