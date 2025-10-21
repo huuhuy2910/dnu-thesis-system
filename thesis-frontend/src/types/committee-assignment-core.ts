@@ -32,8 +32,8 @@ export interface CommitteeAssignmentMemberDetail {
 	role: string;
 	isChair: boolean;
 	degree?: string | null;
-	specialtyCodes: string[];
-	specialtyNames: string[];
+	tagCodes: string[];
+	tagNames: string[];
 }
 
 export interface CommitteeAssignmentDefenseItem {
