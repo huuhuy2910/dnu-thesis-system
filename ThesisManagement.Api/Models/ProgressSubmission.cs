@@ -17,7 +17,6 @@ namespace ThesisManagement.Api.Models
         public string? LecturerCode { get; set; } // New: reference by code
         public DateTime? SubmittedAt { get; set; }
         public int? AttemptNumber { get; set; }
-    // File attachments are stored in SubmissionFiles table; do not map file columns on ProgressSubmission
         public string? LecturerComment { get; set; }
         public string? LecturerState { get; set; }
         public string? FeedbackLevel { get; set; }

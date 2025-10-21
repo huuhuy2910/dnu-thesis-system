@@ -19,7 +19,6 @@ namespace ThesisManagement.Api.Services
             ProgressMilestones = new GenericRepository<ProgressMilestone>(_db);
             ProgressSubmissions = new GenericRepository<ProgressSubmission>(_db);
             MilestoneTemplates = new GenericRepository<MilestoneTemplate>(_db);
-            MilestoneStateHistories = new GenericRepository<MilestoneStateHistory>(_db);
             SubmissionFiles = new GenericRepository<SubmissionFile>(_db);
             Committees = new GenericRepository<Committee>(_db);
             CommitteeMembers = new GenericRepository<CommitteeMember>(_db);
@@ -32,6 +31,7 @@ namespace ThesisManagement.Api.Services
             TopicTags = new GenericRepository<TopicTag>(_db);
             TopicLecturers = new GenericRepository<TopicLecturer>(_db);
             LecturerTags = new GenericRepository<LecturerTag>(_db);
+            SystemActivityLogs = new GenericRepository<SystemActivityLog>(_db);
         }
 
         public IGenericRepository<Department> Departments { get; }
@@ -43,7 +43,6 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         public IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
     public IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
-    public IGenericRepository<MilestoneStateHistory> MilestoneStateHistories { get; }
     public IGenericRepository<SubmissionFile> SubmissionFiles { get; }
         public IGenericRepository<Committee> Committees { get; }
         public IGenericRepository<CommitteeMember> CommitteeMembers { get; }
@@ -56,6 +55,7 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<TopicTag> TopicTags { get; }
         public IGenericRepository<TopicLecturer> TopicLecturers { get; }
         public IGenericRepository<LecturerTag> LecturerTags { get; }
+        public IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
 
         public async Task<int> SaveChangesAsync()
         {

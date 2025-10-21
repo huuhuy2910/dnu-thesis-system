@@ -1,11 +1,13 @@
 export interface PagedResult<T> {
-	items: T[];
-	totalCount: number;
+  items: T[];
+  totalCount: number;
 }
 
 export interface TagSummary {
-	tagCode: string;
-	tagName: string;
-	description?: string | null;
-	usageCount?: number;
+  tagID?: number;
+  tagCode: string;
+  tagName: string;
+  description?: string | null;
+  createdAt?: string;
+  usageCount?: number;
 }

@@ -10,6 +10,7 @@ import {
   FileText,
   Loader2,
   Mail,
+  Filter,
 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import type { Topic } from "../../types/topic";
@@ -32,6 +33,7 @@ interface TopicDisplay {
   studentProfile?: StudentProfile;
   supervisorLecturerProfileID?: number | null;
   supervisorLecturerCode?: string | null;
+  lecturerProfile?: LecturerProfile | null;
 }
 
 const LecturerTopicReview: React.FC = () => {
@@ -78,9 +80,7 @@ const LecturerTopicReview: React.FC = () => {
     topic: null,
   });
 
-  const [lecturerProfile, setLecturerProfile] =
-    useState<LecturerProfile | null>(null);
-  const [loadingLecturer, setLoadingLecturer] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Fetch topics for the lecturer
   useEffect(() => {
@@ -134,6 +134,24 @@ const LecturerTopicReview: React.FC = () => {
               );
             }
 
+            // Fetch lecturer profile for each topic if supervisor exists
+            let lecturerProfile: LecturerProfile | null = null;
+            if (topic.supervisorLecturerCode) {
+              try {
+                const lecturerResponse = await fetchData<{
+                  data: LecturerProfile;
+                }>(
+                  `/LecturerProfiles/get-detail/${topic.supervisorLecturerCode}`
+                );
+                lecturerProfile = lecturerResponse.data;
+              } catch (err) {
+                console.warn(
+                  `Failed to fetch lecturer profile for ${topic.supervisorLecturerCode}`,
+                  err
+                );
+              }
+            }
+
             return {
               topicID: topic.topicID,
               topicCode: topic.topicCode,
@@ -149,6 +167,7 @@ const LecturerTopicReview: React.FC = () => {
               studentProfile,
               supervisorLecturerProfileID: topic.supervisorLecturerProfileID,
               supervisorLecturerCode: topic.supervisorLecturerCode,
+              lecturerProfile,
             };
           })
         );
@@ -475,24 +494,6 @@ const LecturerTopicReview: React.FC = () => {
       isOpen: true,
       topic,
     });
-
-    // Fetch lecturer profile for revision topics
-    if (topic.status === "Cần sửa đổi" && topic.supervisorLecturerCode) {
-      try {
-        setLoadingLecturer(true);
-        const lecturerResponse = await fetchData<{
-          data: LecturerProfile;
-        }>(`/LecturerProfiles/get-detail/${topic.supervisorLecturerCode}`);
-        setLecturerProfile(lecturerResponse.data);
-      } catch (err) {
-        console.error("Failed to fetch lecturer profile:", err);
-        setLecturerProfile(null);
-      } finally {
-        setLoadingLecturer(false);
-      }
-    } else {
-      setLecturerProfile(null);
-    }
   };
 
   const closeDetailModal = () => {
@@ -500,8 +501,6 @@ const LecturerTopicReview: React.FC = () => {
       isOpen: false,
       topic: null,
     });
-    setLecturerProfile(null);
-    setLoadingLecturer(false);
   };
 
   return (
@@ -525,6 +524,44 @@ const LecturerTopicReview: React.FC = () => {
         <p style={{ fontSize: "14px", color: "#666" }}>
           Xem và duyệt các đề tài luận văn của sinh viên
         </p>
+      </div>
+
+      {/* Filter Section */}
+      <div style={{ marginBottom: "24px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <label
+            style={{
+              fontSize: "14px",
+              fontWeight: "600",
+              color: "#374151",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <Filter size={16} />
+            Lọc theo trạng thái:
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #D1D5DB",
+              borderRadius: "8px",
+              fontSize: "14px",
+              background: "white",
+              cursor: "pointer",
+              minWidth: "160px",
+            }}
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="Chờ duyệt">Chờ duyệt</option>
+            <option value="Đã duyệt">Đã duyệt</option>
+            <option value="Cần sửa đổi">Cần sửa đổi</option>
+            <option value="Từ chối">Từ chối</option>
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -699,6 +736,9 @@ const LecturerTopicReview: React.FC = () => {
           {/* Topics List */}
           <div style={{ display: "grid", gap: "16px" }}>
             {topics
+              .filter((topic) =>
+                statusFilter === "all" ? true : topic.status === statusFilter
+              )
               .sort((a, b) => {
                 // Thứ tự ưu tiên: Chờ duyệt > Cần sửa đổi > Đã duyệt > Từ chối
                 const priorityOrder = {
@@ -1028,6 +1068,124 @@ const LecturerTopicReview: React.FC = () => {
                                 }}
                               >
                                 {topic.studentProfile.academicStanding}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lecturer Details */}
+                      {topic.lecturerProfile && (
+                        <div
+                          style={{
+                            background: "#F0F9FF",
+                            border: "1px solid #0EA5E9",
+                            borderRadius: "8px",
+                            padding: "16px",
+                            marginTop: "16px",
+                          }}
+                        >
+                          <h4
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#0C4A6E",
+                              marginBottom: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <User size={16} />
+                            Thông tin giảng viên hướng dẫn
+                          </h4>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "16px",
+                            }}
+                          >
+                            <div>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Tên giảng viên:
+                              </span>
+                              <p
+                                style={{
+                                  fontSize: "14px",
+                                  color: "#1a1a1a",
+                                  margin: "2px 0",
+                                }}
+                              >
+                                {topic.lecturerProfile.fullName}
+                              </p>
+                            </div>
+                            <div>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Email:
+                              </span>
+                              <p
+                                style={{
+                                  fontSize: "14px",
+                                  color: "#1a1a1a",
+                                  margin: "2px 0",
+                                }}
+                              >
+                                {topic.lecturerProfile.email}
+                              </p>
+                            </div>
+                            <div>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Số điện thoại:
+                              </span>
+                              <p
+                                style={{
+                                  fontSize: "14px",
+                                  color: "#1a1a1a",
+                                  margin: "2px 0",
+                                }}
+                              >
+                                {topic.lecturerProfile.phoneNumber ||
+                                  "Chưa cập nhật"}
+                              </p>
+                            </div>
+                            <div>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Học vị:
+                              </span>
+                              <p
+                                style={{
+                                  fontSize: "14px",
+                                  color: "#1a1a1a",
+                                  margin: "2px 0",
+                                }}
+                              >
+                                {topic.lecturerProfile.degree ||
+                                  "Chưa cập nhật"}
                               </p>
                             </div>
                           </div>
@@ -2927,16 +3085,16 @@ const LecturerTopicReview: React.FC = () => {
                 </div>
               )}
 
-              {/* Lecturer Information for Revision Topics */}
-              {detailModal.topic.status === "Cần sửa đổi" && (
+              {/* Lecturer Information */}
+              {detailModal.topic.lecturerProfile && (
                 <div
                   style={{
                     background:
-                      "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
+                      "linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)",
                     borderRadius: "16px",
                     padding: "24px",
-                    border: "1px solid rgba(245, 158, 11, 0.2)",
-                    boxShadow: "0 4px 12px rgba(245, 158, 11, 0.1)",
+                    border: "1px solid rgba(14, 165, 233, 0.2)",
+                    boxShadow: "0 4px 12px rgba(14, 165, 233, 0.1)",
                     position: "relative",
                     overflow: "hidden",
                   }}
@@ -2949,7 +3107,7 @@ const LecturerTopicReview: React.FC = () => {
                       right: 0,
                       height: "4px",
                       background:
-                        "linear-gradient(90deg, #F59E0B, #D97706, #B45309)",
+                        "linear-gradient(90deg, #0EA5E9, #0284C7, #0369A1)",
                     }}
                   />
                   <div
@@ -2965,11 +3123,11 @@ const LecturerTopicReview: React.FC = () => {
                         width: "36px",
                         height: "36px",
                         borderRadius: "8px",
-                        background: "linear-gradient(135deg, #F59E0B, #D97706)",
+                        background: "linear-gradient(135deg, #0EA5E9, #0284C7)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        boxShadow: "0 2px 8px rgba(245, 158, 11, 0.3)",
+                        boxShadow: "0 2px 8px rgba(14, 165, 233, 0.3)",
                       }}
                     >
                       <User size={18} color="white" />
@@ -2978,7 +3136,7 @@ const LecturerTopicReview: React.FC = () => {
                       style={{
                         fontSize: "18px",
                         fontWeight: "600",
-                        color: "#92400e",
+                        color: "#0C4A6E",
                         margin: 0,
                       }}
                     >
@@ -2986,388 +3144,160 @@ const LecturerTopicReview: React.FC = () => {
                     </h3>
                   </div>
 
-                  {loadingLecturer ? (
-                    <div style={{ textAlign: "center", padding: "20px" }}>
-                      <Loader2
-                        size={24}
-                        color="#F59E0B"
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                      <p style={{ marginTop: "8px", color: "#92400e" }}>
-                        Đang tải thông tin giảng viên...
-                      </p>
-                    </div>
-                  ) : lecturerProfile ? (
-                    <div style={{ display: "grid", gap: "16px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "16px",
-                        }}
-                      >
-                        <img
-                          src={
-                            lecturerProfile.profileImage ||
-                            "https://via.placeholder.com/80x80?text=No+Image"
-                          }
-                          alt="Lecturer"
-                          style={{
-                            width: "80px",
-                            height: "80px",
-                            borderRadius: "50%",
-                            objectFit: "cover",
-                            border: "3px solid #F59E0B",
-                            boxShadow: "0 4px 12px rgba(245, 158, 11, 0.2)",
-                          }}
-                        />
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "18px",
-                              fontWeight: "600",
-                              color: "#92400e",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            {lecturerProfile.fullName}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              opacity: 0.8,
-                            }}
-                          >
-                            Mã giảng viên: {lecturerProfile.lecturerCode}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              opacity: 0.8,
-                            }}
-                          >
-                            Học vị: {lecturerProfile.degree}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(200px, 1fr))",
-                          gap: "16px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "6px",
-                              background: "rgba(245, 158, 11, 0.1)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Mail size={16} color="#F59E0B" />
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "12px",
-                                color: "#92400e",
-                                fontWeight: "500",
-                                marginBottom: "2px",
-                              }}
-                            >
-                              Email
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "14px",
-                                color: "#92400e",
-                                fontWeight: "600",
-                              }}
-                            >
-                              {lecturerProfile.email}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "6px",
-                              background: "rgba(245, 158, 11, 0.1)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <User size={16} color="#F59E0B" />
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "12px",
-                                color: "#92400e",
-                                fontWeight: "500",
-                                marginBottom: "2px",
-                              }}
-                            >
-                              Giới tính
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "14px",
-                                color: "#92400e",
-                                fontWeight: "600",
-                              }}
-                            >
-                              {lecturerProfile.gender}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "6px",
-                              background: "rgba(245, 158, 11, 0.1)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Calendar size={16} color="#F59E0B" />
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "12px",
-                                color: "#92400e",
-                                fontWeight: "500",
-                                marginBottom: "2px",
-                              }}
-                            >
-                              Ngày sinh
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "14px",
-                                color: "#92400e",
-                                fontWeight: "600",
-                              }}
-                            >
-                              {new Date(
-                                lecturerProfile.dateOfBirth
-                              ).toLocaleDateString("vi-VN")}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(150px, 1fr))",
-                          gap: "16px",
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Khoa
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.departmentCode}
-                          </div>
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Số điện thoại
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.phoneNumber}
-                          </div>
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Hạn ngạch HD
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.guideQuota}
-                          </div>
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Hạn ngạch PB
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.defenseQuota}
-                          </div>
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Đang hướng dẫn
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.currentGuidingCount}
-                          </div>
-                        </div>
-                      </div>
-
-                      {lecturerProfile.address && (
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Địa chỉ
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.address}
-                          </div>
-                        </div>
-                      )}
-
-                      {lecturerProfile.notes && (
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400e",
-                              fontWeight: "500",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Ghi chú
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              color: "#92400e",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {lecturerProfile.notes}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
+                  <div style={{ display: "grid", gap: "16px" }}>
                     <div
                       style={{
-                        textAlign: "center",
-                        padding: "20px",
-                        color: "#92400e",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "16px",
                       }}
                     >
-                      <AlertCircle size={24} color="#F59E0B" />
-                      <p style={{ marginTop: "8px" }}>
-                        Không thể tải thông tin giảng viên
-                      </p>
+                      <img
+                        src={
+                          detailModal.topic.lecturerProfile.profileImage ||
+                          "https://via.placeholder.com/80x80?text=No+Image"
+                        }
+                        alt="Lecturer"
+                        style={{
+                          width: "80px",
+                          height: "80px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "3px solid #0EA5E9",
+                        }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <h4
+                          style={{
+                            fontSize: "20px",
+                            fontWeight: "600",
+                            color: "#0C4A6E",
+                            margin: "0 0 4px 0",
+                          }}
+                        >
+                          {detailModal.topic.lecturerProfile.fullName}
+                        </h4>
+                        <p
+                          style={{
+                            fontSize: "14px",
+                            color: "#64748B",
+                            margin: "0 0 8px 0",
+                          }}
+                        >
+                          {detailModal.topic.lecturerProfile.degree ||
+                            "Chưa cập nhật học vị"}
+                        </p>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "16px",
+                            fontSize: "14px",
+                            color: "#475569",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <Mail size={16} />
+                            {detailModal.topic.lecturerProfile.email}
+                          </div>
+                          {detailModal.topic.lecturerProfile.phoneNumber && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <User size={16} />
+                              {detailModal.topic.lecturerProfile.phoneNumber}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(200px, 1fr))",
+                        gap: "16px",
+                        marginTop: "16px",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#64748B",
+                            fontWeight: "500",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Mã giảng viên
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            color: "#0C4A6E",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {detailModal.topic.supervisorLecturerCode}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#64748B",
+                            fontWeight: "500",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Khoa
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            color: "#0C4A6E",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {detailModal.topic.lecturerProfile.departmentCode ||
+                            "Chưa cập nhật"}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#64748B",
+                            fontWeight: "500",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Học vị
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            color: "#0C4A6E",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {detailModal.topic.lecturerProfile.degree ||
+                            "Chưa cập nhật"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -717,17 +717,6 @@ namespace ThesisManagement.Api.Services
                             var old = t.Status;
                             t.Status = "Đủ điều kiện bảo vệ";
                             t.LastUpdated = DateTime.UtcNow;
-                            await _db.MilestoneStateHistories.AddAsync(new MilestoneStateHistory
-                            {
-                                MilestoneID = 0,
-                                MilestoneCode = string.Empty,
-                                TopicCode = t.TopicCode,
-                                OldState = old,
-                                NewState = t.Status,
-                                ChangedByUserCode = "system",
-                                ChangedAt = DateTime.UtcNow,
-                                Comment = "Committee deleted (force), assignments removed"
-                            }, cancellationToken);
                         }
                     }
 

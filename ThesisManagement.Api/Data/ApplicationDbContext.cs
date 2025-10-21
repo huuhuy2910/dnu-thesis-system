@@ -1,13 +1,23 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System.Linq;
+using System.Text.Json;
 using ThesisManagement.Api.Models;
+using ThesisManagement.Api.Services;
 
 namespace ThesisManagement.Api.Data
 {
     public class ApplicationDbContext : DbContext
     {
+        private readonly ICurrentUserService? _currentUserService;
+
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> opts) : base(opts) { }
+
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> opts, ICurrentUserService currentUserService) 
+            : base(opts)
+        {
+            _currentUserService = currentUserService;
+        }
 
         public DbSet<Department> Departments => Set<Department>();
         public DbSet<User> Users => Set<User>();
@@ -22,7 +32,6 @@ namespace ThesisManagement.Api.Data
         public DbSet<CommitteeSession> CommitteeSessions => Set<CommitteeSession>();
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
-        public DbSet<MilestoneStateHistory> MilestoneStateHistories => Set<MilestoneStateHistory>();
         public DbSet<CommitteeTag> CommitteeTags => Set<CommitteeTag>();
         
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
@@ -34,6 +43,9 @@ namespace ThesisManagement.Api.Data
         public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
         public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
         public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+        
+        // System Activity Logs
+        public DbSet<SystemActivityLog> SystemActivityLogs => Set<SystemActivityLog>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -193,19 +205,6 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
-            // MilestoneStateHistory
-            modelBuilder.Entity<MilestoneStateHistory>(b =>
-            {
-                b.HasKey(x => x.HistoryID);
-                b.Property(x => x.MilestoneCode).HasMaxLength(60);
-                b.Property(x => x.TopicCode).HasMaxLength(40);
-                b.Property(x => x.OldState).HasMaxLength(50);
-                b.Property(x => x.NewState).HasMaxLength(50);
-                b.Property(x => x.ChangedByUserCode).HasMaxLength(40);
-                b.Property(x => x.ChangedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.Comment).HasMaxLength(500);
-            });
-
             // ProgressSubmissions
             modelBuilder.Entity<ProgressSubmission>(b =>
             {
@@ -243,21 +242,6 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Ordinal).IsRequired();
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
                 b.Property(x => x.LastUpdated);
-            });
-
-            // MilestoneStateHistory (table name is singular in DB)
-            modelBuilder.Entity<MilestoneStateHistory>(b =>
-            {
-                b.ToTable("MilestoneStateHistory");
-                b.HasKey(x => x.HistoryID);
-                b.HasOne(x => x.Milestone).WithMany(x => x.StateHistories).HasForeignKey(x => x.MilestoneID);
-                b.Property(x => x.MilestoneCode).HasMaxLength(60);
-                b.Property(x => x.TopicCode).HasMaxLength(40);
-                b.Property(x => x.OldState).HasMaxLength(50);
-                b.Property(x => x.NewState).HasMaxLength(50).IsRequired();
-                b.Property(x => x.ChangedByUserCode).HasMaxLength(40);
-                b.Property(x => x.Comment);
-                b.Property(x => x.ChangedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             });
 
             // SubmissionFiles
@@ -477,6 +461,37 @@ namespace ThesisManagement.Api.Data
                 // Unique constraint: one lecturer can only have one assignment of the same tag
                 b.HasIndex(x => new { x.LecturerProfileID, x.TagID }).IsUnique();
             });
+
+            // SystemActivityLog
+            modelBuilder.Entity<SystemActivityLog>(b =>
+            {
+                b.ToTable("SystemActivityLogs");
+                b.HasKey(x => x.LogID);
+                b.Property(x => x.EntityName).HasMaxLength(100);
+                b.Property(x => x.EntityID).HasMaxLength(60);
+                b.Property(x => x.ActionType).HasMaxLength(30).IsRequired();
+                b.Property(x => x.UserCode).HasMaxLength(40);
+                b.Property(x => x.UserRole).HasMaxLength(30);
+                b.Property(x => x.IPAddress).HasMaxLength(45);
+                b.Property(x => x.DeviceInfo).HasMaxLength(255);
+                b.Property(x => x.Module).HasMaxLength(100);
+                b.Property(x => x.Status).HasMaxLength(30);
+                b.Property(x => x.RelatedRecordCode).HasMaxLength(60);
+                b.Property(x => x.PerformedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                
+                // Optional foreign key to User
+                b.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserID)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                // Indexes for performance
+                b.HasIndex(x => x.EntityName);
+                b.HasIndex(x => x.ActionType);
+                b.HasIndex(x => x.UserCode);
+                b.HasIndex(x => x.PerformedAt);
+                b.HasIndex(x => x.Module);
+            });
         }
 
         private static string? FormatSessionValue(int? value)
@@ -496,6 +511,255 @@ namespace ThesisManagement.Api.Data
             }
 
             return int.TryParse(digits, out var parsed) ? parsed : null;
+        }
+
+        /// <summary>
+        /// Override SaveChangesAsync để tự động ghi log các thao tác INSERT/UPDATE/DELETE
+        /// </summary>
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var logs = new List<SystemActivityLog>();
+
+            // Lấy thông tin người dùng hiện tại
+            var userId = _currentUserService?.GetUserId();
+            var userCode = _currentUserService?.GetUserCode();
+            var userRole = _currentUserService?.GetUserRole();
+            var ipAddress = _currentUserService?.GetIpAddress();
+            var deviceInfo = _currentUserService?.GetDeviceInfo();
+
+            // Lấy các entity đã thay đổi trước khi save
+            var entries = ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added || 
+                           e.State == EntityState.Modified || 
+                           e.State == EntityState.Deleted)
+                .Where(e => e.Entity.GetType() != typeof(SystemActivityLog)) // Không log chính bảng log
+                .ToList();
+
+            foreach (var entry in entries)
+            {
+                var entityName = entry.Entity.GetType().Name;
+                var entityId = GetEntityId(entry);
+                var module = GetModuleFromEntity(entityName);
+
+                SystemActivityLog? log = null;
+
+                switch (entry.State)
+                {
+                    case EntityState.Added:
+                        // LOG INSERT - Ghi lại dữ liệu mới được tạo
+                        log = new SystemActivityLog
+                        {
+                            EntityName = entityName,
+                            EntityID = entityId,
+                            ActionType = "CREATE",
+                            ActionDescription = $"Tạo mới {GetFriendlyEntityName(entityName)}",
+                            OldValue = null, // Không có dữ liệu cũ
+                            NewValue = SerializeEntity(entry.CurrentValues.ToObject()), // Dữ liệu mới
+                            Module = module,
+                            Status = "PENDING" // Sẽ update thành SUCCESS sau khi save thành công
+                        };
+                        break;
+
+                    case EntityState.Modified:
+                        // LOG UPDATE - Ghi lại dữ liệu cũ và mới
+                        var modifiedProperties = entry.Properties
+                            .Where(p => p.IsModified)
+                            .Select(p => p.Metadata.Name)
+                            .ToList();
+
+                        if (modifiedProperties.Any())
+                        {
+                            var oldValues = new Dictionary<string, object?>();
+                            var newValues = new Dictionary<string, object?>();
+
+                            foreach (var propName in modifiedProperties)
+                            {
+                                oldValues[propName] = entry.OriginalValues[propName];
+                                newValues[propName] = entry.CurrentValues[propName];
+                            }
+
+                            log = new SystemActivityLog
+                            {
+                                EntityName = entityName,
+                                EntityID = entityId,
+                                ActionType = "UPDATE",
+                                ActionDescription = $"Cập nhật {GetFriendlyEntityName(entityName)} - Thay đổi: {string.Join(", ", modifiedProperties)}",
+                                OldValue = JsonSerializer.Serialize(oldValues), // Dữ liệu cũ
+                                NewValue = JsonSerializer.Serialize(newValues), // Dữ liệu mới
+                                Module = module,
+                                Status = "PENDING"
+                            };
+                        }
+                        break;
+
+                    case EntityState.Deleted:
+                        // LOG DELETE - Ghi lại dữ liệu trước khi xóa
+                        log = new SystemActivityLog
+                        {
+                            EntityName = entityName,
+                            EntityID = entityId,
+                            ActionType = "DELETE",
+                            ActionDescription = $"Xóa {GetFriendlyEntityName(entityName)}",
+                            OldValue = SerializeEntity(entry.OriginalValues.ToObject()), // Dữ liệu bị xóa
+                            NewValue = null, // Không còn dữ liệu
+                            Module = module,
+                            Status = "PENDING"
+                        };
+                        break;
+                }
+
+                if (log != null)
+                {
+                    // Gắn thông tin người dùng
+                    log.UserID = userId;
+                    log.UserCode = userCode ?? "SYSTEM";
+                    log.UserRole = userRole ?? "System";
+                    log.IPAddress = ipAddress;
+                    log.DeviceInfo = deviceInfo;
+                    log.PerformedAt = DateTime.UtcNow;
+
+                    logs.Add(log);
+                }
+            }
+
+            // Thực hiện save changes
+            int result;
+            try
+            {
+                result = await base.SaveChangesAsync(cancellationToken);
+
+                // Cập nhật status thành SUCCESS cho tất cả logs
+                foreach (var log in logs)
+                {
+                    log.Status = "SUCCESS";
+                }
+            }
+            catch (Exception ex)
+            {
+                // Cập nhật status thành FAILED nếu có lỗi
+                foreach (var log in logs)
+                {
+                    log.Status = "FAILED";
+                    log.Comment = $"Error: {ex.Message}";
+                }
+                
+                // Re-throw exception sau khi đã log
+                throw;
+            }
+            finally
+            {
+                // Thêm logs vào database (nếu có)
+                if (logs.Any())
+                {
+                    await SystemActivityLogs.AddRangeAsync(logs, cancellationToken);
+                    await base.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Lấy ID hoặc Code của entity để ghi log
+        /// </summary>
+        private string? GetEntityId(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+        {
+            var entity = entry.Entity;
+            var type = entity.GetType();
+
+            // Ưu tiên lấy các trường Code
+            var codeProperty = type.GetProperty("TopicCode") ?? 
+                             type.GetProperty("StudentCode") ?? 
+                             type.GetProperty("LecturerCode") ??
+                             type.GetProperty("UserCode") ??
+                             type.GetProperty("DepartmentCode") ??
+                             type.GetProperty("MilestoneCode") ??
+                             type.GetProperty("SubmissionCode") ??
+                             type.GetProperty("CommitteeCode") ??
+                             type.GetProperty("TagCode");
+
+            if (codeProperty != null)
+            {
+                return codeProperty.GetValue(entity)?.ToString();
+            }
+
+            // Fallback về ID
+            var idProperty = type.GetProperty("TopicID") ?? 
+                           type.GetProperty("StudentProfileID") ?? 
+                           type.GetProperty("LecturerProfileID") ??
+                           type.GetProperty("UserID") ??
+                           type.GetProperty("DepartmentID") ??
+                           type.GetProperty("MilestoneID") ??
+                           type.GetProperty("SubmissionID") ??
+                           type.GetProperty("CommitteeID");
+
+            return idProperty?.GetValue(entity)?.ToString();
+        }
+
+        /// <summary>
+        /// Chuyển entity thành JSON string (loại bỏ navigation properties để tránh circular reference)
+        /// </summary>
+        private string? SerializeEntity(object? entity)
+        {
+            if (entity == null) return null;
+
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+                    WriteIndented = false,
+                    MaxDepth = 3 // Giới hạn độ sâu để tránh circular reference
+                };
+                return JsonSerializer.Serialize(entity, options);
+            }
+            catch
+            {
+                return entity.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Xác định module dựa trên tên entity
+        /// </summary>
+        private string GetModuleFromEntity(string entityName)
+        {
+            return entityName switch
+            {
+                "User" or "StudentProfile" or "LecturerProfile" => "User",
+                "Topic" or "CatalogTopic" or "TopicLecturer" or "TopicTag" => "Topic",
+                "ProgressMilestone" or "ProgressSubmission" or "MilestoneTemplate" => "Milestone",
+                "Committee" or "CommitteeMember" or "CommitteeSession" or "CommitteeTag" => "Committee",
+                "DefenseAssignment" or "DefenseScore" => "Defense",
+                "SubmissionFile" => "Submission",
+                "Department" => "Department",
+                "Tag" or "CatalogTopicTag" or "LecturerTag" => "Catalog",
+                _ => "System"
+            };
+        }
+
+        /// <summary>
+        /// Chuyển tên entity sang tiếng Việt để dễ đọc
+        /// </summary>
+        private string GetFriendlyEntityName(string entityName)
+        {
+            return entityName switch
+            {
+                "User" => "người dùng",
+                "StudentProfile" => "hồ sơ sinh viên",
+                "LecturerProfile" => "hồ sơ giảng viên",
+                "Topic" => "đề tài",
+                "CatalogTopic" => "danh mục đề tài",
+                "ProgressMilestone" => "tiến độ",
+                "ProgressSubmission" => "bài nộp",
+                "Committee" => "hội đồng",
+                "CommitteeMember" => "thành viên hội đồng",
+                "DefenseAssignment" => "phân công bảo vệ",
+                "DefenseScore" => "điểm bảo vệ",
+                "Department" => "khoa",
+                "Tag" => "tag",
+                _ => entityName.ToLower()
+            };
         }
     }
 }

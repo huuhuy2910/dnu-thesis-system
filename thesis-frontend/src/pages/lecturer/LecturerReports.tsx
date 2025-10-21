@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Eye,
@@ -20,22 +21,26 @@ import type {
 import type { SubmissionFile } from "../../types/submissionFile";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
-import type { TopicTag } from "../../types/tag";
 import type { LecturerProfile } from "../../types/lecturer";
 
 const LecturerReports: React.FC = () => {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [reports, setReports] = useState<ProgressSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] =
+    useState<ProgressSubmission | null>(null);
+  const [selectedReportForComment, setSelectedReportForComment] =
     useState<ProgressSubmission | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [studentProfiles, setStudentProfiles] = useState<{
     [key: string]: StudentProfile;
   }>({});
   const [topics, setTopics] = useState<{ [key: string]: Topic }>({});
-  const [topicTags, setTopicTags] = useState<{ [key: string]: TopicTag[] }>({});
+  const [supervisorLecturers, setSupervisorLecturers] = useState<{
+    [key: string]: LecturerProfile;
+  }>({});
   const [submissionFiles, setSubmissionFiles] = useState<{
     [key: string]: SubmissionFile[];
   }>({});
@@ -46,93 +51,161 @@ const LecturerReports: React.FC = () => {
     useState<LecturerProfile | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const getAbsoluteUrl = (url: string) => {
+    if (/^https?:\/\//i.test(url)) return url;
+    const envBase = (import.meta.env.VITE_API_BASE_URL || "").toString();
+    if (!envBase) return url.startsWith("/") ? url : `/${url}`;
+    const normalizedBase = envBase.endsWith("/")
+      ? envBase.slice(0, -1)
+      : envBase;
+    return url.startsWith("/")
+      ? `${normalizedBase}${url}`
+      : `${normalizedBase}/${url}`;
+  };
+
   const loadAdditionalData = useCallback(
     async (submissions: ProgressSubmission[]) => {
-      const studentPromises = submissions.map(async (submission) => {
-        if (
-          submission.studentUserCode &&
-          !studentProfiles[submission.studentUserCode]
-        ) {
+      // Load all student profiles
+      const studentCodes = submissions
+        .map((s) => s.studentUserCode)
+        .filter((code) => code && !studentProfiles[code]);
+
+      if (studentCodes.length > 0) {
+        const studentPromises = studentCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/StudentProfiles/get-list?UserCode=${submission.studentUserCode}`
+              `/StudentProfiles/get-list?UserCode=${code}`
             );
             const data = (response as ApiResponse<StudentProfile[]>).data || [];
-            if (data.length > 0) {
-              setStudentProfiles((prev) => ({
-                ...prev,
-                [submission.studentUserCode]: data[0],
-              }));
-            }
+            return { code, profile: data[0] };
           } catch (err) {
             console.error("Error loading student profile:", err);
+            return null;
           }
-        }
-      });
+        });
 
-      const topicPromises = submissions.map(async (submission) => {
-        if (submission.studentUserCode && !topics[submission.studentUserCode]) {
+        const studentResults = await Promise.all(studentPromises);
+        const newStudentProfiles: { [key: string]: StudentProfile } = {};
+        studentResults.forEach((result) => {
+          if (result && result.profile) {
+            newStudentProfiles[result.code] = result.profile;
+          }
+        });
+
+        if (Object.keys(newStudentProfiles).length > 0) {
+          setStudentProfiles((prev) => ({ ...prev, ...newStudentProfiles }));
+        }
+      }
+
+      // Load all topics
+      const topicCodes = submissions
+        .map((s) => s.studentUserCode)
+        .filter((code) => code && !topics[code]);
+
+      if (topicCodes.length > 0) {
+        const topicPromises = topicCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${submission.studentUserCode}`
+              `/Topics/get-list?ProposerUserCode=${code}`
             );
             const data = (response as ApiResponse<Topic[]>).data || [];
-            if (data.length > 0) {
-              setTopics((prev) => ({
-                ...prev,
-                [submission.studentUserCode]: data[0],
-              }));
-            }
+            return { code, topic: data[0] };
           } catch (err) {
             console.error("Error loading topic:", err);
+            return null;
+          }
+        });
+
+        const topicResults = await Promise.all(topicPromises);
+        const newTopics: { [key: string]: Topic } = {};
+        topicResults.forEach((result) => {
+          if (result && result.topic) {
+            newTopics[result.code] = result.topic;
+          }
+        });
+
+        if (Object.keys(newTopics).length > 0) {
+          setTopics((prev) => ({ ...prev, ...newTopics }));
+        }
+
+        // Collect supervisor lecturer codes from topics (new + existing)
+        const supervisorCodesToFetch = new Set<string>();
+        submissions.forEach((s) => {
+          const topicFromNew = (newTopics as { [key: string]: Topic })[
+            s.studentUserCode
+          ];
+          const topic = topicFromNew || topics[s.studentUserCode];
+          const supCode =
+            (topic as Topic | undefined)?.supervisorLecturerCode || null;
+          if (supCode && !supervisorLecturers[supCode])
+            supervisorCodesToFetch.add(supCode);
+        });
+
+        if (supervisorCodesToFetch.size > 0) {
+          const supPromises = Array.from(supervisorCodesToFetch).map(
+            async (code) => {
+              try {
+                const res = await fetchData(
+                  `/LecturerProfiles/get-detail/${code}`
+                );
+                const data = (res as ApiResponse<LecturerProfile>)?.data;
+                return { code, profile: data };
+              } catch (err) {
+                console.error("Error loading supervisor lecturer:", err);
+                return null;
+              }
+            }
+          );
+
+          const supResults = await Promise.all(supPromises);
+          const newSupervisors: { [key: string]: LecturerProfile } = {};
+          supResults.forEach((r) => {
+            if (r && r.profile) newSupervisors[r.code] = r.profile;
+          });
+
+          if (Object.keys(newSupervisors).length > 0) {
+            setSupervisorLecturers((prev) => ({ ...prev, ...newSupervisors }));
           }
         }
-      });
+      }
 
-      const tagPromises = submissions.map(async (submission) => {
-        const topic = topics[submission.studentUserCode];
-        if (topic && !topicTags[topic.topicCode]) {
+      // Load all submission files
+      const submissionCodes = submissions
+        .map((s) => s.submissionCode)
+        .filter((code) => !submissionFiles[code]);
+
+      if (submissionCodes.length > 0) {
+        const filePromises = submissionCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/TopicTags/list?TopicCode=${topic.topicCode}`
-            );
-            const data = (response as ApiResponse<TopicTag[]>).data || [];
-            setTopicTags((prev) => ({ ...prev, [topic.topicCode]: data }));
-          } catch (err) {
-            console.error("Error loading topic tags:", err);
-          }
-        }
-      });
-
-      const filePromises = submissions.map(async (submission) => {
-        if (!submissionFiles[submission.submissionCode]) {
-          try {
-            const response = await fetchData(
-              `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`
+              `/SubmissionFiles/get-list?SubmissionCode=${code}`
             );
             const data = (response as ApiResponse<SubmissionFile[]>).data || [];
-            setSubmissionFiles((prev) => ({
-              ...prev,
-              [submission.submissionCode]: data,
-            }));
+            return { code, files: data };
           } catch (err) {
             console.error("Error loading submission files:", err);
+            return null;
           }
-        }
-      });
+        });
 
-      await Promise.all([
-        ...studentPromises,
-        ...topicPromises,
-        ...tagPromises,
-        ...filePromises,
-      ]);
+        const fileResults = await Promise.all(filePromises);
+        const newSubmissionFiles: { [key: string]: SubmissionFile[] } = {};
+        fileResults.forEach((result) => {
+          if (result && result.files) {
+            newSubmissionFiles[result.code] = result.files;
+          }
+        });
+
+        if (Object.keys(newSubmissionFiles).length > 0) {
+          setSubmissionFiles((prev) => ({ ...prev, ...newSubmissionFiles }));
+        }
+      }
     },
-    [studentProfiles, topics, topicTags, submissionFiles]
+    [studentProfiles, submissionFiles, topics, supervisorLecturers]
   );
 
   const loadLecturerProfile = useCallback(async () => {
-    if (!auth.user?.userCode) return;
+    if (!auth.user?.userCode || lecturerProfile) return; // Don't load if already loaded
 
     try {
       const response = await fetchData(
@@ -145,7 +218,7 @@ const LecturerReports: React.FC = () => {
     } catch (err) {
       console.error("Error loading lecturer profile:", err);
     }
-  }, [auth.user?.userCode]);
+  }, [auth.user?.userCode, lecturerProfile]);
 
   const loadReports = useCallback(async () => {
     if (!lecturerProfile?.lecturerCode) return;
@@ -181,7 +254,7 @@ const LecturerReports: React.FC = () => {
     }
   }, [lecturerProfile, loadReports]);
 
-  const filteredReports =
+  const filteredReports = (
     filterStatus === "all"
       ? reports
       : reports.filter((report) => {
@@ -193,7 +266,20 @@ const LecturerReports: React.FC = () => {
           if (filterStatus === "rejected")
             return report.lecturerState === "Revision";
           return true;
-        });
+        })
+  ).sort((a, b) => {
+    // Ưu tiên báo cáo chưa nhận xét lên trên
+    const aNotReviewed = !a.lecturerComment && !a.lecturerState;
+    const bNotReviewed = !b.lecturerComment && !b.lecturerState;
+
+    if (aNotReviewed && !bNotReviewed) return -1;
+    if (!aNotReviewed && bNotReviewed) return 1;
+
+    // Nếu cùng trạng thái, sắp xếp theo thời gian nộp (mới nhất trước)
+    return (
+      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+  });
 
   const getStatusIcon = (lecturerState: string | null) => {
     if (!lecturerState) return <Clock size={16} color="#F59E0B" />;
@@ -243,12 +329,12 @@ const LecturerReports: React.FC = () => {
   };
 
   const handleSubmitComment = async () => {
-    if (!selectedReport) return;
+    if (!selectedReportForComment) return;
 
     try {
       setSubmitting(true);
       await fetchData(
-        `/ProgressSubmissions/update/${selectedReport.submissionID}`,
+        `/ProgressSubmissions/update/${selectedReportForComment.submissionID}`,
         {
           method: "PUT",
           body: {
@@ -261,7 +347,7 @@ const LecturerReports: React.FC = () => {
 
       // Reload reports to show updated data
       await loadReports();
-      setSelectedReport(null);
+      setSelectedReportForComment(null);
       setLecturerComment("");
       setLecturerState("");
       setFeedbackLevel("");
@@ -273,23 +359,48 @@ const LecturerReports: React.FC = () => {
     }
   };
 
+  const truncateFileName = (fileName: string, maxLength: number = 20) => {
+    if (fileName.length <= maxLength) return fileName;
+    return fileName.substring(0, maxLength - 3) + "...";
+  };
+
   const handleDownloadFile = async (fileID: number, fileName: string) => {
     try {
-      const response = await fetchData(`/SubmissionFiles/download/${fileID}`);
-      // Handle file download - this might need adjustment based on API response
-      const blob = new Blob([response as BlobPart], {
-        type: "application/octet-stream",
-      });
-      const url = window.URL.createObjectURL(blob);
+      // Use the correct API endpoint for downloading files
+      const downloadUrl = `/api/SubmissionFiles/download/${fileID}`;
+      const url = getAbsoluteUrl(downloadUrl);
+
+      const resp = await fetch(url, { credentials: "include" });
+
+      if (!resp.ok) {
+        // If server responds with unauthorized or redirect to login, send user to login
+        if (resp.status === 401 || resp.status === 302 || resp.status === 403) {
+          navigate("/login");
+          return;
+        }
+        throw new Error(`Download failed with status ${resp.status}`);
+      }
+
+      const contentType = resp.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) {
+        // Probably redirected to login page
+        navigate("/login");
+        return;
+      }
+
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
+      a.href = blobUrl;
+      a.download = fileName || "download";
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Error downloading file:", err);
+      // Show simple feedback to user
+      alert("Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.");
     }
   };
 
@@ -619,7 +730,7 @@ const LecturerReports: React.FC = () => {
                             )
                           </span>
                         </div>
-
+                        {/* Supervisor Lecturer Info */}
                         <div
                           style={{
                             display: "flex",
@@ -627,12 +738,21 @@ const LecturerReports: React.FC = () => {
                             gap: "8px",
                           }}
                         >
-                          <FileText size={14} color="#666" />
+                          <User size={14} color="#666" />
                           <span style={{ fontSize: "14px", color: "#666" }}>
-                            Đề tài: {topic?.title || "N/A"}
+                            Giảng viên hướng dẫn:{" "}
+                            <strong>
+                              {(() => {
+                                const supCode =
+                                  topics[report.studentUserCode]
+                                    ?.supervisorLecturerCode;
+                                return supCode && supervisorLecturers[supCode]
+                                  ? supervisorLecturers[supCode].fullName
+                                  : "N/A";
+                              })()}
+                            </strong>
                           </span>
                         </div>
-
                         <div
                           style={{
                             display: "flex",
@@ -648,6 +768,20 @@ const LecturerReports: React.FC = () => {
                             )}
                           </span>
                         </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <FileText size={14} color="#666" />
+                        <span style={{ fontSize: "14px", color: "#666" }}>
+                          Đề tài: {topic?.title || "N/A"}
+                        </span>
                       </div>
 
                       {/* Student Report Description */}
@@ -780,7 +914,7 @@ const LecturerReports: React.FC = () => {
                           }
                         >
                           <Download size={14} />
-                          Tải {file.fileName}
+                          Tải {truncateFileName(file.fileName)}
                         </button>
                       ))}
 
@@ -810,6 +944,55 @@ const LecturerReports: React.FC = () => {
                         <Eye size={14} />
                         Xem chi tiết
                       </button>
+
+                      {!report.lecturerComment && !report.lecturerState && (
+                        <button
+                          style={{
+                            padding: "8px 16px",
+                            background: "#10B981",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#059669";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "#10B981";
+                          }}
+                          onClick={() => setSelectedReportForComment(report)}
+                        >
+                          <MessageSquare size={14} />
+                          Nhận xét
+                        </button>
+                      )}
+
+                      {(report.lecturerComment || report.lecturerState) && (
+                        <div
+                          style={{
+                            padding: "8px 16px",
+                            background: "#E5E7EB",
+                            color: "#6B7280",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <CheckCircle size={14} />
+                          Đã nhận xét
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -934,6 +1117,50 @@ const LecturerReports: React.FC = () => {
                         {getReportTypeText(selectedReport.milestoneCode)}
                       </p>
                     </div>
+
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          color: "#666",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Giảng viên hướng dẫn
+                      </label>
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          color: "#1a1a1a",
+                          margin: "4px 0",
+                        }}
+                      >
+                        {(() => {
+                          const supCode =
+                            topics[selectedReport.studentUserCode]
+                              ?.supervisorLecturerCode;
+                          const sup = supCode
+                            ? supervisorLecturers[supCode]
+                            : null;
+                          return sup
+                            ? `${sup.fullName} (${sup.email || "—"})`
+                            : "N/A";
+                        })()}
+                      </p>
+                      <p style={{ fontSize: "12px", color: "#666", margin: 0 }}>
+                        SĐT:{" "}
+                        {(() => {
+                          const supCode =
+                            topics[selectedReport.studentUserCode]
+                              ?.supervisorLecturerCode;
+                          const sup = supCode
+                            ? supervisorLecturers[supCode]
+                            : null;
+                          return sup ? sup.phoneNumber || "N/A" : "N/A";
+                        })()}
+                      </p>
+                    </div>
                   </div>
                   <div>
                     <label
@@ -1005,10 +1232,12 @@ const LecturerReports: React.FC = () => {
                           fontWeight: "600",
                           color: "#666",
                           textTransform: "uppercase",
+                          marginRight: "5px",
                         }}
                       >
                         Trạng thái
                       </label>
+                      <br></br>
                       <span
                         style={{
                           display: "inline-block",
@@ -1019,7 +1248,6 @@ const LecturerReports: React.FC = () => {
                           borderRadius: "6px",
                           fontSize: "12px",
                           fontWeight: "600",
-                          marginTop: "4px",
                         }}
                       >
                         {getStatusText(selectedReport.lecturerState)}
@@ -1086,156 +1314,6 @@ const LecturerReports: React.FC = () => {
                       </p>
                     </div>
                   )}
-                  {/* Lecturer Comment Form */}
-                  {!selectedReport.lecturerState && (
-                    <div
-                      style={{
-                        border: "1px solid #E5E7EB",
-                        borderRadius: "8px",
-                        padding: "16px",
-                        background: "#F9FAFB",
-                      }}
-                    >
-                      <h3
-                        style={{
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          color: "#1a1a1a",
-                          marginBottom: "16px",
-                        }}
-                      >
-                        Nhận xét báo cáo
-                      </h3>
-
-                      <div style={{ display: "grid", gap: "12px" }}>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              color: "#666",
-                              textTransform: "uppercase",
-                              display: "block",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            Nhận xét
-                          </label>
-                          <textarea
-                            value={lecturerComment}
-                            onChange={(e) => setLecturerComment(e.target.value)}
-                            placeholder="Nhập nhận xét của bạn..."
-                            style={{
-                              width: "100%",
-                              padding: "8px",
-                              border: "1px solid #D1D5DB",
-                              borderRadius: "4px",
-                              fontSize: "14px",
-                              minHeight: "80px",
-                              resize: "vertical",
-                            }}
-                          />
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: "12px",
-                          }}
-                        >
-                          <div>
-                            <label
-                              style={{
-                                fontSize: "12px",
-                                fontWeight: "600",
-                                color: "#666",
-                                textTransform: "uppercase",
-                                display: "block",
-                                marginBottom: "4px",
-                              }}
-                            >
-                              Trạng thái
-                            </label>
-                            <select
-                              value={lecturerState}
-                              onChange={(e) => setLecturerState(e.target.value)}
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #D1D5DB",
-                                borderRadius: "4px",
-                                fontSize: "14px",
-                              }}
-                            >
-                              <option value="">Chọn trạng thái</option>
-                              <option value="Accepted">Duyệt</option>
-                              <option value="Revision">Yêu cầu sửa đổi</option>
-                              <option value="Pending">Đang xem xét</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label
-                              style={{
-                                fontSize: "12px",
-                                fontWeight: "600",
-                                color: "#666",
-                                textTransform: "uppercase",
-                                display: "block",
-                                marginBottom: "4px",
-                              }}
-                            >
-                              Cấp độ phản hồi
-                            </label>
-                            <select
-                              value={feedbackLevel}
-                              onChange={(e) => setFeedbackLevel(e.target.value)}
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #D1D5DB",
-                                borderRadius: "4px",
-                                fontSize: "14px",
-                              }}
-                            >
-                              <option value="">Chọn cấp độ</option>
-                              <option value="High">Cao</option>
-                              <option value="Normal">Bình thường</option>
-                              <option value="Moderate">Trung bình</option>
-                              <option value="Low">Thấp</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <button
-                            onClick={handleSubmitComment}
-                            disabled={submitting || !lecturerState}
-                            style={{
-                              padding: "8px 16px",
-                              background: "#F37021",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              fontSize: "14px",
-                              fontWeight: "600",
-                              cursor: submitting ? "not-allowed" : "pointer",
-                              opacity: submitting ? 0.6 : 1,
-                            }}
-                          >
-                            {submitting ? "Đang gửi..." : "Gửi nhận xét"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div
@@ -1265,6 +1343,240 @@ const LecturerReports: React.FC = () => {
                   >
                     Đóng
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Comment Modal */}
+          {selectedReportForComment && (
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+              onClick={() => setSelectedReportForComment(null)}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  padding: "32px",
+                  maxWidth: "600px",
+                  width: "90%",
+                  maxHeight: "80vh",
+                  overflow: "auto",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "600",
+                    color: "#1a1a1a",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Nhận xét báo cáo
+                </h2>
+
+                {/* Report Info */}
+                <div style={{ marginBottom: "24px" }}>
+                  <div
+                    style={{
+                      background: "#F9FAFB",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#1a1a1a",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {selectedReportForComment.reportTitle ||
+                        "Báo cáo chưa có tiêu đề"}
+                    </h3>
+                    <div style={{ fontSize: "14px", color: "#666" }}>
+                      <strong>Sinh viên:</strong>{" "}
+                      {studentProfiles[selectedReportForComment.studentUserCode]
+                        ?.fullName ||
+                        selectedReportForComment.studentUserCode}{" "}
+                      (
+                      {studentProfiles[selectedReportForComment.studentUserCode]
+                        ?.studentCode ||
+                        selectedReportForComment.studentUserCode}
+                      )
+                      <br />
+                      <strong>Đề tài:</strong>{" "}
+                      {topics[selectedReportForComment.studentUserCode]
+                        ?.title || "N/A"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comment Form */}
+                <div style={{ display: "grid", gap: "16px" }}>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                        display: "block",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Nhận xét
+                    </label>
+                    <textarea
+                      value={lecturerComment}
+                      onChange={(e) => setLecturerComment(e.target.value)}
+                      placeholder="Nhập nhận xét của bạn..."
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        border: "1px solid #D1D5DB",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        minHeight: "100px",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "16px",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          color: "#666",
+                          textTransform: "uppercase",
+                          display: "block",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Trạng thái
+                      </label>
+                      <select
+                        value={lecturerState}
+                        onChange={(e) => setLecturerState(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px",
+                          border: "1px solid #D1D5DB",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          background: "white",
+                        }}
+                      >
+                        <option value="">Chọn trạng thái</option>
+                        <option value="Accepted">Duyệt</option>
+                        <option value="Revision">Yêu cầu sửa đổi</option>
+                        <option value="Pending">Đang xem xét</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          color: "#666",
+                          textTransform: "uppercase",
+                          display: "block",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Cấp độ phản hồi
+                      </label>
+                      <select
+                        value={feedbackLevel}
+                        onChange={(e) => setFeedbackLevel(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px",
+                          border: "1px solid #D1D5DB",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          background: "white",
+                        }}
+                      >
+                        <option value="">Chọn cấp độ</option>
+                        <option value="High">Cao</option>
+                        <option value="Normal">Bình thường</option>
+                        <option value="Moderate">Trung bình</option>
+                        <option value="Low">Thấp</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "12px",
+                      justifyContent: "flex-end",
+                      marginTop: "24px",
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedReportForComment(null);
+                        setLecturerComment("");
+                        setLecturerState("");
+                        setFeedbackLevel("");
+                      }}
+                      style={{
+                        padding: "12px 24px",
+                        background: "#6B7280",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={handleSubmitComment}
+                      disabled={submitting || !lecturerState}
+                      style={{
+                        padding: "12px 24px",
+                        background: "#F37021",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        cursor: submitting ? "not-allowed" : "pointer",
+                        opacity: submitting ? 0.6 : 1,
+                      }}
+                    >
+                      {submitting ? "Đang gửi..." : "Gửi nhận xét"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

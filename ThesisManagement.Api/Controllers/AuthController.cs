@@ -8,11 +8,13 @@ namespace ThesisManagement.Api.Controllers
     public class AuthController : BaseApiController
     {
         private readonly IAuthService _authService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public AuthController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper, IAuthService authService) 
+        public AuthController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper, IAuthService authService, ICurrentUserService currentUserService) 
             : base(uow, codeGen, mapper)
         {
             _authService = authService;
+            _currentUserService = currentUserService;
         }
 
         [HttpPost("login")]
@@ -29,6 +31,9 @@ namespace ThesisManagement.Api.Controllers
             {
                 return Unauthorized(ApiResponse<object>.Fail("Tên đăng nhập hoặc mật khẩu không đúng", 401));
             }
+
+            // Set thông tin user vào context để có thể log
+            _currentUserService.SetCurrentUser(user.UserID, user.UserCode, user.Role);
 
             var response = new LoginResponseDto(
                 user.UserID,

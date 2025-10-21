@@ -7,6 +7,7 @@ import {
   FileCog,
   ShieldCheck,
   Bell,
+  Activity,
 } from "lucide-react";
 import "./SideNav.css";
 import "./AdminNav.css";
@@ -24,7 +25,6 @@ const AdminNav: React.FC = () => {
       label: "Quản lý đề tài",
       icon: <ClipboardList size={18} />,
     },
-
     {
       path: "/admin/topic-review",
       label: "Duyệt đề tài",
@@ -44,6 +44,11 @@ const AdminNav: React.FC = () => {
       path: "/admin/system-config",
       label: "Cấu hình hệ thống",
       icon: <FileCog size={18} />,
+    },
+    {
+      path: "/admin/activity-logs",
+      label: "Lịch sử hoạt động",
+      icon: <Activity size={18} />,
     },
   ];
 

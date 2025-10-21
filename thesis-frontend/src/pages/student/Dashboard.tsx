@@ -4,6 +4,7 @@ import { fetchData } from "../../api/fetchData";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
+import type { TopicTag, Tag } from "../../types/tag";
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -12,6 +13,8 @@ const Dashboard: React.FC = () => {
   const [supervisorNames, setSupervisorNames] = useState<
     Record<string, string>
   >({});
+  const [topicTags, setTopicTags] = useState<Record<string, TopicTag[]>>({});
+  const [tags, setTags] = useState<Record<string, Tag>>({});
   const [progressSummary, setProgressSummary] = useState<{
     total: number;
     completed: number;
@@ -71,6 +74,47 @@ const Dashboard: React.FC = () => {
           }
         }
         setSupervisorNames(names);
+
+        // Fetch topic tags and tag details
+        const topicTagMap: Record<string, TopicTag[]> = {};
+        const tagMap: Record<string, Tag> = {};
+        const uniqueTagCodes = new Set<string>();
+
+        for (const topic of fetchedTopics) {
+          try {
+            const topicTagResponse = await fetchData<{ data: TopicTag[] }>(
+              `/TopicTags/list?TopicCode=${topic.topicCode}`
+            );
+            const topicTagsData = topicTagResponse.data || [];
+            topicTagMap[topic.topicCode] = topicTagsData;
+
+            // Collect unique tag codes
+            topicTagsData.forEach((tt) => {
+              if (tt.tagCode) uniqueTagCodes.add(tt.tagCode);
+            });
+          } catch (err) {
+            console.error("Error fetching topic tags:", err);
+            topicTagMap[topic.topicCode] = [];
+          }
+        }
+
+        // Fetch tag details
+        for (const tagCode of uniqueTagCodes) {
+          try {
+            const tagResponse = await fetchData<{ data: Tag[] }>(
+              `/Tags/list?TagCode=${tagCode}`
+            );
+            const tagData = tagResponse.data || [];
+            if (tagData.length > 0) {
+              tagMap[tagCode] = tagData[0];
+            }
+          } catch (err) {
+            console.error("Error fetching tag details:", err);
+          }
+        }
+
+        setTopicTags(topicTagMap);
+        setTags(tagMap);
 
         // Fetch progress summary for first topic
         if (fetchedTopics.length > 0) {
@@ -559,10 +603,12 @@ const Dashboard: React.FC = () => {
                       }}
                     >
                       <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Thẻ:
+                        Tag:
                       </span>
                       <span style={{ color: "#718096" }}>
-                        {topic.tagCode || "N/A"}
+                        {(topicTags[topic.topicCode] || [])
+                          .map((tt) => tags[tt.tagCode]?.tagName || tt.tagCode)
+                          .join(", ") || "N/A"}
                       </span>
                     </div>
                     <div

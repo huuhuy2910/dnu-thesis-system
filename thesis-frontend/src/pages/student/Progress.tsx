@@ -32,11 +32,11 @@ const Progress: React.FC = () => {
   // Hardcoded deadlines based on ordinal (fallback if needed)
   const getDeadlineByOrdinal = (ordinal: number): string => {
     const deadlines: { [key: number]: string } = {
-      1: "2025-01-15",
-      2: "2025-02-28",
-      3: "2025-04-15",
-      4: "2025-05-20",
-      5: "2025-06-10",
+      1: "2026-01-15",
+      2: "2026-02-28",
+      3: "2026-04-15",
+      4: "2026-05-20",
+      5: "2026-06-10",
     };
     return deadlines[ordinal] || "2025-12-31";
   };
