@@ -12,6 +12,17 @@ const envBase = ensureScheme(envBaseRaw.trim());
 const normalizedBase = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
 const apiBase = `${normalizedBase}/api`;
 
+// Helper function to get full avatar URL
+export function getAvatarUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) {
+    return path; // Already absolute URL
+  }
+  // Relative path, prepend base URL
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 type BodyInitCompatible = BodyInit | object | undefined;
 
 type FetchDataOptions = Omit<RequestInit, "body" | "signal"> & {
@@ -93,7 +104,10 @@ export async function fetchData<TResponse = unknown>(
     if (typeof window !== "undefined") {
       const raw = localStorage.getItem("app_user");
       if (raw) {
-        const u = JSON.parse(raw as string) as { userCode?: string; role?: string };
+        const u = JSON.parse(raw as string) as {
+          userCode?: string;
+          role?: string;
+        };
         const extra: Record<string, string> = {};
         if (u?.role) extra["X-User-Role"] = u.role;
         if (u?.userCode) extra["X-User-Code"] = u.userCode;
@@ -157,7 +171,10 @@ export async function fetchData<TResponse = unknown>(
   try {
     response = await fetch(url, init);
   } catch (error) {
-    if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
+    if (
+      error instanceof DOMException &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
       throw new FetchDataError(
         `Request to ${url} aborted: ${error.message}`,
         408,

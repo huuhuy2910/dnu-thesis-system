@@ -4,6 +4,9 @@ namespace ThesisManagement.Api.DTOs
 {
     public class StudentProfileFilter : BaseFilter
     {
+        // Support filtering by multiple student codes at once (e.g., ?studentCodes=STU001&studentCodes=STU002 or ?studentCodes=STU001,STU002)
+        public IEnumerable<string>? StudentCodes { get; set; }
+
         public string? UserCode { get; set; }
         public string? DepartmentCode { get; set; }
         public string? StudentCode { get; set; }

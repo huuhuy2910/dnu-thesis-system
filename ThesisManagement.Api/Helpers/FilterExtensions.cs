@@ -72,8 +72,19 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
 
-            if (!string.IsNullOrEmpty(filter.StudentCode))
+            // Support filtering by multiple student codes
+            if (filter.StudentCodes != null && filter.StudentCodes.Any())
+            {
+                var codes = new HashSet<string>(filter.StudentCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (codes.Count > 0)
+                {
+                    query = query.Where(x => codes.Contains(x.StudentCode));
+                }
+            }
+            else if (!string.IsNullOrEmpty(filter.StudentCode))
+            {
                 query = query.Where(x => x.StudentCode.Contains(filter.StudentCode));
+            }
 
             if (!string.IsNullOrEmpty(filter.ClassCode))
                 query = query.Where(x => x.ClassCode != null && x.ClassCode.Contains(filter.ClassCode));
@@ -146,8 +157,19 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
 
-            if (!string.IsNullOrEmpty(filter.LecturerCode))
+            // Support filtering by multiple lecturer codes
+            if (filter.LecturerCodes != null && filter.LecturerCodes.Any())
+            {
+                var codes = new HashSet<string>(filter.LecturerCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (codes.Count > 0)
+                {
+                    query = query.Where(x => codes.Contains(x.LecturerCode));
+                }
+            }
+            else if (!string.IsNullOrEmpty(filter.LecturerCode))
+            {
                 query = query.Where(x => x.LecturerCode.Contains(filter.LecturerCode));
+            }
 
             if (!string.IsNullOrEmpty(filter.Degree))
                 query = query.Where(x => x.Degree != null && x.Degree.Contains(filter.Degree));

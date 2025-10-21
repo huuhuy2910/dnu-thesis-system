@@ -174,6 +174,24 @@ namespace ThesisManagement.Api.Controllers
         }
 
         /// <summary>
+        /// Lấy thông tin avatar của sinh viên
+        /// </summary>
+        [HttpGet("get-avatar/{code}")]
+        public async Task<IActionResult> GetAvatar(string code)
+        {
+            var student = await _uow.StudentProfiles.GetByCodeAsync(code);
+            if (student == null) return NotFound(ApiResponse<object>.Fail("Sinh viên không tồn tại", 404));
+
+            return Ok(ApiResponse<object>.SuccessResponse(new
+            {
+                studentCode = code,
+                hasAvatar = !string.IsNullOrEmpty(student.StudentImage),
+                imageUrl = student.StudentImage,
+                fullImageUrl = student.StudentImage != null ? $"{Request.Scheme}://{Request.Host}{student.StudentImage}" : null
+            }));
+        }
+
+        /// <summary>
         /// Upload avatar cho sinh viên
         /// </summary>
         [HttpPost("upload-avatar/{code}")]

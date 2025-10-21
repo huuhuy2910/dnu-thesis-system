@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -61,6 +61,13 @@ const LecturerProfilePage: React.FC = () => {
 
           if (detailData && Object.keys(detailData).length > 0) {
             profileData = detailData;
+            // Preserve profileImage from list data if detail data doesn't have it
+            if (!detailData.profileImage && listData[0].profileImage) {
+              profileData = {
+                ...detailData,
+                profileImage: listData[0].profileImage,
+              };
+            }
           }
         } catch (detailErr) {
           console.error(
@@ -181,7 +188,9 @@ const LecturerProfilePage: React.FC = () => {
         body: JSON.stringify(profileDataToUpdate),
       });
 
-      setProfile({ ...profile, ...updatedProfile });
+      // Reload profile again to get the latest data including any changes
+      await loadLecturerProfile();
+
       setIsEditing(false);
       setSelectedFile(null);
       setImagePreview(null);
@@ -528,23 +537,15 @@ const LecturerProfilePage: React.FC = () => {
                   }}
                 />
               ) : (
-                <div
+                <img
+                  src={getAvatarUrl(profile.profileImage)}
+                  alt={profile.fullName}
                   style={{
                     width: "100%",
                     height: "100%",
-                    background: "#F9FAFB",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "12px",
-                    color: "#6B7280",
-                    padding: "8px",
-                    textAlign: "center",
-                    wordBreak: "break-all",
+                    objectFit: "cover",
                   }}
-                >
-                  {profile.profileImage}
-                </div>
+                />
               )
             ) : (
               <div

@@ -12,7 +12,7 @@ import {
   Mail,
   Filter,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { Topic } from "../../types/topic";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -3154,8 +3154,9 @@ const LecturerTopicReview: React.FC = () => {
                     >
                       <img
                         src={
-                          detailModal.topic.lecturerProfile.profileImage ||
-                          "https://via.placeholder.com/80x80?text=No+Image"
+                          getAvatarUrl(
+                            detailModal.topic.lecturerProfile.profileImage
+                          ) || "https://via.placeholder.com/80x80?text=No+Image"
                         }
                         alt="Lecturer"
                         style={{

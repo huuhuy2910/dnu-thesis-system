@@ -198,6 +198,24 @@ namespace ThesisManagement.Api.Controllers
         }
 
         /// <summary>
+        /// Lấy thông tin avatar của giảng viên
+        /// </summary>
+        [HttpGet("get-avatar/{code}")]
+        public async Task<IActionResult> GetAvatar(string code)
+        {
+            var lecturer = await _uow.LecturerProfiles.GetByCodeAsync(code);
+            if (lecturer == null) return NotFound(ApiResponse<object>.Fail("Giảng viên không tồn tại", 404));
+
+            return Ok(ApiResponse<object>.SuccessResponse(new
+            {
+                lecturerCode = code,
+                hasAvatar = !string.IsNullOrEmpty(lecturer.ProfileImage),
+                imageUrl = lecturer.ProfileImage,
+                fullImageUrl = lecturer.ProfileImage != null ? $"{Request.Scheme}://{Request.Host}{lecturer.ProfileImage}" : null
+            }));
+        }
+
+        /// <summary>
         /// Upload avatar cho giảng viên
         /// </summary>
         [HttpPost("upload-avatar/{code}")]

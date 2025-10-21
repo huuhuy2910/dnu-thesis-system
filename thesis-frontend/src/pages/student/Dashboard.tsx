@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -264,7 +264,7 @@ const Dashboard: React.FC = () => {
             <div>
               {profile.studentImage ? (
                 <img
-                  src={profile.studentImage}
+                  src={getAvatarUrl(profile.studentImage)}
                   alt="Ảnh sinh viên"
                   style={{
                     width: 200,

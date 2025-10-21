@@ -11,7 +11,7 @@ import {
   Edit,
   Save,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
 import { useAuth } from "../../hooks/useAuth";
@@ -43,19 +43,33 @@ const StudentProfilePage: React.FC = () => {
       if (listData.length > 0) {
         const studentCode = listData[0].studentCode;
 
-        // Get detailed profile
-        const detailRes = await fetchData(
-          `/StudentProfiles/get-update/${studentCode}`
-        );
-        const detailData = (detailRes as ApiResponse<StudentProfile>)?.data;
+        // Get detailed profile - try but fallback to list data if fails
+        let profileData = listData[0];
+        try {
+          const detailRes = await fetchData(
+            `/StudentProfiles/get-update/${studentCode}`
+          );
+          const detailData = (detailRes as ApiResponse<StudentProfile>)?.data;
 
-        if (detailData) {
-          setProfile(detailData);
-          setEditedProfile(detailData);
-        } else {
-          setProfile(listData[0]);
-          setEditedProfile(listData[0]);
+          if (detailData && Object.keys(detailData).length > 0) {
+            // Merge detail data with list data, but preserve studentImage from list data if detail data doesn't have it
+            profileData = { ...listData[0], ...detailData };
+            if (!detailData.studentImage && listData[0].studentImage) {
+              profileData.studentImage = listData[0].studentImage;
+            }
+          }
+        } catch (detailErr) {
+          console.error(
+            "Error fetching detailed profile, using list data:",
+            detailErr
+          );
         }
+
+        // Ensure studentCode is set
+        profileData = { ...profileData, studentCode };
+
+        setProfile(profileData);
+        setEditedProfile(profileData);
       } else {
         setError("Không tìm thấy thông tin sinh viên");
       }
@@ -111,7 +125,9 @@ const StudentProfilePage: React.FC = () => {
         body: JSON.stringify(profileDataToUpdate),
       });
 
-      setProfile({ ...profile, ...updatedProfile });
+      // Reload profile again to get the latest data including any changes
+      await loadStudentProfile();
+
       setIsEditing(false);
       setSelectedFile(null);
       setImagePreview(null);
@@ -438,23 +454,15 @@ const StudentProfilePage: React.FC = () => {
                   }}
                 />
               ) : (
-                <div
+                <img
+                  src={getAvatarUrl(profile.studentImage)}
+                  alt={profile.fullName || auth.user?.fullName || "Student"}
                   style={{
                     width: "100%",
                     height: "100%",
-                    background: "#F9FAFB",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "12px",
-                    color: "#6B7280",
-                    padding: "8px",
-                    textAlign: "center",
-                    wordBreak: "break-all",
+                    objectFit: "cover",
                   }}
-                >
-                  {profile.studentImage}
-                </div>
+                />
               )
             ) : (
               <div
