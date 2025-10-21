@@ -25,7 +25,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useToast } from "../../context/useToast";
-import { committeeAssignmentApi, getCommitteeCreateInit } from "../../api/committeeAssignmentApi";
+import { committeeAssignmentApi, getCommitteeCreateInit, saveCommitteeMembers } from "../../api/committeeAssignmentApi";
 import { FetchDataError } from "../../api/fetchData";
 import { committeeService, type EligibleTopicSummary } from "../../services/committee-management.service";
 import type {
@@ -86,10 +86,17 @@ interface TopicTableItem {
   supervisorCode?: string | null;
     supervisorLecturerProfileID?: number | null;
     supervisorLecturerCode?: string | null;
+  // preserved raw proposer/student code when provided by backend
+  proposerStudentCode?: string | null;
+  // raw tag codes when backend returns them
+  tagCodes?: string[];
+  // optional supervisor user code if present in payload
+  supervisorUserCode?: string | null;
   specialty?: string | null;
   tagDescriptions?: string[];
   status?: string | null;
 }
+
 
 interface AssignedTopicSlot {
   topic: TopicTableItem;
@@ -146,6 +153,140 @@ const EMPTY_ROLE_ASSIGNMENTS: Record<RoleId, number | null> = {
   reviewer3: null,
 };
 
+const ROLE_ORDER: RoleId[] = ["chair", "secretary", "reviewer1", "reviewer2", "reviewer3"];
+
+function extractLecturerProfileId(member: any): number | null {
+  const candidates = [
+    member?.lecturerProfileId,
+    member?.lecturerProfileID,
+    member?.memberLecturerProfileID,
+    member?.memberLecturerProfileId,
+    member?.lecturerProfile?.id,
+    member?.lecturerProfile,
+  ];
+  for (const value of candidates) {
+    if (value == null) continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function normalizeRoleIdFromString(
+  roleValue: string,
+  usedRoles: Set<RoleId>,
+  remainingReviewSlots: RoleId[]
+): RoleId | null {
+  if (!roleValue) return null;
+  const trimmed = roleValue.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+
+  for (const cfg of ROLE_CONFIG) {
+    if (cfg.id === trimmed) return cfg.id;
+    if (cfg.apiRole.toLowerCase() === lower) return cfg.id;
+    if (cfg.label.toLowerCase() === lower) return cfg.id;
+  }
+
+  if (lower.includes("chủ tịch") || lower.includes("chu tich") || lower.includes("chair")) {
+    return "chair";
+  }
+
+  if (lower.includes("thư ký") || lower.includes("thu ky") || lower.includes("secretary")) {
+    return "secretary";
+  }
+
+  const reviewerKeywords = ["phản biện", "phan bien", "ủy viên", "uy vien", "reviewer"];
+  if (reviewerKeywords.some((keyword) => lower.includes(keyword))) {
+    const indexMatch = trimmed.match(/(\d+)/);
+    if (indexMatch) {
+      const idx = Number(indexMatch[1]);
+      if (Number.isInteger(idx) && idx >= 1 && idx <= 3) {
+        const candidate = `reviewer${idx}` as RoleId;
+        if (ROLE_ORDER.includes(candidate)) {
+          return candidate;
+        }
+      }
+    }
+    const next = remainingReviewSlots.find((slot) => !usedRoles.has(slot));
+    return next ?? null;
+  }
+
+  return null;
+}
+
+function deriveRoleIdFromMemberEntry(
+  member: any,
+  usedRoles: Set<RoleId>,
+  remainingReviewSlots: RoleId[]
+): RoleId | null {
+  if (!member) return null;
+
+  if (member?.isChair && !usedRoles.has("chair")) {
+    return "chair";
+  }
+
+  const candidates = [member?.role, member?.roleName, member?.roleLabel, member?.roleDisplay, member?.roleId];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const normalized = normalizeRoleIdFromString(String(candidate), usedRoles, remainingReviewSlots);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function buildMemberAssignmentState(rawMembers?: any[] | null): {
+  membersMap: Record<RoleId, number | null>;
+  syntheticOptions: LecturerOption[];
+} {
+  const membersMap: Record<RoleId, number | null> = { ...EMPTY_ROLE_ASSIGNMENTS };
+  const syntheticOptions: LecturerOption[] = [];
+  const usedRoles = new Set<RoleId>();
+  const remainingReviewSlots: RoleId[] = ["reviewer1", "reviewer2", "reviewer3"];
+
+  (rawMembers ?? []).forEach((member: any) => {
+    const lecturerId = extractLecturerProfileId(member);
+    if (lecturerId == null) return;
+
+    let roleId = deriveRoleIdFromMemberEntry(member, usedRoles, remainingReviewSlots);
+    if (!roleId) return;
+
+    if (usedRoles.has(roleId)) {
+      if (roleId.startsWith("reviewer")) {
+        const fallback = remainingReviewSlots.find((slot) => !usedRoles.has(slot));
+        if (!fallback) return;
+        roleId = fallback;
+      } else {
+        return;
+      }
+    }
+
+    membersMap[roleId] = lecturerId;
+    usedRoles.add(roleId);
+
+    if (roleId.startsWith("reviewer")) {
+      const idx = remainingReviewSlots.indexOf(roleId);
+      if (idx !== -1) remainingReviewSlots.splice(idx, 1);
+    }
+
+    if (!syntheticOptions.some((opt) => opt.lecturerProfileId === lecturerId)) {
+      syntheticOptions.push({
+        lecturerProfileId: lecturerId,
+        lecturerCode: member?.lecturerCode ?? member?.memberLecturerCode ?? "",
+        fullName: member?.fullName ?? member?.lecturerCode ?? "(Không có tên)",
+        degree: member?.degree ?? null,
+      });
+    }
+  });
+
+  return { membersMap, syntheticOptions };
+}
+
 function sessionSlotTimes(session: SessionId): readonly string[] {
   return session === 1 ? MORNING_SLOTS : AFTERNOON_SLOTS;
 }
@@ -175,6 +316,10 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     return {
       topicCode: String(topicCode),
       title: String(title),
+      // preserve proposer/student code so we can batch-fetch student profiles where available
+    proposerStudentCode:
+      (item.proposerStudentCode ?? item.proposerStudentCode ?? item.proposerUserCode ?? item.proposerUserID ?? item.proposerStudentProfileID ?? item.proposerStudentProfileId ?? null) &&
+      String(item.proposerStudentCode ?? item.proposerUserCode ?? item.proposerUserID ?? item.proposerStudentProfileID ?? item.proposerStudentProfileId ?? null),
       studentName: item.studentName ?? item.studentFullName ?? item.student ?? null,
       supervisorName: item.supervisorName ?? item.lecturerName ?? item.supervisor ?? null,
       supervisorCode: item.supervisorCode ?? item.lecturerCode ?? null,
@@ -183,11 +328,16 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       // include supervisor user code if backend provides it
       ...(item.supervisorUserCode ? { supervisorUserCode: String(item.supervisorUserCode) } : {}),
       specialty: item.specialty ?? item.specialtyName ?? item.specialtyCode ?? null,
+      // tagDescriptions should be an array of human-friendly strings (tagName or tagCode)
       tagDescriptions: Array.isArray(item.tagDescriptions)
         ? item.tagDescriptions
         : Array.isArray(item.tags)
           ? item.tags
           : undefined,
+      // also keep raw tagCodes if backend returns them
+      tagCodes: Array.isArray(item.tagCodes)
+        ? item.tagCodes
+        : undefined,
       status: item.status ?? item.topicStatus ?? null,
     };
   }
@@ -221,6 +371,42 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     return `${outH}:${outM}`;
   }
 
+  function normalizeTimeLabel(value?: string | null): string | null {
+    if (!value) return null;
+    const parts = value.trim().split(":");
+    if (parts.length < 2) return null;
+    const hh = String(parts[0] ?? "0").padStart(2, "0");
+    const mm = String(parts[1] ?? "0").padStart(2, "0");
+    const ss = parts.length >= 3 ? String(parts[2] ?? "0").slice(0, 2).padStart(2, "0") : "00";
+    if (Number.isNaN(Number(hh)) || Number.isNaN(Number(mm)) || Number.isNaN(Number(ss))) return null;
+    return `${hh}:${mm}:${ss}`;
+  }
+
+  function addMinutesToNormalizedTime(timeLabel: string, minutes: number): string {
+    const normalized = normalizeTimeLabel(timeLabel);
+    const parts = normalized ? normalized.split(":") : [];
+    const hh = Number(parts[0] ?? 0);
+    const mm = Number(parts[1] ?? 0);
+    const ss = Number(parts[2] ?? 0);
+    const d = new Date();
+    d.setHours(hh, mm, ss, 0);
+    d.setMinutes(d.getMinutes() + minutes);
+    const outH = String(d.getHours()).padStart(2, "0");
+    const outM = String(d.getMinutes()).padStart(2, "0");
+    const outS = String(d.getSeconds()).padStart(2, "0");
+    return `${outH}:${outM}:${outS}`;
+  }
+
+  function normalizeDateTimeString(value?: string | null): string | null {
+    if (!value) return null;
+    const trimmed = String(value).trim().replace(" ", "T");
+    const [datePart, timePartRaw] = trimmed.split("T");
+    if (!datePart) return null;
+    const timeNormalized = normalizeTimeLabel(timePartRaw ?? "");
+    if (!timeNormalized) return `${datePart}T00:00:00`;
+    return `${datePart}T${timeNormalized}`;
+  }
+
   function normalizeLecturerItem(item: any): LecturerOption | null {
     if (!item) return null;
     const lecturerProfileId = item.lecturerProfileId ?? item.lecturerProfileID ?? item.id;
@@ -240,10 +426,10 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
 
   function combineDateAndTime(date: string, time: string): string | null {
     if (!date) return null;
-    const isoCandidate = `${date}T${time}:00`;
-    const parsed = new Date(isoCandidate);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toISOString();
+    const datePart = date.includes("T") ? date.split("T")[0] : date;
+    const timePart = normalizeTimeLabel(time);
+    if (!timePart) return null;
+    return `${datePart}T${timePart}`;
   }
 
   function isPhd(degree?: string | null): boolean {
@@ -323,10 +509,16 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     title: string;
     subtitle?: string;
     wide?: boolean;
+    small?: boolean;
   }
 
   function ModalShell({ children, onClose, title, subtitle, wide }: ModalShellProps) {
-    const widthClass = wide ? "max-w-[980px]" : "max-w-[760px]";
+    // small: compact modal (~half width), wide: large modal, default: medium
+    const widthClass = (arguments[0] as any)?.small
+      ? "max-w-[520px]"
+      : wide
+      ? "max-w-[980px]"
+      : "max-w-[760px]";
 
     return (
       <div className="fixed inset-0 z-[999] flex items-center justify-center">
@@ -512,7 +704,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                   <span className="text-xs font-semibold uppercase tracking-wide text-[#4A5775]">Tags</span>
                   <span className="text-xs text-[#6B7A99]">(chọn nhiều)</span>
                 </div>
-                {entries.length > DEFAULT_VISIBLE && (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setShowAll((s) => !s)}
@@ -520,7 +712,20 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                   >
                     {showAll ? 'Thu gọn' : `Xem thêm (${entries.length - DEFAULT_VISIBLE})`}
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onTagsChange([]);
+                      onFilterChange('status', '');
+                      onSearchChange('');
+                      onFilterChange('defenseDateFrom', '');
+                      onFilterChange('defenseDateTo', '');
+                    }}
+                    className="text-xs bg-white border border-[#D9E1F2] text-[#1F3C88] px-2 py-1 rounded"
+                  >
+                    Xóa lọc
+                  </button>
+                </div>
               </div>
 
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
@@ -534,7 +739,8 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                         const next = selected ? filters.tagCodes.filter((c) => c !== code) : [...filters.tagCodes, code];
                         onTagsChange(next);
                       }}
-                      className={`text-sm text-left rounded-full px-3 py-2 transition ${selected ? 'bg-[#1F3C88] text-white' : 'bg-[#F8FAFF] text-[#1F3C88] border border-[#D9E1F2]'}`}
+                      className={`text-sm text-left rounded-lg px-3 py-3 transition transform hover:-translate-y-0.5 focus:outline-none ${selected ? 'bg-[#1F3C88] text-white shadow-md' : 'bg-white text-[#1F3C88] border border-[#E6EEF9] hover:shadow-sm'}`}
+                      style={{ minWidth: 140 }}
                     >
                       <div className="font-semibold">{info.name}</div>
                       {info.description && <div className="text-xs text-[#6B7A99] truncate">{info.description}</div>}
@@ -544,7 +750,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
               </div>
             </div>
 
-            <div className="w-48">
+                <div className="w-48">
               <label className="block text-xs font-semibold text-[#4A5775] mb-2">Trạng thái</label>
               <select
                 value={filters.status}
@@ -747,7 +953,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
               {data.map((item) => (
                 <div
                   key={item.committeeCode}
-                  className="group relative rounded-2xl border border-[#E5ECFB] bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:border-[#1F3C88]/20"
+                  className="group relative rounded-2xl border border-[#E5ECFB] bg-white p-6 shadow-sm transition-all hover:shadow-lg hover:border-[#1F3C88]/20 flex flex-col h-full"
                 >
                   <div className="mb-4 flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -770,7 +976,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                     </span>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4 text-[#4A5775]" />
                       <span className="text-[#4A5775]">{item.room || "Chưa có phòng"}</span>
@@ -881,6 +1087,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     tagDictionary,
     addToast,
   }: CommitteeDetailViewProps) {
+  
     const [editSection, setEditSection] = useState<'basic' | 'members' | 'topics' | null>(null);
     const [editForm, setEditForm] = useState({
       name: "",
@@ -891,7 +1098,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     const [saving, setSaving] = useState(false);
 
     // Members edit state
-    const [membersForm, setMembersForm] = useState<Record<string, number | null>>({});
+  const [membersForm, setMembersForm] = useState<Record<RoleId, number | null>>({ ...EMPTY_ROLE_ASSIGNMENTS });
     const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([]);
     const [lecturersLoading, setLecturersLoading] = useState(false);
 
@@ -904,6 +1111,51 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     const [topicsLoading, setTopicsLoading] = useState(false);
     const [topicSearch, setTopicSearch] = useState("");
 
+    // supervisor codes set for this committee (to prevent selecting supervisors as committee members)
+    const supervisorCodesInCommittee = useMemo(() => {
+      const codes = new Set<string>();
+      try {
+        (committee?.assignments ?? []).forEach((a: any) => {
+          if (a?.supervisorCode) codes.add(String(a.supervisorCode));
+          if (a?.supervisorLecturerCode) codes.add(String(a.supervisorLecturerCode));
+          // some payloads may use different property names
+          if (a?.supervisor) codes.add(String(a.supervisor));
+        });
+      } catch (e) {
+        // ignore
+      }
+      // also include topicsForm (in case user already added topics locally)
+      try {
+        Object.values(topicsForm || {}).forEach((arr: any) => {
+          (arr ?? []).forEach((slot: any) => {
+            if (slot?.topic?.supervisorCode) codes.add(String(slot.topic.supervisorCode));
+            if (slot?.topic?.supervisorLecturerCode) codes.add(String(slot.topic.supervisorLecturerCode));
+            if (slot?.topic?.supervisor) codes.add(String(slot.topic.supervisor));
+          });
+        });
+      } catch (e) {
+        // ignore
+      }
+      return codes;
+    }, [committee?.assignments, topicsForm]);
+
+    const lecturerCodeLookup = useMemo(() => {
+      const map = new Map<number, string>();
+      (lecturerOptions ?? []).forEach((opt) => {
+        if (opt?.lecturerProfileId != null && Number.isFinite(opt.lecturerProfileId) && opt.lecturerCode) {
+          map.set(opt.lecturerProfileId, opt.lecturerCode);
+        }
+      });
+      (committee?.members ?? []).forEach((member: any) => {
+        const id = extractLecturerProfileId(member);
+        const code = member?.lecturerCode ?? member?.memberLecturerCode ?? null;
+        if (id != null && Number.isFinite(id) && code) {
+          map.set(id, code);
+        }
+      });
+      return map;
+    }, [lecturerOptions, committee?.members]);
+
     useEffect(() => {
       if (committee) {
         setEditForm({
@@ -913,11 +1165,8 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
           tagCodes: committee.tags?.map((tag) => tag.tagCode) || [],
         });
 
-        // Initialize members form
-        const membersMap: Record<string, number | null> = {};
-        committee.members?.forEach((member) => {
-          membersMap[member.role] = member.lecturerProfileId;
-        });
+        // Initialize members form using normalized role mapping
+        const { membersMap } = buildMemberAssignmentState(committee.members);
         setMembersForm(membersMap);
 
         // Initialize topics form by session
@@ -953,16 +1202,11 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       }
     }, [committee]);
 
-    // Fetch lecturers for members editing
+    // Fetch full lecturer list for members editing (no TagCodes filter)
     const fetchLecturersForMembers = useCallback(async () => {
-      if (!committee?.tags) return;
-
       setLecturersLoading(true);
       try {
-        const params = new URLSearchParams();
-        committee.tags.forEach((tag) => params.append("TagCodes", tag.tagCode));
         const response = await apiClient.get("/LecturerProfiles/get-list", {
-          params,
           headers: buildDefaultHeaders(),
         });
         const payload = response.data as { data?: unknown } | unknown;
@@ -976,16 +1220,21 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
         const mapped = rawList
           .map(normalizeLecturerItem)
           .filter((item): item is LecturerOption => Boolean(item));
-        setLecturerOptions(mapped);
+        // dedupe and sort
+        const unique = new Map<number, LecturerOption>();
+        mapped.forEach((l) => unique.set(l.lecturerProfileId, l));
+        const list = Array.from(unique.values()).sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+        setLecturerOptions(list);
       } catch (error) {
         console.error("Không thể tải danh sách giảng viên", error);
-        addToast("Không thể tải danh sách giảng viên", "error");
+        addToast((error as Error).message || "Không thể tải danh sách giảng viên", "error");
+        setLecturerOptions([]);
       } finally {
         setLecturersLoading(false);
       }
-    }, [committee?.tags, addToast]);
+    }, [addToast]);
 
-    // Fetch topics for topics editing
+    // Fetch topics for topics editing (for existing committee)
     const fetchTopicsForEditing = useCallback(async () => {
       if (!committee?.tags) return;
 
@@ -1005,21 +1254,28 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
             : Array.isArray((payload as any)?.items)
               ? ((payload as any).items as unknown[])
               : [];
-        const mappedAll = rawList
+        const mapped = rawList
           .map(normalizeTopicItem)
-          .filter((item): item is TopicTableItem => Boolean(item));
+          .filter((item): item is TopicTableItem => Boolean(item))
+          .filter((item) => {
+            if (!item?.status) return false;
+            const normalized = String(item.status).trim().toLowerCase();
+            const target = 'đủ điều kiện bảo vệ';
+            const asciiTarget = 'du dieu kien bao ve';
+            return normalized === target || normalized === asciiTarget;
+          });
 
-        // Keep only topics with status "Đủ điều kiện bảo vệ"
-        const eligible = mappedAll.filter((t) => (t.status ?? "").trim() === "Đủ điều kiện bảo vệ");
-        setAvailableTopics(eligible);
+        setAvailableTopics(mapped);
       } catch (error) {
         console.error("Không thể tải danh sách đề tài", error);
-        addToast("Không thể tải danh sách đề tài", "error");
+        addToast((error as Error).message || "Không thể tải danh sách đề tài", "error");
+        setAvailableTopics([]);
       } finally {
         setTopicsLoading(false);
       }
-    }, [committee?.tags, addToast]);
+    }, [addToast, committee?.tags]);
 
+    // Save basic info (update committee)
     const handleSaveBasicInfo = async () => {
       if (!committee) return;
 
@@ -1027,9 +1283,9 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       try {
         const updatePayload = {
           committeeCode: committee.committeeCode,
-          name: editForm.name.trim(),
+          name: editForm.name.trim() || committee.name,
           room: editForm.room.trim(),
-          defenseDate: editForm.defenseDate,
+          defenseDate: editForm.defenseDate || undefined,
           tagCodes: editForm.tagCodes,
         };
 
@@ -1053,41 +1309,105 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     const handleSaveMembers = async () => {
       if (!committee) return;
 
-      // Validate required roles
-      const requiredRoles = ['chair', 'secretary', 'reviewer1'];
-      for (const role of requiredRoles) {
-        if (!membersForm[role]) {
-          addToast(`Vui lòng chọn ${role === 'chair' ? 'Chủ tịch' : role === 'secretary' ? 'Thư ký' : 'Phản biện 1'}`, "warning");
-          return;
-        }
-      }
-
       setSaving(true);
       try {
-        const membersPayload = Object.entries(membersForm)
-          .filter(([_, lecturerId]) => lecturerId !== null)
-          .map(([role, lecturerId]) => ({
-            lecturerProfileId: lecturerId!,
-            role,
-          }));
+        const { membersMap: baselineMap } = buildMemberAssignmentState(committee.members);
 
-        await apiClient.post(
-          "/CommitteeAssignment/members",
-          {
-            committeeCode: committee.committeeCode,
-            members: membersPayload,
-          },
-          {
-            headers: buildDefaultHeaders(),
+        const combinedAssignments: { roleId: RoleId; lecturerProfileId: number }[] = [];
+        ROLE_ORDER.forEach((roleId) => {
+          const updated = membersForm[roleId];
+          const baseline = baselineMap[roleId];
+          const finalId = updated ?? baseline ?? null;
+          if (finalId != null) {
+            combinedAssignments.push({ roleId, lecturerProfileId: finalId });
           }
+        });
+
+        const hasChair = combinedAssignments.some((entry) => entry.roleId === 'chair');
+        if (!hasChair) {
+          addToast('Vui lòng chọn Chủ tịch cho hội đồng.', 'warning');
+          setSaving(false);
+          return;
+        }
+
+        const uniqueLecturerIds = new Set(combinedAssignments.map((entry) => entry.lecturerProfileId));
+        if (uniqueLecturerIds.size !== combinedAssignments.length) {
+          addToast('Giảng viên không được trùng lặp giữa các vai trò.', 'warning');
+          setSaving(false);
+          return;
+        }
+
+        if (!committee.members || committee.members.length === 0) {
+          const membersToCreate = combinedAssignments.map(({ roleId, lecturerProfileId }) => {
+            const cfg = ROLE_CONFIG.find((item) => item.id === roleId);
+            return cfg
+              ? {
+                  lecturerProfileId,
+                  role: cfg.apiRole,
+                  isChair: roleId === 'chair',
+                }
+              : null;
+          }).filter((item): item is { lecturerProfileId: number; role: string; isChair: boolean } => Boolean(item));
+
+          if (membersToCreate.length < 4) {
+            addToast('Vui lòng chọn tối thiểu 4 thành viên (bao gồm Chủ tịch).', 'warning');
+            setSaving(false);
+            return;
+          }
+
+          await saveCommitteeMembers({
+            committeeCode: committee.committeeCode,
+            members: membersToCreate,
+          });
+
+          addToast('Đã tạo thành viên hội đồng', 'success');
+          setEditSection(null);
+          onRefresh();
+          return;
+        }
+
+        if (combinedAssignments.length < 4) {
+          addToast('Hội đồng phải có tối thiểu 4 thành viên.', 'warning');
+          setSaving(false);
+          return;
+        }
+
+        const membersPayload = combinedAssignments.map(({ roleId, lecturerProfileId }) => {
+          const cfg = ROLE_CONFIG.find((item) => item.id === roleId);
+          const lecturerCode = lecturerCodeLookup.get(lecturerProfileId)
+            ?? committee.members?.find((m: any) => extractLecturerProfileId(m) === lecturerProfileId)?.lecturerCode
+            ?? '';
+          return cfg
+            ? {
+                role: cfg.apiRole,
+                lecturerCode,
+              }
+            : null;
+        }).filter((item): item is { role: string; lecturerCode: string } => Boolean(item));
+
+        if (membersPayload.some((entry) => !entry.lecturerCode)) {
+          addToast('Không tìm thấy mã giảng viên cho một số lựa chọn. Vui lòng thử lại sau khi danh sách giảng viên tải xong.', 'error');
+          setSaving(false);
+          return;
+        }
+
+        const updatePayload = {
+          committeeCode: committee.committeeCode,
+          members: membersPayload,
+        };
+
+        await apiClient.put(
+          `/CommitteeAssignment/update-members/${encodeURIComponent(committee.committeeCode)}`,
+          updatePayload,
+          { headers: buildDefaultHeaders() }
         );
 
-        addToast("Đã cập nhật thành viên hội đồng", "success");
+        addToast('Đã cập nhật thành viên hội đồng', 'success');
         setEditSection(null);
         onRefresh();
       } catch (error) {
-        console.error("Không thể cập nhật thành viên", error);
-        addToast((error as Error).message || "Không thể cập nhật thành viên", "error");
+        console.error('Không thể cập nhật thành viên', error);
+        addToast((error as Error).message || 'Không thể cập nhật thành viên', 'error');
       } finally {
         setSaving(false);
       }
@@ -1105,29 +1425,162 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
 
       setSaving(true);
       try {
-        const items = allTopics.map((slot) => ({
-          topicCode: slot.topic.topicCode,
-          session: slot.session,
-          scheduledAt: slot.scheduledAt || (committee.defenseDate ? combineDateAndTime(committee.defenseDate, slot.timeLabel) : null),
-          startTime: slot.timeLabel,
-          endTime: addMinutesToTimeLabel(slot.timeLabel, 45),
-        }));
+        const effectiveDate = editForm.defenseDate || committee.defenseDate || null;
+        const normalizeSession = (session: SessionId) => {
+          const baseTimes = sessionSlotTimes(session).map((t) => normalizeTimeLabel(t) ?? "").filter(Boolean);
+          const slots = [...(topicsForm[session] ?? [])];
+          const items: { topicCode: string; session: SessionId; scheduledAt: string | null; startTime: string; endTime: string }[] = [];
+          let lastStart: string | null = null;
 
-        const payload = {
-          committeeCode: committee.committeeCode,
-          scheduledAt: items[0]?.scheduledAt,
-          session: 0,
-          assignedBy: getCurrentUserCode() ?? "admin",
-          items,
+          const nextStartForIndex = (index: number): string => {
+            if (index < baseTimes.length && baseTimes[index]) {
+              return baseTimes[index] as string;
+            }
+            const base = lastStart ?? (baseTimes[baseTimes.length - 1] as string | undefined) ?? normalizeTimeLabel("08:00") ?? "08:00:00";
+            return addMinutesToNormalizedTime(base, 45);
+          };
+
+          const normalizedSlots = slots.map((slot, index) => {
+            const assignedStart = nextStartForIndex(index);
+            lastStart = assignedStart;
+            const assignedEnd = addMinutesToNormalizedTime(assignedStart, 45);
+            const scheduled = effectiveDate ? combineDateAndTime(effectiveDate, assignedStart) : null;
+            items.push({
+              topicCode: slot.topic.topicCode,
+              session,
+              scheduledAt: scheduled,
+              startTime: assignedStart,
+              endTime: assignedEnd,
+            });
+            return {
+              ...slot,
+              timeLabel: assignedStart.slice(0, 5),
+            };
+          });
+
+          return { items, normalizedSlots };
         };
 
-        await apiClient.post("/CommitteeAssignment/assign", payload, {
-          headers: buildDefaultHeaders(),
+        const sessionOne = normalizeSession(1);
+        const sessionTwo = normalizeSession(2);
+        const items = [...sessionOne.items, ...sessionTwo.items];
+
+        setTopicsForm((prev) => ({
+          ...prev,
+          1: sessionOne.normalizedSlots,
+          2: sessionTwo.normalizedSlots,
+        }));
+
+        const existingAssignmentsMap = new Map<string, { topicCode: string; session: SessionId; startTime: string | null; scheduledAt: string | null }>();
+        (committee.assignments ?? []).forEach((assignment) => {
+          const topicCode = assignment.topicCode;
+          if (!topicCode) return;
+          const session = (assignment.session || 1) as SessionId;
+          const normalizedStart = normalizeTimeLabel(typeof assignment.startTime === 'string' ? assignment.startTime : (assignment.startTime as unknown as string)) ?? null;
+          const normalizedScheduled = normalizeDateTimeString(assignment.scheduledAt ?? null);
+          existingAssignmentsMap.set(topicCode, {
+            topicCode,
+            session,
+            startTime: normalizedStart,
+            scheduledAt: normalizedScheduled,
+          });
         });
 
-        addToast("Đã cập nhật đề tài hội đồng", "success");
+        const toCreate: typeof items = [];
+        const toRemove = new Set<string>();
+
+        items.forEach((item) => {
+          const existing = existingAssignmentsMap.get(item.topicCode);
+          if (!existing) {
+            toCreate.push(item);
+            return;
+          }
+
+          const sameSession = existing.session === item.session;
+          const sameStart = normalizeTimeLabel(existing.startTime) === item.startTime;
+          const sameScheduled = normalizeDateTimeString(existing.scheduledAt) === normalizeDateTimeString(item.scheduledAt);
+
+          if (!(sameSession && sameStart && sameScheduled)) {
+            toRemove.add(item.topicCode);
+            toCreate.push(item);
+          }
+
+          existingAssignmentsMap.delete(item.topicCode);
+        });
+
+        existingAssignmentsMap.forEach((entry) => {
+          toRemove.add(entry.topicCode);
+        });
+
+        // Perform deletions (await each so we know the server state is updated)
+        for (const topicCode of toRemove) {
+          try {
+            await apiClient.delete(`/CommitteeAssignment/remove-assignment/${encodeURIComponent(topicCode)}`, {
+              headers: buildDefaultHeaders(),
+            });
+          } catch (error) {
+            console.error('Không thể gỡ đề tài khỏi hội đồng', topicCode, error);
+            addToast(`Không thể gỡ đề tài ${topicCode}`, 'error');
+            setSaving(false);
+            return;
+          }
+        }
+
+        // Re-fetch committee detail after deletes to ensure server-side assignments were cleared
+        let refreshedDetail: any = null;
+        try {
+          const resp = await committeeAssignmentApi.getCommitteeDetail(committee.committeeCode);
+          refreshedDetail = resp?.data ?? null;
+        } catch (err) {
+          // Non-fatal: we will still attempt to assign, but log for debugging
+          console.warn('Không thể tải lại thông tin hội đồng sau khi gỡ đề tài', err);
+        }
+
+        if (toCreate.length > 0) {
+          // If the server still contains assignments that conflict with our toCreate items, abort and show details
+          if (refreshedDetail && Array.isArray(refreshedDetail.assignments)) {
+            const remaining = refreshedDetail.assignments as any[];
+            const conflicts: Array<{ requestedTopic: string; existingTopic: string } > = [];
+            for (const item of toCreate) {
+              for (const a of remaining) {
+                const aScheduled = normalizeDateTimeString(a.scheduledAt ?? null);
+                const aStart = normalizeTimeLabel(typeof a.startTime === 'string' ? a.startTime : String(a.startTime)) ?? null;
+                const itemScheduled = normalizeDateTimeString(item.scheduledAt ?? null);
+                const itemStart = normalizeTimeLabel(item.startTime) ?? null;
+                if (aScheduled && itemScheduled && aScheduled === itemScheduled && aStart && itemStart && aStart === itemStart) {
+                  conflicts.push({ requestedTopic: item.topicCode, existingTopic: a.topicCode });
+                }
+              }
+            }
+
+            if (conflicts.length > 0) {
+              console.error('Xung đột khi gán đề tài sau khi gỡ (server vẫn còn assignments):', conflicts);
+              addToast('Phát hiện xung đột lịch trên server sau khi gỡ đề tài. Vui lòng thử lại hoặc liên hệ quản trị.', 'error');
+              setSaving(false);
+              return;
+            }
+          }
+
+          const payload = {
+            committeeCode: committee.committeeCode,
+            scheduledAt: toCreate[0]?.scheduledAt ?? (effectiveDate ? combineDateAndTime(effectiveDate, normalizeTimeLabel(sessionSlotTimes(1)[0]) ?? '08:00:00') : null),
+            session: toCreate[0]?.session ?? 1,
+            assignedBy: getCurrentUserCode() ?? 'admin',
+            items: toCreate,
+          };
+
+          await apiClient.post('/CommitteeAssignment/assign', payload, {
+            headers: buildDefaultHeaders(),
+          });
+        }
+
+        addToast('Đã cập nhật đề tài hội đồng', 'success');
         setEditSection(null);
         onRefresh();
+
+        return;
+
+        
       } catch (error) {
         console.error("Không thể cập nhật đề tài", error);
         addToast((error as Error).message || "Không thể cập nhật đề tài", "error");
@@ -1374,9 +1827,36 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                   </div>
                   <button
                     onClick={() => {
-                      setEditSection(editSection === 'members' ? null : 'members');
-                      if (editSection !== 'members') {
-                        fetchLecturersForMembers();
+                      const next = editSection === 'members' ? null : 'members';
+                      setEditSection(next);
+                      if (next === 'members' && committee) {
+                        const { membersMap, syntheticOptions } = buildMemberAssignmentState(committee.members);
+                        setMembersForm(membersMap);
+
+                        // Ensure currently assigned lecturers appear in the options immediately (with normalized numeric ids)
+                        const synthetic: LecturerOption[] = syntheticOptions;
+
+                        // DEBUG: log committee members and normalized values to help trace why select isn't showing selected name
+                        try {
+                          // use console.debug to not be too noisy
+                          console.debug('[CM DEBUG] committee.members:', committee.members);
+                          console.debug('[CM DEBUG] membersMap:', membersMap);
+                          console.debug('[CM DEBUG] syntheticOptions:', synthetic);
+                        } catch (e) {
+                          // ignore logging errors
+                        }
+
+                        setLecturerOptions((prev) => {
+                          const map = new Map<number, LecturerOption>();
+                          (prev || []).forEach((p) => map.set(p.lecturerProfileId, p));
+                          synthetic.forEach((s) => {
+                            if (!map.has(s.lecturerProfileId)) map.set(s.lecturerProfileId, s);
+                          });
+                          return Array.from(map.values()).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+                        });
+
+                        // fetch full lecturer list for selects (async)
+                        void fetchLecturersForMembers();
                       }
                     }}
                     className="px-3 py-1 text-sm text-blue-600 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
@@ -1394,11 +1874,11 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                       </div>
                     ) : (
                       <>
-                        {(['chair', 'secretary', 'reviewer1', 'reviewer2', 'reviewer3'] as const).map((role) => {
+                        {ROLE_ORDER.map((role) => {
                           // build set of lecturer ids assigned to other roles
                           const assignedToOthers = new Set<number>();
-                          Object.entries(membersForm).forEach(([k, v]) => {
-                            if (k !== role && v) assignedToOthers.add(v);
+                          (Object.entries(membersForm) as Array<[RoleId, number | null]>).forEach(([key, value]) => {
+                            if (key !== role && value) assignedToOthers.add(value);
                           });
 
                           // current assigned id for this role
@@ -1423,9 +1903,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                           return (
                             <div key={role}>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                {role === 'chair' ? 'Chủ tịch' :
-                                 role === 'secretary' ? 'Thư ký' :
-                                 `Phản biện ${role.slice(-1)}`}
+                                {ROLE_CONFIG.find((cfg) => cfg.id === role)?.label ?? role}
                                 {role === 'chair' || role === 'secretary' || role === 'reviewer1' ? ' *' : ''}
                               </label>
                               <select
@@ -1437,19 +1915,29 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               >
                                 <option value="">Chọn giảng viên...</option>
-                                {baseOptions.map((lecturer) => {
-                                  const isAssignedElsewhere = assignedToOthers.has(lecturer.lecturerProfileId);
-                                  return (
-                                    <option
-                                      key={lecturer.lecturerProfileId}
-                                      value={String(lecturer.lecturerProfileId)}
-                                      disabled={isAssignedElsewhere}
-                                    >
-                                      {lecturer.fullName} {lecturer.degree ? `(${lecturer.degree})` : ''}
-                                      {isAssignedElsewhere ? ' — Đã là thành viên' : ''}
-                                    </option>
-                                  );
-                                })}
+                                {(() => {
+                                  // For chair role, only show PhD lecturers, but always include the currently assigned lecturer
+                                  const optionsToShow = baseOptions.filter((lecturer) => {
+                                    if (role === 'chair') {
+                                      return isPhd(lecturer.degree) || lecturer.lecturerProfileId === currentAssigned;
+                                    }
+                                    return true;
+                                  });
+                                  return optionsToShow.map((lecturer) => {
+                                    const isAssignedElsewhere = assignedToOthers.has(lecturer.lecturerProfileId);
+                                    const isSupervisor = Boolean(lecturer.lecturerCode && supervisorCodesInCommittee.has(lecturer.lecturerCode));
+                                    return (
+                                      <option
+                                        key={lecturer.lecturerProfileId}
+                                        value={String(lecturer.lecturerProfileId)}
+                                        disabled={isAssignedElsewhere || isSupervisor}
+                                      >
+                                        {lecturer.fullName} {lecturer.degree ? `(${lecturer.degree})` : ''}
+                                        {isAssignedElsewhere ? ' — Đã là thành viên' : isSupervisor ? ' — GVHD (Không hợp lệ)' : ''}
+                                      </option>
+                                    );
+                                  });
+                                })()}
                               </select>
                             </div>
                           );
@@ -1469,6 +1957,11 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                             Hủy
                           </button>
                         </div>
+                        {supervisorCodesInCommittee.size > 0 && (
+                          <div className="mt-3 text-xs text-[#8B5E34] rounded-md bg-[#FFF6EE] p-3 border border-[#FFE5D0]">
+                            Lưu ý: Không thể chọn giảng viên đã là giảng viên hướng dẫn của đề tài đã phân (mã: {[...supervisorCodesInCommittee].join(", ")}).
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -2112,7 +2605,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
   // ============================================================================
 
   const CommitteeManagement: React.FC = () => {
-    const pageSize = 10;
+  const pageSize = 6;
 
     // wizard state
     const [wizardOpen, setWizardOpen] = useState(false);
@@ -2225,20 +2718,12 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
         }
         const init = response.data;
         setWizardInit(init);
-        const initialTags = Array.isArray(init.suggestedTags)
-          ? init.suggestedTags
-              .map((tag) => {
-                if (typeof tag === "string") return tag;
-                if (tag && typeof tag.tagCode === "string") return tag.tagCode;
-                return "";
-              })
-              .filter((code): code is string => Boolean(code && code.trim()))
-          : [];
+        // Do NOT pre-select suggested tags. Start with no tags selected; user will click to select.
         setPhaseOneForm({
           name: init.nextCode ?? "",
           room: init.rooms?.[0] ?? "",
           defenseDate: toDateInputValue(init.defaultDefenseDate ?? null),
-          tagCodes: initialTags,
+          tagCodes: [],
           status: "Sắp diễn ra",
         });
         setPhaseOneErrors({});
@@ -2351,10 +2836,25 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
             });
 
             // merge tags into eligible topics
+            // Build a dictionary to resolve tag codes to human-friendly names
+            const tagDict = (cachedTagDictionary.current && Object.keys(cachedTagDictionary.current).length > 0)
+              ? cachedTagDictionary.current
+              : tagDictionary;
+
             eligible.forEach((t) => {
-              const tags = tagMap.get(t.topicCode);
-              if (tags && tags.length > 0) {
-                t.tagDescriptions = tags;
+              const tags = tagMap.get(t.topicCode) || [];
+              if (tags.length > 0) {
+                // Resolve each tag code to a display name when possible
+                const resolved = tags.map((tagCode) => {
+                  const entry = tagDict ? tagDict[String(tagCode)] : undefined;
+                  return (entry && (entry.name || entry.description)) || String(tagCode);
+                });
+                t.tagDescriptions = resolved;
+                // also keep raw codes in case other flows need them
+                t.tagCodes = tags;
+                // Log if any tags couldn't be resolved
+                const unresolved = tags.filter((c) => !(tagDict && tagDict[String(c)]));
+                if (unresolved.length > 0) console.debug("fetchTopicsForSession: unresolved tag codes:", unresolved);
               }
             });
           } catch (tagErr) {
@@ -2392,6 +2892,43 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
             });
           } catch (lecErr) {
             console.warn("Không thể tải thông tin giảng viên hướng dẫn", lecErr);
+          }
+        }
+
+        // Fetch proposer/student names by proposerStudentCode to show student names in the list.
+        const proposerCodes = Array.from(new Set(eligible.map((t) => (t as any).proposerStudentCode).filter(Boolean) as string[]));
+        if (proposerCodes.length > 0) {
+          try {
+            const studentParams = new URLSearchParams();
+            // API accepts StudentCode (single or comma-separated)
+            studentParams.set("StudentCode", proposerCodes.join(","));
+            console.debug("fetchTopicsForSession: requesting StudentProfiles for:", proposerCodes);
+            const studentResp = await apiClient.get("/StudentProfiles/get-list", {
+              params: studentParams,
+              headers: buildDefaultHeaders(),
+            });
+            const studentPayload = studentResp.data as { data?: unknown } | unknown;
+            const studentRaw = Array.isArray((studentPayload as any)?.data)
+              ? ((studentPayload as any).data as any[])
+              : Array.isArray(studentPayload)
+                ? (studentPayload as unknown as any[])
+                : [];
+            const studentMap = new Map<string, string>();
+            studentRaw.forEach((entry) => {
+              const code = entry?.studentCode ?? entry?.StudentCode ?? entry?.student_profile_code ?? entry?.studentProfileCode;
+              const name = entry?.fullName ?? entry?.full_name ?? entry?.studentName ?? entry?.name;
+              if (code && name) studentMap.set(String(code), String(name));
+            });
+            console.debug("fetchTopicsForSession: studentMap keys:", Array.from(studentMap.keys()));
+            eligible.forEach((t) => {
+              const code = (t as any).proposerStudentCode;
+              if (code && (!t.studentName || t.studentName === "—")) {
+                const n = studentMap.get(code);
+                if (n) t.studentName = n;
+              }
+            });
+          } catch (stuErr) {
+            console.warn("Không thể tải thông tin sinh viên", stuErr);
           }
         }
 
@@ -2495,6 +3032,49 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       lecturerOptions.forEach((lecturer) => map.set(lecturer.lecturerProfileId, lecturer));
       return map;
     }, [lecturerOptions]);
+
+    const handleRandomSelectTopics = useCallback(() => {
+      if (!phaseOneForm.defenseDate || filteredTopics.length === 0) {
+        addToast("Cần có ngày bảo vệ và danh sách đề tài để chọn ngẫu nhiên", "warning");
+        return;
+      }
+
+      // Shuffle the available topics
+      const shuffled = [...filteredTopics].sort(() => Math.random() - 0.5);
+      const newAssignedTopics: Record<SessionId, AssignedTopicSlot[]> = { 1: [], 2: [] };
+      let totalAssigned = 0;
+
+      // Distribute topics to sessions, preferring morning first
+      for (const topic of shuffled) {
+        if (totalAssigned >= DAILY_TOPIC_LIMIT) break;
+
+        // Try morning session first
+        if (newAssignedTopics[1].length < SESSION_TOPIC_LIMIT) {
+          const timeLabel = MORNING_SLOTS[newAssignedTopics[1].length] || MORNING_SLOTS[MORNING_SLOTS.length - 1];
+          newAssignedTopics[1].push({
+            topic,
+            session: 1,
+            timeLabel,
+            scheduledAt: combineDateAndTime(phaseOneForm.defenseDate, timeLabel) || null,
+          });
+          totalAssigned++;
+        }
+        // Then afternoon session
+        else if (newAssignedTopics[2].length < SESSION_TOPIC_LIMIT) {
+          const timeLabel = AFTERNOON_SLOTS[newAssignedTopics[2].length] || AFTERNOON_SLOTS[AFTERNOON_SLOTS.length - 1];
+          newAssignedTopics[2].push({
+            topic,
+            session: 2,
+            timeLabel,
+            scheduledAt: combineDateAndTime(phaseOneForm.defenseDate, timeLabel) || null,
+          });
+          totalAssigned++;
+        }
+      }
+
+      setAssignedTopics(newAssignedTopics);
+      addToast(`Đã chọn ngẫu nhiên ${totalAssigned} đề tài`, "success");
+    }, [filteredTopics, phaseOneForm.defenseDate, addToast]);
 
     const handleAssignTopicToSession = useCallback(
       (topic: TopicTableItem, session: SessionId) => {
@@ -2611,8 +3191,40 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
 
     const responseCode = createResponse.data?.committeeCode ?? committeeCode;
     setPersistedCommitteeCode(responseCode);
+    // If backend returned assignments/sessions, initialize assignedTopics from them so UI reflects saved data
+    const returnedAssignments = createResponse.data?.assignments ?? [];
+    if (Array.isArray(returnedAssignments) && returnedAssignments.length > 0) {
+      const sessionMap: Record<SessionId, AssignedTopicSlot[]> = { 1: [], 2: [] };
+      returnedAssignments.forEach((a: any) => {
+        const sess = (a.session ?? 1) as SessionId;
+        // Normalize time label to HH:mm (strip seconds if present)
+        let timeLabel = a.startTime ?? a.start_time ?? "";
+        if (typeof timeLabel === "string") {
+          if (timeLabel.length >= 5 && timeLabel.indexOf(":") >= 0) {
+            timeLabel = timeLabel.slice(0,5);
+          }
+        }
+        const slot: AssignedTopicSlot = {
+          topic: {
+            topicCode: a.topicCode ?? a.topic_code ?? a.topicId,
+            title: a.title ?? a.topicName ?? a.name,
+            studentName: a.studentName ?? a.student_name ?? a.student ?? null,
+            supervisorName: a.supervisorName ?? a.supervisor_name ?? a.supervisor ?? null,
+            supervisorLecturerCode: a.supervisorCode ?? a.supervisorLecturerCode ?? null,
+            status: a.status ?? "Đủ điều kiện bảo vệ",
+          },
+          session: sess,
+          timeLabel: timeLabel || "",
+          scheduledAt: a.scheduledAt ?? a.scheduled_at ?? null,
+        };
+        sessionMap[sess] = sessionMap[sess] || [];
+        sessionMap[sess].push(slot);
+      });
+      setAssignedTopics(sessionMap);
+    } else {
+      setAssignedTopics({ 1: [], 2: [] });
+    }
     setWizardStep(2);
-        setAssignedTopics({ 1: [], 2: [] });
         addToast("Đã tạo hội đồng. Vui lòng phân đề tài.", "success");
       } catch (error) {
         console.error("Không thể tạo hội đồng", error);
@@ -2686,14 +3298,27 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       async (signal?: AbortSignal) => {
         setTableLoading(true);
         try {
-          const filterPayload = {
+          // Build a payload matching committeeAssignmentApi.listCommittees expected filter shape.
+          // The API expects `tagCodes` as an array (sent as repeated `tags` query params),
+          // and a single `date` (defenseDate) when filtering by exact date. Keep search/page/pageSize.
+          const filterPayload: any = {
             page,
             pageSize,
-            search: filters.search,
-            dateFrom: filters.defenseDateFrom || undefined,
-            dateTo: filters.defenseDateTo || undefined,
-            tagCode: filters.tagCodes && filters.tagCodes.length > 0 ? filters.tagCodes.join(",") : undefined,
+            search: filters.search || undefined,
           };
+
+          // If the UI has a single date selected (from === to) send it as `defenseDate`.
+          if (filters.defenseDateFrom && filters.defenseDateTo && filters.defenseDateFrom === filters.defenseDateTo) {
+            filterPayload.defenseDate = filters.defenseDateFrom;
+          } else if (filters.defenseDateFrom && !filters.defenseDateTo) {
+            // If user only filled the from date, treat it as the exact date filter
+            filterPayload.defenseDate = filters.defenseDateFrom;
+          }
+
+          // Send tagCodes as an actual array so buildQueryString will serialize them as repeated `tags` params
+          if (Array.isArray(filters.tagCodes) && filters.tagCodes.length > 0) {
+            filterPayload.tagCodes = filters.tagCodes;
+          }
           console.log("API Call: listCommittees with filters:", filterPayload);
 
           const [listResponse, eligibleCount] = await Promise.all([
@@ -2758,7 +3383,7 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
           }
         }
       },
-      [filters.defenseDateFrom, filters.defenseDateTo, filters.search, page, pageSize]
+      [filters.defenseDateFrom, filters.defenseDateTo, filters.search, filters.tagCodes, filters.status, page, pageSize]
     );
 
     const handleSkipTopics = useCallback(() => {
@@ -2870,6 +3495,52 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
       return (entry && ((entry as any).name || (entry as any).tagName)) || (entry && (entry as any).description) || tagCode;
     }, [tagDictionary, wizardTagNameLookup]);
 
+    const handleRandomAssignLecturers = useCallback(() => {
+      if (lecturerOptions.length === 0) {
+        addToast("Không có giảng viên nào để chọn ngẫu nhiên", "warning");
+        return;
+      }
+
+      const newAssignments = { ...EMPTY_ROLE_ASSIGNMENTS };
+      const usedLecturerIds = new Set<number>();
+
+      // First, try to assign chair (requires PhD)
+      const phdLecturers = lecturerOptions.filter(
+        (lecturer) =>
+          isPhd(lecturer.degree) &&
+          lecturer.lecturerCode &&
+          !supervisorCodesInAssignments.has(lecturer.lecturerCode)
+      );
+
+      if (phdLecturers.length > 0) {
+        const randomChair = phdLecturers[Math.floor(Math.random() * phdLecturers.length)];
+        newAssignments.chair = randomChair.lecturerProfileId;
+        usedLecturerIds.add(randomChair.lecturerProfileId);
+      }
+
+      // Then assign other roles
+      const remainingRoles: RoleId[] = ["reviewer1", "secretary", "reviewer2", "reviewer3"];
+
+      for (const roleId of remainingRoles) {
+        const role = ROLE_CONFIG.find((r) => r.id === roleId)!;
+        const availableLecturers = lecturerOptions.filter((lecturer) => {
+          if (usedLecturerIds.has(lecturer.lecturerProfileId)) return false;
+          if (role.requiresPhd && !isPhd(lecturer.degree)) return false;
+          if (lecturer.lecturerCode && supervisorCodesInAssignments.has(lecturer.lecturerCode)) return false;
+          return true;
+        });
+
+        if (availableLecturers.length > 0) {
+          const randomLecturer = availableLecturers[Math.floor(Math.random() * availableLecturers.length)];
+          newAssignments[roleId] = randomLecturer.lecturerProfileId;
+          usedLecturerIds.add(randomLecturer.lecturerProfileId);
+        }
+      }
+
+      setRoleAssignments(newAssignments);
+      addToast("Đã phân công giảng viên ngẫu nhiên", "success");
+    }, [lecturerOptions, supervisorCodesInAssignments, addToast]);
+
     const lecturerOptionsByRole = useMemo(() => {
       const map: Record<RoleId, LecturerOption[]> = {
         chair: [],
@@ -2892,11 +3563,15 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
           if (role.requiresPhd && !isPhd(lecturer.degree)) {
             return false;
           }
+          // Exclude lecturers who are supervisors of assigned topics
+          if (lecturer.lecturerCode && supervisorCodesInAssignments.has(lecturer.lecturerCode)) {
+            return false;
+          }
           return true;
         });
       });
       return map;
-    }, [lecturerOptions, roleAssignments]);
+    }, [lecturerOptions, roleAssignments, supervisorCodesInAssignments]);
 
     const closeAllModals = useCallback(() => {
       setModals(defaultModalState);
@@ -3114,8 +3789,9 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
     );
 
     const assignedTopicsPercent = useMemo(() => {
-      if (!stats.eligibleTopics) return 0;
-      const pct = (stats.assignedTopics / stats.eligibleTopics) * 100;
+      const total = (stats.eligibleTopics ?? 0) + (stats.assignedTopics ?? 0);
+      if (total === 0) return 0;
+      const pct = (stats.assignedTopics / total) * 100;
       return Math.min(100, Math.round(pct));
     }, [stats.assignedTopics, stats.eligibleTopics]);
 
@@ -3406,16 +4082,24 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                               Mỗi phiên tối đa 4 đề tài, tổng {DAILY_TOPIC_LIMIT} đề tài trong cùng ngày.
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-[#1F3C88]">
+                          <div className="flex flex-col items-end gap-2">
                             <span
-                              className={`rounded-full px-3 py-1 ${
+                              className={`rounded-full px-3 py-1 text-xs ${
                                 totalAssignedTopics >= DAILY_TOPIC_LIMIT
                                   ? "bg-[#FCE8D5] text-[#8B5E34]"
-                                  : "bg-[#F1F5FF]"
+                                  : "bg-[#F1F5FF] text-[#1F3C88]"
                               }`}
                             >
                               {totalAssignedTopics}/{DAILY_TOPIC_LIMIT} đề tài
                             </span>
+                            <button
+                              type="button"
+                              onClick={handleRandomSelectTopics}
+                              disabled={topicsLoading || !phaseOneForm.defenseDate || filteredTopics.length === 0}
+                              className="rounded-full border border-[#1F3C88] bg-[#1F3C88] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#162B61] disabled:opacity-50"
+                            >
+                              Chọn ngẫu nhiên
+                            </button>
                           </div>
                         </div>
                         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -3606,15 +4290,25 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                         <div className="flex flex-col gap-4 rounded-2xl border border-[#E5ECFB] bg-white p-5 shadow-sm">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-sm font-semibold text-[#1F3C88]">Phân vai trò giảng viên</span>
-                            {lecturersLoading ? (
-                              <span className="flex items-center gap-2 text-xs text-[#4A5775]">
-                                <Loader2 className="h-4 w-4 animate-spin text-[#1F3C88]" /> Đang tải
-                              </span>
-                            ) : (
-                              <span className="text-xs text-[#4A5775]">
-                                {lecturerOptions.length.toLocaleString("vi-VN")} lựa chọn
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleRandomAssignLecturers}
+                                disabled={lecturersLoading || lecturerOptions.length === 0}
+                                className="rounded-full border border-[#1F3C88] bg-[#1F3C88] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#162B61] disabled:opacity-50"
+                              >
+                                Phân công ngẫu nhiên
+                              </button>
+                              {lecturersLoading ? (
+                                <span className="flex items-center gap-2 text-xs text-[#4A5775]">
+                                  <Loader2 className="h-4 w-4 animate-spin text-[#1F3C88]" /> Đang tải
+                                </span>
+                              ) : (
+                                <span className="text-xs text-[#4A5775]">
+                                  {lecturerOptions.length.toLocaleString("vi-VN")} lựa chọn
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="space-y-4">
                             {ROLE_CONFIG.map((role) => {
@@ -3793,18 +4487,26 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
         )}
 
         {deleteTarget && (
-          <ModalShell
-            onClose={() => setDeleteTarget(null)}
-            title="Xác nhận xóa hội đồng"
-            subtitle={`Bạn có chắc muốn xóa hội đồng ${deleteTarget}?`}
-          >
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-[#4A5775]">Hành động này không thể hoàn tác.</p>
-              <div className="flex gap-3">
+            <ModalShell
+              onClose={() => setDeleteTarget(null)}
+              title="Xác nhận xóa hội đồng"
+              small
+            >
+            <div className="flex flex-col gap-6">
+              <div>
+                <p className="text-sm font-semibold text-[#1F3C88]">Bạn có chắc muốn xóa hội đồng <span className="font-mono">{deleteTarget}</span>?</p>
+              </div>
+
+              <div className="rounded-md border-l-4 border-[#FFE5D0] bg-[#FFF6EE] p-4 text-sm text-[#8B5E34]">
+                Hành động này không thể hoàn tác.
+              </div>
+
+              <div className="flex justify-end items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(null)}
-                  className="rounded-full border border-[#D9E1F2] px-4 py-2"
+                  className="rounded-full border border-[#D9E1F2] px-4 py-2 text-sm"
+                  aria-label="Hủy xóa hội đồng"
                 >
                   Hủy
                 </button>
@@ -3830,7 +4532,8 @@ function normalizeTopicItem(item: any): TopicTableItem | null {
                       setDeleting(false);
                     }
                   }}
-                  className="rounded-full bg-[#FF6B35] px-4 py-2 text-white"
+                  className="rounded-full bg-[#FF6B35] px-4 py-2 text-white text-sm shadow-sm"
+                  aria-label="Xác nhận xóa hội đồng"
                 >
                   {deleting ? "Đang xóa..." : "Xóa hội đồng"}
                 </button>

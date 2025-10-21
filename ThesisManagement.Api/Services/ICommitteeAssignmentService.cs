@@ -15,7 +15,7 @@ namespace ThesisManagement.Api.Services
         Task<ApiResponse<bool>> DeleteCommitteeAsync(string committeeCode, bool force, CancellationToken cancellationToken = default);
 
         // Queries
-        Task<ApiResponse<PagedResult<CommitteeSummaryDto>>> GetCommitteesAsync(int page, int pageSize, string? keyword, DateTime? date, CancellationToken cancellationToken = default);
+        Task<ApiResponse<PagedResult<CommitteeSummaryDto>>> GetCommitteesAsync(int page, int pageSize, string? keyword, DateTime? date, string[]? tags, CancellationToken cancellationToken = default);
         Task<ApiResponse<CommitteeDetailDto>> GetCommitteeDetailAsync(string committeeCode, CancellationToken cancellationToken = default);
 
         // Availability
