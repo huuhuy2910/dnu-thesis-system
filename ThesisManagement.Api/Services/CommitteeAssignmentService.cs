@@ -732,7 +732,7 @@ namespace ThesisManagement.Api.Services
         }
 
         // ============ QUERIES ============
-        public async Task<ApiResponse<PagedResult<CommitteeSummaryDto>>> GetCommitteesAsync(int page, int pageSize, string? keyword, DateTime? date, CancellationToken cancellationToken = default)
+        public async Task<ApiResponse<PagedResult<CommitteeSummaryDto>>> GetCommitteesAsync(int page, int pageSize, string? keyword, DateTime? date, string[]? tags, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -749,6 +749,11 @@ namespace ThesisManagement.Api.Services
                 {
                     var d = date.Value.Date;
                     q = q.Where(c => c.DefenseDate.HasValue && c.DefenseDate.Value.Date == d);
+                }
+                if (tags != null && tags.Length > 0)
+                {
+                    var tagSet = new HashSet<string>(tags, StringComparer.OrdinalIgnoreCase);
+                    q = q.Where(c => _db.CommitteeTags.Any(ct => ct.CommitteeCode == c.CommitteeCode && tagSet.Contains(ct.TagCode)));
                 }
 
                 var total = await q.CountAsync(cancellationToken);

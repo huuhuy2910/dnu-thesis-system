@@ -22,7 +22,7 @@ export interface CommitteeAssignmentFilter {
 	committeeCode?: string;
 	room?: string;
 	defenseDate?: string; // ISO date string (yyyy-MM-dd)
-	tagCode?: string;
+	tagCodes?: string[];
 	page?: number;
 	pageSize?: number;
 }

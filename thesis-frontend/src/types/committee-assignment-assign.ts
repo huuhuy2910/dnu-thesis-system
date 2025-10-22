@@ -1,6 +1,6 @@
 export interface CommitteeAssignmentTopicSlot {
 	topicCode: string;
-	scheduledAt: string; // ISO datetime string
+	scheduledAt?: string | null; // ISO datetime string or null
 	session: number;
 	startTime: string; // HH:mm:ss
 	endTime: string; // HH:mm:ss
@@ -8,7 +8,7 @@ export interface CommitteeAssignmentTopicSlot {
 
 export interface CommitteeAssignmentAssignRequest {
 	committeeCode: string;
-	scheduledAt: string; // ISO date string for the session
+	scheduledAt?: string | null; // ISO date string for the session or null
 	session: number;
 	items: { topicCode: string; session?: number; scheduledAt?: string | null; startTime?: string | null; endTime?: string | null }[];
 	// items now include session and scheduledAt so backend receives full info in a single array

@@ -59,7 +59,7 @@ const ToastContainer: React.FC = () => {
 
   return (
     <div
-      className="fixed top-4 right-4 z-50 flex max-w-sm flex-col gap-2"
+      className="fixed top-4 right-4 z-[1100] flex max-w-sm flex-col gap-2"
       role="region"
       aria-live="polite"
       aria-atomic="true"
