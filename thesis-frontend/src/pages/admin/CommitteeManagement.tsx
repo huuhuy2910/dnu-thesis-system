@@ -1109,6 +1109,7 @@ function AssignTopicModal({
   onClose,
   onSubmit,
 }: AssignTopicModalProps) {
+  const { addToast } = useToast();
   const [committeeCode, setCommitteeCode] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [session, setSession] = useState("1");
@@ -1118,7 +1119,7 @@ function AssignTopicModal({
 
   const handleSubmit = async () => {
     if (!committeeCode || !scheduledAt) {
-      alert("Vui lòng chọn hội đồng và ngày bảo vệ");
+      addToast("Vui lòng chọn hội đồng và ngày bảo vệ", "warning");
       return;
     }
     setSubmitting(true);

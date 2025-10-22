@@ -21,13 +21,8 @@ const AdminNav: React.FC = () => {
       icon: <Users size={18} />,
     },
     {
-      path: "/admin/topics",
-      label: "Quản lý đề tài",
-      icon: <ClipboardList size={18} />,
-    },
-    {
       path: "/admin/topic-review",
-      label: "Duyệt đề tài",
+      label: "Quản lý đề tài",
       icon: <ClipboardList size={18} />,
     },
     {

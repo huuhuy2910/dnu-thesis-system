@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
+import { useToast } from "../../context/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -20,6 +21,7 @@ import {
 const LecturerProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { addToast } = useToast();
   const [profile, setProfile] = useState<LecturerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,14 +196,15 @@ const LecturerProfilePage: React.FC = () => {
       setIsEditing(false);
       setSelectedFile(null);
       setImagePreview(null);
-      alert("Cập nhật thông tin thành công!");
+      addToast("Cập nhật thông tin thành công!", "success");
     } catch (err) {
       console.error("Error updating profile:", err);
-      setError(
+      const errorMessage =
         err instanceof Error
           ? err.message
-          : "Có lỗi xảy ra khi cập nhật thông tin"
-      );
+          : "Có lỗi xảy ra khi cập nhật thông tin";
+      setError(errorMessage);
+      addToast(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -627,7 +630,7 @@ const LecturerProfilePage: React.FC = () => {
               <label
                 style={{
                   display: "block",
-                  marginBottom: "8px",
+                  marginBottom: "12px",
                   fontSize: "14px",
                   fontWeight: "500",
                   color: "#002855",
@@ -635,27 +638,64 @@ const LecturerProfilePage: React.FC = () => {
               >
                 Tải ảnh đại diện
               </label>
+
+              {/* Hidden file input */}
               <input
+                id="lecturer-avatar-upload"
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/gif,image/bmp"
                 onChange={handleFileChange}
                 style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "2px solid #f37021",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "#FFFFFF",
-                  marginBottom: "8px",
-                  boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
+                  position: "absolute",
+                  opacity: 0,
+                  pointerEvents: "none",
+                  width: "1px",
+                  height: "1px",
                 }}
               />
+
+              {/* Custom upload button */}
+              <label
+                htmlFor="lecturer-avatar-upload"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 20px",
+                  background: "#f37021",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
+                  width: "100%",
+                  textAlign: "center",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#ea580c";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(243, 112, 33, 0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f37021";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow =
+                    "0 2px 8px rgba(243, 112, 33, 0.2)";
+                }}
+              >
+                Chọn ảnh
+              </label>
 
               <p
                 style={{
                   fontSize: "12px",
                   color: "#6B7280",
-                  marginTop: "4px",
+                  marginTop: "8px",
                   textAlign: "center",
                 }}
               >

@@ -9,6 +9,7 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
+import { useToast } from "../../context/useToast";
 import "../admin/Dashboard.css";
 
 interface SystemConfig {
@@ -28,6 +29,7 @@ interface SystemConfig {
 }
 
 const SystemConfig: React.FC = () => {
+  const { addToast } = useToast();
   const [config, setConfig] = useState<SystemConfig>({
     systemName: "Hệ thống Quản lý Đồ án Tốt nghiệp",
     systemVersion: "2.1.0",
@@ -54,7 +56,7 @@ const SystemConfig: React.FC = () => {
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1500));
     setIsSaving(false);
-    alert("Cấu hình đã được lưu thành công!");
+    addToast("Cấu hình đã được lưu thành công!", "success");
   };
 
   const handleReset = () => {

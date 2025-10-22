@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
 import type {
   ProgressSubmission,
@@ -26,6 +27,7 @@ import type { LecturerProfile } from "../../types/lecturer";
 const LecturerReports: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [reports, setReports] = useState<ProgressSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -400,7 +402,10 @@ const LecturerReports: React.FC = () => {
     } catch (err) {
       console.error("Error downloading file:", err);
       // Show simple feedback to user
-      alert("Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.");
+      addToast(
+        "Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.",
+        "error"
+      );
     }
   };
 

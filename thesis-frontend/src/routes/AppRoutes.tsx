@@ -18,7 +18,6 @@ import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
-import TopicsManagement from "../pages/admin/TopicsManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
 import ScrollToTop from "../components/ScrollToTop";
@@ -93,7 +92,6 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UsersManagement />} />
-          <Route path="topics" element={<TopicsManagement />} />
           <Route path="system-config" element={<SystemConfig />} />
           <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="notifications/create" element={<CreateNotification />} />
@@ -110,7 +108,6 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UsersManagement />} />
-          <Route path="topics" element={<TopicsManagement />} />
           <Route path="committees" element={<CommitteeManagement />} />
           <Route
             path="defense-assignments"

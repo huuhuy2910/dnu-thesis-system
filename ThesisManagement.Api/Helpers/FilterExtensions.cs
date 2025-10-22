@@ -263,11 +263,19 @@ namespace ThesisManagement.Api.Helpers
             {
                 query = query.Where(x => x.Title.Contains(filter.Search) ||
                                         x.TopicCode.Contains(filter.Search) ||
-                                        (x.Summary != null && x.Summary.Contains(filter.Search)));
+                                        (x.Summary != null && x.Summary.Contains(filter.Search)) ||
+                                        (x.ProposerUserCode != null && x.ProposerUserCode.Contains(filter.Search)) ||
+                                        (x.ProposerStudentCode != null && x.ProposerStudentCode.Contains(filter.Search)) ||
+                                        (x.SupervisorUserCode != null && x.SupervisorUserCode.Contains(filter.Search)) ||
+                                        (x.SupervisorLecturerCode != null && x.SupervisorLecturerCode.Contains(filter.Search)) ||
+                                        (x.DepartmentCode != null && x.DepartmentCode.Contains(filter.Search)));
             }
 
             if (!string.IsNullOrEmpty(filter.Title))
                 query = query.Where(x => x.Title.Contains(filter.Title));
+
+            if (!string.IsNullOrEmpty(filter.Summary))
+                query = query.Where(x => x.Summary != null && x.Summary.Contains(filter.Summary));
 
             if (!string.IsNullOrEmpty(filter.TopicCode))
                 query = query.Where(x => x.TopicCode.Contains(filter.TopicCode));
@@ -316,6 +324,9 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrWhiteSpace(filter.SupervisorUserCode))
                 query = query.Where(x => x.SupervisorUserCode == filter.SupervisorUserCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.SupervisorLecturerCode))
+                query = query.Where(x => x.SupervisorLecturerCode == filter.SupervisorLecturerCode);
 
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
