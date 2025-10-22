@@ -3,7 +3,7 @@ import StudentNav from "../SideNavs/StudentNav";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { LogOut, ChevronDown, User } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
 
@@ -262,7 +262,7 @@ const StudentLayout: React.FC = () => {
               >
                 {studentImage ? (
                   <img
-                    src={studentImage}
+                    src={getAvatarUrl(studentImage)}
                     alt={profile?.fullName || "avatar"}
                     style={{
                       width: 40,
@@ -335,7 +335,7 @@ const StudentLayout: React.FC = () => {
                     {/* Avatar */}
                     {studentImage ? (
                       <img
-                        src={studentImage}
+                        src={getAvatarUrl(studentImage)}
                         alt={profile?.fullName || "avatar"}
                         style={{
                           width: 48,

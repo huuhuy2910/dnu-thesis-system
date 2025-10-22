@@ -18,7 +18,6 @@ import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
 import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
-import TopicsManagement from "../pages/admin/TopicsManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
 import ScrollToTop from "../components/ScrollToTop";
@@ -30,6 +29,7 @@ import LecturerProfilePage from "../pages/lecturer/LecturerProfile";
 import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
 import LecturerNotifications from "../pages/lecturer/Notifications";
 import CommitteeManagement from "../pages/admin/CommitteeManagement";
+import SystemActivityLogs from "../pages/admin/SystemActivityLogs";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -92,33 +92,32 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UsersManagement />} />
-          <Route path="topics" element={<TopicsManagement />} />
           <Route path="system-config" element={<SystemConfig />} />
           <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="notifications/create" element={<CreateNotification />} />
           {/* thêm các route con khác của admin ở đây */}
         </Route>
-      {/* ADMIN */}
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute allowedRoles={["ADMIN"]}>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<AdminDashboard />} />
-        <Route path="users" element={<UsersManagement />} />
-        <Route path="topics" element={<TopicsManagement />} />
-        <Route path="committees" element={<CommitteeManagement />} />
+        {/* ADMIN */}
         <Route
-          path="defense-assignments"
-          element={<Navigate to="/admin/committees" replace />}
-        />
-        <Route path="system-config" element={<SystemConfig />} />
-        <Route path="notifications/create" element={<CreateNotification />} />
-        {/* thêm các route con khác của admin ở đây */}
-      </Route>
+          path="/admin/*"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UsersManagement />} />
+          <Route path="committees" element={<CommitteeManagement />} />
+          <Route
+            path="defense-assignments"
+            element={<Navigate to="/admin/committees" replace />}
+          />
+          <Route path="system-config" element={<SystemConfig />} />
+          <Route path="notifications/create" element={<CreateNotification />} />
+          <Route path="activity-logs" element={<SystemActivityLogs />} />
+          {/* thêm các route con khác của admin ở đây */}
+        </Route>
 
         {/* fallback: nếu không match => điều hướng về /login */}
         <Route path="*" element={<Navigate to="/login" replace />} />

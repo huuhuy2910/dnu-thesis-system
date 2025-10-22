@@ -18,6 +18,7 @@ import {
   X,
   TrendingUp,
 } from "lucide-react";
+import { useToast } from "../../context/useToast";
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -30,6 +31,7 @@ import type { Tag } from "../../types/tag";
 
 const Reports: React.FC = () => {
   const auth = useAuth();
+  const { addToast } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [reportTitle, setReportTitle] = useState("");
   const [reportDescription, setReportDescription] = useState("");
@@ -299,7 +301,10 @@ const Reports: React.FC = () => {
     } catch (err) {
       console.error("Error downloading file:", err);
       // Show simple feedback to user
-      alert("Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.");
+      addToast(
+        "Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.",
+        "error"
+      );
     }
   };
 
@@ -394,6 +399,8 @@ const Reports: React.FC = () => {
         reportDescription,
         studentUserCode: auth.user.userCode,
         studentUserID: auth.user.userID,
+        lecturerProfileID: lecturerProfile?.lecturerProfileID || null,
+        lecturerCode: lecturerProfile?.lecturerCode || null,
         submittedAt: new Date().toISOString(),
         milestoneCode: milestones.length > 0 ? milestones[0].milestoneCode : "",
         milestoneID: milestones.length > 0 ? milestones[0].milestoneID : null,

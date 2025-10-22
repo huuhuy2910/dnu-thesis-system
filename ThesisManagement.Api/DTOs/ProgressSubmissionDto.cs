@@ -9,6 +9,8 @@ namespace ThesisManagement.Api.DTOs
         string StudentUserCode,
     int? StudentProfileID,
     string? StudentProfileCode,
+    int? LecturerProfileID,
+    string? LecturerCode,
     int? AttemptNumber,
     string? ReportTitle,
     string? ReportDescription);
@@ -16,10 +18,7 @@ namespace ThesisManagement.Api.DTOs
     public record ProgressSubmissionUpdateDto(
     string? LecturerComment,
     string? LecturerState,
-    string? FeedbackLevel,
-    int? AttemptNumber,
-    string? ReportTitle,
-    string? ReportDescription);
+    string? FeedbackLevel);
 
     public record ProgressSubmissionReadDto(
         int SubmissionID,
@@ -30,6 +29,8 @@ namespace ThesisManagement.Api.DTOs
         string? StudentUserCode,
         int? StudentProfileID,
         string? StudentProfileCode,
+        int? LecturerProfileID,
+        string? LecturerCode,
         DateTime? SubmittedAt,
     int? AttemptNumber,
         string? LecturerComment,

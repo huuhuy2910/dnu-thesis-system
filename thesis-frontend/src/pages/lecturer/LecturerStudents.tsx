@@ -11,7 +11,7 @@ import {
   AlertCircle,
   Edit,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { Topic } from "../../types/topic";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { ProgressMilestone } from "../../types/progressMilestone";
@@ -530,7 +530,9 @@ const LecturerStudents: React.FC = () => {
                     >
                       {student.studentProfile?.studentImage ? (
                         <img
-                          src={student.studentProfile.studentImage}
+                          src={getAvatarUrl(
+                            student.studentProfile.studentImage
+                          )}
                           alt={student.studentName}
                           style={{
                             width: "100%",
@@ -959,7 +961,9 @@ const LecturerStudents: React.FC = () => {
                 >
                   {detailModal.student.studentProfile?.studentImage ? (
                     <img
-                      src={detailModal.student.studentProfile.studentImage}
+                      src={getAvatarUrl(
+                        detailModal.student.studentProfile.studentImage
+                      )}
                       alt={detailModal.student.studentName}
                       style={{
                         width: "100%",

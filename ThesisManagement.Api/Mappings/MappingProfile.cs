@@ -29,7 +29,6 @@ namespace ThesisManagement.Api.Mappings
                 .ForMember(dest => dest.CompletedAt5, opt => opt.MapFrom(src => src.CompletedAt5));
             CreateMap<ProgressSubmission, ProgressSubmissionReadDto>();
             CreateMap<MilestoneTemplate, MilestoneTemplateReadDto>();
-            CreateMap<MilestoneStateHistory, MilestoneStateHistoryReadDto>();
             CreateMap<SubmissionFile, SubmissionFileReadDto>();
             // TODO: CreateMap<Committee, CommitteeReadDto>();
             // TODO: CreateMap<CommitteeMember, CommitteeMemberReadDto>();
@@ -41,6 +40,7 @@ namespace ThesisManagement.Api.Mappings
             CreateMap<LecturerTag, LecturerTagReadDto>();
             CreateMap<CatalogTopicTag, CatalogTopicTagReadDto>();
             CreateMap<TopicTag, TopicTagReadDto>();
+            CreateMap<SystemActivityLog, SystemActivityLogReadDto>();
         }
     }
 }

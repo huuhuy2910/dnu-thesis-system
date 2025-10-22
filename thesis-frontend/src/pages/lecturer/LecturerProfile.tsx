@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
+import { useToast } from "../../context/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -20,6 +21,7 @@ import {
 const LecturerProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { addToast } = useToast();
   const [profile, setProfile] = useState<LecturerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +32,7 @@ const LecturerProfilePage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [tagNames, setTagNames] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const loadLecturerProfile = React.useCallback(async () => {
     try {
@@ -60,6 +63,13 @@ const LecturerProfilePage: React.FC = () => {
 
           if (detailData && Object.keys(detailData).length > 0) {
             profileData = detailData;
+            // Preserve profileImage from list data if detail data doesn't have it
+            if (!detailData.profileImage && listData[0].profileImage) {
+              profileData = {
+                ...detailData,
+                profileImage: listData[0].profileImage,
+              };
+            }
           }
         } catch (detailErr) {
           console.error(
@@ -139,7 +149,7 @@ const LecturerProfilePage: React.FC = () => {
     }
   }, [profile?.lecturerCode]);
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     if (!profile || !profile.lecturerCode) {
       setError("Không thể cập nhật: thiếu thông tin mã giảng viên");
       return;
@@ -147,22 +157,54 @@ const LecturerProfilePage: React.FC = () => {
 
     try {
       setLoading(true);
+      setError(null);
 
+      const updatedProfile = { ...editedProfile };
+
+      // If there's a selected file, upload it first
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        // Upload avatar
+        await fetchData(
+          `/LecturerProfiles/upload-avatar/${profile.lecturerCode}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        // Reload profile to get the new avatar URL
+        await loadLecturerProfile();
+      }
+
+      // Save profile changes (exclude profileImage since it's handled by upload API)
+      const profileDataToUpdate = { ...updatedProfile };
+      delete profileDataToUpdate.profileImage;
       await fetchData(`/LecturerProfiles/update/${profile.lecturerCode}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editedProfile),
+        body: JSON.stringify(profileDataToUpdate),
       });
 
-      setProfile({ ...profile, ...editedProfile });
-      setIsEditing(false);
-      // Reload to get updated data
+      // Reload profile again to get the latest data including any changes
       await loadLecturerProfile();
+
+      setIsEditing(false);
+      setSelectedFile(null);
+      setImagePreview(null);
+      addToast("Cập nhật thông tin thành công!", "success");
     } catch (err) {
       console.error("Error updating profile:", err);
-      setError("Có lỗi xảy ra khi cập nhật thông tin");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Có lỗi xảy ra khi cập nhật thông tin";
+      setError(errorMessage);
+      addToast(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -172,20 +214,39 @@ const LecturerProfilePage: React.FC = () => {
     setEditedProfile(profile || {});
     setIsEditing(false);
     setImagePreview(null);
+    setSelectedFile(null);
   };
 
-  const handleImageUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    if (url) {
-      setImagePreview(url);
-      // Store the URL into the edited profile so the payload contains the image
-      setEditedProfile({
-        ...editedProfile,
-        profileImage: url,
-      });
-    } else {
-      // If no URL entered, clear preview
-      setImagePreview(null);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Kiểm tra loại file
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/bmp",
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)");
+        return;
+      }
+
+      // Kiểm tra kích thước file (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Kích thước file không được vượt quá 5MB");
+        return;
+      }
+
+      setSelectedFile(file);
+      // Tạo preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setError(null);
     }
   };
 
@@ -363,7 +424,7 @@ const LecturerProfilePage: React.FC = () => {
             }}
           >
             <button
-              onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
+              onClick={() => (isEditing ? handleSubmit() : setIsEditing(true))}
               disabled={loading}
               style={{
                 display: "flex",
@@ -468,15 +529,27 @@ const LecturerProfilePage: React.FC = () => {
             }}
           >
             {imagePreview || profile.profileImage ? (
-              <img
-                src={imagePreview || profile.profileImage}
-                alt={profile.fullName}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
+              imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt={profile.fullName}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <img
+                  src={getAvatarUrl(profile.profileImage)}
+                  alt={profile.fullName}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              )
             ) : (
               <div
                 style={{
@@ -557,30 +630,77 @@ const LecturerProfilePage: React.FC = () => {
               <label
                 style={{
                   display: "block",
-                  marginBottom: "8px",
+                  marginBottom: "12px",
                   fontSize: "14px",
                   fontWeight: "500",
                   color: "#002855",
                 }}
               >
-                URL ảnh đại diện
+                Tải ảnh đại diện
               </label>
+
+              {/* Hidden file input */}
               <input
-                type="url"
-                value={editedProfile.profileImage || ""}
-                onChange={handleImageUrlChange}
-                placeholder="Nhập URL ảnh..."
+                id="lecturer-avatar-upload"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/bmp"
+                onChange={handleFileChange}
                 style={{
-                  width: "100%",
-                  padding: "12px",
-                  border: "2px solid #f37021",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "#FFFFFF",
-                  boxShadow: "0 2px 4px rgba(243, 112, 33, 0.1)",
-                  transition: "border-color 0.2s, box-shadow 0.2s",
+                  position: "absolute",
+                  opacity: 0,
+                  pointerEvents: "none",
+                  width: "1px",
+                  height: "1px",
                 }}
               />
+
+              {/* Custom upload button */}
+              <label
+                htmlFor="lecturer-avatar-upload"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 20px",
+                  background: "#f37021",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
+                  width: "100%",
+                  textAlign: "center",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#ea580c";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(243, 112, 33, 0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f37021";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow =
+                    "0 2px 8px rgba(243, 112, 33, 0.2)";
+                }}
+              >
+                Chọn ảnh
+              </label>
+
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#6B7280",
+                  marginTop: "8px",
+                  textAlign: "center",
+                }}
+              >
+                Chấp nhận: JPG, JPEG, PNG, GIF, BMP (tối đa 5MB)
+              </p>
             </div>
           )}
         </div>

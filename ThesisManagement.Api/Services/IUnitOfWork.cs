@@ -14,7 +14,6 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
     IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
-    IGenericRepository<MilestoneStateHistory> MilestoneStateHistories { get; }
     IGenericRepository<SubmissionFile> SubmissionFiles { get; }
         IGenericRepository<Committee> Committees { get; }
         IGenericRepository<CommitteeMember> CommitteeMembers { get; }
@@ -27,6 +26,7 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<TopicTag> TopicTags { get; }
         IGenericRepository<TopicLecturer> TopicLecturers { get; }
         IGenericRepository<LecturerTag> LecturerTags { get; }
+        IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
         
         Task<int> SaveChangesAsync();
     }

@@ -9,8 +9,12 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers
-builder.Services.AddControllers();
+// Controllers with filters
+builder.Services.AddControllers(options =>
+{
+    // Thêm global filter để log activities
+    options.Filters.Add<ThesisManagement.Api.Filters.ActivityLogFilter>();
+});
 
 // CORS
 builder.Services.AddCors(options =>
@@ -42,12 +46,19 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
+// HTTP Context for current user
+builder.Services.AddHttpContextAccessor();
+
 // Repositories / Services
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ICodeGenerator, CodeGeneratorService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICommitteeAssignmentService, CommitteeAssignmentService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Filters
+builder.Services.AddScoped<ThesisManagement.Api.Filters.ActivityLogFilter>();
 
 var app = builder.Build();
 
@@ -82,6 +93,9 @@ app.UseRouting();
 
 // Apply CORS early so it covers controller endpoints and static file responses
 app.UseCors("AllowAll");
+
+// Custom middleware to extract user info from headers
+app.UseMiddleware<ThesisManagement.Api.Middleware.UserContextMiddleware>();
 
 // Serve static files from wwwroot (so /uploads/{file} is accessible)
 // Add OnPrepareResponse to ensure static file responses include CORS headers

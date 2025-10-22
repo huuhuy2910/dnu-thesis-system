@@ -355,7 +355,7 @@ const TopicRegistration: React.FC = () => {
       setFilteredLecturers([]);
       setSelectedTagIDs([]);
     }
-  };
+  };  
 
   // Filter lecturers based on selected tags for self-proposed topics and edit mode
   useEffect(() => {

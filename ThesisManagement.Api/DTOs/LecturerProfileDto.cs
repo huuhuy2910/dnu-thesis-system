@@ -28,7 +28,7 @@ namespace ThesisManagement.Api.DTOs
         DateTime? DateOfBirth,
         string? Email,
         string? PhoneNumber,
-        string? ProfileImage,
+        // ProfileImage không được update qua PUT, sử dụng POST /upload-avatar thay thế
         string? Address,
         string? Notes,
         string? FullName);

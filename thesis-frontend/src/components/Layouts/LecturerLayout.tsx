@@ -3,7 +3,7 @@ import LecturerNav from "../SideNavs/LecturerNav";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { LogOut, ChevronDown, User, Clock, GraduationCap } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 
@@ -338,7 +338,7 @@ const LecturerLayout: React.FC = () => {
               >
                 {lecturerImage ? (
                   <img
-                    src={lecturerImage}
+                    src={getAvatarUrl(lecturerImage)}
                     alt={profile?.fullName || "avatar"}
                     style={{
                       width: 40,
@@ -413,7 +413,7 @@ const LecturerLayout: React.FC = () => {
                     {/* Avatar */}
                     {lecturerImage ? (
                       <img
-                        src={lecturerImage}
+                        src={getAvatarUrl(lecturerImage)}
                         alt={profile?.fullName || "avatar"}
                         style={{
                           width: 48,

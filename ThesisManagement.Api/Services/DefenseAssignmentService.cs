@@ -429,18 +429,6 @@ namespace ThesisManagement.Api.Services
 
                         var old = topic.Status;
                         topic.Status = AssignedTopicStatus;
-                        // Log history
-                        await _context.MilestoneStateHistories.AddAsync(new MilestoneStateHistory
-                        {
-                            MilestoneID = 0,
-                            MilestoneCode = string.Empty,
-                            TopicCode = topic.TopicCode,
-                            OldState = old,
-                            NewState = topic.Status,
-                            ChangedByUserCode = dto.AssignedByUserCode ?? "system",
-                            ChangedAt = DateTime.UtcNow,
-                            Comment = "Assigned to committee"
-                        });
                         topic.LastUpdated = now;
 
                         assigned = true;
@@ -650,17 +638,6 @@ namespace ThesisManagement.Api.Services
                 {
                     var old = topic.Status;
                     topic.Status = EligibleTopicStatus;
-                    await _context.MilestoneStateHistories.AddAsync(new MilestoneStateHistory
-                    {
-                        MilestoneID = 0,
-                        MilestoneCode = string.Empty,
-                        TopicCode = topic.TopicCode,
-                        OldState = old,
-                        NewState = topic.Status,
-                        ChangedByUserCode = dto.AssignedByUserCode ?? "system",
-                        ChangedAt = DateTime.UtcNow,
-                        Comment = "Removed from committee / restored to eligible"
-                    });
                     topic.LastUpdated = DateTime.UtcNow;
                 }
 

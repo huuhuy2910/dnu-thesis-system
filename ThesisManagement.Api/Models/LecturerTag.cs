@@ -17,5 +17,5 @@ namespace ThesisManagement.Api.Models
         public LecturerProfile? LecturerProfile { get; set; }
         public Tag? Tag { get; set; }
         public User? AssignedByUser { get; set; }
-    }
+    }                                                                                                                                                         
 }

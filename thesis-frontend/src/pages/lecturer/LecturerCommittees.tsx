@@ -1,29 +1,36 @@
 import React, { useEffect, useState } from "react";
 import { Calendar, Users, GraduationCap, MapPin, Eye } from "lucide-react";
-import { committeeAssignmentApi } from "../../api/committeeAssignmentApi";
+import { fetchData } from "../../api/fetchData";
+import { useAuth } from "../../hooks/useAuth";
 import type { LecturerCommitteeItem } from "../../types/committee-assignment";
-
+import type { LecturerCommitteesResponse } from "../../types/committee-assignment-responses";
 
 const LecturerCommittees: React.FC = () => {
+  const auth = useAuth();
   const [committees, setCommittees] = useState<LecturerCommitteeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCommittees = async () => {
+      if (!auth.user?.userCode) {
+        setError("Không tìm thấy mã người dùng");
+        setLoading(false);
+        return;
+      }
+
       try {
-        // Assuming lecturerCode is available, e.g., from context or props. For now, hardcode or get from auth.
-        const lecturerCode = "LECT01"; // Replace with actual lecturer code from auth/context
-        const response = await committeeAssignmentApi.getLecturerCommittees(
-          lecturerCode
+        const response = await fetchData<LecturerCommitteesResponse>(
+          `/CommitteeAssignment/lecturer-committees/${auth.user.userCode}`
         );
         if (response.success && response.data) {
           setCommittees(response.data.committees);
         } else {
           setError("Không thể tải danh sách hội đồng");
         }
-      } catch {
+      } catch (err) {
         setError("Lỗi khi tải dữ liệu");
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -148,21 +155,56 @@ const LecturerCommittees: React.FC = () => {
                     >
                       {committee.committeeCode}
                     </span>
+                    {committee.tags && committee.tags.length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "4px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {committee.tags.map((tag) => (
+                          <span
+                            key={tag.tagCode}
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 8px",
+                              background: "#E3F2FD",
+                              color: "#1976D2",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {tag.tagName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {committee.members &&
-                      committee.members.find((m) => m.isChair) && (
+                      committee.members.find(
+                        (m) => m.lecturerCode === auth.user?.userCode
+                      ) && (
                         <span
                           style={{
                             display: "inline-block",
                             padding: "4px 12px",
-                            background:
-                              "linear-gradient(135deg, #F37021 0%, #FF8838 100%)",
+                            background: committee.members.find(
+                              (m) => m.lecturerCode === auth.user?.userCode
+                            )?.isChair
+                              ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
+                              : "linear-gradient(135deg, #10B981 0%, #34D399 100%)",
                             color: "white",
                             borderRadius: "6px",
                             fontSize: "12px",
                             fontWeight: "600",
                           }}
                         >
-                          Chủ tịch
+                          {
+                            committee.members.find(
+                              (m) => m.lecturerCode === auth.user?.userCode
+                            )?.role
+                          }
                         </span>
                       )}
                   </div>
@@ -247,6 +289,78 @@ const LecturerCommittees: React.FC = () => {
                 </button>
               </div>
 
+              {/* Members List */}
+              {committee.members && committee.members.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "20px",
+                    paddingTop: "20px",
+                    borderTop: "1px solid #E5E7EB",
+                  }}
+                >
+                  <h4
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#666",
+                      marginBottom: "12px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Thành viên hội đồng ({committee.members.length})
+                  </h4>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {committee.members.map((member) => (
+                      <div
+                        key={member.lecturerCode}
+                        style={{
+                          background: "#F9FAFB",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: "6px",
+                          padding: "12px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: "600", color: "#1a1a1a" }}>
+                            {member.fullName}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#666" }}>
+                            {member.degree} • {member.lecturerCode}
+                          </div>
+                          {member.tagNames && member.tagNames.length > 0 && (
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                color: "#888",
+                                marginTop: "4px",
+                              }}
+                            >
+                              {member.tagNames.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            padding: "4px 8px",
+                            background: member.isChair ? "#F37021" : "#10B981",
+                            color: "white",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {member.role}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Topics List */}
               {committee.assignments && committee.assignments.length > 0 && (
                 <div
@@ -310,6 +424,21 @@ const LecturerCommittees: React.FC = () => {
                           >
                             {topic.topicCode}
                           </span>
+                          {topic.session && (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "3px 8px",
+                                background: "#E3F2FD",
+                                color: "#1976D2",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              Session {topic.session}
+                            </span>
+                          )}
                         </div>
                         <h5
                           style={{
@@ -322,9 +451,33 @@ const LecturerCommittees: React.FC = () => {
                           {topic.title}
                         </h5>
                         {topic.studentName && (
-                          <p style={{ fontSize: "12px", color: "#666" }}>
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              color: "#666",
+                              marginBottom: "4px",
+                            }}
+                          >
                             <strong>SV:</strong> {topic.studentName} (
                             {topic.studentCode})
+                          </p>
+                        )}
+                        {topic.supervisorName && (
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              color: "#666",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            <strong>GVHD:</strong> {topic.supervisorName} (
+                            {topic.supervisorCode})
+                          </p>
+                        )}
+                        {(topic.startTime || topic.endTime) && (
+                          <p style={{ fontSize: "12px", color: "#666" }}>
+                            <strong>Thời gian:</strong> {topic.startTime} -{" "}
+                            {topic.endTime}
                           </p>
                         )}
                       </div>

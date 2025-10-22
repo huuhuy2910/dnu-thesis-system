@@ -11,7 +11,8 @@ import {
   Edit,
   Save,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
+import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
 import { useAuth } from "../../hooks/useAuth";
@@ -19,6 +20,7 @@ import { useAuth } from "../../hooks/useAuth";
 const StudentProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { addToast } = useToast();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ const StudentProfilePage: React.FC = () => {
     {}
   );
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const loadStudentProfile = React.useCallback(async () => {
     try {
@@ -42,19 +45,33 @@ const StudentProfilePage: React.FC = () => {
       if (listData.length > 0) {
         const studentCode = listData[0].studentCode;
 
-        // Get detailed profile
-        const detailRes = await fetchData(
-          `/StudentProfiles/get-update/${studentCode}`
-        );
-        const detailData = (detailRes as ApiResponse<StudentProfile>)?.data;
+        // Get detailed profile - try but fallback to list data if fails
+        let profileData = listData[0];
+        try {
+          const detailRes = await fetchData(
+            `/StudentProfiles/get-update/${studentCode}`
+          );
+          const detailData = (detailRes as ApiResponse<StudentProfile>)?.data;
 
-        if (detailData) {
-          setProfile(detailData);
-          setEditedProfile(detailData);
-        } else {
-          setProfile(listData[0]);
-          setEditedProfile(listData[0]);
+          if (detailData && Object.keys(detailData).length > 0) {
+            // Merge detail data with list data, but preserve studentImage from list data if detail data doesn't have it
+            profileData = { ...listData[0], ...detailData };
+            if (!detailData.studentImage && listData[0].studentImage) {
+              profileData.studentImage = listData[0].studentImage;
+            }
+          }
+        } catch (detailErr) {
+          console.error(
+            "Error fetching detailed profile, using list data:",
+            detailErr
+          );
         }
+
+        // Ensure studentCode is set
+        profileData = { ...profileData, studentCode };
+
+        setProfile(profileData);
+        setEditedProfile(profileData);
       } else {
         setError("Không tìm thấy thông tin sinh viên");
       }
@@ -72,26 +89,59 @@ const StudentProfilePage: React.FC = () => {
     }
   }, [loadStudentProfile, auth.user?.userCode]);
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     if (!profile) return;
 
     try {
       setLoading(true);
+      setError(null);
+
+      const updatedProfile = { ...editedProfile };
+
+      // If there's a selected file, upload it first
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        // Upload avatar
+        await fetchData(
+          `/StudentProfiles/upload-avatar/${profile.studentCode}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        // Reload profile to get the new avatar URL
+        await loadStudentProfile();
+      }
+
+      // Save profile changes (exclude studentImage since it's handled by upload API)
+      const profileDataToUpdate = { ...updatedProfile };
+      delete profileDataToUpdate.studentImage;
       await fetchData(`/StudentProfiles/update/${profile.studentCode}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editedProfile),
+        body: JSON.stringify(profileDataToUpdate),
       });
 
-      setProfile({ ...profile, ...editedProfile });
-      setIsEditing(false);
-      // Reload to get updated data
+      // Reload profile again to get the latest data including any changes
       await loadStudentProfile();
+
+      setIsEditing(false);
+      setSelectedFile(null);
+      setImagePreview(null);
+      addToast("Cập nhật thông tin thành công!", "success");
     } catch (err) {
       console.error("Error updating profile:", err);
-      setError("Có lỗi xảy ra khi cập nhật thông tin");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Có lỗi xảy ra khi cập nhật thông tin";
+      setError(errorMessage);
+      addToast(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -101,20 +151,39 @@ const StudentProfilePage: React.FC = () => {
     setEditedProfile(profile || {});
     setIsEditing(false);
     setImagePreview(null);
+    setSelectedFile(null);
   };
 
-  const handleImageUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    if (url) {
-      setImagePreview(url);
-      // Store the URL into the edited profile so the payload contains the image
-      setEditedProfile({
-        ...editedProfile,
-        studentImage: url,
-      });
-    } else {
-      // If no URL entered, clear preview
-      setImagePreview(null);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Kiểm tra loại file
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/bmp",
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)");
+        return;
+      }
+
+      // Kiểm tra kích thước file (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Kích thước file không được vượt quá 5MB");
+        return;
+      }
+
+      setSelectedFile(file);
+      // Tạo preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setError(null);
     }
   };
 
@@ -279,7 +348,7 @@ const StudentProfilePage: React.FC = () => {
             }}
           >
             <button
-              onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
+              onClick={() => (isEditing ? handleSubmit() : setIsEditing(true))}
               disabled={loading}
               style={{
                 display: "flex",
@@ -377,15 +446,27 @@ const StudentProfilePage: React.FC = () => {
             }}
           >
             {imagePreview || profile.studentImage ? (
-              <img
-                src={imagePreview || profile.studentImage}
-                alt={profile.fullName || auth.user?.fullName || "Student"}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
+              imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt={profile.fullName || auth.user?.fullName || "Student"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <img
+                  src={getAvatarUrl(profile.studentImage)}
+                  alt={profile.fullName || auth.user?.fullName || "Student"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              )
             ) : (
               <div
                 style={{
@@ -464,26 +545,74 @@ const StudentProfilePage: React.FC = () => {
                   fontSize: "14px",
                   fontWeight: "500",
                   color: "#6B7280",
-                  marginBottom: "8px",
+                  marginBottom: "12px",
                 }}
               >
-                Đường dẫn ảnh đại diện
+                Tải ảnh đại diện
               </label>
+
+              {/* Hidden file input */}
               <input
-                type="text"
-                value={editedProfile.studentImage || ""}
-                onChange={handleImageUrlChange}
-                placeholder="Nhập URL ảnh..."
+                id="student-avatar-upload"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/bmp"
+                onChange={handleFileChange}
                 style={{
-                  width: "100%",
-                  padding: "12px",
-                  border: "1px solid #D1D5DB",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "#FFFFFF",
-                  marginBottom: "8px",
+                  position: "absolute",
+                  opacity: 0,
+                  pointerEvents: "none",
+                  width: "1px",
+                  height: "1px",
                 }}
               />
+
+              {/* Custom upload button */}
+              <label
+                htmlFor="student-avatar-upload"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 20px",
+                  background: "#f37021",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 2px 8px rgba(243, 112, 33, 0.2)",
+                  width: "100%",
+                  textAlign: "center",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#ea580c";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(243, 112, 33, 0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f37021";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow =
+                    "0 2px 8px rgba(243, 112, 33, 0.2)";
+                }}
+              >
+                Chọn ảnh
+              </label>
+
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#6B7280",
+                  marginTop: "8px",
+                  textAlign: "center",
+                }}
+              >
+                Chấp nhận: JPG, JPEG, PNG, GIF, BMP (tối đa 5MB)
+              </p>
             </div>
           )}
         </div>

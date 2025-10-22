@@ -72,8 +72,19 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
 
-            if (!string.IsNullOrEmpty(filter.StudentCode))
+            // Support filtering by multiple student codes
+            if (filter.StudentCodes != null && filter.StudentCodes.Any())
+            {
+                var codes = new HashSet<string>(filter.StudentCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (codes.Count > 0)
+                {
+                    query = query.Where(x => codes.Contains(x.StudentCode));
+                }
+            }
+            else if (!string.IsNullOrEmpty(filter.StudentCode))
+            {
                 query = query.Where(x => x.StudentCode.Contains(filter.StudentCode));
+            }
 
             if (!string.IsNullOrEmpty(filter.ClassCode))
                 query = query.Where(x => x.ClassCode != null && x.ClassCode.Contains(filter.ClassCode));
@@ -146,8 +157,19 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
 
-            if (!string.IsNullOrEmpty(filter.LecturerCode))
+            // Support filtering by multiple lecturer codes
+            if (filter.LecturerCodes != null && filter.LecturerCodes.Any())
+            {
+                var codes = new HashSet<string>(filter.LecturerCodes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (codes.Count > 0)
+                {
+                    query = query.Where(x => codes.Contains(x.LecturerCode));
+                }
+            }
+            else if (!string.IsNullOrEmpty(filter.LecturerCode))
+            {
                 query = query.Where(x => x.LecturerCode.Contains(filter.LecturerCode));
+            }
 
             if (!string.IsNullOrEmpty(filter.Degree))
                 query = query.Where(x => x.Degree != null && x.Degree.Contains(filter.Degree));
@@ -241,11 +263,19 @@ namespace ThesisManagement.Api.Helpers
             {
                 query = query.Where(x => x.Title.Contains(filter.Search) ||
                                         x.TopicCode.Contains(filter.Search) ||
-                                        (x.Summary != null && x.Summary.Contains(filter.Search)));
+                                        (x.Summary != null && x.Summary.Contains(filter.Search)) ||
+                                        (x.ProposerUserCode != null && x.ProposerUserCode.Contains(filter.Search)) ||
+                                        (x.ProposerStudentCode != null && x.ProposerStudentCode.Contains(filter.Search)) ||
+                                        (x.SupervisorUserCode != null && x.SupervisorUserCode.Contains(filter.Search)) ||
+                                        (x.SupervisorLecturerCode != null && x.SupervisorLecturerCode.Contains(filter.Search)) ||
+                                        (x.DepartmentCode != null && x.DepartmentCode.Contains(filter.Search)));
             }
 
             if (!string.IsNullOrEmpty(filter.Title))
                 query = query.Where(x => x.Title.Contains(filter.Title));
+
+            if (!string.IsNullOrEmpty(filter.Summary))
+                query = query.Where(x => x.Summary != null && x.Summary.Contains(filter.Summary));
 
             if (!string.IsNullOrEmpty(filter.TopicCode))
                 query = query.Where(x => x.TopicCode.Contains(filter.TopicCode));
@@ -294,6 +324,9 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrWhiteSpace(filter.SupervisorUserCode))
                 query = query.Where(x => x.SupervisorUserCode == filter.SupervisorUserCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.SupervisorLecturerCode))
+                query = query.Where(x => x.SupervisorLecturerCode == filter.SupervisorLecturerCode);
 
             if (!string.IsNullOrWhiteSpace(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode == filter.DepartmentCode);
@@ -573,6 +606,12 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.StudentProfileCode))
                 query = query.Where(x => x.StudentProfileCode == filter.StudentProfileCode);
 
+            if (filter.LecturerProfileID.HasValue)
+                query = query.Where(x => x.LecturerProfileID == filter.LecturerProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.LecturerCode == filter.LecturerCode);
+
             if (!string.IsNullOrEmpty(filter.LecturerState))
                 query = query.Where(x => x.LecturerState == filter.LecturerState);
 
@@ -630,50 +669,6 @@ namespace ThesisManagement.Api.Helpers
 
             if (filter.ToDate.HasValue)
                 query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
-
-        public static IQueryable<MilestoneStateHistory> ApplyFilter(this IQueryable<MilestoneStateHistory> query, MilestoneStateHistoryFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => (x.NewState != null && x.NewState.Contains(filter.Search)) ||
-                                        (x.Comment != null && x.Comment.Contains(filter.Search)));
-            }
-
-            if (filter.MilestoneID.HasValue)
-                query = query.Where(x => x.MilestoneID == filter.MilestoneID.Value);
-
-            if (!string.IsNullOrEmpty(filter.MilestoneCode))
-                query = query.Where(x => x.MilestoneCode != null && x.MilestoneCode.Contains(filter.MilestoneCode));
-
-            if (!string.IsNullOrEmpty(filter.TopicCode))
-                query = query.Where(x => x.TopicCode != null && x.TopicCode.Contains(filter.TopicCode));
-
-            if (!string.IsNullOrEmpty(filter.OldState))
-                query = query.Where(x => x.OldState != null && x.OldState == filter.OldState);
-
-            if (!string.IsNullOrEmpty(filter.NewState))
-                query = query.Where(x => x.NewState == filter.NewState);
-
-            if (!string.IsNullOrEmpty(filter.ChangedByUserCode))
-                query = query.Where(x => x.ChangedByUserCode != null && x.ChangedByUserCode == filter.ChangedByUserCode);
-
-            if (filter.ChangedByUserID.HasValue)
-                query = query.Where(x => x.ChangedByUserID == filter.ChangedByUserID.Value);
-
-            if (filter.ChangedFrom.HasValue)
-                query = query.Where(x => x.ChangedAt >= filter.ChangedFrom.Value);
-
-            if (filter.ChangedTo.HasValue)
-                query = query.Where(x => x.ChangedAt <= filter.ChangedTo.Value);
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.ChangedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.ChangedAt <= filter.ToDate.Value);
 
             return ApplySorting(query, filter);
         }
@@ -827,6 +822,59 @@ namespace ThesisManagement.Api.Helpers
 
             if (filter.ToDate.HasValue)
                 query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<SystemActivityLog> ApplyFilter(this IQueryable<SystemActivityLog> query, SystemActivityLogFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => 
+                    (x.EntityName != null && x.EntityName.Contains(filter.Search)) ||
+                    (x.EntityID != null && x.EntityID.Contains(filter.Search)) ||
+                    (x.ActionDescription != null && x.ActionDescription.Contains(filter.Search)) ||
+                    (x.UserCode != null && x.UserCode.Contains(filter.Search)));
+            }
+
+            if (!string.IsNullOrEmpty(filter.EntityName))
+                query = query.Where(x => x.EntityName == filter.EntityName);
+
+            if (!string.IsNullOrEmpty(filter.EntityID))
+                query = query.Where(x => x.EntityID == filter.EntityID);
+
+            if (!string.IsNullOrEmpty(filter.ActionType))
+                query = query.Where(x => x.ActionType == filter.ActionType);
+
+            if (filter.UserID.HasValue)
+                query = query.Where(x => x.UserID == filter.UserID.Value);
+
+            if (!string.IsNullOrEmpty(filter.UserCode))
+                query = query.Where(x => x.UserCode == filter.UserCode);
+
+            if (!string.IsNullOrEmpty(filter.UserRole))
+                query = query.Where(x => x.UserRole == filter.UserRole);
+
+            if (!string.IsNullOrEmpty(filter.Module))
+                query = query.Where(x => x.Module == filter.Module);
+
+            if (!string.IsNullOrEmpty(filter.Status))
+                query = query.Where(x => x.Status == filter.Status);
+
+            if (!string.IsNullOrEmpty(filter.IPAddress))
+                query = query.Where(x => x.IPAddress == filter.IPAddress);
+
+            if (filter.PerformedFrom.HasValue)
+                query = query.Where(x => x.PerformedAt >= filter.PerformedFrom.Value);
+
+            if (filter.PerformedTo.HasValue)
+                query = query.Where(x => x.PerformedAt <= filter.PerformedTo.Value);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.PerformedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.PerformedAt <= filter.ToDate.Value);
 
             return ApplySorting(query, filter);
         }

@@ -27,7 +27,7 @@ namespace ThesisManagement.Api.DTOs
         string? DepartmentCode,
         string? ClassCode,
         string? FacultyCode,
-        string? StudentImage,
+        // StudentImage không được update qua PUT, sử dụng POST /upload-avatar thay thế
         decimal? GPA,
         string? AcademicStanding,
         string? Gender,
