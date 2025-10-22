@@ -7,8 +7,6 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  User,
-  Calendar,
   MessageSquare,
 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
@@ -23,6 +21,15 @@ import type { SubmissionFile } from "../../types/submissionFile";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer";
+
+// Helper function to format file size
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
 
 const LecturerReports: React.FC = () => {
   const auth = useAuth();
@@ -52,6 +59,9 @@ const LecturerReports: React.FC = () => {
   const [lecturerProfile, setLecturerProfile] =
     useState<LecturerProfile | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   const getAbsoluteUrl = (url: string) => {
     if (/^https?:\/\//i.test(url)) return url;
@@ -230,10 +240,16 @@ const LecturerReports: React.FC = () => {
       setError(null);
 
       const response = await fetchData(
-        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=1&PageSize=10`
+        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`
       );
-      const data = (response as ApiResponseProgressSubmissions).data || [];
+      const apiResponse = response as ApiResponseProgressSubmissions & {
+        totalCount?: number;
+      };
+      const data = apiResponse.data || [];
+      const total = apiResponse.totalCount || data.length;
+
       setReports(data);
+      setTotalCount(total);
 
       // Load additional data for each report
       await loadAdditionalData(data);
@@ -243,7 +259,12 @@ const LecturerReports: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [lecturerProfile?.lecturerCode, loadAdditionalData]);
+  }, [
+    lecturerProfile?.lecturerCode,
+    loadAdditionalData,
+    currentPage,
+    pageSize,
+  ]);
 
   // Load lecturer profile first, then reports
   useEffect(() => {
@@ -256,7 +277,7 @@ const LecturerReports: React.FC = () => {
     }
   }, [lecturerProfile, loadReports]);
 
-  const filteredReports = (
+  const filteredReports =
     filterStatus === "all"
       ? reports
       : reports.filter((report) => {
@@ -268,20 +289,7 @@ const LecturerReports: React.FC = () => {
           if (filterStatus === "rejected")
             return report.lecturerState === "Revision";
           return true;
-        })
-  ).sort((a, b) => {
-    // Ưu tiên báo cáo chưa nhận xét lên trên
-    const aNotReviewed = !a.lecturerComment && !a.lecturerState;
-    const bNotReviewed = !b.lecturerComment && !b.lecturerState;
-
-    if (aNotReviewed && !bNotReviewed) return -1;
-    if (!aNotReviewed && bNotReviewed) return 1;
-
-    // Nếu cùng trạng thái, sắp xếp theo thời gian nộp (mới nhất trước)
-    return (
-      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-    );
-  });
+        });
 
   const getStatusIcon = (lecturerState: string | null) => {
     if (!lecturerState) return <Clock size={16} color="#F59E0B" />;
@@ -359,11 +367,6 @@ const LecturerReports: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const truncateFileName = (fileName: string, maxLength: number = 20) => {
-    if (fileName.length <= maxLength) return fileName;
-    return fileName.substring(0, maxLength - 3) + "...";
   };
 
   const handleDownloadFile = async (fileID: number, fileName: string) => {
@@ -618,391 +621,420 @@ const LecturerReports: React.FC = () => {
             </select>
           </div>
 
-          {/* Reports List */}
-          <div style={{ display: "grid", gap: "16px" }}>
-            {filteredReports.map((report) => {
-              const studentProfile = studentProfiles[report.studentUserCode];
-              const topic = topics[report.studentUserCode];
-              const files = submissionFiles[report.submissionCode] || [];
-
-              return (
-                <div
-                  key={report.submissionID}
-                  style={{
-                    background: "white",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "12px",
-                    padding: "24px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 24px rgba(0,0,0,0.1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 2px 8px rgba(0,0,0,0.05)";
-                  }}
-                >
-                  <div
+          {/* Reports Table */}
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              overflow: "hidden",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: "20px",
-                      alignItems: "start",
+                      background: "#F9FAFB",
+                      borderBottom: "1px solid #E5E7EB",
                     }}
                   >
-                    {/* Report Info */}
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <h3
-                          style={{
-                            fontSize: "18px",
-                            fontWeight: "600",
-                            color: "#1a1a1a",
-                          }}
-                        >
-                          {report.reportTitle || "Báo cáo chưa có tiêu đề"}
-                        </h3>
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "4px 8px",
-                            background:
-                              getStatusColor(report.lecturerState) + "20",
-                            color: getStatusColor(report.lecturerState),
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                          }}
-                        >
-                          {getStatusIcon(report.lecturerState)}
-                          {getStatusText(report.lecturerState)}
-                        </span>
-                        <span
-                          style={{
-                            padding: "2px 6px",
-                            background: "#E0F2FE",
-                            color: "#0369A1",
-                            borderRadius: "4px",
-                            fontSize: "10px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {getReportTypeText(report.milestoneCode)}
-                        </span>
-                      </div>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Báo cáo
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Sinh viên
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Đề tài
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Ngày nộp
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Trạng thái
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px",
+                        textAlign: "center",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        color: "#666",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Thao tác
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReports.map((report) => {
+                    const studentProfile =
+                      studentProfiles[report.studentUserCode];
+                    const topic = topics[report.studentUserCode];
+                    const files = submissionFiles[report.submissionCode] || [];
 
-                      <div
+                    return (
+                      <tr
+                        key={report.submissionID}
                         style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(200px, 1fr))",
-                          gap: "16px",
-                          marginBottom: "16px",
+                          borderBottom: "1px solid #F3F4F6",
+                          transition: "background 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#F9FAFB";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "white";
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <User size={14} color="#666" />
-                          <span style={{ fontSize: "14px", color: "#666" }}>
-                            Sinh viên:{" "}
-                            <strong>
+                        <td style={{ padding: "16px" }}>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: "600",
+                                color: "#1a1a1a",
+                                marginBottom: "4px",
+                              }}
+                            >
+                              {report.reportTitle || "Báo cáo chưa có tiêu đề"}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                color: "#666",
+                                marginBottom: "4px",
+                              }}
+                            >
+                              {getReportTypeText(report.milestoneCode)}
+                            </div>
+                            {report.lecturerComment && (
+                              <div
+                                style={{
+                                  fontSize: "11px",
+                                  color: "#92400E",
+                                  background: "#FEF3C7",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  display: "inline-block",
+                                }}
+                              >
+                                Có nhận xét
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: "16px" }}>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: "600",
+                                color: "#1a1a1a",
+                              }}
+                            >
                               {studentProfile?.fullName ||
                                 report.studentUserCode}
-                            </strong>{" "}
-                            (
-                            {studentProfile?.studentCode ||
-                              report.studentUserCode}
-                            )
-                          </span>
-                        </div>
-                        {/* Supervisor Lecturer Info */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <User size={14} color="#666" />
-                          <span style={{ fontSize: "14px", color: "#666" }}>
-                            Giảng viên hướng dẫn:{" "}
-                            <strong>
-                              {(() => {
-                                const supCode =
-                                  topics[report.studentUserCode]
-                                    ?.supervisorLecturerCode;
-                                return supCode && supervisorLecturers[supCode]
-                                  ? supervisorLecturers[supCode].fullName
-                                  : "N/A";
-                              })()}
-                            </strong>
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <Calendar size={14} color="#666" />
-                          <span style={{ fontSize: "14px", color: "#666" }}>
-                            Nộp ngày:{" "}
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#666" }}>
+                              {studentProfile?.studentCode ||
+                                report.studentUserCode}
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: "16px", maxWidth: "250px" }}>
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              color: "#1a1a1a",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {topic?.title || "N/A"}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#666" }}>
+                            {topic?.topicCode || "N/A"}
+                          </div>
+                        </td>
+                        <td style={{ padding: "16px" }}>
+                          <div style={{ fontSize: "14px", color: "#1a1a1a" }}>
                             {new Date(report.submittedAt).toLocaleDateString(
                               "vi-VN"
                             )}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <FileText size={14} color="#666" />
-                        <span style={{ fontSize: "14px", color: "#666" }}>
-                          Đề tài: {topic?.title || "N/A"}
-                        </span>
-                      </div>
-
-                      {/* Student Report Description */}
-                      <div
-                        style={{
-                          background: "#F9FAFB",
-                          borderRadius: "8px",
-                          padding: "12px",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          <MessageSquare size={14} color="#666" />
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              color: "#666",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Mô tả báo cáo của sinh viên
-                          </span>
-                        </div>
-                        <p
-                          style={{
-                            fontSize: "14px",
-                            color: "#1a1a1a",
-                            margin: 0,
-                          }}
-                        >
-                          {report.reportDescription || "Chưa có mô tả"}
-                        </p>
-                      </div>
-
-                      {/* Lecturer Comments */}
-                      {report.lecturerComment && (
-                        <div
-                          style={{
-                            background: "#FEF3C7",
-                            border: "1px solid #FCD34D",
-                            borderRadius: "8px",
-                            padding: "12px",
-                          }}
-                        >
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#666" }}>
+                            {new Date(report.submittedAt).toLocaleTimeString(
+                              "vi-VN",
+                              { hour: "2-digit", minute: "2-digit" }
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: "16px" }}>
                           <div
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: "8px",
-                              marginBottom: "8px",
+                              gap: "6px",
                             }}
                           >
-                            <MessageSquare size={14} color="#92400E" />
+                            {getStatusIcon(report.lecturerState)}
                             <span
                               style={{
                                 fontSize: "12px",
                                 fontWeight: "600",
-                                color: "#92400E",
-                                textTransform: "uppercase",
+                                color: getStatusColor(report.lecturerState),
                               }}
                             >
-                              Nhận xét của giảng viên
+                              {getStatusText(report.lecturerState)}
                             </span>
                           </div>
-                          <p
+                        </td>
+                        <td style={{ padding: "16px" }}>
+                          <div
                             style={{
-                              fontSize: "14px",
-                              color: "#92400E",
-                              margin: 0,
+                              display: "flex",
+                              gap: "6px",
+                              justifyContent: "center",
+                              flexWrap: "wrap",
                             }}
                           >
-                            {report.lecturerComment}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: "12px",
-                              color: "#92400E",
-                              margin: "4px 0 0 0",
-                              opacity: 0.8,
-                            }}
-                          >
-                            Cấp độ phản hồi:{" "}
-                            {report.feedbackLevel || "Chưa đánh giá"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                            {files.map((file) => (
+                              <button
+                                key={file.fileID}
+                                style={{
+                                  padding: "6px 10px",
+                                  background: "#F37021",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#E55A1B";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#F37021";
+                                }}
+                                onClick={() =>
+                                  handleDownloadFile(file.fileID, file.fileName)
+                                }
+                                title={file.fileName}
+                              >
+                                <Download size={12} />
+                              </button>
+                            ))}
+                            <button
+                              style={{
+                                padding: "6px 10px",
+                                background: "#6B7280",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "#4B5563";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "#6B7280";
+                              }}
+                              onClick={() => setSelectedReport(report)}
+                              title="Xem chi tiết"
+                            >
+                              <Eye size={12} />
+                            </button>
+                            {!report.lecturerComment &&
+                            !report.lecturerState ? (
+                              <button
+                                style={{
+                                  padding: "6px 10px",
+                                  background: "#10B981",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#059669";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#10B981";
+                                }}
+                                onClick={() =>
+                                  setSelectedReportForComment(report)
+                                }
+                                title="Nhận xét"
+                              >
+                                <MessageSquare size={12} />
+                              </button>
+                            ) : (
+                              <div
+                                style={{
+                                  padding: "6px 10px",
+                                  background: "#E5E7EB",
+                                  color: "#6B7280",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                                title="Đã nhận xét"
+                              >
+                                <CheckCircle size={12} />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                    {/* Action Buttons */}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                      }}
-                    >
-                      {files.map((file) => (
-                        <button
-                          key={file.fileID}
-                          style={{
-                            padding: "8px 16px",
-                            background: "#F37021",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#E55A1B";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "#F37021";
-                          }}
-                          onClick={() =>
-                            handleDownloadFile(file.fileID, file.fileName)
-                          }
-                        >
-                          <Download size={14} />
-                          Tải {truncateFileName(file.fileName)}
-                        </button>
-                      ))}
-
-                      <button
-                        style={{
-                          padding: "8px 16px",
-                          background: "#6B7280",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "#4B5563";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "#6B7280";
-                        }}
-                        onClick={() => setSelectedReport(report)}
-                      >
-                        <Eye size={14} />
-                        Xem chi tiết
-                      </button>
-
-                      {!report.lecturerComment && !report.lecturerState && (
-                        <button
-                          style={{
-                            padding: "8px 16px",
-                            background: "#10B981",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#059669";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "#10B981";
-                          }}
-                          onClick={() => setSelectedReportForComment(report)}
-                        >
-                          <MessageSquare size={14} />
-                          Nhận xét
-                        </button>
-                      )}
-
-                      {(report.lecturerComment || report.lecturerState) && (
-                        <div
-                          style={{
-                            padding: "8px 16px",
-                            background: "#E5E7EB",
-                            color: "#6B7280",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <CheckCircle size={14} />
-                          Đã nhận xét
-                        </div>
-                      )}
-                    </div>
-                  </div>
+            {/* Pagination */}
+            {totalCount > pageSize && (
+              <div
+                style={{
+                  padding: "16px",
+                  borderTop: "1px solid #E5E7EB",
+                  background: "#F9FAFB",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ fontSize: "14px", color: "#666" }}>
+                  Hiển thị{" "}
+                  {Math.min((currentPage - 1) * pageSize + 1, totalCount)} -{" "}
+                  {Math.min(currentPage * pageSize, totalCount)} của{" "}
+                  {totalCount} báo cáo
                 </div>
-              );
-            })}
+                <div
+                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
+                >
+                  <button
+                    style={{
+                      padding: "8px 12px",
+                      background: currentPage === 1 ? "#E5E7EB" : "#F37021",
+                      color: currentPage === 1 ? "#9CA3AF" : "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                    }}
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((prev) => prev - 1)}
+                  >
+                    Trước
+                  </button>
+
+                  <span
+                    style={{
+                      fontSize: "14px",
+                      color: "#666",
+                      margin: "0 12px",
+                    }}
+                  >
+                    Trang {currentPage} / {Math.ceil(totalCount / pageSize)}
+                  </span>
+
+                  <button
+                    style={{
+                      padding: "8px 12px",
+                      background:
+                        currentPage >= Math.ceil(totalCount / pageSize)
+                          ? "#E5E7EB"
+                          : "#F37021",
+                      color:
+                        currentPage >= Math.ceil(totalCount / pageSize)
+                          ? "#9CA3AF"
+                          : "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                      cursor:
+                        currentPage >= Math.ceil(totalCount / pageSize)
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                    onClick={() => setCurrentPage((prev) => prev + 1)}
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Report Detail Modal */}
@@ -1014,330 +1046,1001 @@ const LecturerReports: React.FC = () => {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                background: "rgba(0,0,0,0.5)",
+                background: "rgba(0,0,0,0.6)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 zIndex: 1000,
+                padding: "20px",
               }}
               onClick={() => setSelectedReport(null)}
             >
               <div
                 style={{
                   background: "white",
-                  borderRadius: "12px",
-                  padding: "32px",
-                  maxWidth: "700px",
-                  width: "90%",
-                  maxHeight: "80vh",
-                  overflow: "auto",
+                  borderRadius: "16px",
+                  maxWidth: "900px",
+                  width: "100%",
+                  maxHeight: "90vh",
+                  overflow: "hidden",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2
+                {/* Header */}
+                <div
                   style={{
-                    fontSize: "20px",
-                    fontWeight: "600",
-                    color: "#1a1a1a",
-                    marginBottom: "16px",
+                    background:
+                      "linear-gradient(135deg, #F37021 0%, #E55A1B 100%)",
+                    color: "white",
+                    padding: "24px 32px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
                   }}
                 >
-                  Chi tiết báo cáo
-                </h2>
-
-                <div style={{ display: "grid", gap: "16px" }}>
+                  <FileText size={28} />
                   <div>
-                    <label
+                    <h2
                       style={{
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        color: "#666",
-                        textTransform: "uppercase",
+                        fontSize: "24px",
+                        fontWeight: "700",
+                        margin: "0 0 4px 0",
                       }}
                     >
-                      Tiêu đề báo cáo
-                    </label>
-                    <p
-                      style={{
-                        fontSize: "16px",
-                        color: "#1a1a1a",
-                        margin: "4px 0",
-                      }}
-                    >
-                      {selectedReport.reportTitle || "Báo cáo chưa có tiêu đề"}
-                    </p>
-                  </div>{" "}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "16px",
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Sinh viên
-                      </label>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#1a1a1a",
-                          margin: "4px 0",
-                        }}
-                      >
-                        {studentProfiles[selectedReport.studentUserCode]
-                          ?.fullName || selectedReport.studentUserCode}{" "}
-                        (
-                        {studentProfiles[selectedReport.studentUserCode]
-                          ?.studentCode || selectedReport.studentUserCode}
-                        )
-                      </p>
-                    </div>
-
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Loại báo cáo
-                      </label>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#1a1a1a",
-                          margin: "4px 0",
-                        }}
-                      >
-                        {getReportTypeText(selectedReport.milestoneCode)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Giảng viên hướng dẫn
-                      </label>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#1a1a1a",
-                          margin: "4px 0",
-                        }}
-                      >
-                        {(() => {
-                          const supCode =
-                            topics[selectedReport.studentUserCode]
-                              ?.supervisorLecturerCode;
-                          const sup = supCode
-                            ? supervisorLecturers[supCode]
-                            : null;
-                          return sup
-                            ? `${sup.fullName} (${sup.email || "—"})`
-                            : "N/A";
-                        })()}
-                      </p>
-                      <p style={{ fontSize: "12px", color: "#666", margin: 0 }}>
-                        SĐT:{" "}
-                        {(() => {
-                          const supCode =
-                            topics[selectedReport.studentUserCode]
-                              ?.supervisorLecturerCode;
-                          const sup = supCode
-                            ? supervisorLecturers[supCode]
-                            : null;
-                          return sup ? sup.phoneNumber || "N/A" : "N/A";
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        color: "#666",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Đề tài
-                    </label>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#1a1a1a",
-                        margin: "4px 0",
-                      }}
-                    >
-                      {topics[selectedReport.studentUserCode]?.title || "N/A"}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        color: "#666",
-                        margin: "2px 0",
-                      }}
-                    >
-                      Mã đề tài:{" "}
-                      {topics[selectedReport.studentUserCode]?.topicCode ||
-                        "N/A"}
+                      Chi tiết báo cáo
+                    </h2>
+                    <p style={{ fontSize: "14px", margin: 0, opacity: 0.9 }}>
+                      {getReportTypeText(selectedReport.milestoneCode)} •{" "}
+                      {new Date(selectedReport.submittedAt).toLocaleDateString(
+                        "vi-VN"
+                      )}
                     </p>
                   </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "16px",
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Ngày nộp
-                      </label>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#1a1a1a",
-                          margin: "4px 0",
-                        }}
-                      >
-                        {new Date(
-                          selectedReport.submittedAt
-                        ).toLocaleDateString("vi-VN")}
-                      </p>
-                    </div>
+                </div>
 
-                    <div>
-                      <label
+                {/* Content */}
+                <div
+                  style={{
+                    padding: "32px",
+                    maxHeight: "calc(90vh - 120px)",
+                    overflow: "auto",
+                  }}
+                >
+                  {/* Report Overview */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <h3
                         style={{
-                          fontSize: "12px",
+                          fontSize: "18px",
                           fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
-                          marginRight: "5px",
+                          color: "#1a1a1a",
+                          margin: 0,
                         }}
                       >
-                        Trạng thái
-                      </label>
-                      <br></br>
+                        {selectedReport.reportTitle ||
+                          "Báo cáo chưa có tiêu đề"}
+                      </h3>
                       <span
                         style={{
-                          display: "inline-block",
-                          padding: "4px 8px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
                           background:
                             getStatusColor(selectedReport.lecturerState) + "20",
                           color: getStatusColor(selectedReport.lecturerState),
-                          borderRadius: "6px",
+                          borderRadius: "8px",
                           fontSize: "12px",
                           fontWeight: "600",
                         }}
                       >
+                        {getStatusIcon(selectedReport.lecturerState)}
                         {getStatusText(selectedReport.lecturerState)}
                       </span>
                     </div>
-                  </div>
-                  <div>
-                    <label
+
+                    <div
                       style={{
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        color: "#666",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Mô tả báo cáo của sinh viên
-                    </label>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#666",
-                        margin: "4px 0",
-                        padding: "8px",
                         background: "#F9FAFB",
-                        borderRadius: "4px",
+                        borderRadius: "12px",
+                        padding: "20px",
+                        border: "1px solid #E5E7EB",
                       }}
                     >
-                      {selectedReport.reportDescription || "Chưa có mô tả"}
-                    </p>
+                      <p
+                        style={{
+                          fontSize: "15px",
+                          color: "#374151",
+                          margin: 0,
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        {selectedReport.reportDescription ||
+                          "Chưa có mô tả chi tiết từ sinh viên"}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Student & Supervisor Info */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "24px",
+                      marginBottom: "32px",
+                    }}
+                  >
+                    {/* Student Info */}
+                    <div
+                      style={{
+                        background:
+                          "linear-gradient(135deg, #EBF8FF 0%, #DBEAFE 100%)",
+                        border: "1px solid #BFDBFE",
+                        borderRadius: "12px",
+                        padding: "20px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            border: "2px solid #3B82F6",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "#3B82F6",
+                          }}
+                        >
+                          {studentProfiles[selectedReport.studentUserCode]
+                            ?.studentImage ? (
+                            <img
+                              src={
+                                studentProfiles[selectedReport.studentUserCode]
+                                  .studentImage
+                              }
+                              alt="Avatar sinh viên"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                              onError={(e) => {
+                                // Fallback to initial if image fails to load
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.parentElement!.innerHTML =
+                                  studentProfiles[
+                                    selectedReport.studentUserCode
+                                  ]?.fullName
+                                    ?.charAt(0)
+                                    ?.toUpperCase() || "S";
+                                e.currentTarget.parentElement!.style.color =
+                                  "white";
+                                e.currentTarget.parentElement!.style.fontSize =
+                                  "18px";
+                                e.currentTarget.parentElement!.style.fontWeight =
+                                  "600";
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                color: "white",
+                                fontSize: "18px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {studentProfiles[
+                                selectedReport.studentUserCode
+                              ]?.fullName
+                                ?.charAt(0)
+                                ?.toUpperCase() || "S"}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <h4
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: "600",
+                              color: "#1a1a1a",
+                              margin: "0 0 4px 0",
+                            }}
+                          >
+                            Sinh viên
+                          </h4>
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              color: "#6B7280",
+                              margin: 0,
+                            }}
+                          >
+                            Thông tin cá nhân
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Họ và tên
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "500",
+                              color: "#1a1a1a",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {studentProfiles[selectedReport.studentUserCode]
+                              ?.fullName || selectedReport.studentUserCode}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Mã sinh viên
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "500",
+                              color: "#1a1a1a",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {studentProfiles[selectedReport.studentUserCode]
+                              ?.studentCode || selectedReport.studentUserCode}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Email
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              color: "#374151",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {studentProfiles[selectedReport.studentUserCode]
+                              ?.studentEmail || "Chưa cập nhật"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Supervisor Info */}
+                    <div
+                      style={{
+                        background:
+                          "linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)",
+                        border: "1px solid #BBF7D0",
+                        borderRadius: "12px",
+                        padding: "20px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            border: "2px solid #10B981",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "#10B981",
+                          }}
+                        >
+                          {(() => {
+                            const supCode =
+                              topics[selectedReport.studentUserCode]
+                                ?.supervisorLecturerCode;
+                            const sup = supCode
+                              ? supervisorLecturers[supCode]
+                              : null;
+                            return sup?.profileImage ? (
+                              <img
+                                src={sup.profileImage}
+                                alt="Avatar giảng viên"
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={(e) => {
+                                  // Fallback to initial if image fails to load
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.parentElement!.innerHTML =
+                                    sup?.fullName?.charAt(0)?.toUpperCase() ||
+                                    "G";
+                                  e.currentTarget.parentElement!.style.color =
+                                    "white";
+                                  e.currentTarget.parentElement!.style.fontSize =
+                                    "18px";
+                                  e.currentTarget.parentElement!.style.fontWeight =
+                                    "600";
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  color: "white",
+                                  fontSize: "18px",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                {sup?.fullName?.charAt(0)?.toUpperCase() || "G"}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div>
+                          <h4
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: "600",
+                              color: "#1a1a1a",
+                              margin: "0 0 4px 0",
+                            }}
+                          >
+                            Giảng viên hướng dẫn
+                          </h4>
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              color: "#6B7280",
+                              margin: 0,
+                            }}
+                          >
+                            Người hướng dẫn đề tài
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Họ và tên
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "500",
+                              color: "#1a1a1a",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {(() => {
+                              const supCode =
+                                topics[selectedReport.studentUserCode]
+                                  ?.supervisorLecturerCode;
+                              const sup = supCode
+                                ? supervisorLecturers[supCode]
+                                : null;
+                              return sup?.fullName || "N/A";
+                            })()}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Email
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              color: "#374151",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {(() => {
+                              const supCode =
+                                topics[selectedReport.studentUserCode]
+                                  ?.supervisorLecturerCode;
+                              const sup = supCode
+                                ? supervisorLecturers[supCode]
+                                : null;
+                              return sup?.email || "N/A";
+                            })()}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#6B7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Số điện thoại
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              color: "#374151",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {(() => {
+                              const supCode =
+                                topics[selectedReport.studentUserCode]
+                                  ?.supervisorLecturerCode;
+                              const sup = supCode
+                                ? supervisorLecturers[supCode]
+                                : null;
+                              return sup?.phoneNumber || "N/A";
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Topic Information */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h4
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#1a1a1a",
+                        margin: "0 0 16px 0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <FileText size={18} color="#F37021" />
+                      Thông tin đề tài
+                    </h4>
+
+                    <div
+                      style={{
+                        background: "#FEF3C7",
+                        border: "1px solid #FCD34D",
+                        borderRadius: "12px",
+                        padding: "20px",
+                      }}
+                    >
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#92400E",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Tên đề tài
+                          </label>
+                          <p
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: "600",
+                              color: "#92400E",
+                              margin: "4px 0",
+                            }}
+                          >
+                            {topics[selectedReport.studentUserCode]?.title ||
+                              "N/A"}
+                          </p>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "16px",
+                          }}
+                        >
+                          <div>
+                            <label
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#92400E",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Mã đề tài
+                            </label>
+                            <p
+                              style={{
+                                fontSize: "14px",
+                                color: "#92400E",
+                                margin: "4px 0",
+                              }}
+                            >
+                              {topics[selectedReport.studentUserCode]
+                                ?.topicCode || "N/A"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <label
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#92400E",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Trạng thái đề tài
+                            </label>
+                            <p
+                              style={{
+                                fontSize: "14px",
+                                color: "#92400E",
+                                margin: "4px 0",
+                              }}
+                            >
+                              {topics[selectedReport.studentUserCode]?.status ||
+                                "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submission Details */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h4
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#1a1a1a",
+                        margin: "0 0 16px 0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <Clock size={18} color="#6B7280" />
+                      Chi tiết nộp bài
+                    </h4>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(200px, 1fr))",
+                        gap: "16px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: "#F9FAFB",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: "8px",
+                          padding: "16px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            color: "#6B7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Ngày nộp
+                        </label>
+                        <p
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#1a1a1a",
+                            margin: "4px 0",
+                          }}
+                        >
+                          {new Date(
+                            selectedReport.submittedAt
+                          ).toLocaleDateString("vi-VN")}
+                        </p>
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "#6B7280",
+                            margin: "4px 0",
+                          }}
+                        >
+                          {new Date(
+                            selectedReport.submittedAt
+                          ).toLocaleTimeString("vi-VN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#F9FAFB",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: "8px",
+                          padding: "16px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            color: "#6B7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Mã báo cáo
+                        </label>
+                        <p
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#1a1a1a",
+                            margin: "4px 0",
+                          }}
+                        >
+                          {selectedReport.submissionCode}
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#F9FAFB",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: "8px",
+                          padding: "16px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            color: "#6B7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Lần nộp
+                        </label>
+                        <p
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#1a1a1a",
+                            margin: "4px 0",
+                          }}
+                        >
+                          {selectedReport.attemptNumber}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Files Section */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h4
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#1a1a1a",
+                        margin: "0 0 16px 0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <Download size={18} color="#6B7280" />
+                      File đính kèm (
+                      {submissionFiles[selectedReport.submissionCode]?.length ||
+                        0}{" "}
+                      file)
+                    </h4>
+
+                    <div style={{ display: "grid", gap: "12px" }}>
+                      {submissionFiles[selectedReport.submissionCode]?.length >
+                      0 ? (
+                        submissionFiles[selectedReport.submissionCode].map(
+                          (file) => (
+                            <div
+                              key={file.fileID}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                background: "#F9FAFB",
+                                border: "1px solid #E5E7EB",
+                                borderRadius: "8px",
+                                padding: "16px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "12px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "32px",
+                                    height: "32px",
+                                    background: "#F37021",
+                                    borderRadius: "6px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: "white",
+                                  }}
+                                >
+                                  <FileText size={16} />
+                                </div>
+                                <div>
+                                  <p
+                                    style={{
+                                      fontSize: "14px",
+                                      fontWeight: "500",
+                                      color: "#1a1a1a",
+                                      margin: "0 0 2px 0",
+                                    }}
+                                  >
+                                    {file.fileName}
+                                  </p>
+                                  <p
+                                    style={{
+                                      fontSize: "12px",
+                                      color: "#6B7280",
+                                      margin: 0,
+                                    }}
+                                  >
+                                    Kích thước:{" "}
+                                    {formatBytes(file.fileSizeBytes)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                style={{
+                                  padding: "8px 16px",
+                                  background: "#F37021",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#E55A1B";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#F37021";
+                                }}
+                                onClick={() =>
+                                  handleDownloadFile(file.fileID, file.fileName)
+                                }
+                              >
+                                <Download size={14} />
+                                Tải xuống
+                              </button>
+                            </div>
+                          )
+                        )
+                      ) : (
+                        <div
+                          style={{
+                            background: "#F9FAFB",
+                            border: "1px solid #E5E7EB",
+                            borderRadius: "8px",
+                            padding: "24px",
+                            textAlign: "center",
+                            color: "#6B7280",
+                          }}
+                        >
+                          <FileText size={24} style={{ marginBottom: "8px" }} />
+                          <p style={{ margin: 0, fontSize: "14px" }}>
+                            Không có file đính kèm
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lecturer Comments */}
                   {selectedReport.lecturerComment && (
                     <div>
-                      <label
+                      <h4
                         style={{
-                          fontSize: "12px",
+                          fontSize: "16px",
                           fontWeight: "600",
-                          color: "#666",
-                          textTransform: "uppercase",
+                          color: "#1a1a1a",
+                          margin: "0 0 16px 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
                         }}
                       >
+                        <MessageSquare size={18} color="#92400E" />
                         Nhận xét của giảng viên
-                      </label>
-                      <p
+                      </h4>
+
+                      <div
                         style={{
-                          fontSize: "14px",
-                          color: "#92400E",
-                          margin: "4px 0",
-                          padding: "8px",
                           background: "#FEF3C7",
-                          borderRadius: "4px",
+                          border: "1px solid #FCD34D",
+                          borderRadius: "12px",
+                          padding: "20px",
                         }}
                       >
-                        {selectedReport.lecturerComment}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: "12px",
-                          color: "#92400E",
-                          margin: "4px 0 0 0",
-                        }}
-                      >
-                        Cấp độ phản hồi:{" "}
-                        {selectedReport.feedbackLevel || "Chưa đánh giá"}
-                      </p>
+                        <p
+                          style={{
+                            fontSize: "15px",
+                            color: "#92400E",
+                            margin: "0 0 12px 0",
+                            lineHeight: "1.6",
+                          }}
+                        >
+                          {selectedReport.lecturerComment}
+                        </p>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "16px",
+                          }}
+                        >
+                          <div>
+                            <label
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#92400E",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Trạng thái
+                            </label>
+                            <p
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#92400E",
+                                margin: "4px 0",
+                              }}
+                            >
+                              {getStatusText(selectedReport.lecturerState)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <label
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#92400E",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Cấp độ phản hồi
+                            </label>
+                            <p
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#92400E",
+                                margin: "4px 0",
+                              }}
+                            >
+                              {selectedReport.feedbackLevel || "Chưa đánh giá"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
 
+                {/* Footer */}
                 <div
                   style={{
+                    padding: "24px 32px",
+                    borderTop: "1px solid #E5E7EB",
+                    background: "#F9FAFB",
                     display: "flex",
                     justifyContent: "flex-end",
                     gap: "12px",
-                    marginTop: "24px",
                   }}
                 >
                   <button
                     style={{
-                      padding: "8px 16px",
+                      padding: "10px 20px",
                       background: "#6B7280",
                       color: "white",
                       border: "none",
-                      borderRadius: "6px",
+                      borderRadius: "8px",
                       fontSize: "14px",
+                      fontWeight: "600",
                       cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#4B5563";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#6B7280";
                     }}
                     onClick={() => {
                       setSelectedReport(null);
