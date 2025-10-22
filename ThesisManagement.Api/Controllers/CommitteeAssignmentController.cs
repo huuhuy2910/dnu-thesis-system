@@ -23,13 +23,13 @@ namespace ThesisManagement.Api.Controllers
 
         // List & Details
         /// <summary>
-        /// Danh sách hội đồng (có phân trang, lọc theo từ khóa/ngày)
+        /// Danh sách hội đồng (có phân trang, lọc theo từ khóa/ngày/tags)
         /// </summary>
         [AllowAnonymous]
         [HttpGet("committees")]
-        public async Task<IActionResult> GetCommitteesAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, [FromQuery] DateTime? date = null, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> GetCommitteesAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, [FromQuery] DateTime? date = null, [FromQuery] string[]? tags = null, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetCommitteesAsync(page, pageSize, keyword, date, cancellationToken);
+            var response = await _service.GetCommitteesAsync(page, pageSize, keyword, date, tags, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 

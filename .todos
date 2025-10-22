@@ -1,8 +1,0 @@
-
-- [ ] Backend: Enrich CommitteeDetailDto mapping to include full member info (name with degree), tags, assignment extras.
-- [ ] Backend: Update GetCommitteeDetailAsync, available topics endpoint, and tags mapping per requirements.
-- [ ] Backend: Ensure CommitteeAssignmentUpdateRequest handling supports tagCodes/topics and returns updated detail.
-- [ ] Frontend: Rework CommitteeDetailModal UI (Inter/Poppins, accent, badges, framer motion).
-- [ ] Frontend: Surface topic/committee data (stats cards, tag chips, status ribbons).
-- [ ] Frontend: Replace assignment modal with creation wizard + edit/delete flows aligning with API.
-- [ ] Frontend: Sync form payloads with backend request DTOs (tags, topic ids, committee ids).

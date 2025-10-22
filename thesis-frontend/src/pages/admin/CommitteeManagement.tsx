@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Eye,
   Filter,
   GraduationCap,
   Loader2,
@@ -26,6 +27,8 @@ import {
   Trash2,
   Users,
   Users2,
+  X,
+  ArrowLeft,
 } from "lucide-react";
 import { useToast } from "../../context/useToast";
 import {
@@ -43,6 +46,7 @@ import type {
   CommitteeAssignmentDefenseItem,
   CommitteeAssignmentListItem,
   CommitteeAssignmentCreateRequest,
+  CommitteeAssignmentDetail,
   CommitteeCreateInitDto,
 } from "../../types/committee-assignment";
 
@@ -98,6 +102,7 @@ interface TopicTableItem {
   tagDescriptions?: string[];
   status?: string | null;
 }
+
 
 interface AssignedTopicSlot {
   topic: TopicTableItem;
@@ -236,6 +241,140 @@ const EMPTY_ROLE_ASSIGNMENTS: Record<RoleId, number | null> = {
   reviewer2: null,
   reviewer3: null,
 };
+
+const ROLE_ORDER: RoleId[] = ["chair", "secretary", "reviewer1", "reviewer2", "reviewer3"];
+
+function extractLecturerProfileId(member: any): number | null {
+  const candidates = [
+    member?.lecturerProfileId,
+    member?.lecturerProfileID,
+    member?.memberLecturerProfileID,
+    member?.memberLecturerProfileId,
+    member?.lecturerProfile?.id,
+    member?.lecturerProfile,
+  ];
+  for (const value of candidates) {
+    if (value == null) continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function normalizeRoleIdFromString(
+  roleValue: string,
+  usedRoles: Set<RoleId>,
+  remainingReviewSlots: RoleId[]
+): RoleId | null {
+  if (!roleValue) return null;
+  const trimmed = roleValue.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+
+  for (const cfg of ROLE_CONFIG) {
+    if (cfg.id === trimmed) return cfg.id;
+    if (cfg.apiRole.toLowerCase() === lower) return cfg.id;
+    if (cfg.label.toLowerCase() === lower) return cfg.id;
+  }
+
+  if (lower.includes("chủ tịch") || lower.includes("chu tich") || lower.includes("chair")) {
+    return "chair";
+  }
+
+  if (lower.includes("thư ký") || lower.includes("thu ky") || lower.includes("secretary")) {
+    return "secretary";
+  }
+
+  const reviewerKeywords = ["phản biện", "phan bien", "ủy viên", "uy vien", "reviewer"];
+  if (reviewerKeywords.some((keyword) => lower.includes(keyword))) {
+    const indexMatch = trimmed.match(/(\d+)/);
+    if (indexMatch) {
+      const idx = Number(indexMatch[1]);
+      if (Number.isInteger(idx) && idx >= 1 && idx <= 3) {
+        const candidate = `reviewer${idx}` as RoleId;
+        if (ROLE_ORDER.includes(candidate)) {
+          return candidate;
+        }
+      }
+    }
+    const next = remainingReviewSlots.find((slot) => !usedRoles.has(slot));
+    return next ?? null;
+  }
+
+  return null;
+}
+
+function deriveRoleIdFromMemberEntry(
+  member: any,
+  usedRoles: Set<RoleId>,
+  remainingReviewSlots: RoleId[]
+): RoleId | null {
+  if (!member) return null;
+
+  if (member?.isChair && !usedRoles.has("chair")) {
+    return "chair";
+  }
+
+  const candidates = [member?.role, member?.roleName, member?.roleLabel, member?.roleDisplay, member?.roleId];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const normalized = normalizeRoleIdFromString(String(candidate), usedRoles, remainingReviewSlots);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function buildMemberAssignmentState(rawMembers?: any[] | null): {
+  membersMap: Record<RoleId, number | null>;
+  syntheticOptions: LecturerOption[];
+} {
+  const membersMap: Record<RoleId, number | null> = { ...EMPTY_ROLE_ASSIGNMENTS };
+  const syntheticOptions: LecturerOption[] = [];
+  const usedRoles = new Set<RoleId>();
+  const remainingReviewSlots: RoleId[] = ["reviewer1", "reviewer2", "reviewer3"];
+
+  (rawMembers ?? []).forEach((member: any) => {
+    const lecturerId = extractLecturerProfileId(member);
+    if (lecturerId == null) return;
+
+    let roleId = deriveRoleIdFromMemberEntry(member, usedRoles, remainingReviewSlots);
+    if (!roleId) return;
+
+    if (usedRoles.has(roleId)) {
+      if (roleId.startsWith("reviewer")) {
+        const fallback = remainingReviewSlots.find((slot) => !usedRoles.has(slot));
+        if (!fallback) return;
+        roleId = fallback;
+      } else {
+        return;
+      }
+    }
+
+    membersMap[roleId] = lecturerId;
+    usedRoles.add(roleId);
+
+    if (roleId.startsWith("reviewer")) {
+      const idx = remainingReviewSlots.indexOf(roleId);
+      if (idx !== -1) remainingReviewSlots.splice(idx, 1);
+    }
+
+    if (!syntheticOptions.some((opt) => opt.lecturerProfileId === lecturerId)) {
+      syntheticOptions.push({
+        lecturerProfileId: lecturerId,
+        lecturerCode: member?.lecturerCode ?? member?.memberLecturerCode ?? "",
+        fullName: member?.fullName ?? member?.lecturerCode ?? "(Không có tên)",
+        degree: member?.degree ?? null,
+      });
+    }
+  });
+
+  return { membersMap, syntheticOptions };
+}
 
 function sessionSlotTimes(session: SessionId): readonly string[] {
   return session === 1 ? MORNING_SLOTS : AFTERNOON_SLOTS;

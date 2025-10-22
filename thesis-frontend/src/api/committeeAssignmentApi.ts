@@ -34,7 +34,9 @@ function buildQueryString(filter?: CommitteeAssignmentFilter): string {
 	if (filter.committeeCode) params.set("committeeCode", filter.committeeCode);
 	if (filter.room) params.set("room", filter.room);
 	if (filter.defenseDate) params.set("date", filter.defenseDate);
-	if (filter.tagCode) params.set("tagCode", filter.tagCode);
+	if (filter.tagCodes && filter.tagCodes.length > 0) {
+		filter.tagCodes.forEach(code => params.append("tags", code));
+	}
 	if (typeof filter.page === "number") params.set("page", String(filter.page));
 	if (typeof filter.pageSize === "number") params.set("pageSize", String(filter.pageSize));
 
