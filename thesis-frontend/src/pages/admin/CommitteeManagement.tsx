@@ -3221,11 +3221,21 @@ function normalizeTopicItem(item: RawTopicData | null | undefined): TopicTableIt
 
     const supervisorCodesInAssignments = useMemo(() => {
       const codes = new Set<string>();
+      const addIf = (val: unknown) => {
+        if (val == null) return;
+        const s = String(val).trim();
+        if (s) codes.add(s);
+      };
+
       assignedTopics[1].forEach((slot) => {
-        if (slot.topic.supervisorCode) codes.add(slot.topic.supervisorCode);
+        addIf(slot.topic.supervisorCode);
+        addIf(slot.topic.supervisorLecturerCode);
+        addIf(slot.topic.supervisorLecturerProfileID);
       });
       assignedTopics[2].forEach((slot) => {
-        if (slot.topic.supervisorCode) codes.add(slot.topic.supervisorCode);
+        addIf(slot.topic.supervisorCode);
+        addIf(slot.topic.supervisorLecturerCode);
+        addIf(slot.topic.supervisorLecturerProfileID);
       });
       return codes;
     }, [assignedTopics]);

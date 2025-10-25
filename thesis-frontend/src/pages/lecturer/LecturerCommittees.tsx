@@ -92,7 +92,7 @@ const LecturerCommittees: React.FC = () => {
     if (days < 0) {
       return { text: `Đã diễn ra ${Math.abs(days)} ngày`, color: "#6B7280" };
     } else if (days === 0) {
-      return { text: "Hôm nay", color: "#F37021" };
+      return { text: "Hôm nay", color: "#1F3C88" };
     } else if (days === 1) {
       return { text: "Ngày mai", color: "#F59E0B" };
     } else if (days <= 7) {
@@ -154,7 +154,7 @@ const LecturerCommittees: React.FC = () => {
             gap: "12px",
           }}
         >
-          <Users size={32} color="#F37021" />
+          <Users size={32} color="#1F3C88" />
           Hội đồng Bảo vệ của tôi
         </h1>
         <p style={{ fontSize: "14px", color: "#666" }}>
@@ -215,9 +215,9 @@ const LecturerCommittees: React.FC = () => {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow =
-                  "0 8px 24px rgba(243, 112, 33, 0.15)";
+                  "0 8px 24px rgba(31, 60, 136, 0.15)";
                 e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.borderColor = "#F37021";
+                e.currentTarget.style.borderColor = "#1F3C88";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.05)";
@@ -248,8 +248,8 @@ const LecturerCommittees: React.FC = () => {
                         display: "inline-block",
                         padding: "4px 12px",
                         background:
-                          "linear-gradient(135deg, #FFF5F0 0%, #FFE8DC 100%)",
-                        color: "#F37021",
+                          "linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)",
+                        color: "#1F3C88",
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: "600",
@@ -309,7 +309,7 @@ const LecturerCommittees: React.FC = () => {
                             background: committee.members.find(
                               (m) => m.lecturerCode === auth.user?.userCode
                             )?.isChair
-                              ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
+                              ? "linear-gradient(135deg, #1F3C88 0%, #0F1C3F 100%)"
                               : "linear-gradient(135deg, #10B981 0%, #34D399 100%)",
                             color: "white",
                             borderRadius: "6px",
@@ -352,19 +352,19 @@ const LecturerCommittees: React.FC = () => {
                             gap: "8px",
                             padding: "8px 12px",
                             background: isToday 
-                              ? "linear-gradient(135deg, #FFF0F0 0%, #FFE8E8 100%)"
+                              ? "linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)"
                               : isUrgent
                               ? "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
                               : "linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)",
-                            border: `2px solid ${isToday ? "#F37021" : isUrgent ? "#F59E0B" : "#10B981"}`,
+                            border: `2px solid ${isToday ? "#1F3C88" : isUrgent ? "#F59E0B" : "#10B981"}`,
                             borderRadius: "8px",
-                            boxShadow: isToday || isUrgent ? "0 2px 8px rgba(243, 112, 33, 0.2)" : "none",
+                            boxShadow: isToday || isUrgent ? "0 2px 8px rgba(31, 60, 136, 0.2)" : "none",
                           }}
                         >
-                          <Calendar size={16} color={isToday ? "#F37021" : isUrgent ? "#F59E0B" : "#10B981"} />
+                          <Calendar size={16} color={isToday ? "#1F3C88" : isUrgent ? "#F59E0B" : "#10B981"} />
                           <span style={{ 
                             fontSize: "13px", 
-                            color: isToday ? "#F37021" : isUrgent ? "#D97706" : "#047857",
+                            color: isToday ? "#1F3C88" : isUrgent ? "#D97706" : "#047857",
                             fontWeight: "700"
                           }}>
                             {new Date(committee.defenseDate).toLocaleDateString(
@@ -380,7 +380,7 @@ const LecturerCommittees: React.FC = () => {
                           {countdown && (
                             <span style={{ 
                               fontSize: "12px", 
-                              color: isToday ? "#F37021" : isUrgent ? "#D97706" : "#047857",
+                              color: isToday ? "#1F3C88" : isUrgent ? "#D97706" : "#047857",
                               fontWeight: "600",
                               background: "rgba(255,255,255,0.8)",
                               padding: "2px 6px",
@@ -401,7 +401,7 @@ const LecturerCommittees: React.FC = () => {
                           gap: "8px",
                         }}
                       >
-                        <MapPin size={16} color="#F37021" />
+                        <MapPin size={16} color="#1F3C88" />
                         <span style={{ fontSize: "13px", color: "#666" }}>
                           Phòng {committee.room}
                         </span>
@@ -414,7 +414,7 @@ const LecturerCommittees: React.FC = () => {
                         gap: "8px",
                       }}
                     >
-                      <GraduationCap size={16} color="#F37021" />
+                      <GraduationCap size={16} color="#1F3C88" />
                       <span style={{ fontSize: "13px", color: "#666" }}>
                         {committee.assignments?.length || 0} đề tài
                       </span>
@@ -426,7 +426,7 @@ const LecturerCommittees: React.FC = () => {
                   whileTap={{ scale: 0.95 }}
                   style={{
                     padding: "8px 16px",
-                    background: "#F37021",
+                    background: "#1F3C88",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
@@ -565,7 +565,7 @@ const LecturerCommittees: React.FC = () => {
                           style={{
                             padding: "6px 12px",
                             background: member.isChair
-                              ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
+                              ? "linear-gradient(135deg, #1F3C88 0%, #0F1C3F 100%)"
                               : member.lecturerCode === auth.user?.userCode
                               ? "linear-gradient(135deg, #10B981 0%, #34D399 100%)"
                               : "#E5E7EB",
@@ -606,8 +606,8 @@ const LecturerCommittees: React.FC = () => {
                         transition: "all 0.2s ease",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "#FFF5F0";
-                        e.currentTarget.style.borderColor = "#F37021";
+                        e.currentTarget.style.background = "#E3F2FD";
+                        e.currentTarget.style.borderColor = "#1F3C88";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "#F9FAFB";
