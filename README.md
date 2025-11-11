@@ -1,217 +1,248 @@
+<h2 align="center">
+ Hệ thống Quản lý Đồ Án Tốt Nghiệp (FIT – Đại học Đại Nam)
+</h2>
+
 <div align="center">
-    <h1>🎓 Hệ thống Quản lý Đồ Án Tốt Nghiệp (FIT – Đại học Đại Nam)</h1>
-    <p>
-        <a href="https://dainam.edu.vn/vi/khoa-cong-nghe-thong-tin">Khoa Công nghệ Thông tin – Trường Đại học Đại Nam</a>
-    </p>
-  
     <p align="center">
-        <!-- Thay ảnh logo bằng file của bạn trong thư mục docs/ (ghi chú bên dưới) -->
-        <img src="docs/dnu_logo.png" alt="DaiNam University Logo" width="160"/>
-        <img src="docs/fitdnu_logo.png" alt="FIT DNU Logo" width="150"/>
-        <img src="docs/aiotlab_logo.png" alt="AIoTLab Logo" width="140"/>
+        <img src="docs/aiotlab_logo.png" alt="AIoTLab Logo" width="170"/>
+        <img src="docs/fitdnu_logo.png" alt="FIT DNU Logo" width="180"/>
+        <img src="docs/dnu_logo.png" alt="DaiNam University Logo" width="200"/>
     </p>
-  
-    <p>
-        <a href="https://www.facebook.com/DNUAIoTLab"><img alt="AIoTLab" src="https://img.shields.io/badge/AIoTLab-green?style=for-the-badge"></a>
-        <a href="https://dainam.edu.vn/vi/khoa-cong-nghe-thong-tin"><img alt="FIT DNU" src="https://img.shields.io/badge/FIT-DaiNam-blue?style=for-the-badge"></a>
-    </p>
+
+[![AIoTLab](https://img.shields.io/badge/AIoTLab-green?style=for-the-badge)](https://www.facebook.com/DNUAIoTLab)
+[![Faculty of Information Technology](https://img.shields.io/badge/Faculty%20of%20Information%20Technology-blue?style=for-the-badge)](https://dainam.edu.vn/vi/khoa-cong-nghe-thong-tin)
+[![DaiNam University](https://img.shields.io/badge/DaiNam%20University-orange?style=for-the-badge)](https://dainam.edu.vn)
+
 </div>
+
+> **Mô tả ngắn:**  Hệ thống quản lý toàn bộ vòng đời đồ án tốt nghiệp — đăng ký đề tài, theo dõi tiến độ, phân công hội đồng, tổ chức bảo vệ và chấm điểm.
+> 
+> Hiện tại đã hoàn thành 3/4 module chính (đăng ký – phân công – bảo vệ); module chấm điểm và thống kê đang được hoàn thiện & tối ưu.
+> 
+> Đây là phiên bản MVP (Minimum Viable Product) — đã hoạt động ổn định với các chức năng lõi và sẵn sàng mở rộng.
+#### Thực hiện bởi: Nguyễn Thanh Bình & Nguyễn Hữu Huy
+#### Lớp CNTT 16-01 — Khoa Công nghệ Thông tin, Trường Đại học Đại Nam
+## ✨ Giới thiệu nhanh
+
+* **Đối tượng:** Sinh viên, giảng viên, quản trị khoa.
+* **Mục tiêu:** Chuẩn hóa quy trình đồ án, giảm thao tác thủ công, tăng tính minh bạch.
+* **Trạng thái:** MVP với các chức năng lõi (đăng ký đề tài, phân công hội đồng, lịch bảo vệ, chấm điểm).
 
 ---
 
-Hệ thống hỗ trợ quản lý toàn bộ vòng đời đồ án tốt nghiệp: đăng ký đề tài, theo dõi tiến độ, phân công hội đồng, tổ chức bảo vệ và chấm điểm. Đây là phiên bản MVP (Minimum Viable Product) để tiếp tục phát triển hoàn thiện.
-
-> Lưu ý ảnh minh họa: đặt file ảnh vào thư mục `docs/` và thay thế các đường dẫn được đánh dấu trong README (đã chú thích ở từng nơi).
-
-## Mục lục
-
-- Giới thiệu nhanh
-- Tính năng chính
-- Kiến trúc & Công nghệ
-- Cấu trúc thư mục
-- Hướng dẫn cài đặt và chạy
-- Cấu hình môi trường (.env)
-- API tiêu biểu (ví dụ JSON)
-- Ảnh chụp màn hình (placeholders)
-- Lộ trình phát triển
-- Đóng góp & Quy tắc
-- Liên hệ
-
-## � Giới thiệu nhanh
-
-- Dành cho: Sinh viên, giảng viên, quản trị khoa.
-- Mục tiêu: Chuẩn hóa quy trình đồ án tốt nghiệp, giảm thao tác thủ công, tăng tính minh bạch và tra cứu.
-- Trạng thái: MVP hoạt động với các chức năng lõi; sẵn sàng mở rộng.
-
-
 ## 🚀 Tính năng chính
 
-- Sinh viên: đăng ký đề tài, theo dõi tiến độ, xem lịch bảo vệ, xem thông báo.
-- Giảng viên: duyệt/điều phối đề tài, xem lịch hội đồng, chấm điểm và nhận xét.
-- Quản trị: tạo hội đồng, phân phiên – phân vai trò (Chủ tịch/Thư ký/Phản biện), sắp lịch đề tài theo phiên, quản lý thẻ (tags) chuyên môn.
-- Tổng hợp báo cáo, thống kê.
-- Xử lý ràng buộc nghiệp vụ quan trọng (ví dụ: 1 giảng viên chỉ tham gia 1 hội đồng trong cùng một ngày; không chọn giảng viên hướng dẫn làm thành viên hội đồng của chính đề tài đó, v.v.).
+* **Sinh viên**
+
+  * Đăng ký đề tài, nộp hồ sơ, theo dõi tiến độ.
+  * Xem lịch bảo vệ, nhận thông báo kết quả.
+* **Giảng viên**
+
+  * Duyệt / điều phối đề tài, quản lý hướng dẫn.
+  * Tham gia / chấm điểm hội đồng, ghi nhận nhận xét.
+* **Quản trị khoa**
+
+  * Tạo/phiên phân công hội đồng (Chủ tịch / Thư ký / Phản biện).
+  * Sắp lịch theo phiên, quản lý phòng & phòng tránh xung đột.
+* **Hệ thống**
+
+  * Báo cáo, thống kê tổng hợp.
+  * Ràng buộc nghiệp vụ: tránh trùng lịch giảng viên, tránh tham gia hội đồng cho đề tài mình hướng dẫn, v.v.
+
+---
 
 ## 🗂️ Mô hình tổng thể hệ thống
 
 > ![Mô hình tổng thể hệ thống](docs/overview-diagram.png)
 
-*Hình minh họa mô hình tổng thể: Vai trò người dùng và các module chức năng chính.\
+*Hình minh họa: Vai trò người dùng, luồng chức năng chính (đăng ký → duyệt → phân công → bảo vệ → chấm điểm).*
+
+---
 
 ## 🧩 Kiến trúc & Công nghệ
 
-| Tầng | Công nghệ |
-|------|-----------|
-| Backend API | ASP.NET Core 8 (C#), Entity Framework Core, Swagger |
-| Frontend | React + TypeScript + Vite, TailwindCSS, Framer Motion |
-| CSDL | SQL Server |
-| Giao tiếp | JSON over HTTP (Fetch API) |
-| Công cụ | GitHub, VS Code |
+| Tầng        | Công nghệ                                             |
+| ----------- | ----------------------------------------------------- |
+| Backend API | ASP.NET Core 8 (C#), Entity Framework Core, Swagger   |
+| Frontend    | React + TypeScript + Vite, TailwindCSS, Framer Motion |
+| CSDL        | SQL Server                                            |
+| Giao tiếp   | JSON over HTTP (Fetch API / Axios)                    |
+| Công cụ     | GitHub, VS Code, Docker (tùy chọn)                    |
 
-Sơ đồ kiến trúc (thêm ảnh minh họa tại `docs/architecture.png`):
+*Sơ đồ kiến trúc có thể xem tại* `docs/architecture.png`.
 
-![Sơ đồ kiến trúc (thay ảnh tại docs/architecture.png)](docs/architecture.png)
+---
 
-## � Cấu trúc thư mục
-
-Monorepo gồm frontend và backend:
+## 📁 Cấu trúc thư mục (tóm tắt)
 
 ```
 dnu-thesis-system/
 ├─ ThesisManagement.Api/        # Backend ASP.NET Core 8
+│  ├─ Controllers/              # REST controllers
+│  ├─ DTOs/                     # DTOs và ApiResponse<T>
+│  └─ Services/                 # Business logic
 └─ thesis-frontend/             # Frontend React + TypeScript + Vite
+   ├─ src/pages/                # Trang (admin, lecturer, student)
+   ├─ src/components/           # UI components
+   ├─ src/api/                  # API clients (e.g. committeeAssignmentApi)
+   └─ src/context/              # Auth, Toast, Theme
 ```
 
-Chi tiết một số thư mục chính:
+---
 
-- `ThesisManagement.Api/Controllers`: REST Controllers (Committee, Topics, LecturerProfiles,...)
-- `ThesisManagement.Api/DTOs`: DTO contracts và ApiResponse wrapper
-- `thesis-frontend/src/pages`: Các trang (admin, lecturer, student)
-- `thesis-frontend/src/api`: `fetchData` và API clients (`committeeAssignmentApi`)
-- `thesis-frontend/src/context`: Toast, Auth context
+## ⚙️ Cài đặt & Chạy nhanh
 
-> Có thể bổ sung một sơ đồ module cho frontend tại `docs/frontend-modules.png`.
-
-## ⚙️ Hướng dẫn cài đặt và chạy
-
-Yêu cầu tối thiểu:
-
-- Node.js >= 18 và npm
-- .NET SDK 8.0
-- SQL Server
-
-Clone và cài đặt phụ thuộc:
+**Yêu cầu:** Node.js ≥ 18, npm, .NET SDK 8.0, SQL Server (hoặc Docker SQL Server).
 
 ```bash
-# 1) Clone repo
+# Clone repo
 git clone https://github.com/huuhuy2910/dnu-thesis-system.git
 cd dnu-thesis-system
 
-# 2) Frontend: cài đặt dependencies và chạy dev server
+# Frontend
 cd thesis-frontend
 npm install
-npm run dev
+npm run dev         # server dev trên Vite
 
-# 3) Backend: chạy API (mặc định Development)
+# Backend
 cd ../ThesisManagement.Api
 dotnet restore
-dotnet run
+dotnet run          # API chạy ở môi trường Development (ví dụ: https://localhost:5145)
 ```
 
-Mặc định, frontend dùng proxy cấu hình trong `vite.config.ts` hoặc `.env` (cập nhật theo môi trường của bạn).
+> Lưu ý: frontend sử dụng proxy (vite.config.ts) hoặc `VITE_API_BASE_URL` trong `.env` để gọi API.
+
+---
 
 ## 🔐 Cấu hình môi trường (.env)
 
-Tạo file `thesis-frontend/.env` (ví dụ):
+**Frontend** (`thesis-frontend/.env`):
 
 ```bash
 VITE_API_BASE_URL=http://localhost:5145/api
 VITE_APP_NAME=DNU Thesis System
 ```
 
-Tạo `ThesisManagement.Api/appsettings.Development.json` phù hợp với kết nối SQL Server và cấu hình CORS.
-
-## 🧪 API tiêu biểu (ví dụ JSON)
-
-Ví dụ: Lấy thông tin lịch bảo vệ của sinh viên hiện tại.
-
-Endpoint:
-
-```
-GET /api/CommitteeAssignment/student-defense/{studentCode}
-```
-
-Response mẫu (rút gọn):
-
-```json
-{
-    "success": true,
-    "data": {
-        "studentCode": "STU005",
-        "topicCode": "TOP2025_005_AI",
-        "title": "Hệ thống dự đoán điểm học tập",
-        "committee": {
-            "committeeCode": "COM20251023001",
-            "name": "HỘI ĐỒNG 1",
-            "defenseDate": "2025-10-30T00:00:00",
-            "room": "302 - GD1",
-            "session": 1,
-            "startTime": "08:45:00",
-            "endTime": "09:30:00",
-            "members": [ { "name": "Phan Đức Anh", "role": "Chủ tịch" }, ... ]
-        }
-    }
-}
-```
-
-Frontend đã sử dụng client `committeeAssignmentApi.getStudentDefense(studentCode)` để gọi API này và hiển thị dữ liệu thật trong các trang lịch/sinh viên.
-
-## 🖼️ Ảnh chụp màn hình (đặt file vào docs/)
-
-> Thay thế ảnh minh họa bên dưới bằng ảnh thật của hệ thống, đặt trong thư mục `docs/`. Cần chuẩn bị tổng cộng 4 ảnh để minh họa cho các giao diện chính.
-
-- Trang giới thiệu chính: `docs/screen-homepage.png` (Trang chủ hoặc trang đăng nhập chính của hệ thống)
-- Giao diện Admin: `docs/screen-admin-dashboard.png` (Dashboard quản trị viên với các chức năng quản lý)
-- Giao diện Lecturer: `docs/screen-lecturer-dashboard.png` (Dashboard giảng viên với lịch hội đồng và quản lý đề tài)
-- Giao diện Student: `docs/screen-student-dashboard.png` (Dashboard sinh viên với tiến độ và lịch bảo vệ)
-
-Bạn có thể nhúng ảnh như sau:
-
-```md
-![Trang giới thiệu chính](docs/screen-homepage.png)
-![Giao diện Admin](docs/screen-admin-dashboard.png)
-![Giao diện Lecturer](docs/screen-lecturer-dashboard.png)
-![Giao diện Student](docs/screen-student-dashboard.png)
-```
-
-## �️ Lộ trình phát triển (Roadmap rút gọn)
-
-- [ ] Thêm phân quyền chi tiết (role-based trên từng chức năng)
-- [ ] Đồng bộ email/thông báo real-time
-- [ ] Tự động gợi ý lịch dựa trên xung đột phòng & giảng viên
-- [ ] Bộ báo cáo nâng cao và xuất dữ liệu
-
-## 🤝 Đóng góp
-
-Rất hoan nghênh các ý kiến/đóng góp:
-
-1. Fork dự án và tạo nhánh mới từ `main`.
-2. Commit thay đổi theo từng phần rõ ràng.
-3. Mở Pull Request với mô tả chi tiết (ảnh chụp nếu có).
-
-Quy ước mã nguồn: TypeScript strict mode ở FE; API trả về theo `ApiResponse<T>` ở BE.
-
-## 📬 Liên hệ
-
-- Email: 
-    - nguyenhuuhuy489@gmail.com
-    - nguyenbinh041104@gmail.com
-
-Hoặc mở issue trên GitHub nếu bạn gặp lỗi/cần tính năng.
+**Backend** (`appsettings.Development.json`): cấu hình kết nối SQL Server, CORS, logging.
 
 ---
 
-Copyright © 2025
+## 📡 API tiêu biểu (ví dụ JSON)
+
+**Endpoint:** `GET /api/CommitteeAssignment/student-defense/{studentCode}`
+
+**Response mẫu:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "studentCode": "STU005",
+    "topicCode": "TOP2025_005_AI",
+    "title": "Hệ thống dự đoán điểm học tập",
+    "committee": {
+      "committeeCode": "COM20251023001",
+      "name": "HỘI ĐỒNG 1",
+      "defenseDate": "2025-10-30T00:00:00",
+      "room": "302 - GD1",
+      "session": 1,
+      "startTime": "08:45:00",
+      "endTime": "09:30:00",
+      "members": [
+        { "name": "Phan Đức Anh", "role": "Chủ tịch" }
+      ]
+    }
+  }
+}
+```
+
+Frontend gọi qua `committeeAssignmentApi.getStudentDefense(studentCode)` để hiển thị lịch bảo vệ.
 
 
+---
 
+## 🖥️ Giao diện Chính Theo Từng Vai Trò
+
+> *Minh họa các giao diện chính của hệ thống: Trang chủ, Quản trị viên, Giảng viên và Sinh viên.*
+
+---
+
+### 🏠 Trang Giới Thiệu Chính
+
+> Trang chủ hoặc màn hình đăng nhập của hệ thống.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a3d5f49c-5992-4c12-b908-41ee777b1827" alt="Homepage" width="900"/>
+</p>
+
+---
+
+### 🧭 Giao Diện Quản Trị Viên (Admin)
+
+> Dashboard quản trị viên — quản lý đề tài, hội đồng, phân công và thống kê.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/c6cad2af-3840-4315-ab61-4b5fd5da6768" alt="Admin Dashboard" width="900"/>
+</p>
+
+---
+
+### 👨‍🏫 Giao Diện Giảng Viên (Lecturer)
+
+> Dashboard giảng viên — xem lịch hội đồng, duyệt đề tài và chấm điểm sinh viên.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/362a218d-be74-4290-ad61-001860a6f560" alt="Lecturer Dashboard" width="900"/>
+</p>
+
+---
+
+### 🎓 Giao Diện Sinh Viên (Student)
+
+> Dashboard sinh viên — theo dõi tiến độ, xem lịch bảo vệ và thông tin hội đồng.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ed0d2bdf-0933-4c24-ad68-468e70ea5293" alt="Student Dashboard" width="900"/>
+</p>
+
+---
+
+✅ *Các giao diện trên được thiết kế trực quan, nhất quán và thân thiện với từng vai trò người dùng.*
+
+---
+
+## ✅ Lộ trình phát triển (Roadmap rút gọn)
+
+* [ ] ===Phân quyền chi tiết theo chức năng (RBAC)
+* [ ] Đồng bộ thông báo & email (real-time)
+* [ ] Lập lịch tự động: xử lý xung đột phòng & giảng viên
+* [ ] Báo cáo nâng cao & xuất dữ liệu (Excel/PDF)
+* [ ] Thêm unit/integration tests, CI/CD
+
+---
+
+## 🤝 Đóng góp
+
+Rất hoan nghênh mọi đóng góp:
+
+1. Fork repository và tạo branch từ `main`.
+2. Thực hiện thay đổi, viết mô tả commit rõ ràng.
+3. Mở Pull Request với mô tả chi tiết, kèm ảnh chụp (nếu có).
+
+**Quy ước code:**
+
+* Frontend: TypeScript strict mode.
+* Backend: API trả về theo `ApiResponse<T>`.
+
+---
+
+## 📬 Liên hệ
+
+* [nguyenhuuhuy489@gmail.com](mailto:nguyenhuuhuy489@gmail.com)
+* [nguyenbinh041104@gmail.com](mailto:nguyenbinh041104@gmail.com)
+
+Hoặc mở issue trên GitHub nếu phát hiện lỗi hoặc cần tính năng.
+
+---
+
+© 2025 — Hệ thống Quản lý Đồ Án Tốt Nghiệp — FIT, Đại học Đại Nam
