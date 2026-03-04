@@ -1,3 +1,9 @@
+import {
+  clearAuthSession,
+  getAccessToken,
+  markSessionExpiredMessage,
+} from "../services/auth-session.service";
+
 const envBaseRaw = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5180"
 ).toString();
@@ -40,7 +46,7 @@ export class FetchDataError extends Error {
     message: string,
     status: number,
     statusText: string,
-    data: unknown
+    data: unknown,
   ) {
     super(message);
     this.name = "FetchDataError";
@@ -81,7 +87,7 @@ function resolveBody(body: BodyInitCompatible): BodyInit | undefined {
 
 function mergeHeaders(
   base: HeadersInit | undefined,
-  extra: HeadersInit | undefined
+  extra: HeadersInit | undefined,
 ): HeadersInit | undefined {
   if (!base && !extra) return undefined;
 
@@ -94,30 +100,16 @@ function mergeHeaders(
 
 export async function fetchData<TResponse = unknown>(
   path: string,
-  options: FetchDataOptions = {}
+  options: FetchDataOptions = {},
 ): Promise<TResponse> {
   const { body, headers, timeoutMs, signal, ...rest } = options;
   const url = resolveUrl(path);
 
-  // inject default user headers from localStorage if available
-  try {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("app_user");
-      if (raw) {
-        const u = JSON.parse(raw as string) as {
-          userCode?: string;
-          role?: string;
-        };
-        const extra: Record<string, string> = {};
-        if (u?.role) extra["X-User-Role"] = u.role;
-        if (u?.userCode) extra["X-User-Code"] = u.userCode;
-        // merge into provided headers (headers param may be undefined)
-        options.headers = mergeHeaders(extra, headers) as HeadersInit;
-      }
-    }
-  } catch {
-    // ignore parsing errors; do not block requests
-  }
+  // Attach Authorization header when token exists
+  const token = getAccessToken();
+  const authHeaders: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   const controller = new AbortController();
   const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 20000;
@@ -146,7 +138,10 @@ export async function fetchData<TResponse = unknown>(
 
   const init: RequestInit = {
     ...rest,
-    headers: mergeHeaders({ "Content-Type": "application/json" }, headers),
+    headers: mergeHeaders(
+      { "Content-Type": "application/json", ...authHeaders },
+      headers,
+    ),
     signal: controller.signal,
   };
 
@@ -179,7 +174,7 @@ export async function fetchData<TResponse = unknown>(
         `Request to ${url} aborted: ${error.message}`,
         408,
         error.name,
-        null
+        null,
       );
     }
     if ((error as Error).name === "AbortError") {
@@ -187,7 +182,7 @@ export async function fetchData<TResponse = unknown>(
         `Request to ${url} aborted`,
         408,
         (error as Error).name,
-        null
+        null,
       );
     }
     throw error;
@@ -218,11 +213,28 @@ export async function fetchData<TResponse = unknown>(
   }
 
   if (!response.ok) {
+    // Global 401 handling (exclude login endpoint to avoid interrupting login flow)
+    const isLoginRequest = /\/Auth\/login$/i.test(path);
+    if (
+      response.status === 401 &&
+      !isLoginRequest &&
+      typeof window !== "undefined"
+    ) {
+      clearAuthSession();
+      markSessionExpiredMessage(
+        "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
+      );
+
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    }
+
     throw new FetchDataError(
       `Request to ${url} failed with status ${response.status}`,
       response.status,
       response.statusText,
-      parsed
+      parsed,
     );
   }
 

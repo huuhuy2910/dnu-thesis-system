@@ -1,0 +1,24 @@
+using System;
+
+namespace ThesisManagement.Api.DTOs.ProgressSubmissions.Query
+{
+    public record ProgressSubmissionReadDto(
+        int SubmissionID,
+        string SubmissionCode,
+        int? MilestoneID,
+        string? MilestoneCode,
+        int? StudentUserID,
+        string? StudentUserCode,
+        int? StudentProfileID,
+        string? StudentProfileCode,
+        int? LecturerProfileID,
+        string? LecturerCode,
+        DateTime? SubmittedAt,
+        int? AttemptNumber,
+        string? LecturerComment,
+        string? LecturerState,
+        string? FeedbackLevel,
+        string? ReportTitle,
+        string? ReportDescription,
+        DateTime? LastUpdated);
+}

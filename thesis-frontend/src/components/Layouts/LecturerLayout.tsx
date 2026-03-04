@@ -14,6 +14,7 @@ import {
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
+import ChatWidget from "../chat/ChatWidget.tsx";
 
 const LecturerLayout: React.FC = () => {
   const auth = useAuth();
@@ -29,7 +30,7 @@ const LecturerLayout: React.FC = () => {
       try {
         if (!auth.user?.userCode) return;
         const res = await fetchData(
-          `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`
+          `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`,
         );
         const data = (res as ApiResponse<LecturerProfile[]>)?.data || [];
         if (data.length > 0) {
@@ -469,6 +470,9 @@ const LecturerLayout: React.FC = () => {
                 Giảng viên
               </span>
             </div>
+
+            <ChatWidget theme="lecturer" />
+
             <div style={{ position: "relative" }} data-dropdown>
               <button
                 onClick={() => setShowDropdown(!showDropdown)}

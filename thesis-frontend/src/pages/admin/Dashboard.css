@@ -7,7 +7,7 @@
   padding: 32px;
   background-color: #fafafa;
   min-height: calc(100vh - 80px);
-  font-family: 'Segoe UI', Inter, Roboto, sans-serif;
+  font-family: "Segoe UI", Inter, Roboto, sans-serif;
 }
 
 /* Header Section */
@@ -148,9 +148,10 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
-  height: 300px;
-  gap: 16px;
-  padding: 0 16px;
+  height: 320px;
+  gap: 20px;
+  padding: 40px 20px 20px 20px;
+  margin-top: 20px;
 }
 
 .bar-item {
@@ -164,34 +165,39 @@
 .bar {
   width: 100%;
   max-width: 80px;
-  background: linear-gradient(to top, var(--bar-color), var(--bar-color-light));
-  border-radius: 8px 8px 0 0;
+  /* Background will be set via inline style */
+  border-radius: 4px 4px 0 0;
   position: relative;
-  transition: transform 0.3s;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .bar:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .bar-value {
   position: absolute;
-  top: -28px;
+  top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 13px;
   color: #333;
+  white-space: nowrap;
 }
 
 .bar-label {
-  font-size: 13px;
+  font-size: 11px;
   color: #666;
   text-align: center;
   font-weight: 500;
+  margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
 }
 
 .chart-note {

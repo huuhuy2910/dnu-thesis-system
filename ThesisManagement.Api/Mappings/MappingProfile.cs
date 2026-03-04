@@ -1,6 +1,29 @@
 using AutoMapper;
-using ThesisManagement.Api.Models;
 using ThesisManagement.Api.DTOs;
+using ThesisManagement.Api.DTOs.CatalogTopics.Query;
+using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
+using ThesisManagement.Api.DTOs.ConversationMembers.Query;
+using ThesisManagement.Api.DTOs.Conversations.Query;
+using ThesisManagement.Api.DTOs.DefenseScores.Query;
+using ThesisManagement.Api.DTOs.Departments.Query;
+using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
+using ThesisManagement.Api.DTOs.LecturerTags.Query;
+using ThesisManagement.Api.DTOs.MilestoneTemplates.Query;
+using ThesisManagement.Api.DTOs.MessageAttachments.Query;
+using ThesisManagement.Api.DTOs.MessageReadReceipts.Query;
+using ThesisManagement.Api.DTOs.MessageReactions.Query;
+using ThesisManagement.Api.DTOs.Messages.Query;
+using ThesisManagement.Api.DTOs.ProgressMilestones.Query;
+using ThesisManagement.Api.DTOs.ProgressSubmissions.Query;
+using ThesisManagement.Api.DTOs.StudentProfiles.Query;
+using ThesisManagement.Api.DTOs.SubmissionFiles.Query;
+using ThesisManagement.Api.DTOs.SystemActivityLogs.Query;
+using ThesisManagement.Api.DTOs.Tags.Query;
+using ThesisManagement.Api.DTOs.TopicLecturers.Query;
+using ThesisManagement.Api.DTOs.TopicTags.Query;
+using ThesisManagement.Api.DTOs.Topics.Query;
+using ThesisManagement.Api.DTOs.Users.Query;
+using ThesisManagement.Api.Models;
 
 namespace ThesisManagement.Api.Mappings
 {
@@ -36,6 +59,12 @@ namespace ThesisManagement.Api.Mappings
             CreateMap<DefenseScore, DefenseScoreReadDto>();
             
             CreateMap<Tag, TagReadDto>();
+            CreateMap<Conversation, ConversationReadDto>();
+            CreateMap<ConversationMember, ConversationMemberReadDto>();
+            CreateMap<Message, MessageReadDto>();
+            CreateMap<MessageAttachment, MessageAttachmentReadDto>();
+            CreateMap<MessageReaction, MessageReactionReadDto>();
+            CreateMap<MessageReadReceipt, MessageReadReceiptReadDto>();
             CreateMap<TopicLecturer, TopicLecturerReadDto>();
             CreateMap<LecturerTag, LecturerTagReadDto>();
             CreateMap<CatalogTopicTag, CatalogTopicTagReadDto>();

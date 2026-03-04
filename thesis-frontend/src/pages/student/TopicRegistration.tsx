@@ -30,15 +30,15 @@ const TopicRegistration: React.FC = () => {
   // navigate removed; we now show a success modal instead of navigating
   const userCode = auth.user?.userCode;
   const [registrationType, setRegistrationType] = useState<"catalog" | "self">(
-    "catalog"
+    "catalog",
   );
   const [catalogTopics, setCatalogTopics] = useState<CatalogTopic[]>([]);
   const [lecturers, setLecturers] = useState<LecturerProfile[]>([]);
   const [filteredLecturers, setFilteredLecturers] = useState<LecturerProfile[]>(
-    []
+    [],
   );
   const [defaultDepartment, setDefaultDepartment] = useState<Department | null>(
-    null
+    null,
   );
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagInfo, setSelectedTagInfo] = useState<Tag | null>(null);
@@ -87,24 +87,50 @@ const TopicRegistration: React.FC = () => {
         await Promise.all([
           fetchData("/CatalogTopics/get-list?AssignedStatus=Ch%C6%B0a%20giao"),
           fetchData("/LecturerProfiles/get-list"),
-          fetchData("/Departments/get-detail/DPT_CNTT"),
+          fetchData("/Departments/get-list"),
           fetchData("/Tags/list"),
         ]);
 
       setCatalogTopics((catalogRes as ApiResponse<CatalogTopic[]>)?.data || []);
       setLecturers((lecturerRes as ApiResponse<LecturerProfile[]>)?.data || []);
 
-      const cnttDept = (departmentRes as ApiResponse<Department>)?.data;
-      if (cnttDept) {
-        setDefaultDepartment(cnttDept);
-        // Set department in form data
+      // Departments list — prefer the logged-in student's department as the default
+      const departmentsList =
+        (departmentRes as ApiResponse<Department[]>)?.data || [];
+
+      let deptToUse: Department | null = departmentsList.length
+        ? departmentsList[0]
+        : null;
+
+      if (userCode) {
+        try {
+          const studentRes = await fetchData(
+            `/StudentProfiles/get-list?UserCode=${userCode}`,
+          );
+          const studentData =
+            (studentRes as ApiResponse<StudentProfile[]>)?.data || [];
+          if (studentData.length > 0) {
+            const studentDeptCode = studentData[0].departmentCode;
+            const matched = departmentsList.find(
+              (d) => d.departmentCode === studentDeptCode,
+            );
+            if (matched) deptToUse = matched;
+          }
+        } catch (err) {
+          console.error("Error fetching student profile for department:", err);
+        }
+      }
+
+      if (deptToUse) {
+        setDefaultDepartment(deptToUse);
+        // Set department in form data (new registrations)
         setFormData((prev) => ({
           ...prev,
-          departmentID: cnttDept.departmentID,
+          departmentID: deptToUse!.departmentID,
         }));
         setEditFormData((prev) => ({
           ...prev,
-          departmentID: cnttDept.departmentID,
+          departmentID: deptToUse!.departmentID,
         }));
       }
 
@@ -131,7 +157,7 @@ const TopicRegistration: React.FC = () => {
       if (userCode) {
         try {
           const topicsRes = await fetchData(
-            `/Topics/get-list?ProposerUserCode=${userCode}`
+            `/Topics/get-list?ProposerUserCode=${userCode}`,
           );
           const topics = (topicsRes as ApiResponse<Topic[]>)?.data || [];
           const existingTopic = topics.find(
@@ -140,7 +166,7 @@ const TopicRegistration: React.FC = () => {
               topic.status === "Đã duyệt" ||
               topic.status === "Đã chấp nhận" ||
               topic.status === "Từ chối" ||
-              topic.status === "Cần sửa đổi"
+              topic.status === "Cần sửa đổi",
           );
           if (existingTopic) {
             setExistingTopic(existingTopic);
@@ -160,22 +186,24 @@ const TopicRegistration: React.FC = () => {
   }, [userCode]);
 
   const handleContinueAfterSuccess = async () => {
-    // Close modal and refresh data and form
+    // Close modal and refresh data/form after registration
     setShowSuccessModal(false);
     setSuccess(null);
     // reload initial data (topics, lecturers, etc.)
     await loadInitialData();
-    // reset form to initial state
-    setFormData({
+    // reset form to initial state (keep department set to student's department when available)
+    setFormData((prev) => ({
+      ...prev,
       topicCode: formData.topicCode,
       title: "",
       summary: "",
       type: "CATALOG",
       catalogTopicID: null,
       supervisorLecturerProfileID: null,
-      departmentID: null,
+      departmentID:
+        defaultDepartment?.departmentID ?? prev.departmentID ?? null,
       tagID: null,
-    });
+    }));
     setEditFormData({
       topicCode: "",
       title: "",
@@ -183,7 +211,7 @@ const TopicRegistration: React.FC = () => {
       type: "CATALOG",
       catalogTopicID: null,
       supervisorLecturerProfileID: null,
-      departmentID: null,
+      departmentID: defaultDepartment?.departmentID ?? null,
       tagID: null,
     });
     setRegistrationType("catalog");
@@ -202,7 +230,7 @@ const TopicRegistration: React.FC = () => {
 
       // Fetch current topic data for editing
       const topicUpdateRes = await fetchData(
-        `/Topics/get-update/${existingTopic.topicID}`
+        `/Topics/get-update/${existingTopic.topicID}`,
       );
       const topicData = (topicUpdateRes as ApiResponse)?.data as Record<
         string,
@@ -234,12 +262,12 @@ const TopicRegistration: React.FC = () => {
       if (topicData.type === "CATALOG" && topicData.catalogTopicID) {
         // For catalog topics, load tag from catalog topic
         const selectedTopic = catalogTopics.find(
-          (t) => t.catalogTopicID === topicData.catalogTopicID
+          (t) => t.catalogTopicID === topicData.catalogTopicID,
         );
         if (selectedTopic) {
           try {
             const catalogTopicTagsRes = await fetchData(
-              `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`
+              `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`,
             );
             const catalogTopicTags =
               (catalogTopicTagsRes as ApiResponse<CatalogTopicTag[]>)?.data ||
@@ -256,16 +284,16 @@ const TopicRegistration: React.FC = () => {
 
                 // Get lecturers for this tag
                 const lecturerTagsRes = await fetchData(
-                  `/LecturerTags/list?TagCode=${tagCode}`
+                  `/LecturerTags/list?TagCode=${tagCode}`,
                 );
                 const lecturerTags =
                   (lecturerTagsRes as ApiResponse<LecturerTag[]>)?.data || [];
 
                 const tagLecturerCodes = lecturerTags.map(
-                  (lt) => lt.lecturerCode
+                  (lt) => lt.lecturerCode,
                 );
                 const availableLecturers = lecturers.filter((l) =>
-                  tagLecturerCodes.includes(l.lecturerCode)
+                  tagLecturerCodes.includes(l.lecturerCode),
                 );
 
                 setFilteredLecturers(availableLecturers);
@@ -287,14 +315,14 @@ const TopicRegistration: React.FC = () => {
 
             // Get lecturers for this tag
             const lecturerTagsRes = await fetchData(
-              `/LecturerTags/list?TagCode=${tagInfo.tagCode}`
+              `/LecturerTags/list?TagCode=${tagInfo.tagCode}`,
             );
             const lecturerTags =
               (lecturerTagsRes as ApiResponse<LecturerTag[]>)?.data || [];
 
             const tagLecturerCodes = lecturerTags.map((lt) => lt.lecturerCode);
             const availableLecturers = lecturers.filter((l) =>
-              tagLecturerCodes.includes(l.lecturerCode)
+              tagLecturerCodes.includes(l.lecturerCode),
             );
 
             setFilteredLecturers(availableLecturers);
@@ -307,7 +335,7 @@ const TopicRegistration: React.FC = () => {
       // Load existing TopicTag records for this topic so we can allow editing multiple tags
       try {
         const topicTagsRes = await fetchData(
-          `/TopicTags/by-topic/${existingTopic.topicCode}`
+          `/TopicTags/by-topic/${existingTopic.topicCode}`,
         );
         const existingTopicTags =
           (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
@@ -320,11 +348,11 @@ const TopicRegistration: React.FC = () => {
         // fallback to old list endpoint if by-topic not available
         console.warn(
           "/TopicTags/by-topic failed, falling back to /TopicTags/list",
-          error
+          error,
         );
         try {
           const topicTagsRes = await fetchData(
-            `/TopicTags/list?TopicCode=${existingTopic.topicCode}`
+            `/TopicTags/list?TopicCode=${existingTopic.topicCode}`,
           );
           const existingTopicTags =
             (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
@@ -382,7 +410,7 @@ const TopicRegistration: React.FC = () => {
         try {
           // Get selected tags
           const selectedTags = tags.filter((t) =>
-            selectedTagIDs.includes(t.tagID)
+            selectedTagIDs.includes(t.tagID),
           );
           if (selectedTags.length === 0) return;
 
@@ -394,7 +422,7 @@ const TopicRegistration: React.FC = () => {
 
           // Get lecturers directly filtered by tags
           const lecturersRes = await fetchData(
-            `/LecturerProfiles/get-list?${queryParams}`
+            `/LecturerProfiles/get-list?${queryParams}`,
           );
           const availableLecturers =
             (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
@@ -423,7 +451,7 @@ const TopicRegistration: React.FC = () => {
       const loadTopicTags = async () => {
         try {
           const topicTagsRes = await fetchData(
-            `/TopicTags/list?TopicCode=${existingTopic.topicCode}`
+            `/TopicTags/list?TopicCode=${existingTopic.topicCode}`,
           );
           const topicTagsData =
             (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
@@ -450,7 +478,7 @@ const TopicRegistration: React.FC = () => {
 
           // Call API for each tagCode and collect results
           const tagPromises = tagCodes.map((tagCode) =>
-            fetchData(`/Tags/list?TagCode=${tagCode}`)
+            fetchData(`/Tags/list?TagCode=${tagCode}`),
           );
 
           const tagResponses = await Promise.all(tagPromises);
@@ -474,17 +502,64 @@ const TopicRegistration: React.FC = () => {
     }
   }, [topicTags]);
 
+  // Resolve a lecturer -> userID (tries in-memory lecturer.userID first,
+  // then falls back to calling possible Users endpoints). Returns 0 if not found.
+  const resolveSupervisorUserID = async (
+    lecturer?: LecturerProfile | null,
+  ): Promise<number> => {
+    if (!lecturer) return 0;
+
+    // Some API responses may already include userID on lecturer object (not in TS type)
+    const maybeId = (lecturer as unknown as Record<string, unknown>).userID as
+      | number
+      | undefined;
+    if (typeof maybeId === "number" && maybeId > 0) return maybeId;
+
+    const userCode =
+      lecturer.userCode ||
+      ((lecturer as unknown as Record<string, unknown>).lecturerCode as
+        | string
+        | undefined);
+    if (!userCode) return 0;
+
+    // Try common user endpoints (best-effort; backend may not expose all of these)
+    const candidates = [
+      `/Users/get-list?UserCode=${encodeURIComponent(userCode)}`,
+      `/Users/get-detail/${encodeURIComponent(userCode)}`,
+      `/Users/list?UserCode=${encodeURIComponent(userCode)}`,
+    ];
+
+    for (const path of candidates) {
+      try {
+        const resp = await fetchData(path);
+        const data = (resp as ApiResponse<unknown>)?.data ?? resp;
+        if (!data) continue;
+        if (Array.isArray(data) && data.length > 0) {
+          const first = data[0] as Record<string, unknown>;
+          if (typeof first.userID === "number") return first.userID as number;
+        }
+        const obj = data as Record<string, unknown>;
+        if (typeof obj.userID === "number") return obj.userID as number;
+      } catch {
+        // ignore and try next candidate
+      }
+    }
+
+    // not found — return 0 so backend can still attempt resolution from userCode
+    return 0;
+  };
+
   // Handle catalog topic selection
   const handleCatalogTopicChange = async (catalogTopicID: number) => {
     const selectedTopic = catalogTopics.find(
-      (t) => t.catalogTopicID === catalogTopicID
+      (t) => t.catalogTopicID === catalogTopicID,
     );
     if (!selectedTopic) return;
 
     try {
       // Step 1: Get catalog topic tags
       const catalogTopicTagsRes = await fetchData(
-        `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`
+        `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`,
       );
       const catalogTopicTags =
         (catalogTopicTagsRes as ApiResponse<CatalogTopicTag[]>)?.data || [];
@@ -510,7 +585,7 @@ const TopicRegistration: React.FC = () => {
 
       // Step 3: Get lecturers for this tag
       const lecturersRes = await fetchData(
-        `/LecturerProfiles/get-list?TagCodes=${tagCode}`
+        `/LecturerProfiles/get-list?TagCodes=${tagCode}`,
       );
       const availableLecturers =
         (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
@@ -561,16 +636,18 @@ const TopicRegistration: React.FC = () => {
 
       // Get additional data for payload
       const selectedLecturer = lecturers.find(
-        (l) => l.lecturerProfileID === formData.supervisorLecturerProfileID
+        (l) => l.lecturerProfileID === formData.supervisorLecturerProfileID,
       );
       const selectedDepartment = defaultDepartment;
       const selectedTag = tags.find((t) => t.tagID === formData.tagID);
       const selectedCatalogTopic = catalogTopics.find(
-        (c) => c.catalogTopicID === formData.catalogTopicID
+        (c) => c.catalogTopicID === formData.catalogTopicID,
       );
 
-      // Backend will resolve supervisorUserID from supervisorUserCode
-      const supervisorUserID = 0;
+      // Resolve supervisorUserID from selected lecturer (try in-memory value first,
+      // then attempt to query Users endpoints). If not found, keep 0 so backend
+      // may resolve from supervisorUserCode.
+      const supervisorUserID = await resolveSupervisorUserID(selectedLecturer);
 
       // Get student profile for proposer
       let proposerStudentProfileID = 0;
@@ -578,7 +655,7 @@ const TopicRegistration: React.FC = () => {
       if (auth.user?.userCode) {
         try {
           const studentRes = await fetchData(
-            `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`
+            `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`,
           );
           const studentData =
             (studentRes as ApiResponse<StudentProfile[]>)?.data || [];
@@ -625,7 +702,7 @@ const TopicRegistration: React.FC = () => {
       // Create initial progress milestone after successful topic creation
       try {
         const milestoneTemplate = await fetchData(
-          "/ProgressMilestones/get-create"
+          "/ProgressMilestones/get-create",
         );
         const milestoneData =
           ((milestoneTemplate as ApiResponse)?.data as Record<
@@ -662,10 +739,23 @@ const TopicRegistration: React.FC = () => {
             unknown
           >) || {};
 
-        // Create topic tag for each selected tag
-        const selectedTags = tags.filter((t) =>
-          selectedTagIDs.includes(t.tagID)
+        // Resolve tags to create for both flows:
+        // - SELF: from selectedTagIDs
+        // - CATALOG: fallback to formData.tagID / selectedTagInfo.tagID
+        const tagIdsToCreate = Array.from(
+          new Set(
+            selectedTagIDs.length > 0
+              ? selectedTagIDs
+              : [formData.tagID, selectedTagInfo?.tagID].filter(
+                  (id): id is number => typeof id === "number" && id > 0,
+                ),
+          ),
         );
+
+        const selectedTags = tags.filter((t) =>
+          tagIdsToCreate.includes(t.tagID),
+        );
+
         for (const tag of selectedTags) {
           const topicTagPayload = {
             ...topicTagData,
@@ -679,6 +769,10 @@ const TopicRegistration: React.FC = () => {
             method: "POST",
             body: topicTagPayload,
           });
+        }
+
+        if (selectedTags.length === 0) {
+          console.warn("No valid tags resolved for /TopicTags/create");
         }
         console.log("Topic tag associations created successfully");
       } catch (topicTagErr) {
@@ -716,13 +810,16 @@ const TopicRegistration: React.FC = () => {
 
       // Get selected data for edit form
       const selectedLecturer = lecturers.find(
-        (l) => l.lecturerProfileID === editFormData.supervisorLecturerProfileID
+        (l) => l.lecturerProfileID === editFormData.supervisorLecturerProfileID,
       );
       const selectedDepartment = defaultDepartment;
       const selectedTag = tags.find((t) => selectedTagIDs.includes(t.tagID));
       const selectedCatalogTopic = catalogTopics.find(
-        (c) => c.catalogTopicID === editFormData.catalogTopicID
+        (c) => c.catalogTopicID === editFormData.catalogTopicID,
       );
+
+      // Resolve supervisorUserID for update payload
+      const supervisorUserID = await resolveSupervisorUserID(selectedLecturer);
 
       const updatePayload = {
         title: editFormData.title,
@@ -732,7 +829,7 @@ const TopicRegistration: React.FC = () => {
         proposerUserCode: existingTopic.proposerUserCode,
         proposerStudentProfileID: existingTopic.proposerStudentProfileID,
         proposerStudentCode: existingTopic.proposerStudentCode,
-        supervisorUserID: 0,
+        supervisorUserID: supervisorUserID,
         supervisorUserCode: selectedLecturer?.userCode || "",
         supervisorLecturerProfileID:
           editFormData.supervisorLecturerProfileID || 0,
@@ -765,12 +862,12 @@ const TopicRegistration: React.FC = () => {
 
         // Tags to add = selectedTagIDs - existingTagIDs
         const tagsToAdd = selectedTagIDs.filter(
-          (id) => !existingTagIDs.includes(id)
+          (id) => !existingTagIDs.includes(id),
         );
 
         // Tags to remove = existingTopicTagRecords whose tagID not in selectedTagIDs
         const tagsToRemove = existingTopicTagRecords.filter(
-          (rec) => !selectedTagIDs.includes(rec.tagID)
+          (rec) => !selectedTagIDs.includes(rec.tagID),
         );
 
         // POST create for each tag to add
@@ -806,7 +903,7 @@ const TopicRegistration: React.FC = () => {
               `/TopicTags/delete/${topicCode}/${rec.topicTagID}`,
               {
                 method: "DELETE",
-              }
+              },
             );
           } catch (delErr) {
             console.error("Error deleting topicTag", rec, delErr);
@@ -1165,7 +1262,7 @@ const TopicRegistration: React.FC = () => {
                           setSelectedTagIDs((prev) => [...prev, tagID]);
                         } else {
                           setSelectedTagIDs((prev) =>
-                            prev.filter((id) => id !== tagID)
+                            prev.filter((id) => id !== tagID),
                           );
                         }
                       }}
@@ -1264,7 +1361,7 @@ const TopicRegistration: React.FC = () => {
                   const lecturer = filteredLecturers.find(
                     (l) =>
                       l.lecturerProfileID ===
-                      editFormData.supervisorLecturerProfileID
+                      editFormData.supervisorLecturerProfileID,
                   );
                   if (!lecturer) return null;
                   const available =
@@ -1624,7 +1721,7 @@ const TopicRegistration: React.FC = () => {
                 >
                   {(() => {
                     const supervisor = lecturers.find(
-                      (l) => l.userCode === existingTopic.supervisorUserCode
+                      (l) => l.userCode === existingTopic.supervisorUserCode,
                     );
                     return (
                       supervisor?.fullName ||
@@ -1704,11 +1801,11 @@ const TopicRegistration: React.FC = () => {
 
                     // Fallback to old logic if topicTagNames is empty
                     const byId = tags.find(
-                      (t) => t.tagID === existingTopic.tagID
+                      (t) => t.tagID === existingTopic.tagID,
                     )?.tagName;
                     if (byId) return byId;
                     const byCode = tags.find(
-                      (t) => t.tagCode === existingTopic.tagCode
+                      (t) => t.tagCode === existingTopic.tagCode,
                     )?.tagName;
                     return byCode || existingTopic.tagCode || "Chưa có";
                   })()}
@@ -1756,16 +1853,16 @@ const TopicRegistration: React.FC = () => {
                 existingTopic.status === "Đang chờ"
                   ? "#e3f2fd"
                   : existingTopic.status === "Từ chối" ||
-                    existingTopic.status === "Cần sửa đổi"
-                  ? "#ffebee"
-                  : "#e8f5e8",
+                      existingTopic.status === "Cần sửa đổi"
+                    ? "#ffebee"
+                    : "#e8f5e8",
               border: `1px solid ${
                 existingTopic.status === "Đang chờ"
                   ? "#2196f3"
                   : existingTopic.status === "Từ chối" ||
-                    existingTopic.status === "Cần sửa đổi"
-                  ? "#f44336"
-                  : "#4caf50"
+                      existingTopic.status === "Cần sửa đổi"
+                    ? "#f44336"
+                    : "#4caf50"
               }`,
               borderRadius: "8px",
               padding: "16px",
@@ -1778,9 +1875,9 @@ const TopicRegistration: React.FC = () => {
                   existingTopic.status === "Đang chờ"
                     ? "#1976d2"
                     : existingTopic.status === "Từ chối" ||
-                      existingTopic.status === "Cần sửa đổi"
-                    ? "#c62828"
-                    : "#2e7d32",
+                        existingTopic.status === "Cần sửa đổi"
+                      ? "#c62828"
+                      : "#2e7d32",
                 fontSize: "16px",
                 fontWeight: "500",
                 marginBottom: "8px",
@@ -1789,10 +1886,10 @@ const TopicRegistration: React.FC = () => {
               {existingTopic.status === "Đang chờ"
                 ? "Đề tài của bạn đang trong quá trình xét duyệt"
                 : existingTopic.status === "Từ chối"
-                ? "Đề tài của bạn đã bị từ chối"
-                : existingTopic.status === "Cần sửa đổi"
-                ? "Đề tài của bạn cần được sửa đổi"
-                : "Đề tài của bạn đã được duyệt thành công"}
+                  ? "Đề tài của bạn đã bị từ chối"
+                  : existingTopic.status === "Cần sửa đổi"
+                    ? "Đề tài của bạn cần được sửa đổi"
+                    : "Đề tài của bạn đã được duyệt thành công"}
             </div>
             <div
               style={{
@@ -1808,10 +1905,10 @@ const TopicRegistration: React.FC = () => {
               {existingTopic.status === "Đang chờ"
                 ? "Bạn sẽ nhận được thông báo khi có kết quả. Trong thời gian này, bạn không thể đăng ký đề tài mới."
                 : existingTopic.status === "Từ chối"
-                ? "Bạn có thể sửa đổi và đăng ký lại đề tài mới."
-                : existingTopic.status === "Cần sửa đổi"
-                ? "Vui lòng sửa đổi đề tài theo nhận xét của giảng viên và gửi lại."
-                : "Chúc mừng! Bạn có thể bắt đầu thực hiện đề tài của mình."}
+                  ? "Bạn có thể sửa đổi và đăng ký lại đề tài mới."
+                  : existingTopic.status === "Cần sửa đổi"
+                    ? "Vui lòng sửa đổi đề tài theo nhận xét của giảng viên và gửi lại."
+                    : "Chúc mừng! Bạn có thể bắt đầu thực hiện đề tài của mình."}
             </div>
 
             {/* Edit Topic Button - only show for rejected or revision topics */}
@@ -2280,7 +2377,7 @@ const TopicRegistration: React.FC = () => {
                           setSelectedTagIDs((prev) => [...prev, tagID]);
                         } else {
                           setSelectedTagIDs((prev) =>
-                            prev.filter((id) => id !== tagID)
+                            prev.filter((id) => id !== tagID),
                           );
                         }
                       }}
@@ -2370,8 +2467,8 @@ const TopicRegistration: React.FC = () => {
               {registrationType === "catalog"
                 ? "-- Chọn đề tài để xem giảng viên --"
                 : selectedTagIDs.length > 0
-                ? "-- Chọn giảng viên hướng dẫn --"
-                : "-- Chọn thẻ trước để lọc giảng viên --"}
+                  ? "-- Chọn giảng viên hướng dẫn --"
+                  : "-- Chọn thẻ trước để lọc giảng viên --"}
             </option>
             {(registrationType === "catalog" ||
             (registrationType === "self" && filteredLecturers.length > 0)
@@ -2409,7 +2506,8 @@ const TopicRegistration: React.FC = () => {
                     : lecturers;
                 const lecturer = displayLecturers.find(
                   (l) =>
-                    l.lecturerProfileID === formData.supervisorLecturerProfileID
+                    l.lecturerProfileID ===
+                    formData.supervisorLecturerProfileID,
                 );
                 if (!lecturer) return null;
                 const available =

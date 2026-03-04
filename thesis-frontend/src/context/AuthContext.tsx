@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import type { User } from "../types/user";
 import { AuthContext } from "./AuthContextTypes";
+import {
+  clearAuthSession,
+  hasValidAccessToken,
+} from "../services/auth-session.service";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -18,12 +22,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!hasValidAccessToken() && user) {
+      setUser(null);
+    }
+  }, [user]);
+
   const login = (u: User | null) => setUser(u);
-  const logout = () => setUser(null);
+  const logout = () => {
+    clearAuthSession();
+    setUser(null);
+  };
 
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated: !!user, login, logout }}
+      value={{
+        user,
+        isAuthenticated: !!user && hasValidAccessToken(),
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

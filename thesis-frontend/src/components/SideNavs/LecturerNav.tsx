@@ -1,6 +1,13 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Users, CalendarCheck, FileText, Bell } from "lucide-react";
+import {
+  Home,
+  Users,
+  CalendarCheck,
+  FileText,
+  Bell,
+  BookOpen,
+} from "lucide-react";
 import "./SideNav.css";
 import "./LecturerNav.css";
 
@@ -20,6 +27,11 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
       path: "/lecturer/reports",
       label: "Nhận xét báo cáo",
       icon: <FileText size={18} />,
+    },
+    {
+      path: "/lecturer/topic-review",
+      label: "Duyệt đề tài",
+      icon: <BookOpen size={18} />,
     },
     {
       path: "/lecturer/schedule",

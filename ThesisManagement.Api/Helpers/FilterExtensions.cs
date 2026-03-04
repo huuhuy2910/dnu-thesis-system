@@ -1,8 +1,28 @@
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-using ThesisManagement.Api.Models;
 using ThesisManagement.Api.DTOs;
+using ThesisManagement.Api.DTOs.CatalogTopics.Query;
+using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
+using ThesisManagement.Api.DTOs.CommitteeMembers.Query;
+using ThesisManagement.Api.DTOs.Committees.Query;
+using ThesisManagement.Api.DTOs.DefenseAssignments.Query;
+using ThesisManagement.Api.DTOs.DefenseScores.Query;
+using ThesisManagement.Api.DTOs.Departments.Query;
+using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
+using ThesisManagement.Api.DTOs.LecturerTags.Query;
+using ThesisManagement.Api.DTOs.MilestoneTemplates.Query;
+using ThesisManagement.Api.DTOs.ProgressMilestones.Query;
+using ThesisManagement.Api.DTOs.ProgressSubmissions.Query;
+using ThesisManagement.Api.DTOs.StudentProfiles.Query;
+using ThesisManagement.Api.DTOs.SubmissionFiles.Query;
+using ThesisManagement.Api.DTOs.Tags.Query;
+using ThesisManagement.Api.DTOs.SystemActivityLogs.Query;
+using ThesisManagement.Api.DTOs.TopicLecturers.Query;
+using ThesisManagement.Api.DTOs.TopicTags.Query;
+using ThesisManagement.Api.DTOs.Topics.Query;
+using ThesisManagement.Api.DTOs.Users.Query;
+using ThesisManagement.Api.Models;
 
 namespace ThesisManagement.Api.Helpers
 {

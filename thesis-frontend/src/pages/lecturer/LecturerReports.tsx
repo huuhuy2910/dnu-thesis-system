@@ -13,6 +13,7 @@ import {
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../context/useToast";
+import { getAccessToken } from "../../services/auth-session.service";
 import type { ApiResponse } from "../../types/api";
 import type {
   ProgressSubmission,
@@ -105,7 +106,7 @@ const LecturerReports: React.FC = () => {
       currentStudentProfiles: { [key: string]: StudentProfile },
       currentTopics: { [key: string]: Topic },
       currentSupervisorLecturers: { [key: string]: LecturerProfile },
-      currentSubmissionFiles: { [key: string]: SubmissionFile[] }
+      currentSubmissionFiles: { [key: string]: SubmissionFile[] },
     ) => {
       // Load all student profiles
       const studentCodes = submissions
@@ -116,7 +117,7 @@ const LecturerReports: React.FC = () => {
         const studentPromises = studentCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/StudentProfiles/get-list?UserCode=${code}`
+              `/StudentProfiles/get-list?UserCode=${code}`,
             );
             const data = (response as ApiResponse<StudentProfile[]>).data || [];
             return { code, profile: data[0] };
@@ -153,7 +154,7 @@ const LecturerReports: React.FC = () => {
         const topicPromises = topicCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${code}`
+              `/Topics/get-list?ProposerUserCode=${code}`,
             );
             const data = (response as ApiResponse<Topic[]>).data || [];
             return { code, topic: data[0] };
@@ -192,7 +193,7 @@ const LecturerReports: React.FC = () => {
             async (code) => {
               try {
                 const res = await fetchData(
-                  `/LecturerProfiles/get-detail/${code}`
+                  `/LecturerProfiles/get-detail/${code}`,
                 );
                 const data = (res as ApiResponse<LecturerProfile>)?.data;
                 return { code, profile: data };
@@ -200,7 +201,7 @@ const LecturerReports: React.FC = () => {
                 console.error("Error loading supervisor lecturer:", err);
                 return null;
               }
-            }
+            },
           );
 
           const supResults = await Promise.all(supPromises);
@@ -229,7 +230,7 @@ const LecturerReports: React.FC = () => {
         const filePromises = submissionCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/SubmissionFiles/get-list?SubmissionCode=${code}`
+              `/SubmissionFiles/get-list?SubmissionCode=${code}`,
             );
             const data = (response as ApiResponse<SubmissionFile[]>).data || [];
             return { code, files: data };
@@ -257,7 +258,7 @@ const LecturerReports: React.FC = () => {
         }
       }
     },
-    [] // No dependencies - use refs instead
+    [], // No dependencies - use refs instead
   );
 
   const loadLecturerProfile = useCallback(async () => {
@@ -265,7 +266,7 @@ const LecturerReports: React.FC = () => {
 
     try {
       const response = await fetchData(
-        `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`
+        `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`,
       );
       const data = (response as ApiResponse<LecturerProfile[]>).data || [];
       if (data.length > 0) {
@@ -284,7 +285,7 @@ const LecturerReports: React.FC = () => {
       setError(null);
 
       const response = await fetchData(
-        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`
+        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`,
       );
       const apiResponse = response as ApiResponseProgressSubmissions & {
         totalCount?: number;
@@ -301,7 +302,7 @@ const LecturerReports: React.FC = () => {
         studentProfilesRef.current,
         topicsRef.current,
         supervisorLecturersRef.current,
-        submissionFilesRef.current
+        submissionFilesRef.current,
       );
     } catch (err) {
       setError("Không thể tải danh sách báo cáo");
@@ -402,7 +403,7 @@ const LecturerReports: React.FC = () => {
             lecturerState,
             feedbackLevel,
           },
-        }
+        },
       );
 
       // Reload reports to show updated data
@@ -425,7 +426,11 @@ const LecturerReports: React.FC = () => {
       const downloadUrl = `/api/SubmissionFiles/download/${fileID}`;
       const url = getAbsoluteUrl(downloadUrl);
 
-      const resp = await fetch(url, { credentials: "include" });
+      const token = getAccessToken();
+      const resp = await fetch(url, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
 
       if (!resp.ok) {
         // If server responds with unauthorized or redirect to login, send user to login
@@ -457,7 +462,7 @@ const LecturerReports: React.FC = () => {
       // Show simple feedback to user
       addToast(
         "Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.",
-        "error"
+        "error",
       );
     }
   };
@@ -858,13 +863,13 @@ const LecturerReports: React.FC = () => {
                         <td style={{ padding: "16px" }}>
                           <div style={{ fontSize: "14px", color: "#1a1a1a" }}>
                             {new Date(report.submittedAt).toLocaleDateString(
-                              "vi-VN"
+                              "vi-VN",
                             )}
                           </div>
                           <div style={{ fontSize: "12px", color: "#666" }}>
                             {new Date(report.submittedAt).toLocaleTimeString(
                               "vi-VN",
-                              { hour: "2-digit", minute: "2-digit" }
+                              { hour: "2-digit", minute: "2-digit" },
                             )}
                           </div>
                         </td>
@@ -1144,7 +1149,7 @@ const LecturerReports: React.FC = () => {
                     <p style={{ fontSize: "14px", margin: 0, opacity: 0.9 }}>
                       {getReportTypeText(selectedReport.milestoneCode)} •{" "}
                       {new Date(selectedReport.submittedAt).toLocaleDateString(
-                        "vi-VN"
+                        "vi-VN",
                       )}
                     </p>
                   </div>
@@ -1781,7 +1786,7 @@ const LecturerReports: React.FC = () => {
                           }}
                         >
                           {new Date(
-                            selectedReport.submittedAt
+                            selectedReport.submittedAt,
                           ).toLocaleDateString("vi-VN")}
                         </p>
                         <p
@@ -1792,7 +1797,7 @@ const LecturerReports: React.FC = () => {
                           }}
                         >
                           {new Date(
-                            selectedReport.submittedAt
+                            selectedReport.submittedAt,
                           ).toLocaleTimeString("vi-VN", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -1974,7 +1979,7 @@ const LecturerReports: React.FC = () => {
                                 Tải xuống
                               </button>
                             </div>
-                          )
+                          ),
                         )
                       ) : (
                         <div

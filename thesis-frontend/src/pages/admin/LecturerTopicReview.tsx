@@ -43,12 +43,19 @@ interface TopicDisplay {
   lecturerProfile?: LecturerProfile | null;
 }
 
-const LecturerTopicReview: React.FC = () => {
+interface LecturerTopicReviewProps {
+  currentLecturerOnly?: boolean;
+}
+
+const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
+  currentLecturerOnly = false,
+}) => {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [topics, setTopics] = useState<TopicDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentLecturerCode, setCurrentLecturerCode] = useState<string>("");
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   const [commentModal, setCommentModal] = useState<{
@@ -124,25 +131,41 @@ const LecturerTopicReview: React.FC = () => {
   // Fetch stats for all topics (not filtered)
   const fetchStats = useCallback(async () => {
     try {
+      if (currentLecturerOnly && !currentLecturerCode) {
+        setStats({
+          total: 0,
+          approved: 0,
+          pending: 0,
+          rejected: 0,
+          revision: 0,
+        });
+        return;
+      }
+
+      const lecturerFilter =
+        currentLecturerOnly && currentLecturerCode
+          ? `&SupervisorLecturerCode=${encodeURIComponent(currentLecturerCode)}`
+          : "";
+
       const statsResponse = await fetchData<{
         data: Topic[];
         totalCount: number;
-      }>(`/Topics/get-list?Page=1&PageSize=1000`); // Get a large number to count all
+      }>(`/Topics/get-list?Page=1&PageSize=1000${lecturerFilter}`); // Get a large number to count all
 
       const allTopics = statsResponse.data;
       const statsData = {
         total: statsResponse.totalCount,
         approved: allTopics.filter(
-          (t) => mapApiStatusToDisplay(t.status) === "Đã duyệt"
+          (t) => mapApiStatusToDisplay(t.status) === "Đã duyệt",
         ).length,
         pending: allTopics.filter(
-          (t) => mapApiStatusToDisplay(t.status) === "Chờ duyệt"
+          (t) => mapApiStatusToDisplay(t.status) === "Chờ duyệt",
         ).length,
         rejected: allTopics.filter(
-          (t) => mapApiStatusToDisplay(t.status) === "Từ chối"
+          (t) => mapApiStatusToDisplay(t.status) === "Từ chối",
         ).length,
         revision: allTopics.filter(
-          (t) => mapApiStatusToDisplay(t.status) === "Cần sửa đổi"
+          (t) => mapApiStatusToDisplay(t.status) === "Cần sửa đổi",
         ).length,
       };
 
@@ -151,16 +174,61 @@ const LecturerTopicReview: React.FC = () => {
       console.warn("Failed to fetch stats:", err);
       // Keep existing stats or set to 0
     }
-  }, []);
+  }, [currentLecturerCode, currentLecturerOnly]);
+
+  useEffect(() => {
+    const resolveLecturerCode = async () => {
+      if (!currentLecturerOnly) {
+        setCurrentLecturerCode("");
+        return;
+      }
+
+      if (!user?.userCode) {
+        setCurrentLecturerCode("");
+        return;
+      }
+
+      try {
+        const lecturerProfileResponse = await fetchData<
+          ApiResponse<LecturerProfile[]>
+        >(
+          `/LecturerProfiles/get-list?UserCode=${encodeURIComponent(
+            user.userCode,
+          )}`,
+        );
+
+        const lecturerCode =
+          lecturerProfileResponse?.data?.[0]?.lecturerCode?.trim() || "";
+        setCurrentLecturerCode(lecturerCode);
+
+        if (!lecturerCode) {
+          setError("Không tìm thấy mã giảng viên cho tài khoản hiện tại.");
+        }
+      } catch (err) {
+        console.error("Failed to resolve lecturer code:", err);
+        setCurrentLecturerCode("");
+        setError("Không thể xác định thông tin giảng viên hiện tại.");
+      }
+    };
+
+    void resolveLecturerCode();
+  }, [currentLecturerOnly, user?.userCode]);
 
   // Build API URL based on status filter
   const buildApiUrl = (
     status: string,
     search: string,
     page: number,
-    size: number
+    size: number,
+    supervisorLecturerCode?: string,
   ): string => {
     let url = `/Topics/get-list?Page=${page}&PageSize=${size}&SortBy=createdAt&SortOrder=desc`;
+
+    if (supervisorLecturerCode) {
+      url += `&SupervisorLecturerCode=${encodeURIComponent(
+        supervisorLecturerCode,
+      )}`;
+    }
 
     if (search.trim()) {
       url += `&Search=${encodeURIComponent(search.trim())}`;
@@ -186,6 +254,13 @@ const LecturerTopicReview: React.FC = () => {
     const fetchTopics = async () => {
       if (!user?.userCode) return;
 
+      if (currentLecturerOnly && !currentLecturerCode) {
+        setTopics([]);
+        setTotalCount(0);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -194,7 +269,8 @@ const LecturerTopicReview: React.FC = () => {
           statusFilter,
           searchTerm,
           currentPage,
-          pageSize
+          pageSize,
+          currentLecturerOnly ? currentLecturerCode : undefined,
         );
         const topicsResponse = await fetchData<{
           data: Topic[];
@@ -208,14 +284,14 @@ const LecturerTopicReview: React.FC = () => {
           ...new Set(
             topicsResponse.data
               .map((topic) => topic.proposerStudentCode)
-              .filter((code) => code)
+              .filter((code) => code),
           ),
         ];
         const lecturerCodes = [
           ...new Set(
             topicsResponse.data
               .map((topic) => topic.supervisorLecturerCode)
-              .filter((code) => code)
+              .filter((code) => code),
           ),
         ];
 
@@ -281,7 +357,7 @@ const LecturerTopicReview: React.FC = () => {
               supervisorLecturerCode: topic.supervisorLecturerCode,
               lecturerProfile,
             };
-          }
+          },
         );
 
         setTopics(displayTopics);
@@ -296,6 +372,8 @@ const LecturerTopicReview: React.FC = () => {
     fetchTopics();
     fetchStats(); // Fetch stats whenever topics change
   }, [
+    currentLecturerOnly,
+    currentLecturerCode,
     user?.userCode,
     statusFilter,
     searchTerm,
@@ -410,7 +488,7 @@ const LecturerTopicReview: React.FC = () => {
       } catch (lecturerErr) {
         console.warn(
           "Failed to create topic-lecturer association:",
-          lecturerErr
+          lecturerErr,
         );
         // Continue with approval even if lecturer association fails
       }
@@ -445,13 +523,13 @@ const LecturerTopicReview: React.FC = () => {
       // Update local state
       setTopics(
         topics.map((t) =>
-          t.topicID === topicID ? { ...t, status: "Đã duyệt" as const } : t
-        )
+          t.topicID === topicID ? { ...t, status: "Đã duyệt" as const } : t,
+        ),
       );
 
       showSuccessModal(
         "approve",
-        topics.find((t) => t.topicID === topicID)?.title || ""
+        topics.find((t) => t.topicID === topicID)?.title || "",
       );
 
       // Reload page after successful approval
@@ -481,12 +559,12 @@ const LecturerTopicReview: React.FC = () => {
         topics.map((topic) =>
           topic.topicID === topicID
             ? { ...topic, status: "Từ chối" as const, comments: comment }
-            : topic
-        )
+            : topic,
+        ),
       );
       showSuccessModal(
         "reject",
-        topics.find((t) => t.topicID === topicID)?.title || ""
+        topics.find((t) => t.topicID === topicID)?.title || "",
       );
 
       // Reload page after successful rejection
@@ -516,12 +594,12 @@ const LecturerTopicReview: React.FC = () => {
         topics.map((topic) =>
           topic.topicID === topicID
             ? { ...topic, status: "Cần sửa đổi" as const, comments: comment }
-            : topic
-        )
+            : topic,
+        ),
       );
       showSuccessModal(
         "revision",
-        topics.find((t) => t.topicID === topicID)?.title || ""
+        topics.find((t) => t.topicID === topicID)?.title || "",
       );
 
       // Reload page after successful revision request
@@ -537,7 +615,7 @@ const LecturerTopicReview: React.FC = () => {
   const openCommentModal = (
     action: "reject" | "revision",
     topicID: number,
-    topicTitle: string
+    topicTitle: string,
   ) => {
     setCommentModal({
       isOpen: true,
@@ -618,7 +696,7 @@ const LecturerTopicReview: React.FC = () => {
 
   const showSuccessModal = (
     action: "approve" | "reject" | "revision",
-    topicTitle: string
+    topicTitle: string,
   ) => {
     setSuccessModal({
       isOpen: true,
@@ -654,7 +732,7 @@ const LecturerTopicReview: React.FC = () => {
       if (topic.category === "Đề tài catalog") {
         // For catalog topics, get tags from CatalogTopicTags
         const catalogTopicTagsRes = await fetchData(
-          `/CatalogTopicTags/list?CatalogTopicCode=${topic.topicCode}`
+          `/CatalogTopicTags/list?CatalogTopicCode=${topic.topicCode}`,
         );
         const catalogTopicTags =
           (catalogTopicTagsRes as ApiResponse<CatalogTopicTag[]>)?.data || [];
@@ -669,7 +747,7 @@ const LecturerTopicReview: React.FC = () => {
       } else if (topic.category === "Đề tài tự chọn") {
         // For self-proposed topics, get tags from TopicTags
         const topicTagsRes = await fetchData(
-          `/TopicTags/by-topic/${topic.topicCode}`
+          `/TopicTags/by-topic/${topic.topicCode}`,
         );
         const topicTagRecords =
           (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
@@ -679,7 +757,7 @@ const LecturerTopicReview: React.FC = () => {
           const tagPromises = topicTagRecords.map(async (record) => {
             try {
               const tagRes = await fetchData(
-                `/Tags/get-by-code/${record.tagCode}`
+                `/Tags/get-by-code/${record.tagCode}`,
               );
               return (tagRes as ApiResponse<Tag>)?.data;
             } catch {
@@ -1251,7 +1329,7 @@ const LecturerTopicReview: React.FC = () => {
                             }}
                           >
                             {new Date(topic.submissionDate).toLocaleDateString(
-                              "vi-VN"
+                              "vi-VN",
                             )}
                           </td>
 
@@ -1275,18 +1353,18 @@ const LecturerTopicReview: React.FC = () => {
                                   topic.status === "Đã duyệt"
                                     ? "#DCFCE7"
                                     : topic.status === "Từ chối"
-                                    ? "#FEE2E2"
-                                    : topic.status === "Cần sửa đổi"
-                                    ? "#FEF3C7"
-                                    : "#FEF3C7",
+                                      ? "#FEE2E2"
+                                      : topic.status === "Cần sửa đổi"
+                                        ? "#FEF3C7"
+                                        : "#FEF3C7",
                                 color:
                                   topic.status === "Đã duyệt"
                                     ? "#166534"
                                     : topic.status === "Từ chối"
-                                    ? "#991B1B"
-                                    : topic.status === "Cần sửa đổi"
-                                    ? "#92400E"
-                                    : "#92400E",
+                                      ? "#991B1B"
+                                      : topic.status === "Cần sửa đổi"
+                                        ? "#92400E"
+                                        : "#92400E",
                               }}
                             >
                               {getStatusIcon(topic.status)}
@@ -1415,7 +1493,7 @@ const LecturerTopicReview: React.FC = () => {
                                       openCommentModal(
                                         "revision",
                                         topic.topicID,
-                                        topic.title
+                                        topic.title,
                                       );
                                     }}
                                     title="Yêu cầu sửa đổi đề tài"
@@ -1483,7 +1561,7 @@ const LecturerTopicReview: React.FC = () => {
                                       openCommentModal(
                                         "reject",
                                         topic.topicID,
-                                        topic.title
+                                        topic.title,
                                       );
                                     }}
                                     title="Từ chối đề tài"
@@ -1554,7 +1632,7 @@ const LecturerTopicReview: React.FC = () => {
                                       e.stopPropagation();
                                       openViewCommentModal(
                                         topic.comments || "Không có nhận xét",
-                                        topic.title
+                                        topic.title,
                                       );
                                     }}
                                     title="Xem nhận xét của giảng viên"
@@ -2176,7 +2254,7 @@ const LecturerTopicReview: React.FC = () => {
                     }}
                   >
                     {new Date(
-                      confirmationModal.topic.submissionDate
+                      confirmationModal.topic.submissionDate,
                     ).toLocaleDateString("vi-VN")}
                   </p>
                 </div>
@@ -2625,7 +2703,7 @@ const LecturerTopicReview: React.FC = () => {
                       <img
                         src={
                           getAvatarUrl(
-                            detailModal.topic.studentProfile.studentImage
+                            detailModal.topic.studentProfile.studentImage,
                           ) || "https://via.placeholder.com/80x80?text=No+Image"
                         }
                         alt="Student Avatar"
@@ -2811,7 +2889,7 @@ const LecturerTopicReview: React.FC = () => {
                       <img
                         src={
                           getAvatarUrl(
-                            detailModal.topic.lecturerProfile.profileImage
+                            detailModal.topic.lecturerProfile.profileImage,
                           ) || "https://via.placeholder.com/80x80?text=No+Image"
                         }
                         alt="Lecturer Avatar"
@@ -3174,7 +3252,7 @@ const LecturerTopicReview: React.FC = () => {
                             alignItems: "center",
                             gap: "6px",
                             border: `1px solid ${getStatusColor(
-                              detailModal.topic.status
+                              detailModal.topic.status,
                             )}30`,
                           }}
                         >
@@ -3277,7 +3355,7 @@ const LecturerTopicReview: React.FC = () => {
                         }}
                       >
                         {new Date(
-                          detailModal.topic.submissionDate
+                          detailModal.topic.submissionDate,
                         ).toLocaleDateString("vi-VN")}
                       </div>
                     </div>
@@ -3300,7 +3378,7 @@ const LecturerTopicReview: React.FC = () => {
                         }}
                       >
                         {new Date(
-                          detailModal.topic.submissionDate
+                          detailModal.topic.submissionDate,
                         ).toLocaleDateString("vi-VN")}
                       </div>
                     </div>

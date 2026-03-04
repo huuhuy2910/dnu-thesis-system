@@ -7,6 +7,7 @@ import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
+import { ChatProvider } from "./context/ChatContext";
 import PageLoader from "./components/PageLoader";
 import ToastContainer from "./components/ToastContainer";
 
@@ -38,9 +39,11 @@ function Root() {
       {loading && <PageLoader />}
       <ToastProvider>
         <AuthProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <ChatProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ChatProvider>
         </AuthProvider>
         <ToastContainer />
       </ToastProvider>

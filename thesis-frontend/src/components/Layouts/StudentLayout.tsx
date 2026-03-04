@@ -6,6 +6,7 @@ import { LogOut, ChevronDown, User, Menu, X } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
+import ChatWidget from "../chat/ChatWidget.tsx";
 
 const StudentLayout: React.FC = () => {
   const auth = useAuth();
@@ -19,7 +20,7 @@ const StudentLayout: React.FC = () => {
       try {
         if (!auth.user?.userCode) return;
         const res = await fetchData(
-          `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`
+          `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`,
         );
         const data = (res as ApiResponse<StudentProfile[]>)?.data || [];
         if (data.length > 0) {
@@ -379,6 +380,8 @@ const StudentLayout: React.FC = () => {
                 Sinh viên
               </span>
             </div>
+
+            <ChatWidget theme="student" />
 
             <div style={{ position: "relative" }} data-dropdown>
               <button

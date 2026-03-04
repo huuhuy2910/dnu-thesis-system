@@ -82,11 +82,21 @@ const mockChartData: ChartData[] = [
   {
     label: "ĐÃ HOÀN THÀNH",
     value: 42,
-    color: "#002855",
-    colorLight: "#004080",
+    color: "#2e7d32",
+    colorLight: "#4caf50",
   },
-  { label: "QUÁ HẠN", value: 23, color: "#002855", colorLight: "#004080" },
-  { label: "CHỜ DUYỆT", value: 18, color: "#002855", colorLight: "#004080" },
+  {
+    label: "QUÁ HẠN",
+    value: 23,
+    color: "#ef4444",
+    colorLight: "#f87171",
+  },
+  {
+    label: "CHỜ DUYỆT",
+    value: 18,
+    color: "#f59e0b",
+    colorLight: "#fbbf24",
+  },
 ];
 
 // Mock Recent Topics Data - Dữ liệu nghiêm túc hơn
@@ -194,31 +204,29 @@ const Dashboard: React.FC = () => {
               size={24}
               style={{ marginRight: 12, color: "#f37021" }}
             />
-            TIẾN ĐỘ HOÀN THÀNH ĐỒ ÁN (DỮ LIỆU MẪU)
+            TIẾN ĐỘ HOÀN THÀNH ĐỒ ÁN
           </h2>
           <div className="chart-container">
             <div className="bar-chart">
-              {mockChartData.map((item, index) => (
-                <div key={index} className="bar-item">
-                  <div
-                    className="bar"
-                    style={
-                      {
-                        height: `${(item.value / maxChartValue) * 100}%`,
-                        "--bar-color": item.color,
-                        "--bar-color-light": item.colorLight,
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="bar-value">{item.value}</div>
+              {mockChartData.map((item, index) => {
+                const barHeight = (item.value / maxChartValue) * 250; // 250px max height
+                return (
+                  <div key={index} className="bar-item">
+                    <div
+                      className="bar"
+                      style={{
+                        height: `${Math.max(barHeight, 20)}px`,
+                        background: `linear-gradient(to top, ${item.color}, ${item.colorLight})`,
+                        minHeight: "20px",
+                      }}
+                    >
+                      <div className="bar-value">{item.value}</div>
+                    </div>
+                    <div className="bar-label">{item.label}</div>
                   </div>
-                  <div className="bar-label">{item.label}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
-          <div className="chart-note">
-            📊 DỮ LIỆU MINH HỌA - SẼ THAY BẰNG API THỰC SAU
           </div>
         </div>
 

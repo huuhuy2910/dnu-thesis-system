@@ -23,6 +23,7 @@ import { useToast } from "../../context/useToast";
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { getAccessToken } from "../../services/auth-session.service";
 import type { ApiResponse } from "../../types/api";
 import type { SubmissionFile } from "../../types/submissionFile";
 import type { Report } from "../../types/report";
@@ -73,7 +74,7 @@ const Reports: React.FC = () => {
       try {
         // Fetch topic
         const topicsRes = (await fetchData(
-          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`
+          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`,
         )) as ApiResponse<Topic[]>;
 
         if (topicsRes.data && topicsRes.data.length > 0) {
@@ -87,7 +88,7 @@ const Reports: React.FC = () => {
             if (userTopic.type === "CATALOG") {
               // For catalog topics, get tags from CatalogTopicTags
               const catalogTopicTagsRes = await fetchData(
-                `/CatalogTopicTags/list?CatalogTopicCode=${userTopic.topicCode}`
+                `/CatalogTopicTags/list?CatalogTopicCode=${userTopic.topicCode}`,
               );
               const catalogTopicTags =
                 (catalogTopicTagsRes as ApiResponse<Record<string, unknown>[]>)
@@ -99,24 +100,24 @@ const Reports: React.FC = () => {
                   async (record: Record<string, unknown>) => {
                     try {
                       const tagRes = await fetchData(
-                        `/Tags/get-by-code/${record.tagCode}`
+                        `/Tags/get-by-code/${record.tagCode}`,
                       );
                       return (tagRes as ApiResponse<Tag>)?.data;
                     } catch {
                       return null;
                     }
-                  }
+                  },
                 );
 
                 const tagResults = await Promise.all(tagPromises);
                 topicTags = tagResults.filter(
-                  (tag): tag is Tag => tag !== null
+                  (tag): tag is Tag => tag !== null,
                 );
               }
             } else {
               // For self-proposed topics, get tags from TopicTags
               const topicTagsRes = await fetchData(
-                `/TopicTags/by-topic/${userTopic.topicCode}`
+                `/TopicTags/by-topic/${userTopic.topicCode}`,
               );
               const topicTagRecords =
                 (topicTagsRes as ApiResponse<Record<string, unknown>[]>)
@@ -128,18 +129,18 @@ const Reports: React.FC = () => {
                   async (record: Record<string, unknown>) => {
                     try {
                       const tagRes = await fetchData(
-                        `/Tags/get-by-code/${record.tagCode}`
+                        `/Tags/get-by-code/${record.tagCode}`,
                       );
                       return (tagRes as ApiResponse<Tag>)?.data;
                     } catch {
                       return null;
                     }
-                  }
+                  },
                 );
 
                 const tagResults = await Promise.all(tagPromises);
                 topicTags = tagResults.filter(
-                  (tag): tag is Tag => tag !== null
+                  (tag): tag is Tag => tag !== null,
                 );
               }
             }
@@ -153,7 +154,7 @@ const Reports: React.FC = () => {
           // Fetch progress milestones
           try {
             const progressRes = await fetchData(
-              `/ProgressMilestones/get-list?TopicCode=${userTopic.topicCode}`
+              `/ProgressMilestones/get-list?TopicCode=${userTopic.topicCode}`,
             );
             const progressData =
               (progressRes as ApiResponse<ProgressMilestone[]>)?.data || [];
@@ -167,14 +168,14 @@ const Reports: React.FC = () => {
           if (userTopic.status === "Đang chờ") {
             setCanSubmit(false);
             setSubmitMessage(
-              "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo."
+              "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo.",
             );
           }
 
           // Fetch lecturer profile if supervisor exists
           if (userTopic.supervisorLecturerCode) {
             const lecturerRes = (await fetchData(
-              `/LecturerProfiles/get-detail/${userTopic.supervisorLecturerCode}`
+              `/LecturerProfiles/get-detail/${userTopic.supervisorLecturerCode}`,
             )) as ApiResponse<LecturerProfile>;
 
             if (lecturerRes.data) {
@@ -182,14 +183,14 @@ const Reports: React.FC = () => {
 
               // Fetch lecturer tags
               const tagsRes = (await fetchData(
-                `/LecturerTags/list?LecturerCode=${userTopic.supervisorLecturerCode}`
+                `/LecturerTags/list?LecturerCode=${userTopic.supervisorLecturerCode}`,
               )) as ApiResponse<Record<string, unknown>[]>;
 
               if (tagsRes.data) {
                 // Fetch tag details
                 const tagCodes = tagsRes.data.map((s) => s.tagCode).join(",");
                 const tagDetailsRes = (await fetchData(
-                  `/Tags/list?TagCode=${tagCodes}`
+                  `/Tags/list?TagCode=${tagCodes}`,
                 )) as ApiResponse<Tag[]>;
 
                 if (tagDetailsRes.data) {
@@ -232,7 +233,7 @@ const Reports: React.FC = () => {
       try {
         // Get lecturer tags
         const lecturerTagRes = await fetchData(
-          `/LecturerTags/list?LecturerCode=${lecturerProfile.lecturerCode}`
+          `/LecturerTags/list?LecturerCode=${lecturerProfile.lecturerCode}`,
         );
         const lecturerTagsData =
           (lecturerTagRes as ApiResponse<LecturerTag[]>)?.data || [];
@@ -302,7 +303,7 @@ const Reports: React.FC = () => {
         setLoading(true);
         // Fetch submissions
         const submissionsRes = (await fetchData(
-          `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`
+          `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`,
         )) as ApiResponse<Record<string, unknown>[]>;
 
         if (!submissionsRes.data || submissionsRes.data.length === 0) {
@@ -314,7 +315,7 @@ const Reports: React.FC = () => {
         // Sort by attemptNumber descending and get the latest submission
         const sortedSubmissions = submissionsRes.data.sort(
           (a: Record<string, unknown>, b: Record<string, unknown>) =>
-            (b.attemptNumber as number) - (a.attemptNumber as number)
+            (b.attemptNumber as number) - (a.attemptNumber as number),
         );
 
         // Check if student can submit new report
@@ -324,7 +325,7 @@ const Reports: React.FC = () => {
           if (!lecturerState || lecturerState.toLowerCase() === "pending") {
             setCanSubmit(false);
             setSubmitMessage(
-              "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới."
+              "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới.",
             );
           } else {
             setCanSubmit(true);
@@ -340,7 +341,7 @@ const Reports: React.FC = () => {
           sortedSubmissions.map(async (submission: Record<string, unknown>) => {
             try {
               const filesRes = (await fetchData(
-                `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`
+                `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`,
               )) as ApiResponse<SubmissionFile[]>;
               return {
                 ...submission,
@@ -350,14 +351,14 @@ const Reports: React.FC = () => {
               console.error(
                 "Error fetching files for submission:",
                 submission.submissionCode,
-                error
+                error,
               );
               return {
                 ...submission,
                 files: [],
               };
             }
-          })
+          }),
         );
 
         setReports(reportsWithFiles as Report[]);
@@ -378,7 +379,7 @@ const Reports: React.FC = () => {
     if (!topic) {
       setCanSubmit(false);
       setSubmitMessage(
-        "Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo."
+        "Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo.",
       );
       return;
     }
@@ -387,7 +388,7 @@ const Reports: React.FC = () => {
     if (topic.status === "Đang chờ") {
       setCanSubmit(false);
       setSubmitMessage(
-        "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo."
+        "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo.",
       );
       return;
     }
@@ -399,7 +400,7 @@ const Reports: React.FC = () => {
       if (!lecturerState || lecturerState.toLowerCase() === "pending") {
         setCanSubmit(false);
         setSubmitMessage(
-          "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới."
+          "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới.",
         );
       } else {
         setCanSubmit(true);
@@ -433,7 +434,7 @@ const Reports: React.FC = () => {
 
   const handleDownloadFile = async (
     file: SubmissionFile,
-    e?: React.MouseEvent
+    e?: React.MouseEvent,
   ) => {
     e?.preventDefault();
     try {
@@ -441,7 +442,11 @@ const Reports: React.FC = () => {
       const downloadUrl = `/api/SubmissionFiles/download/${file.fileID}`;
       const url = getAbsoluteUrl(downloadUrl);
 
-      const resp = await fetch(url, { credentials: "include" });
+      const token = getAccessToken();
+      const resp = await fetch(url, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
 
       if (!resp.ok) {
         // If server responds with unauthorized or redirect to login, send user to login
@@ -473,7 +478,7 @@ const Reports: React.FC = () => {
       // Show simple feedback to user
       addToast(
         "Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.",
-        "error"
+        "error",
       );
     }
   };
@@ -548,7 +553,7 @@ const Reports: React.FC = () => {
     try {
       // Get submission template
       const submissionTemplate = await fetchData(
-        "/ProgressSubmissions/get-create"
+        "/ProgressSubmissions/get-create",
       );
       const submissionData = (
         submissionTemplate as ApiResponse<Record<string, unknown>>
@@ -564,7 +569,7 @@ const Reports: React.FC = () => {
 
       // Find the current active milestone (state: "Đang thực hiện")
       const currentMilestone = progressMilestones.find(
-        (milestone) => milestone.state === "Đang thực hiện"
+        (milestone) => milestone.state === "Đang thực hiện",
       );
 
       // Create submission payload
@@ -587,7 +592,7 @@ const Reports: React.FC = () => {
         {
           method: "POST",
           body: submissionPayload,
-        }
+        },
       );
 
       const createdSubmission = (
@@ -603,8 +608,8 @@ const Reports: React.FC = () => {
       formData.append(
         "submissionID",
         String(
-          (createdSubmission as Record<string, unknown>)?.submissionID || ""
-        )
+          (createdSubmission as Record<string, unknown>)?.submissionID || "",
+        ),
       );
       formData.append("submissionCode", submissionCode);
       formData.append("fileName", selectedFile.name);
@@ -628,7 +633,7 @@ const Reports: React.FC = () => {
 
       // Refresh reports list
       const submissionsRes = (await fetchData(
-        `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`
+        `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`,
       )) as ApiResponse<Record<string, unknown>[]>;
       if (submissionsRes.data) {
         const reportsWithFiles = await Promise.all(
@@ -636,7 +641,7 @@ const Reports: React.FC = () => {
             async (submission: Record<string, unknown>) => {
               try {
                 const filesRes = (await fetchData(
-                  `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`
+                  `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`,
                 )) as ApiResponse<SubmissionFile[]>;
                 return {
                   ...submission,
@@ -649,8 +654,8 @@ const Reports: React.FC = () => {
                   files: [],
                 };
               }
-            }
-          )
+            },
+          ),
         );
         setReports(reportsWithFiles as Report[]);
       }
@@ -1544,7 +1549,7 @@ const Reports: React.FC = () => {
                             <span
                               onClick={() =>
                                 setShowLecturerTagTooltip(
-                                  !showLecturerTagTooltip
+                                  !showLecturerTagTooltip,
                                 )
                               }
                               style={{
@@ -1668,7 +1673,7 @@ const Reports: React.FC = () => {
                             (lecturerProfile.currentGuidingCount /
                               lecturerProfile.guideQuota) *
                               100,
-                            100
+                            100,
                           )}%`,
                           height: "100%",
                           background:
@@ -2438,7 +2443,7 @@ const Reports: React.FC = () => {
                           background: "#fff",
                           borderRadius: "12px",
                           border: `1px solid ${getStatusColor(
-                            report.lecturerState
+                            report.lecturerState,
                           )}`,
                           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
                           transition: "all 0.2s ease",
@@ -2472,7 +2477,7 @@ const Reports: React.FC = () => {
                                 height: "32px",
                                 borderRadius: "8px",
                                 background: `linear-gradient(135deg, ${getStatusColor(
-                                  report.lecturerState
+                                  report.lecturerState,
                                 )}, ${getStatusColor(report.lecturerState)}dd)`,
                                 display: "flex",
                                 alignItems: "center",
@@ -2517,7 +2522,7 @@ const Reports: React.FC = () => {
                                 >
                                   <Calendar size={12} />
                                   {new Date(
-                                    report.submittedAt
+                                    report.submittedAt,
                                   ).toLocaleDateString("vi-VN", {
                                     year: "numeric",
                                     month: "short",
@@ -2543,7 +2548,7 @@ const Reports: React.FC = () => {
                             style={{
                               padding: "4px 12px",
                               backgroundColor: getStatusColor(
-                                report.lecturerState
+                                report.lecturerState,
                               ),
                               color: "#fff",
                               borderRadius: "16px",
@@ -2736,7 +2741,7 @@ const Reports: React.FC = () => {
                 position: "sticky",
                 top: 0,
                 background: `linear-gradient(135deg, ${getStatusColor(
-                  selectedReport.lecturerState
+                  selectedReport.lecturerState,
                 )}, ${getStatusColor(selectedReport.lecturerState)}dd)`,
                 padding: "24px",
                 borderRadius: "20px 20px 0 0",
@@ -2782,7 +2787,7 @@ const Reports: React.FC = () => {
                         day: "numeric",
                         hour: "2-digit",
                         minute: "2-digit",
-                      }
+                      },
                     )}
                   </span>
                   {selectedReport.attemptNumber && (

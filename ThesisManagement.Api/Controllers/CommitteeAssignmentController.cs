@@ -1,6 +1,8 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ThesisManagement.Api.Application.Command.CommitteeAssignments;
+using ThesisManagement.Api.Application.Query.CommitteeAssignments;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -10,15 +12,63 @@ namespace ThesisManagement.Api.Controllers
     [AllowAnonymous]
     public class CommitteeAssignmentController : BaseApiController
     {
-        private readonly ICommitteeAssignmentService _service;
+        private readonly IGetCommitteesQuery _getCommitteesQuery;
+        private readonly IGetCommitteeDetailQuery _getCommitteeDetailQuery;
+        private readonly IGetCommitteeCreateInitQuery _getCommitteeCreateInitQuery;
+        private readonly ICreateCommitteeCommand _createCommitteeCommand;
+        private readonly IUpdateCommitteeCommand _updateCommitteeCommand;
+        private readonly IUpdateCommitteeMembersCommand _updateCommitteeMembersCommand;
+        private readonly IDeleteCommitteeCommand _deleteCommitteeCommand;
+        private readonly IGetAvailableLecturersQuery _getAvailableLecturersQuery;
+        private readonly IGetAvailableTopicsQuery _getAvailableTopicsQuery;
+        private readonly IGetCommitteeTagsQuery _getCommitteeTagsQuery;
+        private readonly IAssignTopicsCommand _assignTopicsCommand;
+        private readonly ISaveCommitteeMembersCommand _saveCommitteeMembersCommand;
+        private readonly IAutoAssignTopicsCommand _autoAssignTopicsCommand;
+        private readonly IChangeAssignmentCommand _changeAssignmentCommand;
+        private readonly IRemoveAssignmentCommand _removeAssignmentCommand;
+        private readonly IGetLecturerCommitteesQuery _getLecturerCommitteesQuery;
+        private readonly IGetStudentDefenseInfoQuery _getStudentDefenseInfoQuery;
 
         public CommitteeAssignmentController(
             IUnitOfWork uow,
             ICodeGenerator codeGen,
             IMapper mapper,
-            ICommitteeAssignmentService service) : base(uow, codeGen, mapper)
+            IGetCommitteesQuery getCommitteesQuery,
+            IGetCommitteeDetailQuery getCommitteeDetailQuery,
+            IGetCommitteeCreateInitQuery getCommitteeCreateInitQuery,
+            ICreateCommitteeCommand createCommitteeCommand,
+            IUpdateCommitteeCommand updateCommitteeCommand,
+            IUpdateCommitteeMembersCommand updateCommitteeMembersCommand,
+            IDeleteCommitteeCommand deleteCommitteeCommand,
+            IGetAvailableLecturersQuery getAvailableLecturersQuery,
+            IGetAvailableTopicsQuery getAvailableTopicsQuery,
+            IGetCommitteeTagsQuery getCommitteeTagsQuery,
+            IAssignTopicsCommand assignTopicsCommand,
+            ISaveCommitteeMembersCommand saveCommitteeMembersCommand,
+            IAutoAssignTopicsCommand autoAssignTopicsCommand,
+            IChangeAssignmentCommand changeAssignmentCommand,
+            IRemoveAssignmentCommand removeAssignmentCommand,
+            IGetLecturerCommitteesQuery getLecturerCommitteesQuery,
+            IGetStudentDefenseInfoQuery getStudentDefenseInfoQuery) : base(uow, codeGen, mapper)
         {
-            _service = service;
+            _getCommitteesQuery = getCommitteesQuery;
+            _getCommitteeDetailQuery = getCommitteeDetailQuery;
+            _getCommitteeCreateInitQuery = getCommitteeCreateInitQuery;
+            _createCommitteeCommand = createCommitteeCommand;
+            _updateCommitteeCommand = updateCommitteeCommand;
+            _updateCommitteeMembersCommand = updateCommitteeMembersCommand;
+            _deleteCommitteeCommand = deleteCommitteeCommand;
+            _getAvailableLecturersQuery = getAvailableLecturersQuery;
+            _getAvailableTopicsQuery = getAvailableTopicsQuery;
+            _getCommitteeTagsQuery = getCommitteeTagsQuery;
+            _assignTopicsCommand = assignTopicsCommand;
+            _saveCommitteeMembersCommand = saveCommitteeMembersCommand;
+            _autoAssignTopicsCommand = autoAssignTopicsCommand;
+            _changeAssignmentCommand = changeAssignmentCommand;
+            _removeAssignmentCommand = removeAssignmentCommand;
+            _getLecturerCommitteesQuery = getLecturerCommitteesQuery;
+            _getStudentDefenseInfoQuery = getStudentDefenseInfoQuery;
         }
 
         // List & Details
@@ -29,7 +79,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("committees")]
         public async Task<IActionResult> GetCommitteesAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? keyword = null, [FromQuery] DateTime? date = null, [FromQuery] string[]? tags = null, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetCommitteesAsync(page, pageSize, keyword, date, tags, cancellationToken);
+            var response = await _getCommitteesQuery.ExecuteAsync(page, pageSize, keyword, date, tags, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -40,7 +90,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-detail/{committeeCode}")]
         public async Task<IActionResult> GetDetailAsync(string committeeCode, CancellationToken cancellationToken)
         {
-            var response = await _service.GetCommitteeDetailAsync(committeeCode, cancellationToken);
+            var response = await _getCommitteeDetailQuery.ExecuteAsync(committeeCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -52,7 +102,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-create")]
         public async Task<IActionResult> GetCreateAsync(CancellationToken cancellationToken)
         {
-            var response = await _service.GetCommitteeCreateInitAsync(cancellationToken);
+            var response = await _getCommitteeCreateInitQuery.ExecuteAsync(cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -64,12 +114,11 @@ namespace ThesisManagement.Api.Controllers
         {
             // Role-based access: only Admin can create
             var role = GetRequestRole();
-            var userCode = GetRequestUserCode();
             if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.CreateCommitteeAsync(request, cancellationToken);
+            var response = await _createCommitteeCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -85,7 +134,7 @@ namespace ThesisManagement.Api.Controllers
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
             request.CommitteeCode = committeeCode;
-            var response = await _service.UpdateCommitteeAsync(committeeCode, request, cancellationToken);
+            var response = await _updateCommitteeCommand.ExecuteAsync(committeeCode, request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -103,7 +152,7 @@ namespace ThesisManagement.Api.Controllers
 
             request ??= new CommitteeMembersUpdateRequestDto();
             request.CommitteeCode = committeeCode;
-            var response = await _service.UpdateCommitteeMembersAsync(request, cancellationToken);
+            var response = await _updateCommitteeMembersCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -118,7 +167,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.DeleteCommitteeAsync(committeeCode, force, cancellationToken);
+            var response = await _deleteCommitteeCommand.ExecuteAsync(committeeCode, force, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -130,7 +179,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("available-lecturers")]
         public async Task<IActionResult> GetAvailableLecturersAsync([FromQuery] string? tag = null, [FromQuery] DateTime? date = null, [FromQuery] string? role = null, [FromQuery] bool? requireChair = null, [FromQuery] string? committeeCode = null, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetAvailableLecturersAsync(tag, date, role, requireChair, committeeCode, cancellationToken);
+            var response = await _getAvailableLecturersQuery.ExecuteAsync(tag, date, role, requireChair, committeeCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -141,7 +190,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("available-topics")]
         public async Task<IActionResult> GetAvailableTopicsAsync([FromQuery] string? tag = null, [FromQuery] string? department = null, [FromQuery] string? committeeCode = null, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetAvailableTopicsAsync(tag, department, committeeCode, cancellationToken);
+            var response = await _getAvailableTopicsQuery.ExecuteAsync(tag, department, committeeCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -152,7 +201,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("tags")]
         public async Task<IActionResult> GetTagsAsync(CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetTagsAsync(cancellationToken);
+            var response = await _getCommitteeTagsQuery.ExecuteAsync(cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -168,7 +217,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.AssignTopicsAsync(request, cancellationToken);
+            var response = await _assignTopicsCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -184,7 +233,7 @@ namespace ThesisManagement.Api.Controllers
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
 
-            var response = await _service.SaveCommitteeMembersAsync(request, cancellationToken);
+            var response = await _saveCommitteeMembersCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -199,7 +248,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.AutoAssignTopicsAsync(request, cancellationToken);
+            var response = await _autoAssignTopicsCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -214,7 +263,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.ChangeAssignmentAsync(request, cancellationToken);
+            var response = await _changeAssignmentCommand.ExecuteAsync(request, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -229,7 +278,7 @@ namespace ThesisManagement.Api.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Không có quyền thực hiện thao tác này.", StatusCodes.Status403Forbidden));
             }
-            var response = await _service.RemoveAssignmentAsync(topicCode, cancellationToken);
+            var response = await _removeAssignmentCommand.ExecuteAsync(topicCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -241,7 +290,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("lecturer-committees/{lecturerCode}")]
         public async Task<IActionResult> GetLecturerCommitteesAsync(string lecturerCode, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetLecturerCommitteesAsync(lecturerCode, cancellationToken);
+            var response = await _getLecturerCommitteesQuery.ExecuteAsync(lecturerCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 
@@ -252,7 +301,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("student-defense/{studentCode}")]
         public async Task<IActionResult> GetStudentDefenseInfoAsync(string studentCode, CancellationToken cancellationToken = default)
         {
-            var response = await _service.GetStudentDefenseInfoAsync(studentCode, cancellationToken);
+            var response = await _getStudentDefenseInfoQuery.ExecuteAsync(studentCode, cancellationToken);
             return StatusCode(GetStatusCode(response), response);
         }
 

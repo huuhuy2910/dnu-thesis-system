@@ -1,176 +1,104 @@
 using System;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Command.StudentProfiles;
+using ThesisManagement.Api.Application.Query.StudentProfiles;
 using ThesisManagement.Api.DTOs;
-using ThesisManagement.Api.Models;
+using ThesisManagement.Api.DTOs.StudentProfiles.Command;
+using ThesisManagement.Api.DTOs.StudentProfiles.Query;
 using ThesisManagement.Api.Services;
-using ThesisManagement.Api.Helpers;
 
 namespace ThesisManagement.Api.Controllers
 {
     public class StudentProfilesController : BaseApiController
     {
-        public StudentProfilesController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper) : base(uow, codeGen, mapper) { }
+        private readonly IGetStudentProfilesListQuery _getStudentProfilesListQuery;
+        private readonly IGetStudentProfileDetailQuery _getStudentProfileDetailQuery;
+        private readonly IGetStudentProfileCreateQuery _getStudentProfileCreateQuery;
+        private readonly IGetStudentProfileUpdateQuery _getStudentProfileUpdateQuery;
+        private readonly IGetStudentAvatarQuery _getStudentAvatarQuery;
+        private readonly ICreateStudentProfileCommand _createStudentProfileCommand;
+        private readonly IUpdateStudentProfileCommand _updateStudentProfileCommand;
+        private readonly IUploadStudentAvatarCommand _uploadStudentAvatarCommand;
+        private readonly IDeleteStudentProfileCommand _deleteStudentProfileCommand;
+
+        public StudentProfilesController(
+            IUnitOfWork uow,
+            ICodeGenerator codeGen,
+            IMapper mapper,
+            IGetStudentProfilesListQuery getStudentProfilesListQuery,
+            IGetStudentProfileDetailQuery getStudentProfileDetailQuery,
+            IGetStudentProfileCreateQuery getStudentProfileCreateQuery,
+            IGetStudentProfileUpdateQuery getStudentProfileUpdateQuery,
+            IGetStudentAvatarQuery getStudentAvatarQuery,
+            ICreateStudentProfileCommand createStudentProfileCommand,
+            IUpdateStudentProfileCommand updateStudentProfileCommand,
+            IUploadStudentAvatarCommand uploadStudentAvatarCommand,
+            IDeleteStudentProfileCommand deleteStudentProfileCommand) : base(uow, codeGen, mapper)
+        {
+            _getStudentProfilesListQuery = getStudentProfilesListQuery;
+            _getStudentProfileDetailQuery = getStudentProfileDetailQuery;
+            _getStudentProfileCreateQuery = getStudentProfileCreateQuery;
+            _getStudentProfileUpdateQuery = getStudentProfileUpdateQuery;
+            _getStudentAvatarQuery = getStudentAvatarQuery;
+            _createStudentProfileCommand = createStudentProfileCommand;
+            _updateStudentProfileCommand = updateStudentProfileCommand;
+            _uploadStudentAvatarCommand = uploadStudentAvatarCommand;
+            _deleteStudentProfileCommand = deleteStudentProfileCommand;
+        }
 
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] StudentProfileFilter filter)
         {
-            var result = await _uow.StudentProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                (query, f) => query.ApplyFilter(f));
-            var dtos = result.Items.Select(x => _mapper.Map<StudentProfileReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<StudentProfileReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getStudentProfilesListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<StudentProfileReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         [HttpGet("get-detail/{code}")]
         public async Task<IActionResult> GetDetail(string code)
         {
-            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
-            return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(ent)));
+            var dto = await _getStudentProfileDetailQuery.ExecuteAsync(code);
+            if (dto == null)
+                return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
+
+            return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(dto));
         }
 
         [HttpGet("get-create")]
         public IActionResult GetCreate()
         {
-            var sample = new StudentProfileCreateDto(
-                string.Empty,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "Đang học",
-                null,
-                null,
-                null);
+            var sample = _getStudentProfileCreateQuery.Execute();
             return Ok(ApiResponse<StudentProfileCreateDto>.SuccessResponse(sample));
         }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] StudentProfileCreateDto dto)
         {
-            // Generate StudentCode
-            var code = _codeGen.Generate("STU");
-            // Resolve User by Code
-            var user = await _uow.Users.Query().FirstOrDefaultAsync(u => u.UserCode == dto.UserCode);
-            if (user == null) return BadRequest(ApiResponse<object>.Fail("User not found", 400));
-            
-            // Resolve Department by Code if provided
-            Department? department = null;
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-            }
-            
-            var entity = new StudentProfile
-            {
-                StudentCode = code,
-                UserCode = dto.UserCode,
-                UserID = user.UserID,
-                DepartmentCode = dto.DepartmentCode,
-                DepartmentID = department?.DepartmentID,
-                ClassCode = dto.ClassCode,
-                FacultyCode = dto.FacultyCode,
-                StudentImage = dto.StudentImage,
-                GPA = dto.GPA,
-                AcademicStanding = dto.AcademicStanding,
-                Gender = dto.Gender,
-                DateOfBirth = dto.DateOfBirth,
-                PhoneNumber = dto.PhoneNumber,
-                StudentEmail = dto.StudentEmail,
-                Address = dto.Address,
-                EnrollmentYear = dto.EnrollmentYear,
-                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Đang học" : dto.Status,
-                GraduationYear = dto.GraduationYear,
-                Notes = dto.Notes,
-                FullName = dto.FullName,
-                CreatedAt = DateTime.UtcNow,
-                LastUpdated = DateTime.UtcNow
-            };
-            await _uow.StudentProfiles.AddAsync(entity);
-            await _uow.SaveChangesAsync();
-            return StatusCode(201, ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(entity),1,201));
+            var result = await _createStudentProfileCommand.ExecuteAsync(dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return StatusCode(201, ApiResponse<StudentProfileReadDto>.SuccessResponse(result.Data, 1, 201));
         }
 
         [HttpGet("get-update/{code}")]
         public async Task<IActionResult> GetUpdate(string code)
         {
-            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
-            var dto = new StudentProfileUpdateDto(
-                ent.StudentCode,
-                ent.UserCode,
-                ent.DepartmentCode,
-                ent.ClassCode,
-                ent.FacultyCode,
-                // ent.StudentImage, // Không bao gồm vì không update qua PUT
-                ent.GPA,
-                ent.AcademicStanding,
-                ent.Gender,
-                ent.DateOfBirth,
-                ent.PhoneNumber,
-                ent.StudentEmail,
-                ent.Address,
-                ent.EnrollmentYear,
-                ent.Status,
-                ent.GraduationYear,
-                ent.Notes,
-                ent.FullName);
+            var dto = await _getStudentProfileUpdateQuery.ExecuteAsync(code);
+            if (dto == null)
+                return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
+
             return Ok(ApiResponse<StudentProfileUpdateDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{code}")]
         public async Task<IActionResult> Update(string code, [FromBody] StudentProfileUpdateDto dto)
         {
-            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
-            
-            // Resolve User by Code if provided
-            if (!string.IsNullOrWhiteSpace(dto.UserCode) && !string.Equals(dto.UserCode, ent.UserCode, StringComparison.OrdinalIgnoreCase))
-            {
-                var user = await _uow.Users.Query().FirstOrDefaultAsync(u => u.UserCode == dto.UserCode);
-                if (user == null) return BadRequest(ApiResponse<object>.Fail("User not found", 400));
-                ent.UserCode = user.UserCode;
-                ent.UserID = user.UserID;
-            }
+            var result = await _updateStudentProfileCommand.ExecuteAsync(code, dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
-            // Resolve Department by Code if provided
-            Department? department = null;
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-                if (department == null) return BadRequest(ApiResponse<object>.Fail("Department not found", 400));
-            }
-
-            ent.DepartmentCode = dto.DepartmentCode;
-            ent.DepartmentID = department?.DepartmentID;
-            ent.ClassCode = dto.ClassCode;
-            ent.FacultyCode = dto.FacultyCode;
-            // StudentImage không được update ở đây, sử dụng endpoint POST /upload-avatar thay thế
-            ent.GPA = dto.GPA;
-            ent.AcademicStanding = dto.AcademicStanding;
-            ent.Gender = dto.Gender;
-            ent.DateOfBirth = dto.DateOfBirth;
-            ent.PhoneNumber = dto.PhoneNumber;
-            ent.StudentEmail = dto.StudentEmail;
-            ent.Address = dto.Address;
-            ent.EnrollmentYear = dto.EnrollmentYear;
-            ent.Status = dto.Status;
-            ent.GraduationYear = dto.GraduationYear;
-            ent.Notes = dto.Notes;
-            if (dto.FullName != null) ent.FullName = dto.FullName;
-            ent.LastUpdated = DateTime.UtcNow;
-            _uow.StudentProfiles.Update(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(_mapper.Map<StudentProfileReadDto>(ent)));
+            return Ok(ApiResponse<StudentProfileReadDto>.SuccessResponse(result.Data));
         }
 
         /// <summary>
@@ -179,15 +107,16 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-avatar/{code}")]
         public async Task<IActionResult> GetAvatar(string code)
         {
-            var student = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (student == null) return NotFound(ApiResponse<object>.Fail("Sinh viên không tồn tại", 404));
+            var avatar = await _getStudentAvatarQuery.ExecuteAsync(code);
+            if (avatar == null)
+                return NotFound(ApiResponse<object>.Fail("Sinh viên không tồn tại", 404));
 
             return Ok(ApiResponse<object>.SuccessResponse(new
             {
                 studentCode = code,
-                hasAvatar = !string.IsNullOrEmpty(student.StudentImage),
-                imageUrl = student.StudentImage,
-                fullImageUrl = student.StudentImage != null ? $"{Request.Scheme}://{Request.Host}{student.StudentImage}" : null
+                hasAvatar = avatar.HasAvatar,
+                imageUrl = avatar.ImageUrl,
+                fullImageUrl = avatar.ImageUrl != null ? $"{Request.Scheme}://{Request.Host}{avatar.ImageUrl}" : null
             }));
         }
 
@@ -199,76 +128,26 @@ namespace ThesisManagement.Api.Controllers
         [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> UploadAvatar(string code, [FromForm] IFormFile file)
         {
-            // Kiểm tra sinh viên có tồn tại không
-            var student = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (student == null) return NotFound(ApiResponse<object>.Fail("Sinh viên không tồn tại", 404));
-
-            // Kiểm tra file
-            if (file == null || file.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail("File ảnh là bắt buộc", 400));
-
-            // Kiểm tra loại file (chỉ cho phép ảnh)
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };
-            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!allowedExtensions.Contains(fileExtension))
-                return BadRequest(ApiResponse<object>.Fail("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)", 400));
-
-            // Kiểm tra kích thước file (giới hạn 5MB)
-            if (file.Length > 5 * 1024 * 1024)
-                return BadRequest(ApiResponse<object>.Fail("Kích thước file không được vượt quá 5MB", 400));
-
-            // Tạo thư mục lưu ảnh nếu chưa có
-            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "students");
-            if (!Directory.Exists(avatarsRoot)) Directory.CreateDirectory(avatarsRoot);
-
-            // Xóa ảnh cũ nếu có
-            if (!string.IsNullOrEmpty(student.StudentImage))
-            {
-                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", student.StudentImage.TrimStart('/').Replace("/", "\\"));
-                if (System.IO.File.Exists(oldImagePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(oldImagePath);
-                    }
-                    catch { /* Ignore errors when deleting old file */ }
-                }
-            }
-
-            // Tạo tên file duy nhất
-            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
-            var savePath = Path.Combine(avatarsRoot, uniqueName);
-
-            // Lưu file
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // Cập nhật đường dẫn ảnh vào database
-            var imageUrl = $"/avatars/students/{uniqueName}";
-            student.StudentImage = imageUrl;
-            student.LastUpdated = DateTime.UtcNow;
-            
-            _uow.StudentProfiles.Update(student);
-            await _uow.SaveChangesAsync();
+            var result = await _uploadStudentAvatarCommand.ExecuteAsync(code, file);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
             return Ok(ApiResponse<object>.SuccessResponse(new 
             { 
                 studentCode = code,
-                imageUrl = imageUrl,
-                message = "Upload avatar thành công"
+                imageUrl = result.Data?.ImageUrl,
+                message = result.Data?.Message
             }));
         }
 
         [HttpDelete("delete/{code}")]
         public async Task<IActionResult> Delete(string code)
         {
-            var ent = await _uow.StudentProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("StudentProfile not found", 404));
-            _uow.StudentProfiles.Remove(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<object>.SuccessResponse(null));
+            var result = await _deleteStudentProfileCommand.ExecuteAsync(code);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(ApiResponse<object>.SuccessResponse(result.Data));
         }
     }
 }

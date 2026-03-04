@@ -16,8 +16,14 @@ namespace ThesisManagement.Api.Services
 
         public async Task<User?> ValidateUserAsync(string username, string password)
         {
+            var normalizedUsername = username?.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(normalizedUsername))
+            {
+                return null;
+            }
+
             var user = await _uow.Users.Query()
-                .FirstOrDefaultAsync(u => u.UserCode == username);
+                .FirstOrDefaultAsync(u => u.UserCode != null && u.UserCode.ToUpper() == normalizedUsername);
 
             if (user == null || !VerifyPassword(password, user.PasswordHash))
                 return null;

@@ -1,48 +1,41 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ThesisManagement.Api.Application.Command.Auth;
 using ThesisManagement.Api.DTOs;
+using ThesisManagement.Api.DTOs.Users.Command;
 using ThesisManagement.Api.Services;
 
 namespace ThesisManagement.Api.Controllers
 {
     public class AuthController : BaseApiController
     {
-        private readonly IAuthService _authService;
-        private readonly ICurrentUserService _currentUserService;
+        private readonly ILoginCommand _loginCommand;
 
-        public AuthController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper, IAuthService authService, ICurrentUserService currentUserService) 
+        public AuthController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper, ILoginCommand loginCommand)
             : base(uow, codeGen, mapper)
         {
-            _authService = authService;
-            _currentUserService = currentUserService;
+            _loginCommand = loginCommand;
         }
 
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            if (string.IsNullOrEmpty(loginDto.Username) || string.IsNullOrEmpty(loginDto.Password))
+            var result = await _loginCommand.ExecuteAsync(loginDto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(new
             {
-                return BadRequest(ApiResponse<object>.Fail("Username và Password không được để trống", 400));
-            }
-
-            var user = await _authService.ValidateUserAsync(loginDto.Username, loginDto.Password);
-            
-            if (user == null)
-            {
-                return Unauthorized(ApiResponse<object>.Fail("Tên đăng nhập hoặc mật khẩu không đúng", 401));
-            }
-
-            // Set thông tin user vào context để có thể log
-            _currentUserService.SetCurrentUser(user.UserID, user.UserCode, user.Role);
-
-            var response = new LoginResponseDto(
-                user.UserID,
-                user.UserCode,
-                user.Role,
-                user.CreatedAt
-            );
-
-            return Ok(new { success = true, userCode = user.UserCode, role = user.Role, data = response });
+                success = true,
+                userCode = result.Data!.UserCode,
+                role = result.Data.Role,
+                accessToken = result.Data.AccessToken,
+                tokenType = result.Data.TokenType,
+                expiresAt = result.Data.ExpiresAt,
+                data = result.Data.Data
+            });
         }
     }
 }
