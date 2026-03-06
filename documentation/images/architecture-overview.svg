@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <style>
+    .card { fill:#ffffff; stroke:#1f6feb; stroke-width:2; rx:10; }
+    .title { font: bold 16px/1 sans-serif; fill:#1f6feb; }
+    .label { font: 13px/1 sans-serif; fill:#0f172a; }
+    .small { font: 12px/1 sans-serif; fill:#475569; }
+    .arrow { stroke:#475569; stroke-width:2; fill:none; marker-end:url(#arrowhead); }
+    .bg { fill:#f8fafc; }
+    .service { fill:#fff7ed; stroke:#f97316; }
+    .db { fill:#fff5f5; stroke:#ef4444; }
+    .cache { fill:#f0fff4; stroke:#16a34a; }
+    .box { fill:#eef2ff; stroke:#1e40af; }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="900" rx="0"/>
+
+  <!-- Client Tier -->
+  <g transform="translate(40,40)">
+    <rect class="card" x="0" y="0" width="380" height="220"/>
+    <text class="title" x="18" y="30">Client / Frontend</text>
+    <text class="label" x="18" y="56">React 19 + TypeScript (Vite)</text>
+    <text class="small" x="18" y="76">Mantine, Tailwind, react-router</text>
+
+    <g transform="translate(12,92)">
+      <rect class="box" x="0" y="0" width="170" height="48" rx="8"/>
+      <text class="small" x="12" y="30">Student UI</text>
+
+      <rect class="box" x="190" y="0" width="170" height="48" rx="8"/>
+      <text class="small" x="202" y="30">Lecturer / Admin UI</text>
+
+      <rect class="box" x="0" y="64" width="170" height="40" rx="8"/>
+      <text class="small" x="12" y="90">PWA / Mobile (optional)</text>
+
+      <rect class="box" x="190" y="64" width="170" height="40" rx="8"/>
+      <text class="small" x="202" y="90">Browser APIs (Uploads, Notifications)</text>
+    </g>
+  </g>
+
+  <!-- Reverse proxy / CDN -->
+  <g transform="translate(450,30)">
+    <rect class="card" x="0" y="0" width="260" height="100"/>
+    <text class="title" x="14" y="28">Edge / Reverse Proxy</text>
+    <text class="small" x="14" y="50">Nginx / Azure Front Door / Cloudflare</text>
+    <text class="small" x="14" y="68">SSL termination, static CDN, rate limiting</text>
+  </g>
+
+  <!-- Application / API Tier -->
+  <g transform="translate(760,30)">
+    <rect class="card" x="0" y="0" width="520" height="340"/>
+    <text class="title" x="18" y="30">Application / API Layer</text>
+    <text class="label" x="18" y="54">ASP.NET Core 8.0 (Kestrel behind proxy)</text>
+    <text class="small" x="18" y="72">Entity Framework Core, Swagger, DI, AutoMapper</text>
+
+    <!-- Auth & API services -->
+    <g transform="translate(18,92)">
+      <rect class="service" x="0" y="0" width="200" height="56" rx="8"/>
+      <text class="small" x="12" y="34">Auth Service (JWT, Refresh Tokens)</text>
+
+      <rect class="service" x="220" y="0" width="260" height="56" rx="8"/>
+      <text class="small" x="232" y="34">Core API (Topics, Milestones, Committees, Users)</text>
+
+      <rect class="service" x="0" y="80" width="200" height="56" rx="8"/>
+      <text class="small" x="12" y="110">File Service (Multipart upload, validation)</text>
+
+      <rect class="service" x="220" y="80" width="260" height="56" rx="8"/>
+      <text class="small" x="232" y="110">Notification Service (Email, Push)</text>
+
+      <rect class="service" x="0" y="160" width="200" height="56" rx="8"/>
+      <text class="small" x="12" y="190">Background Workers (processing, approvals)</text>
+
+      <rect class="service" x="220" y="160" width="260" height="56" rx="8"/>
+      <text class="small" x="232" y="190">Scheduler / Cron (Defense scheduling)</text>
+    </g>
+  </g>
+
+  <!-- Data & Infrastructure -->
+  <g transform="translate(100,320)">
+    <rect class="card" x="0" y="0" width="440" height="260"/>
+    <text class="title" x="18" y="28">Persistence & Infrastructure</text>
+    <text class="small" x="18" y="50">On-prem SQL Server or Cloud DB (Managed)</text>
+
+    <rect class="db" x="18" y="72" width="400" height="64" rx="8"/>
+    <text class="small" x="30" y="106">Relational DB: Users, Topics, Milestones, Committees, Submissions</text>
+
+    <rect class="cache" x="18" y="152" width="200" height="56" rx="8"/>
+    <text class="small" x="30" y="186">Redis Cache / Session store</text>
+
+    <rect class="db" x="238" y="152" width="180" height="56" rx="8"/>
+    <text class="small" x="250" y="186">Blob Storage (S3 / Azure Blob / Disk)</text>
+  </g>
+
+  <!-- DevOps & Monitoring -->
+  <g transform="translate(580,420)">
+    <rect class="card" x="0" y="0" width="540" height="160"/>
+    <text class="title" x="18" y="28">DevOps / Observability</text>
+    <text class="small" x="18" y="52">CI/CD (GitHub Actions / Azure DevOps), Docker images</text>
+    <text class="small" x="18" y="72">Monitoring: Prometheus, Grafana, Application Insights</text>
+    <text class="small" x="18" y="92">Logging: ELK / Seq / File</text>
+    <text class="small" x="18" y="112">Secrets: Key Vault / Env vars</text>
+  </g>
+
+  <!-- External Integrations -->
+  <g transform="translate(1000,420)">
+    <rect class="card" x="0" y="0" width="320" height="160"/>
+    <text class="title" x="14" y="26">External Integrations</text>
+    <text class="small" x="14" y="50">University SIS / LMS, Email provider, OAuth IdPs</text>
+    <text class="small" x="14" y="70">SSO, LDAP (optional), Calendar sync</text>
+  </g>
+
+  <!-- Arrows and flows -->
+  <!-- Client -> Edge -->
+  <path class="arrow" d="M420 140 L450 100" />
+  <text class="small" x="430" y="120">HTTPS (TLS)</text>
+
+  <!-- Edge -> App -->
+  <path class="arrow" d="M710 80 L760 80" />
+  <text class="small" x="720" y="70">Reverse proxy → Kestrel</text>
+
+  <!-- App -> DB -->
+  <path class="arrow" d="M880 220 L540 360" />
+  <text class="small" x="700" y="260">ADO.NET / EF Core (SQL)</text>
+
+  <!-- File upload flow -->
+  <path class="arrow" d="M920 230 L560 360" />
+  <text class="small" x="740" y="240">Multipart upload → Blob storage</text>
+
+  <!-- Notifications / Queue -->
+  <path class="arrow" d="M900 300 L540 420" />
+  <text class="small" x="700" y="340">Message queue (RabbitMQ / Azure Service Bus)</text>
+
+  <!-- DevOps integration arrow -->
+  <path class="arrow" d="M600 500 L620 440" />
+  <text class="small" x="620" y="490">CI/CD pipeline builds images → Registry</text>
+
+  <!-- Legend / Notes -->
+  <g transform="translate(40,600)">
+    <rect x="0" y="0" width="1320" height="260" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <text class="title" x="18" y="28">Detailed Architecture — Key points</text>
+    <text class="small" x="18" y="54">• Auth: JWT access tokens + optional refresh tokens; enforce RBAC on API endpoints.</text>
+    <text class="small" x="18" y="74">• File storage: store files in blob store, keep metadata in DB; serve via signed URLs or static file server.</text>
+    <text class="small" x="18" y="94">• Background workers: handle heavy tasks, approvals, file processing, notifications.</text>
+    <text class="small" x="18" y="114">• Observability: instrument APIs for traces, metrics, and centralized logging for audits.</text>
+  </g>
+
+</svg>

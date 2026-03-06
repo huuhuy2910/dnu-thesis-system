@@ -1,171 +1,100 @@
 using System;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Command.ProgressSubmissions;
+using ThesisManagement.Api.Application.Query.ProgressSubmissions;
 using ThesisManagement.Api.DTOs;
-using ThesisManagement.Api.Models;
+using ThesisManagement.Api.DTOs.ProgressSubmissions.Command;
+using ThesisManagement.Api.DTOs.ProgressSubmissions.Query;
 using ThesisManagement.Api.Services;
-using ThesisManagement.Api.Helpers;
 
 namespace ThesisManagement.Api.Controllers
 {
     public class ProgressSubmissionsController : BaseApiController
     {
-        public ProgressSubmissionsController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper) : base(uow, codeGen, mapper) { }
+        private readonly IGetProgressSubmissionsListQuery _getProgressSubmissionsListQuery;
+        private readonly IGetProgressSubmissionDetailQuery _getProgressSubmissionDetailQuery;
+        private readonly IGetProgressSubmissionCreateQuery _getProgressSubmissionCreateQuery;
+        private readonly IGetProgressSubmissionUpdateQuery _getProgressSubmissionUpdateQuery;
+        private readonly ICreateProgressSubmissionCommand _createProgressSubmissionCommand;
+        private readonly IUpdateProgressSubmissionCommand _updateProgressSubmissionCommand;
+        private readonly IDeleteProgressSubmissionCommand _deleteProgressSubmissionCommand;
+
+        public ProgressSubmissionsController(
+            IUnitOfWork uow,
+            ICodeGenerator codeGen,
+            IMapper mapper,
+            IGetProgressSubmissionsListQuery getProgressSubmissionsListQuery,
+            IGetProgressSubmissionDetailQuery getProgressSubmissionDetailQuery,
+            IGetProgressSubmissionCreateQuery getProgressSubmissionCreateQuery,
+            IGetProgressSubmissionUpdateQuery getProgressSubmissionUpdateQuery,
+            ICreateProgressSubmissionCommand createProgressSubmissionCommand,
+            IUpdateProgressSubmissionCommand updateProgressSubmissionCommand,
+            IDeleteProgressSubmissionCommand deleteProgressSubmissionCommand) : base(uow, codeGen, mapper)
+        {
+            _getProgressSubmissionsListQuery = getProgressSubmissionsListQuery;
+            _getProgressSubmissionDetailQuery = getProgressSubmissionDetailQuery;
+            _getProgressSubmissionCreateQuery = getProgressSubmissionCreateQuery;
+            _getProgressSubmissionUpdateQuery = getProgressSubmissionUpdateQuery;
+            _createProgressSubmissionCommand = createProgressSubmissionCommand;
+            _updateProgressSubmissionCommand = updateProgressSubmissionCommand;
+            _deleteProgressSubmissionCommand = deleteProgressSubmissionCommand;
+        }
 
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] ProgressSubmissionFilter filter)
         {
-            var result = await _uow.ProgressSubmissions.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                (query, f) => query.ApplyFilter(f));
-            var dtos = result.Items.Select(x => _mapper.Map<ProgressSubmissionReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<ProgressSubmissionReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getProgressSubmissionsListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<ProgressSubmissionReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         [HttpGet("get-detail/{code}")]
         public async Task<IActionResult> GetDetail(string code)
         {
-            var ent = await _uow.ProgressSubmissions.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
-            return Ok(ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(_mapper.Map<ProgressSubmissionReadDto>(ent)));
+            var dto = await _getProgressSubmissionDetailQuery.ExecuteAsync(code);
+            if (dto == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
+            return Ok(ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(dto));
         }
 
         [HttpGet("get-create")]
         public async Task<IActionResult> GetCreate()
         {
-            var sampleCode = await GenerateSubmissionCodeAsync();
-            var sample = new
-            {
-                SubmissionCode = sampleCode,
-                MilestoneID = (int?)null,
-                MilestoneCode = string.Empty,
-                StudentUserID = (int?)null,
-                StudentUserCode = string.Empty,
-                StudentProfileID = (int?)null,
-                StudentProfileCode = (string?)null,
-                LecturerProfileID = (int?)null,
-                LecturerCode = (string?)null,
-                AttemptNumber = (int?)1,
-                ReportTitle = (string?)null,
-                ReportDescription = (string?)null
-            };
+            var sample = await _getProgressSubmissionCreateQuery.ExecuteAsync();
             return Ok(ApiResponse<object>.SuccessResponse(sample));
         }
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] ProgressSubmissionCreateDto dto)
         {
-            if (dto.MilestoneID.HasValue && dto.MilestoneID <= 0)
-                return BadRequest(ApiResponse<object>.Fail("MilestoneID must be positive", 400));
-
-            if (string.IsNullOrWhiteSpace(dto.MilestoneCode))
-                return BadRequest(ApiResponse<object>.Fail("MilestoneCode is required", 400));
-            if (dto.StudentUserID.HasValue && dto.StudentUserID <= 0)
-                return BadRequest(ApiResponse<object>.Fail("StudentUserID must be positive", 400));
-
-            if (string.IsNullOrWhiteSpace(dto.StudentUserCode))
-                return BadRequest(ApiResponse<object>.Fail("StudentUserCode is required", 400));
-
-            if (dto.StudentProfileID.HasValue && dto.StudentProfileID <= 0)
-                return BadRequest(ApiResponse<object>.Fail("StudentProfileID must be positive", 400));
-
-            if (dto.LecturerProfileID.HasValue && dto.LecturerProfileID <= 0)
-                return BadRequest(ApiResponse<object>.Fail("LecturerProfileID must be positive", 400));
-
-            var code = await GenerateSubmissionCodeAsync();
-            var ent = new ProgressSubmission
-            {
-                SubmissionCode = code,
-                MilestoneID = dto.MilestoneID,
-                MilestoneCode = dto.MilestoneCode,
-                StudentUserID = dto.StudentUserID,
-                StudentUserCode = dto.StudentUserCode,
-                StudentProfileID = dto.StudentProfileID,
-                StudentProfileCode = dto.StudentProfileCode,
-                LecturerProfileID = dto.LecturerProfileID,
-                LecturerCode = dto.LecturerCode,
-                AttemptNumber = dto.AttemptNumber ?? 1,
-                ReportTitle = dto.ReportTitle,
-                ReportDescription = dto.ReportDescription,
-                SubmittedAt = DateTime.UtcNow,
-                LastUpdated = DateTime.UtcNow
-            };
-            await _uow.ProgressSubmissions.AddAsync(ent);
-            try
-            {
-                await _uow.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                // If duplicate code due to race, regenerate and retry once
-                ent.SubmissionCode = await GenerateSubmissionCodeAsync();
-                await _uow.SaveChangesAsync();
-            }
-            return StatusCode(201, ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(_mapper.Map<ProgressSubmissionReadDto>(ent),1,201));
-        }
-
-        private async Task<string> GenerateSubmissionCodeAsync()
-        {
-            var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
-            var prefix = $"SUBF{datePart}";
-
-            // Get existing codes for today
-            var existing = await _uow.ProgressSubmissions.Query()
-                .Where(s => EF.Functions.Like(s.SubmissionCode, prefix + "%"))
-                .Select(s => s.SubmissionCode)
-                .ToListAsync();
-
-            int maxSuffix = 0;
-            foreach (var c in existing)
-            {
-                if (c.Length > prefix.Length)
-                {
-                    var suffix = c.Substring(prefix.Length);
-                    if (int.TryParse(suffix, out var n))
-                        maxSuffix = Math.Max(maxSuffix, n);
-                }
-            }
-
-            var next = maxSuffix + 1;
-            return $"{prefix}{next:D3}";
+            var result = await _createProgressSubmissionCommand.ExecuteAsync(dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+            return StatusCode(result.StatusCode, ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(result.Data, 1, result.StatusCode));
         }
 
         [HttpGet("get-update/{id}")]
         public async Task<IActionResult> GetUpdate(int id)
         {
-            var ent = await _uow.ProgressSubmissions.GetByIdAsync(id);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
-            var dto = new ProgressSubmissionUpdateDto(
-                ent.LecturerComment,
-                ent.LecturerState,
-                ent.FeedbackLevel);
+            var dto = await _getProgressSubmissionUpdateQuery.ExecuteAsync(id);
+            if (dto == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
             return Ok(ApiResponse<ProgressSubmissionUpdateDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] ProgressSubmissionUpdateDto dto)
         {
-            var ent = await _uow.ProgressSubmissions.GetByIdAsync(id);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
-            
-            // Only allow updating lecturer-related fields
-            ent.LecturerComment = dto.LecturerComment ?? ent.LecturerComment;
-            ent.LecturerState = dto.LecturerState ?? ent.LecturerState;
-            ent.FeedbackLevel = dto.FeedbackLevel ?? ent.FeedbackLevel;
-            
-            ent.LastUpdated = DateTime.UtcNow;
-            _uow.ProgressSubmissions.Update(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(_mapper.Map<ProgressSubmissionReadDto>(ent)));
+            var result = await _updateProgressSubmissionCommand.ExecuteAsync(id, dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+            return Ok(ApiResponse<ProgressSubmissionReadDto>.SuccessResponse(result.Data));
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var ent = await _uow.ProgressSubmissions.GetByIdAsync(id);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("Submission not found", 404));
-            _uow.ProgressSubmissions.Remove(ent);
-            await _uow.SaveChangesAsync();
+            var result = await _deleteProgressSubmissionCommand.ExecuteAsync(id);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
             return Ok(ApiResponse<object>.SuccessResponse(null));
         }
     }

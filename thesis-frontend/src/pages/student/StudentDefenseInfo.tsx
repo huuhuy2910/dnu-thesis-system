@@ -21,7 +21,10 @@ const StudentDefenseInfo: React.FC = () => {
         // Try to read current user/student code from localStorage (app_user.userCode) to match other pages
         let studentCode: string | undefined;
         try {
-          const raw = typeof window !== 'undefined' ? window.localStorage.getItem('app_user') : null;
+          const raw =
+            typeof window !== "undefined"
+              ? window.localStorage.getItem("app_user")
+              : null;
           if (raw) {
             const parsed = JSON.parse(raw) as { userCode?: string } | null;
             studentCode = parsed?.userCode;
@@ -31,21 +34,22 @@ const StudentDefenseInfo: React.FC = () => {
         }
 
         if (!studentCode) {
-          setError('Không tìm thấy mã sinh viên (vui lòng đăng nhập)');
+          setError("Không tìm thấy mã sinh viên (vui lòng đăng nhập)");
           setLoading(false);
           return;
         }
 
-        const response = await committeeAssignmentApi.getStudentDefense(studentCode);
+        const response =
+          await committeeAssignmentApi.getStudentDefense(studentCode);
         // response is ApiResponse<StudentDefenseInfoDto>
-        if (response && (response as any).success && (response as any).data) {
-          setData((response as any).data as StudentDefenseInfoDto);
+        if (response && response.success && response.data) {
+          setData(response.data);
         } else {
-          setError(((response as any)?.message as string) || 'Không thể tải thông tin bảo vệ');
+          setError(response?.message ?? "Không thể tải thông tin bảo vệ");
         }
       } catch (err) {
-        console.error('fetchDefenseInfo error', err);
-        setError('Lỗi khi tải dữ liệu');
+        console.error("fetchDefenseInfo error", err);
+        setError("Lỗi khi tải dữ liệu");
       } finally {
         setLoading(false);
       }
@@ -159,7 +163,9 @@ const StudentDefenseInfo: React.FC = () => {
             Ôi, đề tài của bạn chưa đủ điều kiện bảo vệ! 😊
           </h3>
           <p style={{ color: "#666" }}>
-            Đừng lo lắng nhé! Lịch bảo vệ của bạn chưa được sắp xếp. Hãy tiếp tục hoàn thiện đề tài và liên hệ với giảng viên hướng dẫn để được hỗ trợ thêm. Chúc bạn cố gắng! 💪
+            Đừng lo lắng nhé! Lịch bảo vệ của bạn chưa được sắp xếp. Hãy tiếp
+            tục hoàn thiện đề tài và liên hệ với giảng viên hướng dẫn để được hỗ
+            trợ thêm. Chúc bạn cố gắng! 💪
           </p>
         </div>
       ) : (
@@ -238,17 +244,28 @@ const StudentDefenseInfo: React.FC = () => {
                     color: "#1a1a1a",
                   }}
                 >
-                  {data.committee?.defenseDate ? new Date(data.committee.defenseDate).toLocaleString("vi-VN", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }) : "Chưa có"}
+                  {data.committee?.defenseDate
+                    ? new Date(data.committee.defenseDate).toLocaleString(
+                        "vi-VN",
+                        {
+                          weekday: "long",
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )
+                    : "Chưa có"}
                 </p>
                 {data.committee?.startTime && data.committee?.endTime && (
-                  <p style={{ fontSize: "14px", color: "#666", marginTop: "4px" }}>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#666",
+                      marginTop: "4px",
+                    }}
+                  >
                     {data.committee.startTime} - {data.committee.endTime}
                   </p>
                 )}
@@ -458,9 +475,16 @@ const StudentDefenseInfo: React.FC = () => {
                           style={{
                             display: "inline-block",
                             padding: "6px 12px",
-                            background: member.role === "Chủ tịch" ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)" : "white",
-                            color: member.role === "Chủ tịch" ? "white" : "#666",
-                            border: member.role === "Chủ tịch" ? "none" : "1px solid #E5E7EB",
+                            background:
+                              member.role === "Chủ tịch"
+                                ? "linear-gradient(135deg, #F37021 0%, #FF8838 100%)"
+                                : "white",
+                            color:
+                              member.role === "Chủ tịch" ? "white" : "#666",
+                            border:
+                              member.role === "Chủ tịch"
+                                ? "none"
+                                : "1px solid #E5E7EB",
                             borderRadius: "6px",
                             fontSize: "13px",
                             fontWeight: "600",

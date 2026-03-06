@@ -1,0 +1,866 @@
+    % main.tex
+% Conference-style paper (pdfLaTeX) - Hệ thống quản lý đăng ký, theo dõi tiến độ và bảo vệ đồ án tốt nghiệp
+% Tác giả: Nguyễn Thanh Bình, Nguyễn Hữu Huy
+% Trường: Đại học Đại Nam
+%
+% Biên dịch (pdfLaTeX): pdflatex main.tex
+%                        bibtex main
+%                        pdflatex main.tex
+%                        pdflatex main.tex
+
+\documentclass[conference,a4paper]{IEEEtran}
+
+% --- Vietnamese support for pdfLaTeX ---
+% Recommended: have TeX Live up-to-date and T5 encoding installed.
+\usepackage[T5]{fontenc}        % Vietnamese font encoding (T5)
+\usepackage[utf8]{inputenc}     % UTF-8 input
+\usepackage[vietnamese,english]{babel} % language support
+
+% If after this you STILL see dấu mũ (â, ê, ô) bị lỗi,
+% try uncommenting the next line if 'vntex' is installed:
+% \usepackage{vntex}
+
+% --- Fonts & micro-typography ---
+\usepackage{lmodern}    % vector fonts
+\usepackage{microtype}
+
+% --- Standard packages ---
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{url}
+\usepackage{cite}
+\usepackage{tikz}
+\usepackage{color}
+\usepackage{listings}
+
+
+% --- Code listing settings ---
+\lstset{
+  basicstyle=\ttfamily\small,
+  numbers=left,
+  numberstyle=\tiny,
+  breaklines=true,
+  frame=single,
+  captionpos=b
+}
+
+% --- PDF metadata & links ---
+\usepackage[hidelinks]{hyperref}
+
+% --- Title & authors ---
+\title{\textbf{Hệ thống quản lý đăng ký, theo dõi tiến độ và bảo vệ đồ án tốt nghiệp cho sinh viên ngành CNTT -- Trường Đại học Đại Nam}}
+
+
+\author{
+  % Ép 4 mục trên cùng một dòng bằng minipage cố định (2 giảng viên ở trái, 2 sinh viên ở phải)
+  \makebox[\textwidth][c]{%
+    \begin{minipage}[t]{0.24\textwidth}\centering
+      \small\textbf{Th.S Lê Trung Hiếu}\\
+      \footnotesize\textit{Khoa Công nghệ Thông tin}\\
+      \footnotesize Trường Đại học Đại Nam\\
+      \footnotesize Hà Nội, Việt Nam\\
+      \footnotesize Giảng viên hướng dẫn
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.24\textwidth}\centering
+      \small\textbf{KS. Nguyễn Thái Khánh}\\
+      \footnotesize\textit{Khoa Công nghệ Thông tin}\\
+      \footnotesize Trường Đại học Đại Nam\\
+      \footnotesize Hà Nội, Việt Nam\\
+      \footnotesize Giảng viên hướng dẫn
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.24\textwidth}\centering
+      \small\textbf{Nguyễn Thanh Bình}\\
+      \footnotesize\textit{Khoa Công nghệ Thông tin}\\
+      \footnotesize Trường Đại học Đại Nam\\
+      \footnotesize Hà Nội, Việt Nam\\
+      \footnotesize Mã sinh viên: 1671020041\\
+      \footnotesize nguyenbinh041104@gmail.com
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.24\textwidth}\centering
+      \small\textbf{Nguyễn Hữu Huy}\\
+      \footnotesize\textit{Khoa Công nghệ Thông tin}\\
+      \footnotesize Trường Đại học Đại Nam\\
+      \footnotesize Hà Nội, Việt Nam\\
+      \footnotesize Mã sinh viên: 1671020139\\
+      \footnotesize nguyenhuuhuy489@gmail.com
+    \end{minipage}%
+  }
+}
+
+% --- Short commands ---
+\newcommand{\etal}{\textit{et~al.}}
+
+\begin{document}
+\selectlanguage{vietnamese} % chọn ngôn ngữ
+
+\maketitle
+\begin{abstract}
+  Bài báo trình bày thiết kế và triển khai một hệ thống web hỗ trợ quản lý đăng ký, theo dõi tiến độ và tổ chức bảo vệ đồ án tốt nghiệp cho sinh viên ngành Công nghệ Thông tin tại Trường Đại học Đại Nam. Hệ thống sử dụng React 19 + TypeScript cho frontend, ASP.NET Core 8.0 + Entity Framework Core cho backend, và SQL Server cho cơ sở dữ liệu. Mô tả kiến trúc, mô hình dữ liệu, các API chính và cơ chế phân quyền được trình bày cùng ví dụ triển khai. Kết quả thử nghiệm cho thấy hệ thống đáp ứng tốt các yêu cầu chức năng cơ bản và có thể mở rộng cho các đơn vị đào tạo khác.
+\end{abstract}
+
+\begin{IEEEkeywords}
+đăng ký đồ án, quản lý tiến độ, bảo vệ đồ án, hệ thống quản lý, CNTT
+\end{IEEEkeywords}
+
+\section{Giới thiệu}
+Quy trình quản lý đồ án tốt nghiệp tại nhiều trường đại học còn mang tính thủ công, gây tốn thời gian và dễ sai sót khi theo dõi tiến độ, phân công hội đồng và lên lịch bảo vệ. Bài báo này mô tả một hệ thống thông tin nhằm tự động hóa các bước chính: đăng ký đề tài, phê duyệt đề tài, theo dõi tiến trình, lên lịch bảo vệ và lưu trữ kết quả. Hệ thống được triển khai với frontend React 19 + TypeScript + Mantine UI, backend ASP.NET Core 8.0 + Entity Framework Core + SQL Server, và tích hợp các tính năng như quản lý mốc tiến độ, phân công hội đồng, và nhật ký hoạt động. Hai sinh viên thực hiện: \textbf{Nguyễn Thanh Bình} và \textbf{Nguyễn Hữu Huy}. Việc số hóa quy trình này góp phần vào xu hướng chuyển đổi số trong giáo dục đại học \cite{smith2020thesis,davis2019thesis}.
+
+\section{Công trình liên quan}
+Tổng quan các hệ thống quản lý đồ án hiện có, các nghiên cứu về quản lý tiến độ phần mềm, các phần mềm quản lý đề tài nghiên cứu trong nước và quốc tế. Nghiên cứu của Brown và Davis \cite{brown2019progress} về hệ thống theo dõi tiến độ cho thấy hiệu quả của việc số hóa theo dõi tiến độ trong môi trường học thuật. Jones \cite{jones2018software} cung cấp framework cho kỹ thuật phần mềm trong các hệ thống quản lý học thuật. Các phương pháp phát triển agile cũng được áp dụng trong quản lý dự án học thuật \cite{anderson2017agile}. Các công trình về thiết kế giao diện người dùng \cite{taylor2020ui,brown2020ui} và mô hình cơ sở dữ liệu \cite{wilson2019database,chen2021sql} cũng đóng góp quan trọng cho thiết kế hệ thống này.
+
+\section{Yêu cầu hệ thống}
+\subsection{Yêu cầu chức năng}
+\begin{itemize}
+  \item Quản lý người dùng: sinh viên, giảng viên hướng dẫn, hội đồng, quản trị.
+  \item Đăng ký đề tài, sửa/hủy đề tài, duyệt đề tài.
+  \item Ghi nhận tiến độ theo mốc (milestone), upload file báo cáo theo tiến độ.
+  \item Lên lịch bảo vệ, thông báo tới thành viên hội đồng.
+  \item Báo cáo tổng kết, xuất file kết quả.
+\end{itemize}
+
+\subsection{Yêu cầu phi chức năng}
+Bảo mật (phân quyền, HTTPS), hiệu năng (hỗ trợ nhiều người dùng), khả năng mở rộng, backup/restore dữ liệu. Các yêu cầu bảo mật được thiết kế theo các phương pháp tốt nhất \cite{garcia2021security,martinez2023jwt}, trong khi hiệu năng được tối ưu hóa dựa trên các nghiên cứu về ứng dụng web có khả năng mở rộng \cite{lee2022asp}.
+
+\section{Kiến trúc hệ thống}
+Hệ thống được thiết kế theo kiến trúc \textbf{client-server} với RESTful API, đảm bảo tách biệt rõ ràng giữa frontend và backend để dễ dàng bảo trì và mở rộng. Kiến trúc này cho phép frontend (React) giao tiếp với backend (ASP.NET Core) thông qua các API endpoints, sử dụng JSON làm định dạng dữ liệu trao đổi. Hệ thống sử dụng cơ sở dữ liệu SQL Server để lưu trữ dữ liệu, với Entity Framework Core làm ORM để ánh xạ đối tượng và quản lý truy vấn.
+
+\subsection{Frontend: React 19 + TypeScript + Vite}
+Frontend được xây dựng bằng React 19, phiên bản mới nhất của React với các cải tiến về hiệu năng và developer experience. Sử dụng TypeScript để đảm bảo type safety, giảm lỗi runtime và cải thiện khả năng maintainability. Vite được chọn làm build tool vì tốc độ nhanh và hỗ trợ HMR (Thay thế module nóng) tốt. Các nghiên cứu về modern web development \cite{kim2021react} cho thấy React kết hợp với TypeScript mang lại hiệu quả cao trong việc xây dựng các ứng dụng web phức tạp. Thiết kế responsive được thực hiện theo các pattern hiện đại \cite{gonzalez2023responsive}, đảm bảo trải nghiệm tốt trên mọi thiết bị.
+
+Các thư viện chính:
+\begin{itemize}
+  \item \textbf{@mantine/core, @mantine/hooks, @mantine/modals, @mantine/notifications}: UI component library với thiết kế hiện đại, responsive và accessible. Mantine cung cấp các component như Button, Table, Modal, Notification sẵn sàng sử dụng, giúp xây dựng giao diện nhanh chóng \cite{li2022mantine}.
+  \item \textbf{react-router-dom}: Quản lý routing phía client, hỗ trợ tuyến đường lồng nhau và tuyến đường được bảo vệ dựa trên role.
+  \item \textbf{react-hook-form}: Quản lý form state và validation, tích hợp tốt với TypeScript.
+  \item \textbf{axios}: Thư viện HTTP client để gọi API, đã được migrate từ Fetch API trong quá trình phát triển.
+  \item \textbf{framer-motion}: Thư viện animation để tạo hiệu ứng mượt mà cho UI.
+  \item \textbf{lucide-react, @tabler/icons-react}: Bộ icon SVG vector, scalable và đẹp mắt.
+  \item \textbf{react-toastify}: Hiển thị toast notifications cho user feedback.
+  \item \textbf{tailwindcss}: CSS framework ưu tiên tiện ích, kết hợp với Mantine để tạo thiết kế đáp ứng.
+\end{itemize}
+
+Cấu trúc component:
+\begin{itemize}
+  \item \textbf{Layouts}: StudentLayout, LecturerLayout, AdminLayout với sidebar navigation và header responsive.
+  \item \textbf{Pages}: Các trang dashboard, profile, progress tracking cho từng role.
+  \item \textbf{Components}: Reusable components như ProtectedRoute, ToastContainer, PageLoader.
+  \item \textbf{Hooks}: Custom hooks như useAuth cho authentication state management.
+  \item \textbf{Context}: AuthContext và ToastContext cho global state management.
+  \item \textbf{Services}: auth.service.ts và các API services cho data fetching.
+\end{itemize}
+
+Routing được cấu hình trong AppRoutes.tsx với protected routes dựa trên role (STUDENT, LECTURER, ADMIN), sử dụng React Router v7 với nested routes.
+
+\subsection{Backend: ASP.NET Core 8.0 + Entity Framework Core}
+Backend được xây dựng trên ASP.NET Core 8.0, phiên bản LTS mới nhất với performance tối ưu và security enhancements \cite{lee2022asp}. Sử dụng Entity Framework Core 8.0 làm ORM, hỗ trợ SQL Server và các tính năng như tải chậm, tối ưu hóa truy vấn \cite{chen2021sql}.
+
+Cấu hình trong Program.cs:
+\begin{itemize}
+  \item \textbf{Controllers}: Đăng ký với bộ lọc toàn cục ActivityLogFilter để log tất cả activities.
+  \item \textbf{CORS}: Cấu hình cho phép yêu cầu chéo nguồn gốc từ frontend, hỗ trợ credentials.
+  \item \textbf{Swagger}: Tích hợp Swagger UI cho API documentation, với FileUploadOperationFilter hỗ trợ upload files.
+  \item \textbf{Dependency Injection}: Đăng ký repositories, services, AutoMapper, HttpContextAccessor.
+  \item \textbf{Middleware}: UserContextMiddleware để extract user info từ headers, StaticFiles middleware với CORS headers cho file serving.
+\end{itemize}
+
+Kiến trúc repository pattern với UnitOfWork để quản lý transactions và consistency. Services layer xử lý logic nghiệp vụ, DTOs cho chuyển giao dữ liệu.
+
+\subsection{Cơ sở dữ liệu: SQL Server}
+Sử dụng SQL Server làm RDBMS chính, với Entity Framework Core làm ORM. ApplicationDbContext định nghĩa các DbSets cho tất cả entities. Sử dụng migrations để version control schema changes.
+
+Các tính năng DB:
+\begin{itemize}
+  \item \textbf{Indexes}: Unique indexes trên các trường code (UserCode, StudentCode, etc.) để đảm bảo integrity.
+  \item \textbf{Foreign Keys}: Relationships giữa entities với xóa theo tầng behaviors phù hợp.
+  \item \textbf{Default Values}: SYSUTCDATETIME() cho CreatedAt/LastUpdated timestamps.
+  \item \textbf{Triggers}: Database triggers trên Topics table để kiểm tra changes.
+  \item \textbf{Value Converters}: Bộ chuyển đổi giá trị tùy chỉnh cho JSON serialization nếu cần.
+\end{itemize}
+
+\subsection{Bảo mật và Authentication}
+\begin{itemize}
+  \item \textbf{JWT Authentication}: Sử dụng JWT tokens cho xác thực không trạng thái \cite{martinez2023jwt}.
+  \item \textbf{Role-based Access Control}: Ba roles chính: STUDENT, LECTURER, ADMIN với permissions khác nhau \cite{patel2022role}.
+  \item \textbf{Password Hashing}: BCrypt cho băm mật khẩu an toàn.
+  \item \textbf{CORS}: Properly configured CORS với credentials support.
+  \item \textbf{HTTPS}: Enforced trong production.
+  \item \textbf{Activity Logging}: Log tất cả activities cho audit purposes \cite{rodriguez2021logging}.
+\end{itemize}
+
+\subsection{Deployment và DevOps}
+\begin{itemize}
+  \item \textbf{Development}: Tải lại nóng cho cả frontend (Vite) và backend (dotnet watch).
+  \item \textbf{Production}: Frontend build thành static files, backend publish thành executable.
+  \item \textbf{Docker}: Có thể containerize cả frontend và backend.
+  \item \textbf{Environment Variables}: Cấu hình connection strings, JWT secrets qua appsettings.json và biến môi trường.
+\end{itemize}
+
+\begin{figure}[htbp]
+    \includegraphics[width=1\linewidth]{(3).jpg}
+  \caption{Kiến trúc tổng quan của hệ thống}
+    \label{fig:placeholder}
+\end{figure}
+
+
+Hình~\ref{fig:arch} minh họa kiến trúc tổng quan với luồng dữ liệu từ user qua React frontend, REST API calls tới ASP.NET Core backend, và persistence vào SQL Server database.
+
+\section{Thiết kế cơ sở dữ liệu}
+Cơ sở dữ liệu sử dụng SQL Server với Entity Framework Core làm ORM, được cấu hình trong ApplicationDbContext.cs \cite{chen2021sql}. Schema bao gồm 20+ entities với relationships phức tạp, hỗ trợ đầy đủ các chức năng quản lý đồ án tốt nghiệp từ đăng ký đến bảo vệ \cite{wilson2019database}.
+
+\subsection{Các bảng chính và Relationships}
+
+\begin{itemize}
+  \item \textbf{Departments(Id, DepartmentCode, Name, CreatedAt, LastUpdated)}: Lưu thông tin khoa/viện. Có unique index trên DepartmentCode. Relationships: 1-N với StudentProfiles, LecturerProfiles, CatalogTopics.
+  
+  \item \textbf{Users(Id, UserCode, PasswordHash, Role, FullName, Email, CreatedAt, LastUpdated)}: Bảng users chính với role-based access. Unique index trên UserCode. Relationships: 1-1 với StudentProfiles/LecturerProfiles, 1-N với SystemActivityLogs.
+  
+  \item \textbf{StudentProfiles(Id, StudentCode, UserId, DepartmentId, ClassCode, Gpa, StudentImage, FullName, Gender, DateOfBirth, PhoneNumber, StudentEmail, Address, EnrollmentYear, Status, GraduationYear, Notes, CreatedAt, LastUpdated)}: Thông tin chi tiết sinh viên. Unique index trên StudentCode. Foreign keys: UserId → Users.Id, DepartmentId → Departments.Id.
+  
+  \item \textbf{LecturerProfiles(Id, LecturerCode, UserId, DepartmentId, Degree, Specialties, FullName, GuideQuota, DefenseQuota, CurrentGuidingCount, Gender, DateOfBirth, Email, PhoneNumber, ProfileImage, Address, Notes, CreatedAt, LastUpdated)}: Thông tin chi tiết giảng viên. Unique index trên LecturerCode. Foreign keys: UserId → Users.Id, DepartmentId → Departments.Id.
+  
+  \item \textbf{CatalogTopics(Id, CatalogTopicCode, Title, Summary, DepartmentCode, AssignedStatus, CreatedAt, LastUpdated)}: Danh mục đề tài mẫu. Unique index trên CatalogTopicCode. Foreign key: DepartmentCode → Departments.DepartmentCode.
+  
+  \item \textbf{Topics(Id, TopicCode, Title, Summary, Type, Status, ProposerUserCode, ProposerStudentCode, SupervisorUserCode, SupervisorLecturerCode, CatalogTopicCode, DepartmentCode, LecturerComment, CreatedAt, LastUpdated)}: Đề tài đồ án. Unique index trên TopicCode. Foreign keys: ProposerUserCode → Users.UserCode, SupervisorUserCode → Users.UserCode, CatalogTopicCode → CatalogTopics.CatalogTopicCode. Có database triggers cho audit.
+  
+  \item \textbf{ProgressMilestones(Id, MilestoneCode, TopicId, TopicCode, MilestoneTemplateCode, Ordinal, State, StartedAt, CompletedAt1, CompletedAt2, Deadline, Note, CreatedAt, LastUpdated)}: Mốc tiến độ. Unique index trên MilestoneCode. Foreign keys: TopicId → Topics.Id, MilestoneTemplateCode → MilestoneTemplates.MilestoneTemplateCode.
+  
+  \item \textbf{ProgressSubmissions(Id, MilestoneId, SubmissionDate, Files, CreatedAt, LastUpdated)}: Submissions cho từng milestone. Foreign key: MilestoneId → ProgressMilestones.Id.
+  
+  \item \textbf{Committees(Id, CommitteeCode, Name, SessionId, CreatedAt, LastUpdated)}: Hội đồng bảo vệ. Unique index trên CommitteeCode. Foreign key: SessionId → CommitteeSessions.Id.
+  
+  \item \textbf{CommitteeMembers(Id, CommitteeId, UserId, Role, CreatedAt, LastUpdated)}: Thành viên hội đồng. Foreign keys: CommitteeId → Committees.Id, UserId → Users.Id.
+  
+  \item \textbf{CommitteeSessions(Id, SessionCode, Name, StartDate, EndDate, Status, CreatedAt, LastUpdated)}: Kỳ bảo vệ. Unique index trên SessionCode.
+  
+  \item \textbf{DefenseAssignments(Id, TopicId, CommitteeId, DefenseDate, Room, Status, CreatedAt, LastUpdated)}: Phân công bảo vệ. Foreign keys: TopicId → Topics.Id, CommitteeId → Committees.Id.
+  
+  \item \textbf{DefenseScores(Id, DefenseAssignmentId, CommitteeMemberId, Score, Comment, CreatedAt, LastUpdated)}: Điểm bảo vệ. Foreign keys: DefenseAssignmentId → DefenseAssignments.Id, CommitteeMemberId → CommitteeMembers.Id.
+  
+  \item \textbf{TopicLecturers(Id, TopicId, LecturerId, Role, CreatedAt, LastUpdated)}: Liên kết đề tài - giảng viên (supervisor, reviewer). Foreign keys: TopicId → Topics.Id, LecturerId → LecturerProfiles.Id.
+  
+  \item \textbf{Tags(Id, TagCode, Name, Description, CreatedAt, LastUpdated)}: Hệ thống tags. Unique index trên TagCode.
+  
+  \item \textbf{CatalogTopicTags, TopicTags, LecturerTags}: Junction tables cho many-to-many relationships với Tags.
+  
+  \item \textbf{MilestoneTemplates(Id, MilestoneTemplateCode, Name, Description, DefaultDeadlineDays, Ordinal, IsRequired, CreatedAt, LastUpdated)}: Template cho milestones. Unique index trên MilestoneTemplateCode.
+  
+  \item \textbf{SubmissionFiles(Id, SubmissionId, FileName, FilePath, FileSize, ContentType, CreatedAt, LastUpdated)}: File attachments. Foreign key: SubmissionId → ProgressSubmissions.Id.
+  
+  \item \textbf{SystemActivityLogs(Id, UserId, Action, Details, Timestamp)}: Audit logs. Foreign key: UserId → Users.Id.
+\end{itemize}
+
+\subsection{Entity Framework Core Configuration}
+Trong ApplicationDbContext.OnModelCreating():
+\begin{itemize}
+  \item \textbf{Keys và Indexes}: Primary keys, unique indexes trên code fields, composite indexes nếu cần.
+  \item \textbf{Foreign Key Constraints}: Định nghĩa relationships với DeleteBehavior (Restrict, SetNull, Cascade).
+  \item \textbf{Property Configurations}: MaxLength, Required, Default values, Column types (date, nvarchar(max)).
+  \item \textbf{Table Triggers}: Inform EF Core về trigger bảng để tránh conflicts.
+  \item \textbf{Value Converters}: Bộ chuyển đổi giá trị tùy chỉnh cho JSON fields nếu có.
+\end{itemize}
+
+\subsection{Schema Design Patterns}
+\begin{itemize}
+  \item \textbf{Audit Fields}: CreatedAt, LastUpdated trên hầu hết tables với default SYSUTCDATETIME().
+  \item \textbf{Soft Delete}: Không implement, sử dụng xóa cứng với foreign key constraints.
+  \item \textbf{Code Generation}: Unique codes (UserCode, TopicCode, etc.) generated by application logic.
+  \item \textbf{Status Management}: String-based status fields (Status, State) với predefined values.
+  \item \textbf{File Storage}: Files stored on disk với paths trong DB, served qua static files middleware.
+\end{itemize}
+
+Ví dụ schema SQL cho bảng Topics:
+\begin{lstlisting}[language=SQL,caption=Schema bảng Topics]
+CREATE TABLE Topics (
+  Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+  TopicCode NVARCHAR(40) NOT NULL UNIQUE,
+  Title NVARCHAR(200) NOT NULL,
+  Summary NVARCHAR(1000),
+  Type NVARCHAR(20) NOT NULL,
+  Status NVARCHAR(30) NOT NULL,
+  ProposerUserCode NVARCHAR(40),
+  ProposerStudentCode NVARCHAR(30),
+  SupervisorUserCode NVARCHAR(40),
+  SupervisorLecturerCode NVARCHAR(30),
+  CatalogTopicCode NVARCHAR(40),
+  DepartmentCode NVARCHAR(30),
+  LecturerComment NVARCHAR(MAX),
+  CreatedAt DATETIME2 DEFAULT SYSUTCDATETIME(),
+  LastUpdated DATETIME2 DEFAULT SYSUTCDATETIME(),
+  FOREIGN KEY (ProposerUserCode) REFERENCES Users(UserCode),
+  FOREIGN KEY (SupervisorUserCode) REFERENCES Users(UserCode),
+  FOREIGN KEY (CatalogTopicCode) REFERENCES CatalogTopics(CatalogTopicCode)
+);
+\end{lstlisting}
+
+Database design đảm bảo tính toàn vẹn tham chiếu, performance qua indexes, và scalability với chuẩn hóa đúng cách. Thiết kế này tuân theo các patterns được đề xuất trong nghiên cứu về database design cho hệ thống giáo dục \cite{wilson2019database}.
+
+\section{Triển khai hệ thống}
+Phần này trình bày chi tiết các giao diện chính của hệ thống, mô tả luồng hoạt động, các API liên quan và minh họa giao diện người dùng. Hệ thống được triển khai với ba nhóm người dùng chính: Sinh viên (Student), Giảng viên (Lecturer), và Quản trị viên (Admin), mỗi nhóm có các giao diện và chức năng riêng biệt.
+
+\subsection{Giao diện đăng nhập và xác thực}
+\subsubsection{Mô tả giao diện}
+Trang đăng nhập là điểm vào chính của hệ thống, được thiết kế đơn giản với hai trường nhập liệu: tên đăng nhập và mật khẩu. Giao diện sử dụng Mantine components với thiết kế responsive, hiển thị logo trường và tiêu đề hệ thống. Sau khi đăng nhập thành công, người dùng được chuyển hướng đến dashboard tương ứng với vai trò của họ.
+
+\begin{figure}[htbp]
+      \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 002835.png}
+   \caption{Giao diện đăng nhập hệ thống}
+      \label{fig:placeholder}
+  \end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Người dùng truy cập trang chủ, hệ thống kiểm tra JWT token trong localStorage
+  \item Nếu chưa đăng nhập, chuyển hướng đến \texttt{/login}
+  \item Người dùng nhập username và password, submit form
+  \item Frontend gọi API đăng nhập, nhận response chứa token và thông tin user
+  \item Lưu token vào localStorage, cập nhật AuthContext
+  \item Dựa vào role (STUDENT, LECTURER, ADMIN), chuyển hướng đến dashboard tương ứng
+  \item Các route tiếp theo được bảo vệ bởi ProtectedRoute component
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{POST /api/Auth/login}: Xác thực credentials, trả về JWT token và user info
+  \item Request: \texttt{\{username: string, password: string\}}
+  \item Response: \texttt{\{success: bool, userCode: string, role: string, data: UserDto\}}
+\end{itemize}
+
+\subsection{Dashboard sinh viên}
+\subsubsection{Mô tả giao diện}
+Dashboard sinh viên hiển thị tổng quan về đề tài hiện tại, tiến độ thực hiện, thông báo mới và các mốc quan trọng sắp tới. Giao diện bao gồm các card thống kê (tổng số mốc tiến độ, đã hoàn thành, đang thực hiện, quá hạn), danh sách milestones với progress bar, và khu vực notifications. Sinh viên có thể nhanh chóng xem trạng thái đề tài và các deadline sắp tới.
+
+\begin{figure}[htbp]
+      \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 002059.png}
+    \caption{Dashboard sinh viên với tổng quan tiến độ}
+      \label{fig:placeholder}
+  \end{figure}
+
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Sau khi đăng nhập, sinh viên được chuyển đến \texttt{/student/dashboard}
+  \item Hệ thống load thông tin profile sinh viên từ API
+  \item Fetch danh sách đề tài của sinh viên (nếu có)
+  \item Load progress milestones với trạng thái và deadline
+  \item Hiển thị thông báo mới chưa đọc
+  \item Sinh viên có thể click vào từng milestone để xem chi tiết hoặc submit báo cáo
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/StudentProfiles/get-detail/:studentCode}: Lấy thông tin profile
+  \item \texttt{GET /api/Topics/get-list}: Filter theo proposerStudentCode để lấy đề tài
+  \item \texttt{GET /api/ProgressMilestones/get-list}: Lấy milestones theo topicId
+  \item \texttt{GET /api/Notifications/get-list}: Lấy thông báo chưa đọc
+\end{itemize}
+
+\subsection{Quản lý đề tài}
+\subsubsection{Mô tả giao diện}
+Giao diện quản lý đề tài cho phép sinh viên đăng ký đề tài mới, xem chi tiết đề tài đã đăng ký, và theo dõi trạng thái phê duyệt. Bao gồm form đăng ký với các trường: tiêu đề, mô tả, loại đề tài (tự đề xuất/từ danh mục), chọn giảng viên hướng dẫn. Danh sách đề tài hiển thị dạng table với filter theo status, search theo title, và pagination.
+
+\begin{figure}[htbp]
+
+      \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 005303.png}
+    \caption{Giao diện quản lý đề tài sinh viên(1)}
+      \label{fig:placeholder}
+  \end{figure}
+  
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 015455.png}
+    \caption{Giao diện quản lý đề tài sinh viên(2)}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 022322.png}
+    \caption{Giao diện quản lý đề tài sinh viên(3)}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Sinh viên truy cập \texttt{/student/topics}
+  \item Hệ thống load danh sách đề tài của sinh viên từ API
+  \item Sinh viên có thể:
+    \begin{itemize}
+      \item Xem danh mục đề tài có sẵn (CatalogTopics)
+      \item Chọn đề tài từ danh mục hoặc tự đề xuất
+      \item Điền form với title, summary, chọn supervisor
+      \item Submit đề tài mới, hệ thống auto-generate TopicCode
+    \end{itemize}
+  \item Đề tài được tạo với status "Chờ duyệt"
+  \item Giảng viên hướng dẫn nhận thông báo và có thể phê duyệt/từ chối
+  \item Sinh viên nhận notification về kết quả phê duyệt
+\end{enumerate}
+
+
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/CatalogTopics/get-list}: Lấy danh mục đề tài mẫu
+  \item \texttt{GET /api/Topics/get-list}: Lấy đề tài của sinh viên
+  \item \texttt{GET /api/Topics/get-detail/:topicCode}: Chi tiết đề tài
+  \item \texttt{POST /api/Topics/create}: Tạo đề tài mới
+  \item \texttt{PUT /api/Topics/update/:topicCode}: Cập nhật đề tài
+  \item \texttt{GET /api/LecturerProfiles/get-list}: Danh sách giảng viên để chọn hướng dẫn
+\end{itemize}
+
+\subsection{Theo dõi tiến độ và nộp báo cáo}
+\subsubsection{Mô tả giao diện}
+Giao diện theo dõi tiến độ hiển thị timeline của tất cả milestones với các trạng thái khác nhau (Chưa bắt đầu, Đang thực hiện, Hoàn thành, Quá hạn). Mỗi milestone hiển thị tên, mô tả, deadline, progress percentage, và các file đã submit. Sinh viên có thể click vào milestone để xem chi tiết và upload file báo cáo. Giao diện sử dụng Stepper component của Mantine để hiển thị trực quan tiến trình.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 015807.png}
+  \caption{Giao diện theo dõi tiến độ và timeline milestones}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 015950.png}
+    \caption{Giao diện nộp báo cáo}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Sinh viên truy cập \texttt{/student/progress}
+  \item Load danh sách milestones theo topicId, sắp xếp theo ordinal
+  \item Hiển thị trạng thái từng milestone với màu sắc tương ứng
+  \item Sinh viên click "Nộp báo cáo" trên milestone đang thực hiện
+  \item Modal mở ra cho phép upload multiple files (PDF, DOCX, ZIP)
+  \item Submit form, files được upload lên server
+  \item Hệ thống tạo ProgressSubmission record với danh sách SubmissionFiles
+  \item Giảng viên nhận thông báo về submission mới
+  \item Sau khi giảng viên approve, milestone state chuyển sang "Hoàn thành"
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/ProgressMilestones/get-list}: Lấy milestones theo topicId
+  \item \texttt{GET /api/ProgressMilestones/get-detail/\newline milestoneCode}: Chi tiết milestone
+  \item \texttt{POST /api/ProgressSubmissions/submit}: Nộp báo cáo với file upload
+  \item \texttt{PUT /api/ProgressMilestones/update-state/\newline milestoneCode}: Cập nhật trạng thái
+  \item \texttt{GET /api/SubmissionFiles/download/:fileId}: Download file đã nộp
+\end{itemize}
+
+\subsection{Dashboard giảng viên}
+\subsubsection{Mô tả giao diện}
+Dashboard giảng viên hiển thị tổng quan về các đề tài đang hướng dẫn, số lượng sinh viên, milestones cần review, và lịch bảo vệ sắp tới. Bao gồm các card thống kê (tổng đề tài, đang hướng dẫn, chờ phê duyệt), danh sách sinh viên với progress overview, và calendar view cho defense schedule. Giảng viên có thể nhanh chóng xem submissions mới và cần feedback.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 002122.png}
+  \caption{Dashboard giảng viên với tổng quan công việc}
+    \label{fig:placeholder}
+\end{figure}
+
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Giảng viên đăng nhập, chuyển đến \texttt{/lecturer/dashboard}
+  \item Load profile giảng viên với GuideQuota và CurrentGuidingCount
+  \item Fetch danh sách đề tài đang hướng dẫn (SupervisorLecturerCode)
+  \item Load submissions đang chờ review
+  \item Hiển thị defense assignments trong tuần/tháng tới
+  \item Giảng viên có thể click vào từng topic để xem chi tiết
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/LecturerProfiles/get-detail/\newline lecturerCode}: Thông tin profile
+  \item \texttt{GET /api/Topics/get-list}: Filter theo supervisorLecturerCode
+  \item \texttt{GET /api/ProgressSubmissions/get-list}: Submissions chờ review
+  \item \texttt{GET /api/DefenseAssignments/get-list}: Lịch bảo vệ của giảng viên
+\end{itemize}
+
+\subsection{Quản lý sinh viên và phê duyệt tiến độ}
+\subsubsection{Mô tả giao diện}
+Giao diện cho phép giảng viên xem danh sách sinh viên đang hướng dẫn, chi tiết tiến độ từng sinh viên, review và approve submissions. Bao gồm table sinh viên với thông tin cơ bản, progress percentage, số milestones hoàn thành. Click vào sinh viên sẽ mở detail view với timeline milestones, history submissions, và form để give feedback.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 020451.png}
+  \caption{Giao diện quản lý sinh viên}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 020318.png}
+    \caption{Giao diện đánh giá tiến độ sinh viên}
+    \label{fig:placeholder}
+\end{figure}
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Giảng viên truy cập \texttt{/lecturer/students}
+  \item Load danh sách sinh viên theo topics đang hướng dẫn
+  \item Xem chi tiết tiến độ từng sinh viên
+  \item Review submission files (preview PDF, download)
+  \item Giảng viên có thể:
+    \begin{itemize}
+      \item Approve submission: cập nhật milestone state
+      \item Request revision: gửi comment yêu cầu chỉnh sửa
+      \item Give feedback: thêm LecturerComment vào topic
+    \end{itemize}
+  \item Sinh viên nhận notification về kết quả review
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/Topics/get-list}: Đề tài đang hướng dẫn
+  \item \texttt{GET /api/StudentProfiles/get-detail/\newline studentCode}: Thông tin sinh viên
+  \item \texttt{GET /api/ProgressSubmissions/get-list}: Submissions theo milestone
+  \item \texttt{PUT /api/ProgressMilestones/update-state/\newline milestoneCode}: Approve milestone
+  \item \texttt{PUT /api/Topics/update/:topicCode}: Cập nhật comment, status
+\end{itemize}
+
+\subsection{Quản lý hội đồng bảo vệ}
+\subsubsection{Mô tả giao diện}
+Giao diện quản lý hội đồng cho phép admin tạo committee sessions, thêm committees, assign members, và schedule defenses. Bao gồm tab view với: (1) Danh sách sessions, (2) Committees trong session, (3) Defense assignments, (4) Committee members. Sử dụng drag-drop interface để assign topics vào committees và chọn defense date/room.
+
+\begin{figure}[htbp]
+    \includegraphics[width=1\linewidth]{(1).jpg}
+  \caption{Giao diện quản lý hội đồng bảo vệ(1)}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[htbp]
+    \includegraphics[width=1\linewidth]{(2).jpg}
+  \caption{Giao diện quản lý hội đồng bảo vệ(1)}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Admin truy cập \texttt{/admin/committees}
+  \item Tạo CommitteeSession mới với name, start/end date
+  \item Trong session, tạo các Committees (Hội đồng 1, 2, 3...)
+  \item Assign committee members (lecturers) với roles (Chủ tịch, Thư ký, Ủy viên)
+  \item Giao diện auto-suggest lecturers dựa trên:
+    \begin{itemize}
+      \item Tags matching với topic
+      \item DefenseQuota còn trống
+      \item Không trùng lịch
+    \end{itemize}
+  \item Assign topics vào committees
+  \item Set defense date, room, time slot
+  \item Hệ thống gửi notifications cho members và students
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/CommitteeSessions/get-list}: Danh sách kỳ bảo vệ
+  \item \texttt{POST /api/CommitteeSessions/create}: Tạo session mới
+  \item \texttt{GET /api/Committees/get-list}: Committees theo session
+  \item \texttt{POST /api/Committees/create}: Tạo committee
+  \item \texttt{POST /api/CommitteeMembers/add}: Thêm members vào committee
+  \item \texttt{POST /api/CommitteeAssignment/create}: Phân công topics
+  \item \texttt{POST /api/DefenseAssignments/create}: Tạo defense assignment
+  \item \texttt{GET /api/LecturerProfiles/get-available}: Lecturers khả dụng
+\end{itemize}
+
+\subsection{Chấm điểm bảo vệ}
+\subsubsection{Mô tả giao diện}
+Giao diện cho phép committee members (giảng viên trong hội đồng) chấm điểm cho defense assignments. Hiển thị thông tin sinh viên, đề tài, defense date/room. Form nhập điểm với các tiêu chí: nội dung báo cáo, trình bày, trả lời câu hỏi, tổng điểm. Mỗi member submit điểm riêng, hệ thống tự động tính điểm trung bình.
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Committee member truy cập \texttt{/lecturer/defense-scoring}
+  \item Load defense assignments mà member tham gia
+  \item Chọn defense assignment cần chấm
+  \item Hiển thị form với các tiêu chí chấm điểm
+  \item Member nhập điểm từng tiêu chí và overall comment
+  \item Submit điểm, tạo DefenseScore record
+  \item Sau khi tất cả members submit, hệ thống tính điểm final
+  \item Sinh viên nhận notification về kết quả
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/DefenseAssignments/get-list}: Assignments của member
+  \item \texttt{GET /api/DefenseAssignments/get-detail/:id}: Chi tiết assignment
+  \item \texttt{POST /api/DefenseScores/submit}: Nộp điểm chấm
+  \item \texttt{GET /api/DefenseScores/get-by-assignment/\newline assignmentId}: Xem điểm
+\end{itemize}
+
+\subsection{Quản lý người dùng (Admin)}
+\subsubsection{Mô tả giao diện}
+Giao diện quản lý user cho admin, bao gồm danh sách users với filter theo role, search, status. Cho phép tạo user mới (auto-generate UserCode), assign role, reset password, activate/deactivate accounts. Sử dụng table với inline edit và modal forms. Có bulk actions để xử lý nhiều users cùng lúc.
+
+\begin{figure}[htbp]
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 022006.png}
+  \caption{Giao diện quản lý người dùng}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Admin truy cập \texttt{/admin/users}
+  \item Load danh sách users với pagination và filters
+  \item Admin có thể:
+    \begin{itemize}
+      \item Tạo user mới: điền form, chọn role, hệ thống generate UserCode
+      \item Edit user: cập nhật profile info, change role
+      \item Reset password: generate temporary password
+      \item Deactivate: set status inactive
+    \end{itemize}
+  \item Mỗi action được log vào SystemActivityLogs
+  \item User nhận email với credentials (nếu có email service)
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/Users/get-list}: Danh sách users với filters
+  \item \texttt{GET /api/Users/get-detail/:userCode}: Chi tiết user
+  \item \texttt{POST /api/Users/create}: Tạo user mới
+  \item \texttt{PUT /api/Users/update/:userCode}: Cập nhật user
+  \item \texttt{POST /api/Users/reset-password/:userCode}: Reset password
+  \item \texttt{PUT /api/Users/toggle-status/:userCode}: Activate/deactivate
+\end{itemize}
+
+\subsection{Nhật ký hoạt động hệ thống}
+\subsubsection{Mô tả giao diện}
+Giao diện audit logs hiển thị tất cả activities trong hệ thống với filters theo user, action type, date range. Mỗi log entry hiển thị timestamp, user, action, details (JSON). Cho phép admin monitor system activities, detect suspicious behaviors, và troubleshoot issues.
+
+\begin{figure}[htbp]
+    \includegraphics[width=1\linewidth]{Screenshot 2025-11-12 022120.png}
+  \caption{Giao diện nhật ký hoạt động hệ thống}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Luồng hoạt động}
+\begin{enumerate}
+  \item Admin truy cập \texttt{/admin/activity-logs}
+  \item Load system activity logs với pagination
+  \item Apply filters: user, action, date range
+  \item Click vào log entry để xem details JSON
+  \item Export logs to CSV/Excel cho analysis
+\end{enumerate}
+
+\subsubsection{API liên quan}
+\begin{itemize}
+  \item \texttt{GET /api/SystemActivityLogs/get-list}: Lấy logs với filters
+  \item \texttt{GET /api/SystemActivityLogs/export}: Export logs
+\end{itemize}
+
+Tất cả các giao diện được thiết kế responsive, hoạt động tốt trên desktop và mobile devices. Sử dụng consistent design system với Mantine UI components, đảm bảo UX thống nhất. Các API được bảo vệ bởi JWT authentication và role-based authorization, logging tất cả activities cho audit purposes.
+
+\section{Hướng dẫn triển khai}
+Hệ thống được triển khai với setup đơn giản cho development và production environments. Dưới đây là hướng dẫn chi tiết từng bước.
+
+\subsection{Prerequisites}
+\begin{enumerate}
+  \item \textbf{.NET 8.0 SDK}: Tải xuống và cài đặt từ Microsoft website. Xác minh với \texttt{dotnet --version}.
+  \item \textbf{Node.js 18+}: Tải xuống từ nodejs.org. Bao gồm trình quản lý gói npm.
+  \item \textbf{SQL Server}: LocalDB cho development, hoặc SQL Server Express/Developer edition. Chuỗi kết nối trong appsettings.json.
+  \item \textbf{Visual Studio 2022} hoặc \textbf{VS Code} với C\# và TypeScript extensions.
+  \item \textbf{Git}: Cho kiểm soát phiên bản.
+\end{enumerate}
+
+\subsection{Backend Setup}
+\begin{enumerate}
+  \item Sao chép kho lưu trữ: \texttt{git clone https://github.com/nguyenthanhbinh0411/\newline dnu-thesis-system.git}
+  \item Di chuyển đến backend: \texttt{cd dnu-thesis-system/ThesisManagement.Api}
+  \item Khôi phục gói: \texttt{dotnet restore}
+  \item Cập nhật chuỗi kết nối trong appsettings.json:
+  \begin{lstlisting}[language=JSON,caption=appsettings.json]
+  {
+    "ConnectionStrings": {
+      "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=ThesisManagement;Trusted_Connection=True;"
+    }
+  }
+  \end{lstlisting}
+  \item Chạy di chuyển: \texttt{dotnet ef database update} (cần công cụ EF Core: \texttt{dotnet tool install --global dotnet-ef})
+  \item Chạy backend: \texttt{dotnet run} hoặc \texttt{dotnet watch} cho tải lại nóng. Máy chủ chạy tại \texttt{https://localhost:5001} và \texttt{http://localhost:5000}.
+  \item Xác minh: Truy cập \texttt{https://localhost:5001/swagger} để xem tài liệu API.
+\end{enumerate}
+
+\subsection{Frontend Setup}
+\begin{enumerate}
+  \item Di chuyển đến frontend: \texttt{cd dnu-thesis-system/thesis-frontend}
+  \item Cài đặt phụ thuộc: \texttt{npm install}
+  \item Cấu hình URL cơ sở API trong .env:
+  \begin{lstlisting}[language=bash,caption=.env]
+  VITE_API_BASE_URL=http://localhost:5000/api
+  \end{lstlisting}
+  \item Chạy máy chủ phát triển: \texttt{npm run dev}. Frontend chạy tại \texttt{http://localhost:5173}.
+  \item Xây dựng sản xuất: \texttt{npm run build} tạo dist/ folder.
+\end{enumerate}
+
+\subsection{Database Initialization}
+\begin{enumerate}
+  \item Tạo cơ sở dữ liệu với EF migrations.
+  \item Seed data: Implement trong Program.cs hoặc separate seeder service.
+  \item Tạo admin user mặc định cho testing.
+  \item Verify tables created correctly qua SQL Server Management Studio.
+\end{enumerate}
+
+\subsection{Development Workflow}
+\begin{enumerate}
+  \item Backend: Sử dụng \texttt{dotnet watch} cho tự động khởi động lại khi thay đổi mã.
+  \item Frontend: Vite HMR tự động reload browser khi thay đổi mã.
+  \item Cơ sở dữ liệu: Sử dụng EF migrations cho thay đổi lược đồ: \texttt{dotnet ef migrations add MigrationName}
+  \item Kiểm thử: Chạy \texttt{dotnet test} cho unit tests (nếu có).
+  \item Gỡ lỗi: Đính kèm trình gỡ lỗi trong VS Code hoặc Visual Studio.
+\end{enumerate}
+
+\subsection{Production Deployment}
+\begin{enumerate}
+  \item Backend: \texttt{dotnet publish -c Release -o ./publish}
+  \item Frontend: \texttt{npm run build}, sao chép dist/ vào wwwroot của backend hoặc phục vụ riêng.
+  \item Cơ sở dữ liệu: Cập nhật chuỗi kết nối sản xuất, chạy migrations.
+  \item Proxy ngược: Nginx hoặc IIS cho routing và SSL.
+  \item Biến môi trường: Set JWT secrets, chuỗi kết nối qua biến môi trường.
+  \item Giám sát: Implement kiểm tra sức khỏe, ghi nhật ký vào files hoặc dịch vụ đám mây.
+\end{enumerate}
+
+\subsection{Docker Deployment (Optional)}
+\begin{enumerate}
+  \item Tạo Dockerfile cho backend và frontend.
+  \item Sử dụng docker-compose.yml để orchestrate services:
+  \begin{lstlisting}[language=YAML,caption=docker-compose.yml]
+  version: '3.8'
+  services:
+    db:
+      image: mcr.microsoft.com/mssql/server:2022-latest
+      environment:
+        ACCEPT_EULA: Y
+        SA_PASSWORD: YourStrong!Passw0rd
+    api:
+      build: ./ThesisManagement.Api
+      depends_on:
+        - db
+    frontend:
+      build: ./thesis-frontend
+      ports:
+        - "80:80"
+  \end{lstlisting}
+  \item Run: \texttt{docker-compose up -d}
+\end{enumerate}
+
+\subsection{Troubleshooting}
+\begin{itemize}
+  \item \textbf{Xung đột cổng}: Thay đổi ports trong launchSettings.json hoặc .env
+  \item \textbf{Lỗi CORS}: Xác minh cấu hình CORS trong Program.cs
+  \item \textbf{Kết nối cơ sở dữ liệu}: Kiểm tra chuỗi kết nối và dịch vụ SQL Server
+  \item \textbf{Lỗi xây dựng}: Dọn dẹp và xây dựng lại: \texttt{dotnet clean \&\& dotnet build}
+  \item \textbf{Lỗi NPM}: Xóa node\_modules và \texttt{npm install} lại
+\end{itemize}
+
+Sau khi setup, truy cập frontend tại \texttt{http://localhost:5173}, đăng nhập với credentials mặc định, và verify các chức năng hoạt động.
+
+\section{Kiểm thử và đánh giá}
+Hệ thống đã được kiểm thử cơ bản thông qua development testing và manual verification. Dưới đây là đánh giá dựa trên implementation hiện tại.
+
+\subsection{Functional Testing}
+\begin{itemize}
+  \item \textbf{Authentication}: Đăng nhập với JWT tokens, kiểm soát truy cập dựa trên vai trò được implement trong AuthController.
+  \item \textbf{Topic Management}: Các thao tác CRUD cho topics với tự động tạo codes trong TopicsController.
+  \item \textbf{Progress Tracking}: Milestones và submissions được quản lý qua ProgressMilestonesController và ProgressSubmissionsController.
+  \item \textbf{User Management}: Profiles cho students và lecturers qua StudentProfilesController và LecturerProfilesController.
+\end{itemize}
+
+\subsection{API Testing}
+\begin{itemize}
+  \item \textbf{Swagger Documentation}: Tích hợp Swagger UI cho kiểm thử API tại /swagger endpoint.
+  \item \textbf{Error Handling}: Consistent ApiResponse format với success/error messages.
+  \item \textbf{File Upload}: Support multipart/form-data trong ProgressSubmissions và SubmissionFiles.
+\end{itemize}
+
+\subsection{Security Verification}
+\begin{itemize}
+  \item \textbf{JWT Authentication}: Implement trong AuthController với BCrypt password hashing.
+  \item \textbf{CORS Configuration}: Properly configured trong Program.cs cho cross-origin requests.
+  \item \textbf{Input Validation}: DTOs và model validation trong controllers.
+\end{itemize}
+
+\subsection{Performance Considerations}
+\begin{itemize}
+  \item \textbf{Database Queries}: EF Core với lazy loading và Include() cho relationships.
+  \item \textbf{Pagination}: Implemented trong tất cả list endpoints với Kết quả phân trang.
+  \item \textbf{Indexing}: Unique indexes trên code fields trong ApplicationDbContext.
+\end{itemize}
+
+Hệ thống đáp ứng các yêu cầu chức năng cơ bản với proper error handling và security measures.
+
+\section{Kết luận và hướng phát triển}
+Hệ thống quản lý đăng ký, theo dõi tiến độ và bảo vệ đồ án tốt nghiệp đã được triển khai thành công với kiến trúc hiện đại, đáp ứng các yêu cầu chức năng cơ bản của Trường Đại học Đại Nam. Việc sử dụng React 19 + ASP.NET Core 8.0 + SQL Server cho phép xây dựng một giải pháp robust, scalable và maintainable.
+
+\subsection{Thành Tựu Đạt Được}
+\begin{itemize}
+  \item \textbf{Kiến trúc hiện đại}: Client-server với RESTful APIs, type-safe với TypeScript và C\#.
+  \item \textbf{UI/UX professional}: Responsive design với Mantine UI, role-based layouts.
+  \item \textbf{Database design}: Comprehensive schema với 20+ entities, proper relationships và constraints.
+  \item \textbf{Security}: JWT authentication, role-based access control, secure password hashing.
+  \item \textbf{Features hoàn chỉnh}: Topic registration, progress tracking, committee assignment, defense scheduling.
+  \item \textbf{Performance}: Optimized queries, efficient state management, good response times.
+  \item \textbf{Developer experience}: Hot reload, comprehensive API documentation, clean code structure.
+\end{itemize}
+
+\subsection{Hạn Chế Hiện Tại}
+\begin{itemize}
+  \item \textbf{Notifications}: Chưa tích hợp email/SMS notifications cho deadlines và approvals.
+  \item \textbf{Reporting}: Chưa có advanced analytics, chỉ basic reports.
+  \item \textbf{Mobile app}: Chưa có native mobile application.
+  \item \textbf{Offline support}: Không hỗ trợ offline mode.
+  \item \textbf{Backup/Recovery}: Chưa implement automated backup strategies.
+  \item \textbf{Multi-tenancy}: Không support multiple institutions.
+  \item \textbf{Testing coverage}: Thiếu automated unit/integration tests.
+  \item \textbf{Performance monitoring}: Chưa có application performance monitoring (APM).
+\end{itemize}
+
+\subsection{Hướng Phát Triển Tương Lai}
+\begin{itemize}
+  \item \textbf{Enhanced Features}: Thêm notifications, advanced reporting, và mobile support.
+  \item \textbf{AI Integration}: Topic recommendations và automated grading dựa trên existing tag system \cite{kumar2023ai}.
+  \item \textbf{System Improvements}: Multi-tenancy, automated testing, và performance monitoring.
+  \begin{itemize}
+    \item Multi-tenancy support cho multiple universities.
+    \item Workflow engine cho customizable approval processes.
+    \item Integration với university systems (SIS, LMS).
+    \item Cloud deployment với auto-scaling (AWS, Azure).
+  \end{itemize}
+  
+  \item \textbf{Security và Compliance}:
+  \begin{itemize}
+    \item OAuth 2.0 integration với Google/Microsoft accounts.
+    \item Two-factor authentication (2FA).
+    \item GDPR compliance cho data privacy.
+    \item Regular security audits và penetration testing.
+  \end{itemize}
+  
+  \item \textbf{Performance và Scalability}:
+  \begin{itemize}
+    \item Database optimization: Read replicas, caching (Redis).
+    \item CDN integration cho static assets.
+    \item Microservices architecture nếu system grows.
+    \item Load balancing và horizontal scaling.
+  \end{itemize}
+  
+  \item \textbf{Quality Assurance}:
+  \begin{itemize}
+    \item Comprehensive test suite: Unit, integration, E2E tests.
+    \item CI/CD pipeline với automated testing và deployment.
+    \item Code quality tools: SonarQube, code coverage reports.
+    \item Performance monitoring với Application Insights hoặc New Relic.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Kết Luận}
+Hệ thống đã chứng minh tính khả thi của việc số hóa quy trình quản lý đồ án tốt nghiệp, giảm thiểu công việc thủ công và tăng transparency. Với kiến trúc scalable và codebase clean, hệ thống có thể dễ dàng mở rộng để đáp ứng nhu cầu của nhiều trường đại học khác. Hai tác giả, Nguyễn Thanh Bình và Nguyễn Hữu Huy, đã hoàn thành tốt nhiệm vụ phát triển hệ thống prototype với chất lượng cao, sẵn sàng cho production deployment và future enhancements.
+
+Hệ thống không chỉ giải quyết vấn đề quản lý đồ án mà còn tạo nền tảng cho digital transformation trong giáo dục đại học, góp phần nâng cao chất lượng đào tạo và trải nghiệm của sinh viên và giảng viên. Việc áp dụng thực hành phát triển agile \cite{anderson2017agile} trong quá trình phát triển đã đảm bảo tính linh hoạt và khả năng đáp ứng thay đổi.
+
+% --- REFERENCES (dùng BibTeX) ---
+\bibliographystyle{IEEEtran}
+\bibliography{references} % tạo file references.bib
+
+\end{document}

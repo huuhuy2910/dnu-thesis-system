@@ -5,6 +5,17 @@ import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { TopicTag, Tag } from "../../types/tag";
+import {
+  User,
+  BookOpen,
+  TrendingUp,
+  Bell,
+  Calendar,
+  Target,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -210,555 +221,1284 @@ const Dashboard: React.FC = () => {
       id: 1,
       title: "Giảng viên đã nhận xét báo cáo chương 2",
       date: "03/10/2025",
+      type: "success" as const,
+      icon: CheckCircle,
     },
     {
       id: 2,
       title: "Cập nhật lịch bảo vệ dự kiến",
       date: "28/09/2025",
+      type: "info" as const,
+      icon: Calendar,
     },
     {
       id: 3,
       title: "Thông báo nộp file tiến độ tuần 4",
       date: "22/09/2025",
+      type: "warning" as const,
+      icon: Clock,
     },
     {
       id: 4,
       title: "Thông báo nộp file tiến độ tuần 5",
       date: "29/09/2025",
+      type: "warning" as const,
+      icon: AlertCircle,
     },
     {
       id: 5,
       title: "Thông báo nộp file tiến độ tuần 6",
       date: "6/10/2025",
+      type: "warning" as const,
+      icon: AlertCircle,
     },
   ];
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Đã duyệt":
+        return { bg: "#10B981", text: "#FFFFFF" };
+      case "Chờ duyệt":
+        return { bg: "#F59E0B", text: "#FFFFFF" };
+      case "Từ chối":
+        return { bg: "#EF4444", text: "#FFFFFF" };
+      default:
+        return { bg: "#6B7280", text: "#FFFFFF" };
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case "success":
+        return "#10B981";
+      case "warning":
+        return "#F59E0B";
+      case "info":
+        return "#3B82F6";
+      default:
+        return "#6B7280";
+    }
+  };
 
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: "20px",
-        padding: "10px 0",
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #FFFFFF 0%, #FFF8F0 100%)",
+        padding: "24px",
       }}
     >
-      {/* LEFT COLUMN */}
-      <div>
-        {/* THÔNG TIN SINH VIÊN */}
+      {/* Header Section */}
+      <div
+        style={{
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(10px)",
+          borderRadius: "20px",
+          padding: "32px",
+          marginBottom: "32px",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+        }}
+      >
         <div
           style={{
-            backgroundColor: "#fff",
-            borderRadius: 10,
-            padding: 20,
-            marginBottom: 20,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "20px",
           }}
         >
-          <h3 style={{ color: "#f37021", marginBottom: 12 }}>
-            Thông tin sinh viên
-          </h3>
+          <div>
+            <h1
+              style={{
+                fontSize: "32px",
+                fontWeight: "700",
+                color: "#1F2937",
+                margin: "0 0 8px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              Xin chào,{" "}
+              {profile?.fullName || auth.user?.fullName || "Sinh viên"}!
+            </h1>
+            <p
+              style={{
+                fontSize: "16px",
+                color: "#6B7280",
+                margin: 0,
+              }}
+            >
+              Chúc bạn có một ngày học tập hiệu quả
+            </p>
+          </div>
           <div
-            style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              background: "linear-gradient(135deg, #F37021, #FF8C42)",
+              padding: "16px 24px",
+              borderRadius: "16px",
+              color: "white",
+            }}
           >
-            {/* Ảnh sinh viên bên trái */}
             <div>
-              {profile.studentImage ? (
-                <img
-                  src={getAvatarUrl(profile.studentImage)}
-                  alt="Ảnh sinh viên"
-                  style={{
-                    width: 200,
-                    height: 250,
-                    borderRadius: 8,
-                    objectFit: "cover",
-                    border: "2px solid #f37021",
-                  }}
-                />
-              ) : (
+              <div style={{ fontSize: "14px", opacity: 0.9 }}>GPA</div>
+              <div style={{ fontSize: "24px", fontWeight: "700" }}>
+                {profile?.gpa || "N/A"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "24px",
+          marginBottom: "32px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "16px",
+            padding: "24px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #3B82F6, #1D4ED8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <BookOpen size={28} color="white" />
+          </div>
+          <div>
+            <h3
+              style={{
+                fontSize: "28px",
+                fontWeight: "700",
+                color: "#1F2937",
+                margin: "0 0 4px 0",
+              }}
+            >
+              {topics.length}
+            </h3>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#6B7280",
+                margin: 0,
+                fontWeight: "500",
+              }}
+            >
+              Đề tài đang thực hiện
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "16px",
+            padding: "24px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #10B981, #059669)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <TrendingUp size={28} color="white" />
+          </div>
+          <div>
+            <h3
+              style={{
+                fontSize: "28px",
+                fontWeight: "700",
+                color: "#1F2937",
+                margin: "0 0 4px 0",
+              }}
+            >
+              {progressSummary?.percentage || 0}%
+            </h3>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#6B7280",
+                margin: 0,
+                fontWeight: "500",
+              }}
+            >
+              Tiến độ hoàn thành
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "16px",
+            padding: "24px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #F59E0B, #D97706)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Bell size={28} color="white" />
+          </div>
+          <div>
+            <h3
+              style={{
+                fontSize: "28px",
+                fontWeight: "700",
+                color: "#1F2937",
+                margin: "0 0 4px 0",
+              }}
+            >
+              {notifications.length}
+            </h3>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#6B7280",
+                margin: 0,
+                fontWeight: "500",
+              }}
+            >
+              Thông báo mới
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "2fr 1fr",
+          gap: "24px",
+        }}
+      >
+        {/* Left Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Student Profile Card */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "32px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <User size={24} color="#F37021" />
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1F2937",
+                  margin: 0,
+                }}
+              >
+                Thông tin cá nhân
+              </h2>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "32px",
+                alignItems: "flex-start",
+              }}
+            >
+              {/* Avatar */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+              >
+                {profile?.studentImage ? (
+                  <img
+                    src={getAvatarUrl(profile.studentImage)}
+                    alt="Ảnh sinh viên"
+                    style={{
+                      width: "140px",
+                      height: "180px",
+                      borderRadius: "16px",
+                      objectFit: "cover",
+                      border: "3px solid #F37021",
+                      boxShadow: "0 8px 25px rgba(243, 112, 33, 0.2)",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "140px",
+                      height: "180px",
+                      borderRadius: "16px",
+                      background: "linear-gradient(135deg, #F3F4F6, #E5E7EB)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: "3px solid #D1D5DB",
+                    }}
+                  >
+                    <User size={48} color="#9CA3AF" />
+                  </div>
+                )}
                 <div
                   style={{
-                    width: 120,
-                    height: 220,
-                    borderRadius: 8,
-                    backgroundColor: "#eee",
+                    position: "absolute",
+                    bottom: "-8px",
+                    right: "-8px",
+                    background: "#10B981",
+                    borderRadius: "50%",
+                    width: "32px",
+                    height: "32px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#888",
-                    fontSize: 12,
+                    border: "3px solid white",
                   }}
                 >
-                  Không có ảnh
+                  <CheckCircle size={16} color="white" />
                 </div>
-              )}
+              </div>
+
+              {/* Info Grid */}
+              <div
+                style={{
+                  flex: 1,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "16px 24px",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Họ và tên
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#1F2937",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.fullName || auth.user?.fullName || "N/A"}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Mã sinh viên
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#1F2937",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.studentCode}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Email
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#4B5563",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.studentEmail || "N/A"}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Lớp
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#4B5563",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.classCode}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Khoa
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#4B5563",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.facultyCode}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Ngành
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#4B5563",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.departmentCode}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    GPA
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "700",
+                        color: "#1F2937",
+                        margin: 0,
+                      }}
+                    >
+                      {profile?.gpa}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#6B7280",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Học lực
+                  </label>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#4B5563",
+                      margin: 0,
+                    }}
+                  >
+                    {profile?.academicStanding}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Topics Section */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "32px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <Target size={24} color="#F37021" />
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1F2937",
+                  margin: 0,
+                }}
+              >
+                Đề tài đồ án
+              </h2>
             </div>
 
-            {/* Thông tin bên phải */}
-            <div style={{ flex: 1 }}>
+            {topics.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 20px",
+                  background: "linear-gradient(135deg, #F9FAFB, #F3F4F6)",
+                  borderRadius: "16px",
+                  border: "2px dashed #D1D5DB",
+                }}
+              >
+                <BookOpen
+                  size={64}
+                  color="#9CA3AF"
+                  style={{ marginBottom: "16px" }}
+                />
+                <h3
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "600",
+                    color: "#6B7280",
+                    margin: "0 0 8px 0",
+                  }}
+                >
+                  Chưa có đề tài
+                </h3>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "#9CA3AF",
+                    margin: 0,
+                  }}
+                >
+                  Bạn chưa đăng ký đề tài nào. Hãy liên hệ với giảng viên để
+                  được hướng dẫn.
+                </p>
+              </div>
+            ) : (
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "12px",
+                  gap: "20px",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Họ tên:
-                  </span>
-                  <span style={{ color: "#333" }}>
-                    {profile?.fullName || auth.user?.fullName || "N/A"}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Email:
-                  </span>
-                  <span style={{ color: "#333" }}>
-                    {profile.studentEmail || "N/A"}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Mã SV:
-                  </span>
-                  <span style={{ color: "#333" }}>{profile.studentCode}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Ngành:
-                  </span>
-                  <span style={{ color: "#333" }}>
-                    {profile.departmentCode}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Lớp:
-                  </span>
-                  <span style={{ color: "#333" }}>{profile.classCode}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Khoa:
-                  </span>
-                  <span style={{ color: "#333" }}>{profile.facultyCode}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    GPA:
-                  </span>
-                  <span style={{ color: "#333" }}>{profile.gpa}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{ fontWeight: 600, color: "#555", minWidth: 120 }}
-                  >
-                    Học lực:
-                  </span>
-                  <span style={{ color: "#333" }}>
-                    {profile.academicStanding}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                {topics.map((topic) => {
+                  const statusColor = getStatusColor(topic.status);
+                  return (
+                    <div
+                      key={topic.topicID}
+                      style={{
+                        background: "linear-gradient(135deg, #FFFFFF, #F9FAFB)",
+                        borderRadius: "16px",
+                        padding: "24px",
+                        border: "1px solid #E5E7EB",
+                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
+                        transition: "all 0.3s ease",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                        e.currentTarget.style.boxShadow =
+                          "0 8px 25px rgba(0, 0, 0, 0.1)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow =
+                          "0 4px 12px rgba(0, 0, 0, 0.05)";
+                      }}
+                    >
+                      {/* Header */}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <h3
+                          style={{
+                            fontSize: "18px",
+                            fontWeight: "700",
+                            color: "#1F2937",
+                            margin: 0,
+                            flex: 1,
+                            marginRight: "16px",
+                            lineHeight: "1.4",
+                          }}
+                        >
+                          {topic.title}
+                        </h3>
+                        <span
+                          style={{
+                            backgroundColor: statusColor.bg,
+                            color: statusColor.text,
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {topic.status}
+                        </span>
+                      </div>
 
-        {/* ĐỀ TÀI ĐỒ ÁN */}
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 10,
-            padding: 20,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#f37021", marginBottom: 16, fontSize: 18 }}>
-            Đề tài đồ án
-          </h3>
-          {topics.length === 0 ? (
+                      {/* Description */}
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          color: "#6B7280",
+                          margin: "0 0 20px 0",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        {topic.summary}
+                      </p>
+
+                      {/* Details Grid */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(200px, 1fr))",
+                          gap: "16px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F37021",
+                            }}
+                          ></div>
+                          <span style={{ fontSize: "13px", color: "#6B7280" }}>
+                            <strong>Mã đề tài:</strong> {topic.topicCode}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F37021",
+                            }}
+                          ></div>
+                          <span style={{ fontSize: "13px", color: "#6B7280" }}>
+                            <strong>Loại:</strong> {topic.type}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F37021",
+                            }}
+                          ></div>
+                          <span style={{ fontSize: "13px", color: "#6B7280" }}>
+                            <strong>GV hướng dẫn:</strong>{" "}
+                            {supervisorNames[topic.supervisorUserCode || ""] ||
+                              "Chưa có"}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F37021",
+                            }}
+                          ></div>
+                          <span style={{ fontSize: "13px", color: "#6B7280" }}>
+                            <strong>Tag:</strong>{" "}
+                            {(topicTags[topic.topicCode] || [])
+                              .map(
+                                (tt) => tags[tt.tagCode]?.tagName || tt.tagCode
+                              )
+                              .join(", ") || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Progress Section */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "32px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
             <div
               style={{
-                textAlign: "center",
-                padding: 40,
-                color: "#888",
-                backgroundColor: "#f9f9f9",
-                borderRadius: 8,
-                border: "2px dashed #ddd",
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
               }}
             >
-              <div style={{ fontSize: 48, marginBottom: 10 }}>📄</div>
-              <p>Chưa có đề tài nào được đăng ký.</p>
+              <TrendingUp size={24} color="#F37021" />
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1F2937",
+                  margin: 0,
+                }}
+              >
+                Tiến độ đồ án
+              </h2>
             </div>
-          ) : (
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-            >
-              {topics.map((topic) => (
-                <div
-                  key={topic.topicID}
+
+            {!progressSummary ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "40px 20px",
+                  background: "linear-gradient(135deg, #FEF3C7, #FDE68A)",
+                  borderRadius: "16px",
+                  border: "1px solid #F59E0B",
+                }}
+              >
+                <Clock
+                  size={48}
+                  color="#F59E0B"
+                  style={{ marginBottom: "16px" }}
+                />
+                <h3
                   style={{
-                    border: "1px solid #e0e0e0",
-                    borderRadius: 12,
-                    padding: 20,
-                    backgroundColor: "#fafafa",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                    transition: "box-shadow 0.3s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 12px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      "0 1px 3px rgba(0,0,0,0.1)";
+                    fontSize: "18px",
+                    fontWeight: "600",
+                    color: "#92400E",
+                    margin: "0 0 8px 0",
                   }}
                 >
-                  {/* Header */}
+                  Chưa có dữ liệu tiến độ
+                </h3>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "#78350F",
+                    margin: 0,
+                  }}
+                >
+                  Vui lòng liên hệ giảng viên để cập nhật tiến độ.
+                </p>
+              </div>
+            ) : (
+              <div>
+                {/* Progress Overview */}
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, #F0F9FF, #E0F2FE)",
+                    borderRadius: "16px",
+                    padding: "24px",
+                    marginBottom: "24px",
+                    border: "1px solid #0EA5E9",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
+                      alignItems: "center",
                       justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: 12,
+                      marginBottom: "16px",
                     }}
                   >
-                    <h4
+                    <h3
                       style={{
-                        color: "#2d3748",
+                        fontSize: "20px",
+                        fontWeight: "700",
+                        color: "#0C4A6E",
                         margin: 0,
-                        fontSize: 16,
-                        fontWeight: 600,
-                        flex: 1,
-                        marginRight: 12,
                       }}
                     >
-                      {topic.title}
-                    </h4>
-                    <span
+                      {progressSummary.percentage}% Hoàn thành
+                    </h3>
+                    <div
                       style={{
-                        backgroundColor:
-                          topic.status === "Đã duyệt"
-                            ? "#f37021"
-                            : topic.status === "Chờ duyệt"
-                            ? "#ed8936"
-                            : "#e53e3e",
-                        color: "#fff",
-                        padding: "4px 8px",
-                        borderRadius: 12,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        whiteSpace: "nowrap",
+                        background: "#10B981",
+                        color: "white",
+                        padding: "8px 16px",
+                        borderRadius: "20px",
+                        fontSize: "14px",
+                        fontWeight: "600",
                       }}
                     >
-                      {topic.status}
-                    </span>
+                      {progressSummary.completed}/{progressSummary.total} mốc
+                    </div>
                   </div>
 
-                  {/* Summary */}
+                  {/* Progress Bar */}
+                  <div
+                    style={{
+                      backgroundColor: "#E0F2FE",
+                      borderRadius: "12px",
+                      height: "16px",
+                      overflow: "hidden",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${progressSummary.percentage}%`,
+                        background: "linear-gradient(90deg, #F37021, #FF8C42)",
+                        height: "100%",
+                        borderRadius: "12px",
+                        transition: "width 0.8s ease",
+                        boxShadow: "0 0 10px rgba(243, 112, 33, 0.3)",
+                      }}
+                    />
+                  </div>
+
                   <p
                     style={{
-                      color: "#4a5568",
-                      fontSize: 14,
-                      marginBottom: 16,
-                      lineHeight: 1.5,
+                      fontSize: "14px",
+                      color: "#0C4A6E",
+                      margin: 0,
+                      textAlign: "center",
                     }}
                   >
-                    {topic.summary}
+                    Tiếp tục cố gắng! Bạn đang tiến bộ tốt.
                   </p>
+                </div>
 
-                  {/* Details Grid */}
+                {/* Next Milestone */}
+                {progressSummary.nextMilestone && (
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(200px, 1fr))",
-                      gap: "12px",
-                      fontSize: 13,
+                      background: "linear-gradient(135deg, #FEF3C7, #FDE68A)",
+                      borderRadius: "16px",
+                      padding: "20px",
+                      border: "1px solid #F59E0B",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "16px",
                     }}
                   >
                     <div
                       style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "12px",
+                        background: "#F59E0B",
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
+                        justifyContent: "center",
                       }}
                     >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Mã đề tài:
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {topic.topicCode}
-                      </span>
+                      <Target size={24} color="white" />
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Loại:
-                      </span>
-                      <span style={{ color: "#718096" }}>{topic.type}</span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        GV hướng dẫn:
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {supervisorNames[topic.supervisorUserCode || ""] ||
-                          "Chưa có"}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Ngành:
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {topic.departmentCode || "N/A"}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Tag:
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {(topicTags[topic.topicCode] || [])
-                          .map((tt) => tags[tt.tagCode]?.tagName || tt.tagCode)
-                          .join(", ") || "N/A"}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                        Lần nộp lại:
-                      </span>
-                      <span style={{ color: "#718096" }}>
-                        {topic.resubmitCount || 0}
-                      </span>
+                    <div>
+                      <h4
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          color: "#92400E",
+                          margin: "0 0 4px 0",
+                        }}
+                      >
+                        Mốc tiếp theo
+                      </h4>
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          color: "#78350F",
+                          margin: 0,
+                          fontWeight: "500",
+                        }}
+                      >
+                        {progressSummary.nextMilestone}
+                      </p>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* TIẾN ĐỘ ĐỒ ÁN */}
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 10,
-            padding: 20,
-            marginTop: 20,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#f37021", marginBottom: 16, fontSize: 18 }}>
-            Tiến độ đồ án
-          </h3>
-          {!progressSummary ? (
-            <p style={{ color: "#888" }}>Chưa có dữ liệu tiến độ.</p>
-          ) : (
-            <>
-              {/* Progress Bar */}
-              <div style={{ marginBottom: 20 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 8,
-                  }}
-                >
-                  <span style={{ fontWeight: 600, color: "#2d3748" }}>
-                    Hoàn thành: {progressSummary.percentage}%
-                  </span>
-                  <span style={{ color: "#718096" }}>
-                    {progressSummary.completed}/{progressSummary.total} mốc
-                  </span>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: "#eee",
-                    borderRadius: 8,
-                    height: 14,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${progressSummary.percentage}%`,
-                      backgroundColor: "#f37021",
-                      height: "100%",
-                      transition: "width 0.4s ease",
-                    }}
-                  />
-                </div>
+                )}
               </div>
-
-              {/* Next Milestone */}
-              {progressSummary.nextMilestone && (
-                <div
-                  style={{
-                    marginTop: 16,
-                    padding: 12,
-                    backgroundColor: "#fff5f0",
-                    border: "1px solid #f37021",
-                    borderRadius: 8,
-                    fontSize: 14,
-                    color: "#2d3748",
-                  }}
-                >
-                  <strong style={{ color: "#f37021" }}>Mốc tiếp theo:</strong>{" "}
-                  {progressSummary.nextMilestone}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT COLUMN */}
-      <div>
-        {/* THÔNG BÁO */}
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 10,
-            padding: 20,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-            height: "325px", // Chiều cao bằng phần thông tin sinh viên (khoảng 250px ảnh + padding)
-            paddingBottom: "10px", // Thêm padding bottom để chiều cao bằng phần thông tin sinh viên
-          }}
-        >
-          <h3 style={{ color: "#f37021", marginBottom: 12 }}>
-            Thông báo mới nhất
-          </h3>
-          <div
-            style={{
-              height: "250px", // Chiều cao cho phần cuộn
-              overflowY: "auto", // Chỉ phần list thông báo cuộn
-            }}
-          >
-            {notifications.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  borderBottom: "1px solid #f0f0f0",
-                  padding: "8px 0",
-                }}
-              >
-                <div style={{ fontWeight: 500, color: "#333" }}>
-                  {item.title}
-                </div>
-                <div style={{ fontSize: 12, color: "#888" }}>{item.date}</div>
-              </div>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* MỐC SẮP TỚI */}
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 10,
-            padding: 20,
-            marginTop: 20,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#f37021", marginBottom: 10 }}>Mốc sắp tới</h3>
-          <p style={{ margin: 0, color: "#555", fontSize: 14 }}>
-            📅 <strong>10/10/2025 - Nộp báo cáo chương 3</strong>
-          </p>
+        {/* Right Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Notifications */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "32px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <Bell size={24} color="#F37021" />
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1F2937",
+                  margin: 0,
+                }}
+              >
+                Thông báo
+              </h2>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                maxHeight: "400px",
+                overflowY: "auto",
+              }}
+            >
+              {notifications.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: "linear-gradient(135deg, #FFFFFF, #F9FAFB)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid #E5E7EB",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+                      transition: "all 0.2s ease",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow =
+                        "0 4px 12px rgba(0, 0, 0, 0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow =
+                        "0 2px 8px rgba(0, 0, 0, 0.05)";
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "12px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "8px",
+                          backgroundColor: getNotificationColor(item.type),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <IconComponent size={16} color="white" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <h4
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#1F2937",
+                            margin: "0 0 4px 0",
+                            lineHeight: "1.4",
+                          }}
+                        >
+                          {item.title}
+                        </h4>
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "#6B7280",
+                            margin: 0,
+                          }}
+                        >
+                          {item.date}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Upcoming Milestones */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "32px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <Calendar size={24} color="#F37021" />
+              <h2
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1F2937",
+                  margin: 0,
+                }}
+              >
+                Lịch sắp tới
+              </h2>
+            </div>
+
+            <div
+              style={{
+                background: "linear-gradient(135deg, #F0F9FF, #E0F2FE)",
+                borderRadius: "16px",
+                padding: "20px",
+                border: "1px solid #0EA5E9",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #F37021, #FF8C42)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Calendar size={24} color="white" />
+                </div>
+                <div>
+                  <h4
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#0C4A6E",
+                      margin: "0 0 4px 0",
+                    }}
+                  >
+                    10/10/2025
+                  </h4>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#0C4A6E",
+                      margin: 0,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Nộp báo cáo chương 3
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

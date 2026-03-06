@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   login as loginApi,
@@ -6,6 +6,21 @@ import {
 } from "../../services/auth.service";
 import { useAuth } from "../../hooks/useAuth";
 import { RolePaths } from "../../utils/role";
+import type { ApiResponse } from "../../types/api";
+import {
+  AuthSessionKeys,
+  clearAuthSession,
+  consumeSessionExpiredMessage,
+  setAuthSession,
+} from "../../services/auth-session.service";
+
+type LoginApiResponse = ApiResponse<unknown> & {
+  userCode?: string;
+  role?: string;
+  accessToken?: string;
+  tokenType?: string;
+  expiresAt?: string;
+};
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState("");
@@ -16,12 +31,19 @@ const LoginPage: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const expiredMessage = consumeSessionExpiredMessage();
+    if (expiredMessage) {
+      setError(expiredMessage);
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const resp = await loginApi({ username, password });
+      const resp = (await loginApi({ username, password })) as LoginApiResponse;
       if (!resp.success) {
         setError(resp.message ?? "Đăng nhập thất bại");
         setLoading(false);
@@ -32,6 +54,50 @@ const LoginPage: React.FC = () => {
 
       // nếu server trả về user info
       if (user) {
+        try {
+          // Reset previous auth data after successful login
+          clearAuthSession();
+
+          // Save full login response exactly as returned from backend
+          window.localStorage.setItem("login_response", JSON.stringify(resp));
+
+          // Save access token + expiresAt (memory first + storage fallback)
+          setAuthSession({
+            accessToken: resp.accessToken ?? null,
+            expiresAt: resp.expiresAt ?? null,
+          });
+
+          // Save convenient auth payload for token-based usage
+          window.localStorage.setItem(
+            "auth_session",
+            JSON.stringify({
+              success: resp.success,
+              userCode: resp.userCode,
+              role: resp.role,
+              accessToken: resp.accessToken,
+              tokenType: resp.tokenType,
+              expiresAt: resp.expiresAt,
+              data: resp.data,
+            }),
+          );
+
+          // Keep dedicated keys for compatibility
+          if (resp.accessToken) {
+            window.localStorage.setItem(
+              AuthSessionKeys.ACCESS_TOKEN_KEY,
+              resp.accessToken,
+            );
+          }
+          if (resp.expiresAt) {
+            window.localStorage.setItem(
+              AuthSessionKeys.EXPIRES_AT_KEY,
+              resp.expiresAt,
+            );
+          }
+        } catch {
+          // Ignore localStorage failures and continue auth flow
+        }
+
         auth.login(user);
         const role = (user.role ?? "").toString().toUpperCase();
         const redirect = RolePaths[role] ?? "/";
@@ -52,7 +118,7 @@ const LoginPage: React.FC = () => {
         message?: string;
       };
       setError(
-        error?.response?.data?.message ?? error.message ?? "Lỗi kết nối"
+        error?.response?.data?.message ?? error.message ?? "Lỗi kết nối",
       );
     } finally {
       setLoading(false);
@@ -115,7 +181,10 @@ const LoginPage: React.FC = () => {
         }}
       >
         {/* Header */}
-        <div className="login-header" style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+        <div
+          className="login-header"
+          style={{ textAlign: "center", marginBottom: "2.5rem" }}
+        >
           <div
             style={{
               width: "100px",
@@ -203,7 +272,10 @@ const LoginPage: React.FC = () => {
                 position: "relative",
                 borderRadius: "8px",
                 overflow: "hidden",
-                backgroundColor: focusedField === "username" ? "rgba(243, 112, 33, 0.02)" : "#FFFFFF",
+                backgroundColor:
+                  focusedField === "username"
+                    ? "rgba(243, 112, 33, 0.02)"
+                    : "#FFFFFF",
                 border:
                   focusedField === "username"
                     ? "2px solid #F37021"
@@ -255,7 +327,10 @@ const LoginPage: React.FC = () => {
                 position: "relative",
                 borderRadius: "8px",
                 overflow: "hidden",
-                backgroundColor: focusedField === "password" ? "rgba(243, 112, 33, 0.02)" : "#FFFFFF",
+                backgroundColor:
+                  focusedField === "password"
+                    ? "rgba(243, 112, 33, 0.02)"
+                    : "#FFFFFF",
                 border:
                   focusedField === "password"
                     ? "2px solid #F37021"

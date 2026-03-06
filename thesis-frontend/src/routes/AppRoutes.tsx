@@ -30,6 +30,7 @@ import LecturerTopicReview from "../pages/admin/LecturerTopicReview";
 import LecturerNotifications from "../pages/lecturer/Notifications";
 import CommitteeManagement from "../pages/admin/CommitteeManagement";
 import SystemActivityLogs from "../pages/admin/SystemActivityLogs";
+import LecturerTopicReviewPage from "../pages/lecturer/LecturerTopicReview";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -76,6 +77,7 @@ const AppRoutes: React.FC = () => {
           <Route path="schedule" element={<LecturerSchedule />} />
           <Route path="committees" element={<LecturerCommittees />} />
           <Route path="reports" element={<LecturerReports />} />
+          <Route path="topic-review" element={<LecturerTopicReviewPage />} />
           <Route path="profile" element={<LecturerProfilePage />} />
           <Route path="notifications" element={<LecturerNotifications />} />
           {/* thêm các route con của lecturer ở đây */}

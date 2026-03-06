@@ -1,6 +1,11 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import {
+  clearAuthSession,
+  hasValidAccessToken,
+  markSessionExpiredMessage,
+} from "../services/auth-session.service";
 
 interface Props {
   children: React.ReactElement;
@@ -9,8 +14,13 @@ interface Props {
 
 const ProtectedRoute: React.FC<Props> = ({ children, allowedRoles }) => {
   const auth = useAuth();
+  const hasValidToken = hasValidAccessToken();
 
-  if (!auth.isAuthenticated) {
+  if (!hasValidToken) {
+    clearAuthSession();
+    markSessionExpiredMessage(
+      "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
+    );
     return <Navigate to="/login" replace />;
   }
 

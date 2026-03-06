@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -8,10 +8,12 @@ import {
   Clock,
   AlertCircle,
   MessageSquare,
+  X,
 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../context/useToast";
+import { getAccessToken } from "../../services/auth-session.service";
 import type { ApiResponse } from "../../types/api";
 import type {
   ProgressSubmission,
@@ -42,7 +44,7 @@ const LecturerReports: React.FC = () => {
     useState<ProgressSubmission | null>(null);
   const [selectedReportForComment, setSelectedReportForComment] =
     useState<ProgressSubmission | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("pending");
   const [studentProfiles, setStudentProfiles] = useState<{
     [key: string]: StudentProfile;
   }>({});
@@ -63,6 +65,29 @@ const LecturerReports: React.FC = () => {
   const [pageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Use refs to track current state values without causing re-renders
+  const studentProfilesRef = useRef(studentProfiles);
+  const topicsRef = useRef(topics);
+  const supervisorLecturersRef = useRef(supervisorLecturers);
+  const submissionFilesRef = useRef(submissionFiles);
+
+  // Update refs when state changes
+  useEffect(() => {
+    studentProfilesRef.current = studentProfiles;
+  }, [studentProfiles]);
+
+  useEffect(() => {
+    topicsRef.current = topics;
+  }, [topics]);
+
+  useEffect(() => {
+    supervisorLecturersRef.current = supervisorLecturers;
+  }, [supervisorLecturers]);
+
+  useEffect(() => {
+    submissionFilesRef.current = submissionFiles;
+  }, [submissionFiles]);
+
   const getAbsoluteUrl = (url: string) => {
     if (/^https?:\/\//i.test(url)) return url;
     const envBase = (import.meta.env.VITE_API_BASE_URL || "").toString();
@@ -76,17 +101,23 @@ const LecturerReports: React.FC = () => {
   };
 
   const loadAdditionalData = useCallback(
-    async (submissions: ProgressSubmission[]) => {
+    async (
+      submissions: ProgressSubmission[],
+      currentStudentProfiles: { [key: string]: StudentProfile },
+      currentTopics: { [key: string]: Topic },
+      currentSupervisorLecturers: { [key: string]: LecturerProfile },
+      currentSubmissionFiles: { [key: string]: SubmissionFile[] },
+    ) => {
       // Load all student profiles
       const studentCodes = submissions
         .map((s) => s.studentUserCode)
-        .filter((code) => code && !studentProfiles[code]);
+        .filter((code) => code && !currentStudentProfiles[code]);
 
       if (studentCodes.length > 0) {
         const studentPromises = studentCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/StudentProfiles/get-list?UserCode=${code}`
+              `/StudentProfiles/get-list?UserCode=${code}`,
             );
             const data = (response as ApiResponse<StudentProfile[]>).data || [];
             return { code, profile: data[0] };
@@ -106,19 +137,24 @@ const LecturerReports: React.FC = () => {
 
         if (Object.keys(newStudentProfiles).length > 0) {
           setStudentProfiles((prev) => ({ ...prev, ...newStudentProfiles }));
+          // Update ref immediately
+          studentProfilesRef.current = {
+            ...studentProfilesRef.current,
+            ...newStudentProfiles,
+          };
         }
       }
 
       // Load all topics
       const topicCodes = submissions
         .map((s) => s.studentUserCode)
-        .filter((code) => code && !topics[code]);
+        .filter((code) => code && !currentTopics[code]);
 
       if (topicCodes.length > 0) {
         const topicPromises = topicCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${code}`
+              `/Topics/get-list?ProposerUserCode=${code}`,
             );
             const data = (response as ApiResponse<Topic[]>).data || [];
             return { code, topic: data[0] };
@@ -138,18 +174,17 @@ const LecturerReports: React.FC = () => {
 
         if (Object.keys(newTopics).length > 0) {
           setTopics((prev) => ({ ...prev, ...newTopics }));
+          // Update ref immediately
+          topicsRef.current = { ...topicsRef.current, ...newTopics };
         }
 
         // Collect supervisor lecturer codes from topics (new + existing)
         const supervisorCodesToFetch = new Set<string>();
         submissions.forEach((s) => {
-          const topicFromNew = (newTopics as { [key: string]: Topic })[
-            s.studentUserCode
-          ];
-          const topic = topicFromNew || topics[s.studentUserCode];
-          const supCode =
-            (topic as Topic | undefined)?.supervisorLecturerCode || null;
-          if (supCode && !supervisorLecturers[supCode])
+          const topicFromNew = newTopics[s.studentUserCode];
+          const topic = topicFromNew || currentTopics[s.studentUserCode];
+          const supCode = topic?.supervisorLecturerCode || null;
+          if (supCode && !currentSupervisorLecturers[supCode])
             supervisorCodesToFetch.add(supCode);
         });
 
@@ -158,7 +193,7 @@ const LecturerReports: React.FC = () => {
             async (code) => {
               try {
                 const res = await fetchData(
-                  `/LecturerProfiles/get-detail/${code}`
+                  `/LecturerProfiles/get-detail/${code}`,
                 );
                 const data = (res as ApiResponse<LecturerProfile>)?.data;
                 return { code, profile: data };
@@ -166,7 +201,7 @@ const LecturerReports: React.FC = () => {
                 console.error("Error loading supervisor lecturer:", err);
                 return null;
               }
-            }
+            },
           );
 
           const supResults = await Promise.all(supPromises);
@@ -177,6 +212,11 @@ const LecturerReports: React.FC = () => {
 
           if (Object.keys(newSupervisors).length > 0) {
             setSupervisorLecturers((prev) => ({ ...prev, ...newSupervisors }));
+            // Update ref immediately
+            supervisorLecturersRef.current = {
+              ...supervisorLecturersRef.current,
+              ...newSupervisors,
+            };
           }
         }
       }
@@ -184,13 +224,13 @@ const LecturerReports: React.FC = () => {
       // Load all submission files
       const submissionCodes = submissions
         .map((s) => s.submissionCode)
-        .filter((code) => !submissionFiles[code]);
+        .filter((code) => !currentSubmissionFiles[code]);
 
       if (submissionCodes.length > 0) {
         const filePromises = submissionCodes.map(async (code) => {
           try {
             const response = await fetchData(
-              `/SubmissionFiles/get-list?SubmissionCode=${code}`
+              `/SubmissionFiles/get-list?SubmissionCode=${code}`,
             );
             const data = (response as ApiResponse<SubmissionFile[]>).data || [];
             return { code, files: data };
@@ -210,10 +250,15 @@ const LecturerReports: React.FC = () => {
 
         if (Object.keys(newSubmissionFiles).length > 0) {
           setSubmissionFiles((prev) => ({ ...prev, ...newSubmissionFiles }));
+          // Update ref immediately
+          submissionFilesRef.current = {
+            ...submissionFilesRef.current,
+            ...newSubmissionFiles,
+          };
         }
       }
     },
-    [studentProfiles, submissionFiles, topics, supervisorLecturers]
+    [], // No dependencies - use refs instead
   );
 
   const loadLecturerProfile = useCallback(async () => {
@@ -221,7 +266,7 @@ const LecturerReports: React.FC = () => {
 
     try {
       const response = await fetchData(
-        `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`
+        `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`,
       );
       const data = (response as ApiResponse<LecturerProfile[]>).data || [];
       if (data.length > 0) {
@@ -240,7 +285,7 @@ const LecturerReports: React.FC = () => {
       setError(null);
 
       const response = await fetchData(
-        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`
+        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`,
       );
       const apiResponse = response as ApiResponseProgressSubmissions & {
         totalCount?: number;
@@ -251,8 +296,14 @@ const LecturerReports: React.FC = () => {
       setReports(data);
       setTotalCount(total);
 
-      // Load additional data for each report
-      await loadAdditionalData(data);
+      // Load additional data using current ref values
+      await loadAdditionalData(
+        data,
+        studentProfilesRef.current,
+        topicsRef.current,
+        supervisorLecturersRef.current,
+        submissionFilesRef.current,
+      );
     } catch (err) {
       setError("Không thể tải danh sách báo cáo");
       console.error("Error loading reports:", err);
@@ -261,9 +312,9 @@ const LecturerReports: React.FC = () => {
     }
   }, [
     lecturerProfile?.lecturerCode,
-    loadAdditionalData,
     currentPage,
     pageSize,
+    loadAdditionalData,
   ]);
 
   // Load lecturer profile first, then reports
@@ -352,7 +403,7 @@ const LecturerReports: React.FC = () => {
             lecturerState,
             feedbackLevel,
           },
-        }
+        },
       );
 
       // Reload reports to show updated data
@@ -375,7 +426,11 @@ const LecturerReports: React.FC = () => {
       const downloadUrl = `/api/SubmissionFiles/download/${fileID}`;
       const url = getAbsoluteUrl(downloadUrl);
 
-      const resp = await fetch(url, { credentials: "include" });
+      const token = getAccessToken();
+      const resp = await fetch(url, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
 
       if (!resp.ok) {
         // If server responds with unauthorized or redirect to login, send user to login
@@ -407,7 +462,7 @@ const LecturerReports: React.FC = () => {
       // Show simple feedback to user
       addToast(
         "Không thể tải file. Vui lòng thử lại hoặc đăng nhập lại.",
-        "error"
+        "error",
       );
     }
   };
@@ -808,13 +863,13 @@ const LecturerReports: React.FC = () => {
                         <td style={{ padding: "16px" }}>
                           <div style={{ fontSize: "14px", color: "#1a1a1a" }}>
                             {new Date(report.submittedAt).toLocaleDateString(
-                              "vi-VN"
+                              "vi-VN",
                             )}
                           </div>
                           <div style={{ fontSize: "12px", color: "#666" }}>
                             {new Date(report.submittedAt).toLocaleTimeString(
                               "vi-VN",
-                              { hour: "2-digit", minute: "2-digit" }
+                              { hour: "2-digit", minute: "2-digit" },
                             )}
                           </div>
                         </td>
@@ -1077,6 +1132,7 @@ const LecturerReports: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: "16px",
+                    position: "relative",
                   }}
                 >
                   <FileText size={28} />
@@ -1093,10 +1149,37 @@ const LecturerReports: React.FC = () => {
                     <p style={{ fontSize: "14px", margin: 0, opacity: 0.9 }}>
                       {getReportTypeText(selectedReport.milestoneCode)} •{" "}
                       {new Date(selectedReport.submittedAt).toLocaleDateString(
-                        "vi-VN"
+                        "vi-VN",
                       )}
                     </p>
                   </div>
+                  <button
+                    onClick={() => setSelectedReport(null)}
+                    style={{
+                      position: "absolute",
+                      top: "16px",
+                      right: "16px",
+                      background: "transparent",
+                      border: "none",
+                      color: "white",
+                      cursor: "pointer",
+                      padding: "8px",
+                      borderRadius: "4px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "background-color 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }}
+                  >
+                    <X size={20} />
+                  </button>
                 </div>
 
                 {/* Content */}
@@ -1703,7 +1786,7 @@ const LecturerReports: React.FC = () => {
                           }}
                         >
                           {new Date(
-                            selectedReport.submittedAt
+                            selectedReport.submittedAt,
                           ).toLocaleDateString("vi-VN")}
                         </p>
                         <p
@@ -1714,7 +1797,7 @@ const LecturerReports: React.FC = () => {
                           }}
                         >
                           {new Date(
-                            selectedReport.submittedAt
+                            selectedReport.submittedAt,
                           ).toLocaleTimeString("vi-VN", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -1896,7 +1979,7 @@ const LecturerReports: React.FC = () => {
                                 Tải xuống
                               </button>
                             </div>
-                          )
+                          ),
                         )
                       ) : (
                         <div

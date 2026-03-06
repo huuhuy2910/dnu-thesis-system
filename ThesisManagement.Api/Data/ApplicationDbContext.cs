@@ -20,6 +20,7 @@ namespace ThesisManagement.Api.Data
         }
 
         public DbSet<Department> Departments => Set<Department>();
+        public DbSet<Class> Classes => Set<Class>();
         public DbSet<User> Users => Set<User>();
         public DbSet<StudentProfile> StudentProfiles => Set<StudentProfile>();
         public DbSet<LecturerProfile> LecturerProfiles => Set<LecturerProfile>();
@@ -43,6 +44,12 @@ namespace ThesisManagement.Api.Data
         public DbSet<LecturerTag> LecturerTags => Set<LecturerTag>();
         public DbSet<MilestoneTemplate> MilestoneTemplates => Set<MilestoneTemplate>();
         public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+        public DbSet<Conversation> Conversations => Set<Conversation>();
+        public DbSet<ConversationMember> ConversationMembers => Set<ConversationMember>();
+        public DbSet<Message> Messages => Set<Message>();
+        public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
+        public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+        public DbSet<MessageReadReceipt> MessageReadReceipts => Set<MessageReadReceipt>();
         
         // System Activity Logs
         public DbSet<SystemActivityLog> SystemActivityLogs => Set<SystemActivityLog>();
@@ -58,8 +65,8 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.DepartmentCode).HasMaxLength(30).IsRequired();
                 b.Property(x => x.Name).HasMaxLength(200).IsRequired();
                 b.HasIndex(x => x.DepartmentCode).IsUnique();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // Users
@@ -70,8 +77,8 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.UserCode).IsUnique();
                 b.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
                 b.Property(x => x.Role).HasMaxLength(20).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // StudentProfiles
@@ -82,6 +89,7 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.StudentCode).IsUnique();
                 b.HasOne(x => x.User).WithOne(x => x.StudentProfile).HasForeignKey<StudentProfile>(x => x.UserID);
                 b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentID).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.Class).WithMany(x => x.StudentProfiles).HasForeignKey(x => x.ClassID).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.StudentImage).HasMaxLength(255);
                 b.Property(x => x.FullName).HasMaxLength(150);
 
@@ -97,8 +105,22 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.GraduationYear);
                 b.Property(x => x.Notes);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // Classes
+            modelBuilder.Entity<Class>(b =>
+            {
+                b.ToTable("CLASSES");
+                b.HasKey(x => x.ClassID);
+                b.Property(x => x.ClassCode).HasMaxLength(30).IsRequired();
+                b.HasIndex(x => x.ClassCode).IsUnique();
+                b.Property(x => x.ClassName).HasMaxLength(150).IsRequired();
+                b.Property(x => x.DepartmentCode).HasMaxLength(30);
+                b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Đang hoạt động");
+                b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentID).OnDelete(DeleteBehavior.Restrict);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // LecturerProfiles
@@ -124,8 +146,8 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Address).HasMaxLength(255);
                 b.Property(x => x.Notes);
                 b.Property(x => x.FullName).HasMaxLength(100);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // CatalogTopics
@@ -138,14 +160,14 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Summary).HasMaxLength(1000);
                 b.Property(x => x.AssignedStatus).HasMaxLength(20);
                 b.HasOne(x => x.Department).WithMany(x => x.CatalogTopics).HasForeignKey(x => x.DepartmentCode).HasPrincipalKey(x => x.DepartmentCode);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // Topics
             modelBuilder.Entity<Topic>(b =>
             {
-                b.ToTable("Topics", tb =>
+                b.ToTable("TOPICS", tb =>
                 {
                     // Inform EF Core that triggers exist on this table so it avoids using a bare OUTPUT clause.
                     // Update the trigger names below to match the actual triggers defined in the database.
@@ -173,11 +195,11 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.SupervisorLecturerCode).HasMaxLength(30);
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
-                // Lecturer comment stored as nvarchar(max)
+                // Oracle: map to CLOB by convention
                 b.Property(x => x.LecturerComment);
                 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
                 
                 // Configure CatalogTopic navigation
                 b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
@@ -201,8 +223,8 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.CompletedAt3);
                 b.Property(x => x.CompletedAt4);
                 b.Property(x => x.CompletedAt5);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // ProgressSubmissions
@@ -210,7 +232,7 @@ namespace ThesisManagement.Api.Data
             {
                 // Inform EF Core that triggers exist on this table so it avoids using a bare OUTPUT clause.
                 // Update the trigger names below to match the actual triggers defined in the database.
-                b.ToTable("ProgressSubmissions", tb =>
+                b.ToTable("PROGRESSSUBMISSIONS", tb =>
                 {
                     tb.HasTrigger("TR_ProgressSubmissions_Insert");
                     tb.HasTrigger("TR_ProgressSubmissions_Update");
@@ -225,10 +247,10 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserID).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.StudentUserCode).HasMaxLength(40);
                 b.Property(x => x.StudentProfileCode).HasMaxLength(60);
-                b.Property(x => x.SubmittedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.SubmittedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.AttemptNumber).HasDefaultValue(1);
                 // File columns are stored in SubmissionFiles table; do not configure file columns on ProgressSubmission
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // MilestoneTemplates
@@ -240,7 +262,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Name).HasMaxLength(200).IsRequired();
                 b.Property(x => x.Description);
                 b.Property(x => x.Ordinal).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated);
             });
 
@@ -253,14 +275,113 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.FileURL).HasMaxLength(1024).IsRequired();
                 b.Property(x => x.FileName).HasMaxLength(255);
                 b.Property(x => x.MimeType).HasMaxLength(100);
-                b.Property(x => x.UploadedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.UploadedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.UploadedByUserCode).HasMaxLength(40);
+            });
+
+            // Conversations
+            modelBuilder.Entity<Conversation>(b =>
+            {
+                b.ToTable("CONVERSATIONS");
+                b.HasKey(x => x.ConversationID);
+                b.Property(x => x.ConversationCode).HasMaxLength(50).IsRequired();
+                b.HasIndex(x => x.ConversationCode).IsUnique();
+                b.Property(x => x.ConversationType).HasMaxLength(20).IsRequired();
+                b.Property(x => x.Title).HasMaxLength(200);
+                b.Property(x => x.CreatedByUserCode).HasMaxLength(40);
+                b.Property(x => x.AvatarURL).HasMaxLength(500);
+                b.Property(x => x.LastMessagePreview).HasMaxLength(500);
+                b.Property(x => x.IsArchived).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated);
+                b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserID).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ConversationMembers
+            modelBuilder.Entity<ConversationMember>(b =>
+            {
+                b.ToTable("CONVERSATIONMEMBERS");
+                b.HasKey(x => x.MemberID);
+                b.Property(x => x.ConversationCode).HasMaxLength(50);
+                b.Property(x => x.UserCode).HasMaxLength(40);
+                b.Property(x => x.MemberRole).HasMaxLength(20).HasDefaultValue("Member");
+                b.Property(x => x.NickName).HasMaxLength(100);
+                b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.IsMuted).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.IsPinned).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.UnreadCount).HasDefaultValue(0);
+                b.Property(x => x.JoinedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Conversation).WithMany(x => x.Members).HasForeignKey(x => x.ConversationID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserID).OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => new { x.ConversationID, x.UserCode }).IsUnique();
+            });
+
+            // Messages
+            modelBuilder.Entity<Message>(b =>
+            {
+                b.ToTable("MESSAGES");
+                b.HasKey(x => x.MessageID);
+                b.Property(x => x.MessageCode).HasMaxLength(60).IsRequired();
+                b.HasIndex(x => x.MessageCode).IsUnique();
+                b.Property(x => x.ConversationCode).HasMaxLength(50);
+                b.Property(x => x.SenderUserID).IsRequired();
+                b.Property(x => x.SenderUserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.MessageType).HasMaxLength(20).HasDefaultValue("TEXT");
+                b.Property(x => x.IsEdited).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.IsDeleted).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.DeletedForEveryone).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.SentAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Conversation).WithMany(x => x.Messages).HasForeignKey(x => x.ConversationID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.SenderUser).WithMany().HasForeignKey(x => x.SenderUserID).OnDelete(DeleteBehavior.Restrict);
+                b.HasOne(x => x.ReplyToMessage).WithMany().HasForeignKey(x => x.ReplyToMessageID).OnDelete(DeleteBehavior.SetNull);
+                b.HasIndex(x => new { x.ConversationID, x.SentAt });
+            });
+
+            // MessageAttachments
+            modelBuilder.Entity<MessageAttachment>(b =>
+            {
+                b.ToTable("MESSAGEATTACHMENTS");
+                b.HasKey(x => x.AttachmentID);
+                b.Property(x => x.FileUrl).HasMaxLength(1024).IsRequired();
+                b.Property(x => x.FileName).HasMaxLength(255);
+                b.Property(x => x.MimeType).HasMaxLength(100);
+                b.Property(x => x.ThumbnailURL).HasMaxLength(1000);
+                b.Property(x => x.UploadedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Message).WithMany(x => x.Attachments).HasForeignKey(x => x.MessageID).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // MessageReactions
+            modelBuilder.Entity<MessageReaction>(b =>
+            {
+                b.ToTable("MESSAGEREACTIONS");
+                b.HasKey(x => x.ReactionID);
+                b.Property(x => x.UserID).IsRequired();
+                b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.ReactionType).HasMaxLength(20);
+                b.Property(x => x.ReactedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Message).WithMany(x => x.Reactions).HasForeignKey(x => x.MessageID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserID).OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => new { x.MessageID, x.UserCode, x.ReactionType }).IsUnique();
+            });
+
+            // MessageReadReceipts
+            modelBuilder.Entity<MessageReadReceipt>(b =>
+            {
+                b.ToTable("MESSAGEREADRECEIPTS");
+                b.HasKey(x => x.ReceiptID);
+                b.Property(x => x.UserID).IsRequired();
+                b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.ReadAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Message).WithMany().HasForeignKey(x => x.MessageID).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserID).OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => new { x.MessageID, x.UserCode }).IsUnique();
             });
 
             // Committees
             modelBuilder.Entity<Committee>(b =>
             {
-                b.ToTable("Committees", tb =>
+                b.ToTable("COMMITTEES", tb =>
                 {
                     tb.HasTrigger("TR_Committees_Insert");
                     tb.HasTrigger("TR_Committees_Update");
@@ -269,19 +390,19 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.CommitteeID);
                 b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.CommitteeCode).IsUnique();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             modelBuilder.Entity<CommitteeSession>(b =>
             {
-                b.ToTable("CommitteeSessions");
+                b.ToTable("COMMITTEESESSIONS");
                 b.HasKey(x => x.CommitteeSessionID);
                 b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
                 b.Property(x => x.SessionNumber).IsRequired();
                 b.Property(x => x.TopicCount).HasDefaultValue(0);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
                 b.HasOne(x => x.Committee)
                     .WithMany()
                     .HasForeignKey(x => x.CommitteeCode)
@@ -292,7 +413,7 @@ namespace ThesisManagement.Api.Data
 
             modelBuilder.Entity<CommitteeTag>(b =>
             {
-                b.ToTable("CommitteeTags", tb =>
+                b.ToTable("COMMITTEETAGS", tb =>
                 {
                     tb.HasTrigger("TR_CommitteeTags_Insert");
                     tb.HasTrigger("TR_CommitteeTags_Update");
@@ -303,7 +424,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.CommitteeCode).HasMaxLength(50).IsRequired();
                 b.Property(x => x.TagID).IsRequired();
                 b.Property(x => x.TagCode).HasMaxLength(50).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
 
                 b.HasOne(x => x.Committee)
                     .WithMany(x => x.CommitteeTags)
@@ -321,7 +442,7 @@ namespace ThesisManagement.Api.Data
             // CommitteeMembers with new schema
             modelBuilder.Entity<CommitteeMember>(b =>
             {
-                b.ToTable("CommitteeMembers", tb =>
+                b.ToTable("COMMITTEEMEMBERS", tb =>
                 {
                     tb.HasTrigger("TR_CommitteeMembers_Insert");
                     tb.HasTrigger("TR_CommitteeMembers_Update");
@@ -349,7 +470,7 @@ namespace ThesisManagement.Api.Data
             // DefenseAssignments
             modelBuilder.Entity<DefenseAssignment>(b =>
             {
-                b.ToTable("DefenseAssignments", tb =>
+                b.ToTable("DEFENSEASSIGNMENTS", tb =>
                 {
                     tb.HasTrigger("TR_DefenseAssignments_Insert");
                     tb.HasTrigger("TR_DefenseAssignments_Update");
@@ -360,13 +481,14 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.AssignmentCode).IsUnique();
                 b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
                 b.HasOne(x => x.Committee).WithMany().HasForeignKey(x => x.CommitteeCode).HasPrincipalKey(x => x.CommitteeCode);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.Session)
                     .HasConversion(sessionConverter)
                     .HasMaxLength(20);
-                b.Property(x => x.StartTime).HasColumnType("time(0)");
-                b.Property(x => x.EndTime).HasColumnType("time(0)");
+                // Oracle provider maps TimeSpan to INTERVAL DAY TO SECOND
+                b.Property(x => x.StartTime);
+                b.Property(x => x.EndTime);
                 b.Property(x => x.AssignedBy).HasMaxLength(40);
                 b.Property(x => x.AssignedAt);
             });
@@ -387,9 +509,9 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.AssignmentCode).HasMaxLength(60);
                 b.Property(x => x.MemberLecturerCode).HasMaxLength(30);
                 b.Property(x => x.MemberLecturerUserCode).HasMaxLength(40);
-                b.Property(x => x.Score).HasColumnType("decimal(4,2)");
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.Score).HasColumnType("NUMBER(4,2)");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // Specialties - DELETED
@@ -403,8 +525,8 @@ namespace ThesisManagement.Api.Data
                 // Topic navigation removed to prevent shadow properties
                 // b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicID);
                 b.HasOne(x => x.LecturerProfile).WithMany(x => x.TopicLecturers).HasForeignKey(x => x.LecturerProfileID);
-                b.Property(x => x.IsPrimary).HasDefaultValue(false);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.IsPrimary).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // Tags
@@ -415,7 +537,7 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.TagCode).IsUnique();
                 b.Property(x => x.TagName).HasMaxLength(100).IsRequired();
                 b.Property(x => x.Description).HasMaxLength(500);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // CatalogTopicTags (Many-to-Many)
@@ -424,7 +546,7 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => new { x.CatalogTopicID, x.TagID });
                 b.HasOne(x => x.CatalogTopic).WithMany(x => x.CatalogTopicTags).HasForeignKey(x => x.CatalogTopicID);
                 b.HasOne(x => x.Tag).WithMany(x => x.CatalogTopicTags).HasForeignKey(x => x.TagID);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // TopicTags - handles both CatalogTopic and Topic tags
@@ -440,7 +562,7 @@ namespace ThesisManagement.Api.Data
                     .WithMany(x => x.TopicTags)
                     .HasForeignKey(x => x.TagID)
                     .OnDelete(DeleteBehavior.Cascade);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             // LecturerTags
@@ -456,7 +578,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LecturerCode).HasMaxLength(40);
                 b.Property(x => x.TagCode).HasMaxLength(40);
                 b.Property(x => x.AssignedByUserCode).HasMaxLength(40);
-                b.Property(x => x.AssignedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.AssignedAt).HasDefaultValueSql("SYSTIMESTAMP");
 
                 // Unique constraint: one lecturer can only have one assignment of the same tag
                 b.HasIndex(x => new { x.LecturerProfileID, x.TagID }).IsUnique();
@@ -465,7 +587,7 @@ namespace ThesisManagement.Api.Data
             // SystemActivityLog
             modelBuilder.Entity<SystemActivityLog>(b =>
             {
-                b.ToTable("SystemActivityLogs");
+                b.ToTable("SYSTEMACTIVITYLOGS");
                 b.HasKey(x => x.LogID);
                 b.Property(x => x.EntityName).HasMaxLength(100);
                 b.Property(x => x.EntityID).HasMaxLength(60);
@@ -477,7 +599,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Module).HasMaxLength(100);
                 b.Property(x => x.Status).HasMaxLength(30);
                 b.Property(x => x.RelatedRecordCode).HasMaxLength(60);
-                b.Property(x => x.PerformedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.PerformedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 
                 // Optional foreign key to User
                 b.HasOne(x => x.User)
@@ -492,6 +614,44 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.PerformedAt);
                 b.HasIndex(x => x.Module);
             });
+
+            ApplyOracleIdentifierNamingRules(modelBuilder);
+        }
+
+        private static void ApplyOracleIdentifierNamingRules(ModelBuilder modelBuilder)
+        {
+            var keepPascalCaseColumns = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
+            {
+                ["MILESTONETEMPLATES"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" },
+                ["DEFENSESCORES"] = new HashSet<string>(StringComparer.Ordinal) { "Comment" },
+                ["Users"] = new HashSet<string>(StringComparer.Ordinal) { "Role" },
+                ["TOPICS"] = new HashSet<string>(StringComparer.Ordinal) { "Type" },
+                ["SYSTEMACTIVITYLOGS"] = new HashSet<string>(StringComparer.Ordinal) { "Comment" },
+                ["PROGRESSMILESTONES"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" }
+            };
+
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                var tableName = entityType.GetTableName();
+                if (string.IsNullOrWhiteSpace(tableName))
+                {
+                    continue;
+                }
+
+                var normalizedTableName = string.Equals(tableName, "Users", StringComparison.OrdinalIgnoreCase)
+                    ? "Users"
+                    : tableName.ToUpperInvariant();
+
+                entityType.SetTableName(normalizedTableName);
+
+                foreach (var property in entityType.GetProperties())
+                {
+                    var keepPascalCase = keepPascalCaseColumns.TryGetValue(normalizedTableName, out var columns)
+                                        && columns.Contains(property.Name);
+
+                    property.SetColumnName(keepPascalCase ? property.Name : property.Name.ToUpperInvariant());
+                }
+            }
         }
 
         private static string? FormatSessionValue(int? value)
@@ -669,6 +829,7 @@ namespace ThesisManagement.Api.Data
 
             // Ưu tiên lấy các trường Code
             var codeProperty = type.GetProperty("TopicCode") ?? 
+                             type.GetProperty("ConversationCode") ??
                              type.GetProperty("StudentCode") ?? 
                              type.GetProperty("LecturerCode") ??
                              type.GetProperty("UserCode") ??
@@ -685,6 +846,8 @@ namespace ThesisManagement.Api.Data
 
             // Fallback về ID
             var idProperty = type.GetProperty("TopicID") ?? 
+                           type.GetProperty("ConversationID") ??
+                           type.GetProperty("MessageID") ??
                            type.GetProperty("StudentProfileID") ?? 
                            type.GetProperty("LecturerProfileID") ??
                            type.GetProperty("UserID") ??
@@ -732,6 +895,7 @@ namespace ThesisManagement.Api.Data
                 "Committee" or "CommitteeMember" or "CommitteeSession" or "CommitteeTag" => "Committee",
                 "DefenseAssignment" or "DefenseScore" => "Defense",
                 "SubmissionFile" => "Submission",
+                "Conversation" or "ConversationMember" or "Message" or "MessageAttachment" or "MessageReaction" or "MessageReadReceipt" => "Chat",
                 "Department" => "Department",
                 "Tag" or "CatalogTopicTag" or "LecturerTag" => "Catalog",
                 _ => "System"
@@ -756,6 +920,12 @@ namespace ThesisManagement.Api.Data
                 "CommitteeMember" => "thành viên hội đồng",
                 "DefenseAssignment" => "phân công bảo vệ",
                 "DefenseScore" => "điểm bảo vệ",
+                "Conversation" => "cuộc trò chuyện",
+                "ConversationMember" => "thành viên cuộc trò chuyện",
+                "Message" => "tin nhắn",
+                "MessageAttachment" => "tệp đính kèm tin nhắn",
+                "MessageReaction" => "cảm xúc tin nhắn",
+                "MessageReadReceipt" => "trạng thái đã đọc",
                 "Department" => "khoa",
                 "Tag" => "tag",
                 _ => entityName.ToLower()

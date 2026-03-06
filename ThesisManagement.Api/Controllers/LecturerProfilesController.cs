@@ -1,200 +1,99 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Command.LecturerProfiles;
+using ThesisManagement.Api.Application.Query.LecturerProfiles;
 using ThesisManagement.Api.DTOs;
-using ThesisManagement.Api.Models;
+using ThesisManagement.Api.DTOs.LecturerProfiles.Command;
+using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
 using ThesisManagement.Api.Services;
-using ThesisManagement.Api.Helpers;
 
 namespace ThesisManagement.Api.Controllers
 {
     public class LecturerProfilesController : BaseApiController
     {
-        public LecturerProfilesController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper) : base(uow, codeGen, mapper) { }
+        private readonly IGetLecturerProfilesListQuery _getLecturerProfilesListQuery;
+        private readonly IGetLecturerProfileDetailQuery _getLecturerProfileDetailQuery;
+        private readonly IGetLecturerProfileCreateQuery _getLecturerProfileCreateQuery;
+        private readonly IGetLecturerProfileUpdateQuery _getLecturerProfileUpdateQuery;
+        private readonly IGetLecturerAvatarQuery _getLecturerAvatarQuery;
+        private readonly ICreateLecturerProfileCommand _createLecturerProfileCommand;
+        private readonly IUpdateLecturerProfileCommand _updateLecturerProfileCommand;
+        private readonly IUploadLecturerAvatarCommand _uploadLecturerAvatarCommand;
+        private readonly IDeleteLecturerProfileCommand _deleteLecturerProfileCommand;
+
+        public LecturerProfilesController(
+            IUnitOfWork uow,
+            ICodeGenerator codeGen,
+            IMapper mapper,
+            IGetLecturerProfilesListQuery getLecturerProfilesListQuery,
+            IGetLecturerProfileDetailQuery getLecturerProfileDetailQuery,
+            IGetLecturerProfileCreateQuery getLecturerProfileCreateQuery,
+            IGetLecturerProfileUpdateQuery getLecturerProfileUpdateQuery,
+            IGetLecturerAvatarQuery getLecturerAvatarQuery,
+            ICreateLecturerProfileCommand createLecturerProfileCommand,
+            IUpdateLecturerProfileCommand updateLecturerProfileCommand,
+            IUploadLecturerAvatarCommand uploadLecturerAvatarCommand,
+            IDeleteLecturerProfileCommand deleteLecturerProfileCommand) : base(uow, codeGen, mapper)
+        {
+            _getLecturerProfilesListQuery = getLecturerProfilesListQuery;
+            _getLecturerProfileDetailQuery = getLecturerProfileDetailQuery;
+            _getLecturerProfileCreateQuery = getLecturerProfileCreateQuery;
+            _getLecturerProfileUpdateQuery = getLecturerProfileUpdateQuery;
+            _getLecturerAvatarQuery = getLecturerAvatarQuery;
+            _createLecturerProfileCommand = createLecturerProfileCommand;
+            _updateLecturerProfileCommand = updateLecturerProfileCommand;
+            _uploadLecturerAvatarCommand = uploadLecturerAvatarCommand;
+            _deleteLecturerProfileCommand = deleteLecturerProfileCommand;
+        }
 
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] LecturerProfileFilter filter)
         {
-            // Build tag codes set from both TagCodes collection and Tags string parameter
-            var tagCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (filter.TagCodes != null)
-            {
-                foreach (var code in filter.TagCodes)
-                {
-                    if (!string.IsNullOrWhiteSpace(code))
-                        tagCodes.Add(code.Trim());
-                }
-            }
-            if (!string.IsNullOrEmpty(filter.Tags))
-            {
-                var tagValues = filter.Tags.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var tag in tagValues)
-                {
-                    var value = tag.Trim();
-                    if (!string.IsNullOrWhiteSpace(value))
-                        tagCodes.Add(value);
-                }
-            }
-
-            // If tag filtering is needed, handle via join with LecturerTag table
-            IEnumerable<LecturerProfile> items;
-            int totalCount;
-
-            if (tagCodes.Count > 0)
-            {
-                // Get lecturer profiles with tag filtering via LecturerTag join
-                var baseQuery = _uow.LecturerProfiles.Query();
-                var filteredLecturers = await baseQuery
-                    .Where(lp => _uow.LecturerTags.Query()
-                        .Any(lt => lt.LecturerCode == lp.LecturerCode && lt.Tag != null && tagCodes.Contains(lt.Tag.TagCode)))
-                    .ToListAsync();
-
-                // Apply other filters after tag filtering
-                var lecturerQuery = filteredLecturers.AsQueryable();
-                
-                // Reapply the filter without tag codes to apply other filters
-                var tempFilter = new LecturerProfileFilter
-                {
-                    Page = filter.Page,
-                    PageSize = filter.PageSize,
-                    Search = filter.Search,
-                    UserCode = filter.UserCode,
-                    DepartmentCode = filter.DepartmentCode,
-                    LecturerCode = filter.LecturerCode,
-                    Degree = filter.Degree,
-                    MinGuideQuota = filter.MinGuideQuota,
-                    MaxGuideQuota = filter.MaxGuideQuota,
-                    MinDefenseQuota = filter.MinDefenseQuota,
-                    MaxDefenseQuota = filter.MaxDefenseQuota,
-                    TagCodes = null,
-                    Tags = null,
-                    FromDate = filter.FromDate,
-                    ToDate = filter.ToDate,
-                    SortBy = filter.SortBy
-                };
-
-                var result = await _uow.LecturerProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, tempFilter,
-                    (query, f) => query.Where(lp => filteredLecturers.Select(fl => fl.LecturerProfileID).Contains(lp.LecturerProfileID)).ApplyFilter(f));
-                items = result.Items;
-                totalCount = result.TotalCount;
-            }
-            else
-            {
-                // No tag filtering, use standard filter
-                var result = await _uow.LecturerProfiles.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                    (query, f) => query.ApplyFilter(f));
-                items = result.Items;
-                totalCount = result.TotalCount;
-            }
-
-            var dtos = items.Select(x => _mapper.Map<LecturerProfileReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<LecturerProfileReadDto>>.SuccessResponse(dtos, totalCount));
+            var result = await _getLecturerProfilesListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<LecturerProfileReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         [HttpGet("get-detail/{code}")]
         public async Task<IActionResult> GetDetail(string code)
         {
-            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(ent)));
+            var dto = await _getLecturerProfileDetailQuery.ExecuteAsync(code);
+            if (dto == null)
+                return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
+
+            return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(dto));
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { UserID = 0, DepartmentID = (int?)null, CurrentGuidingCount = 0 }));
+        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(_getLecturerProfileCreateQuery.Execute()));
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] LecturerProfileCreateDto dto)
         {
-            // Resolve UserCode to UserID
-            var user = await _uow.Users.Query().FirstOrDefaultAsync(u => u.UserCode == dto.UserCode);
-            if (user == null)
-                return BadRequest(ApiResponse<object>.Fail("User not found", 400));
+            var result = await _createLecturerProfileCommand.ExecuteAsync(dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
-            // Resolve DepartmentCode to DepartmentID if provided
-            Department? department = null;
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-            }
-            
-            var code = _codeGen.Generate("LEC");
-            var entity = new LecturerProfile
-            {
-                LecturerCode = code,
-                UserCode = dto.UserCode,
-                UserID = user.UserID,
-                DepartmentCode = dto.DepartmentCode,
-                DepartmentID = department?.DepartmentID,
-                Degree = dto.Degree,
-                GuideQuota = dto.GuideQuota ?? 10,
-                DefenseQuota = dto.DefenseQuota ?? 8,
-                CurrentGuidingCount = dto.CurrentGuidingCount,
-                Gender = dto.Gender,
-                DateOfBirth = dto.DateOfBirth,
-                Email = dto.Email,
-                PhoneNumber = dto.PhoneNumber,
-                ProfileImage = dto.ProfileImage,
-                Address = dto.Address,
-                Notes = dto.Notes,
-                FullName = dto.FullName,
-                CreatedAt = DateTime.UtcNow,
-                LastUpdated = DateTime.UtcNow
-            };
-            await _uow.LecturerProfiles.AddAsync(entity);
-            await _uow.SaveChangesAsync();
-            return StatusCode(201, ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(entity),1,201));
+            return StatusCode(201, ApiResponse<LecturerProfileReadDto>.SuccessResponse(result.Data, 1, 201));
         }
 
         [HttpGet("get-update/{code}")]
         public async Task<IActionResult> GetUpdate(string code)
         {
-            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(new LecturerProfileUpdateDto(
-                ent.DepartmentCode,
-                ent.Degree,
-                ent.GuideQuota,
-                ent.DefenseQuota,
-                ent.CurrentGuidingCount,
-                ent.Gender,
-                ent.DateOfBirth,
-                ent.Email,
-                ent.PhoneNumber,
-                // ent.ProfileImage, // Không bao gồm vì không update qua PUT
-                ent.Address,
-                ent.Notes,
-                ent.FullName)));
+            var dto = await _getLecturerProfileUpdateQuery.ExecuteAsync(code);
+            if (dto == null)
+                return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
+
+            return Ok(ApiResponse<LecturerProfileUpdateDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{code}")]
         public async Task<IActionResult> Update(string code, [FromBody] LecturerProfileUpdateDto dto)
         {
-            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            // Resolve DepartmentCode to DepartmentID if provided
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                var department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-                ent.DepartmentCode = dto.DepartmentCode;
-                ent.DepartmentID = department?.DepartmentID;
-            }
-            
-            ent.Degree = dto.Degree;
-            ent.GuideQuota = dto.GuideQuota ?? ent.GuideQuota;
-            ent.DefenseQuota = dto.DefenseQuota ?? ent.DefenseQuota;
-            ent.CurrentGuidingCount = dto.CurrentGuidingCount ?? ent.CurrentGuidingCount;
-            if (dto.Gender != null) ent.Gender = dto.Gender;
-            if (dto.DateOfBirth.HasValue) ent.DateOfBirth = dto.DateOfBirth;
-            if (dto.Email != null) ent.Email = dto.Email;
-            if (dto.PhoneNumber != null) ent.PhoneNumber = dto.PhoneNumber;
-            // ProfileImage không được update ở đây, sử dụng endpoint POST /upload-avatar thay thế
-            if (dto.Address != null) ent.Address = dto.Address;
-            if (dto.Notes != null) ent.Notes = dto.Notes;
-            if (dto.FullName != null) ent.FullName = dto.FullName;
-            ent.LastUpdated = DateTime.UtcNow;
-            _uow.LecturerProfiles.Update(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(_mapper.Map<LecturerProfileReadDto>(ent)));
+            var result = await _updateLecturerProfileCommand.ExecuteAsync(code, dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(ApiResponse<LecturerProfileReadDto>.SuccessResponse(result.Data));
         }
 
         /// <summary>
@@ -203,15 +102,16 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-avatar/{code}")]
         public async Task<IActionResult> GetAvatar(string code)
         {
-            var lecturer = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (lecturer == null) return NotFound(ApiResponse<object>.Fail("Giảng viên không tồn tại", 404));
+            var avatar = await _getLecturerAvatarQuery.ExecuteAsync(code);
+            if (avatar == null)
+                return NotFound(ApiResponse<object>.Fail("Giảng viên không tồn tại", 404));
 
             return Ok(ApiResponse<object>.SuccessResponse(new
             {
                 lecturerCode = code,
-                hasAvatar = !string.IsNullOrEmpty(lecturer.ProfileImage),
-                imageUrl = lecturer.ProfileImage,
-                fullImageUrl = lecturer.ProfileImage != null ? $"{Request.Scheme}://{Request.Host}{lecturer.ProfileImage}" : null
+                hasAvatar = avatar.HasAvatar,
+                imageUrl = avatar.ImageUrl,
+                fullImageUrl = avatar.ImageUrl != null ? $"{Request.Scheme}://{Request.Host}{avatar.ImageUrl}" : null
             }));
         }
 
@@ -223,76 +123,26 @@ namespace ThesisManagement.Api.Controllers
         [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> UploadAvatar(string code, [FromForm] IFormFile file)
         {
-            // Kiểm tra giảng viên có tồn tại không
-            var lecturer = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (lecturer == null) return NotFound(ApiResponse<object>.Fail("Giảng viên không tồn tại", 404));
-
-            // Kiểm tra file
-            if (file == null || file.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail("File ảnh là bắt buộc", 400));
-
-            // Kiểm tra loại file (chỉ cho phép ảnh)
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };
-            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!allowedExtensions.Contains(fileExtension))
-                return BadRequest(ApiResponse<object>.Fail("Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)", 400));
-
-            // Kiểm tra kích thước file (giới hạn 5MB)
-            if (file.Length > 5 * 1024 * 1024)
-                return BadRequest(ApiResponse<object>.Fail("Kích thước file không được vượt quá 5MB", 400));
-
-            // Tạo thư mục lưu ảnh nếu chưa có
-            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "lecturers");
-            if (!Directory.Exists(avatarsRoot)) Directory.CreateDirectory(avatarsRoot);
-
-            // Xóa ảnh cũ nếu có
-            if (!string.IsNullOrEmpty(lecturer.ProfileImage))
-            {
-                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", lecturer.ProfileImage.TrimStart('/').Replace("/", "\\"));
-                if (System.IO.File.Exists(oldImagePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(oldImagePath);
-                    }
-                    catch { /* Ignore errors when deleting old file */ }
-                }
-            }
-
-            // Tạo tên file duy nhất
-            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
-            var savePath = Path.Combine(avatarsRoot, uniqueName);
-
-            // Lưu file
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // Cập nhật đường dẫn ảnh vào database
-            var imageUrl = $"/avatars/lecturers/{uniqueName}";
-            lecturer.ProfileImage = imageUrl;
-            lecturer.LastUpdated = DateTime.UtcNow;
-            
-            _uow.LecturerProfiles.Update(lecturer);
-            await _uow.SaveChangesAsync();
+            var result = await _uploadLecturerAvatarCommand.ExecuteAsync(code, file);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
             return Ok(ApiResponse<object>.SuccessResponse(new 
             { 
                 lecturerCode = code,
-                imageUrl = imageUrl,
-                message = "Upload avatar thành công"
+                imageUrl = result.Data?.ImageUrl,
+                message = result.Data?.Message
             }));
         }
 
         [HttpDelete("delete/{code}")]
         public async Task<IActionResult> Delete(string code)
         {
-            var ent = await _uow.LecturerProfiles.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("LecturerProfile not found", 404));
-            _uow.LecturerProfiles.Remove(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<object>.SuccessResponse(null));
+            var result = await _deleteLecturerProfileCommand.ExecuteAsync(code);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(ApiResponse<object>.SuccessResponse(result.Data));
         }
     }
 }

@@ -1,104 +1,98 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Command.CatalogTopics;
+using ThesisManagement.Api.Application.Query.CatalogTopics;
 using ThesisManagement.Api.DTOs;
-using ThesisManagement.Api.Models;
+using ThesisManagement.Api.DTOs.CatalogTopics.Command;
+using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.Services;
-using ThesisManagement.Api.Helpers;
 
 namespace ThesisManagement.Api.Controllers
 {
     public class CatalogTopicsController : BaseApiController
     {
-        public CatalogTopicsController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper) : base(uow, codeGen, mapper) { }
+        private readonly IGetCatalogTopicsListQuery _getCatalogTopicsListQuery;
+        private readonly IGetCatalogTopicDetailQuery _getCatalogTopicDetailQuery;
+        private readonly IGetCatalogTopicCreateQuery _getCatalogTopicCreateQuery;
+        private readonly IGetCatalogTopicUpdateQuery _getCatalogTopicUpdateQuery;
+        private readonly ICreateCatalogTopicCommand _createCatalogTopicCommand;
+        private readonly IUpdateCatalogTopicCommand _updateCatalogTopicCommand;
+        private readonly IDeleteCatalogTopicCommand _deleteCatalogTopicCommand;
+
+        public CatalogTopicsController(
+            IUnitOfWork uow,
+            ICodeGenerator codeGen,
+            IMapper mapper,
+            IGetCatalogTopicsListQuery getCatalogTopicsListQuery,
+            IGetCatalogTopicDetailQuery getCatalogTopicDetailQuery,
+            IGetCatalogTopicCreateQuery getCatalogTopicCreateQuery,
+            IGetCatalogTopicUpdateQuery getCatalogTopicUpdateQuery,
+            ICreateCatalogTopicCommand createCatalogTopicCommand,
+            IUpdateCatalogTopicCommand updateCatalogTopicCommand,
+            IDeleteCatalogTopicCommand deleteCatalogTopicCommand) : base(uow, codeGen, mapper)
+        {
+            _getCatalogTopicsListQuery = getCatalogTopicsListQuery;
+            _getCatalogTopicDetailQuery = getCatalogTopicDetailQuery;
+            _getCatalogTopicCreateQuery = getCatalogTopicCreateQuery;
+            _getCatalogTopicUpdateQuery = getCatalogTopicUpdateQuery;
+            _createCatalogTopicCommand = createCatalogTopicCommand;
+            _updateCatalogTopicCommand = updateCatalogTopicCommand;
+            _deleteCatalogTopicCommand = deleteCatalogTopicCommand;
+        }
 
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] CatalogTopicFilter filter)
         {
-            var result = await _uow.CatalogTopics.GetPagedWithFilterAsync(filter.Page, filter.PageSize, filter,
-                (query, f) => query.ApplyFilter(f));
-            var dtos = result.Items.Select(x => _mapper.Map<CatalogTopicReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<CatalogTopicReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getCatalogTopicsListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<CatalogTopicReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         [HttpGet("get-detail/{code}")]
         public async Task<IActionResult> GetDetail(string code)
         {
-            var ent = await _uow.CatalogTopics.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(_mapper.Map<CatalogTopicReadDto>(ent)));
+            var dto = await _getCatalogTopicDetailQuery.ExecuteAsync(code);
+            if (dto == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
+            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(dto));
         }
 
         [HttpGet("get-create")]
-        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(new { Title = "", Summary = "", Tags = "", AssignedStatus = "", AssignedAt = (DateTime?)null }));
+        public IActionResult GetCreate() => Ok(ApiResponse<object>.SuccessResponse(_getCatalogTopicCreateQuery.Execute()));
 
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CatalogTopicCreateDto dto)
         {
-            // Resolve Department by Code if provided
-            Department? department = null;
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-            }
-            
-            var code = _codeGen.Generate("CAT");
-            var ent = new CatalogTopic
-            {
-                CatalogTopicCode = code,
-                Title = dto.Title,
-                Summary = dto.Summary,
-                DepartmentID = department?.DepartmentID,
-                DepartmentCode = dto.DepartmentCode,
-                AssignedStatus = dto.AssignedStatus,
-                AssignedAt = dto.AssignedAt,
-                CreatedAt = DateTime.UtcNow,
-                LastUpdated = DateTime.UtcNow
-            };
-            await _uow.CatalogTopics.AddAsync(ent);
-            await _uow.SaveChangesAsync();
-            return StatusCode(201, ApiResponse<CatalogTopicReadDto>.SuccessResponse(_mapper.Map<CatalogTopicReadDto>(ent),1,201));
+            var result = await _createCatalogTopicCommand.ExecuteAsync(dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return StatusCode(result.StatusCode, ApiResponse<CatalogTopicReadDto>.SuccessResponse(result.Data, 1, result.StatusCode));
         }
 
         [HttpGet("get-update/{code}")]
         public async Task<IActionResult> GetUpdate(string code)
         {
-            var ent = await _uow.CatalogTopics.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            return Ok(ApiResponse<CatalogTopicUpdateDto>.SuccessResponse(new CatalogTopicUpdateDto(ent.Title, ent.Summary, ent.DepartmentCode, ent.AssignedStatus, ent.AssignedAt)));
+            var dto = await _getCatalogTopicUpdateQuery.ExecuteAsync(code);
+            if (dto == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
+            return Ok(ApiResponse<CatalogTopicUpdateDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{code}")]
         public async Task<IActionResult> Update(string code, [FromBody] CatalogTopicUpdateDto dto)
         {
-            var ent = await _uow.CatalogTopics.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            if (!string.IsNullOrWhiteSpace(dto.Title)) ent.Title = dto.Title;
-            ent.Summary = dto.Summary;
-            
-            // Resolve Department by Code if provided
-            if (!string.IsNullOrWhiteSpace(dto.DepartmentCode))
-            {
-                var department = await _uow.Departments.Query().FirstOrDefaultAsync(d => d.DepartmentCode == dto.DepartmentCode);
-                ent.DepartmentID = department?.DepartmentID;
-                ent.DepartmentCode = dto.DepartmentCode;
-            }
-            
-            ent.AssignedStatus = dto.AssignedStatus;
-            ent.AssignedAt = dto.AssignedAt;
-            ent.LastUpdated = DateTime.UtcNow;
-            _uow.CatalogTopics.Update(ent);
-            await _uow.SaveChangesAsync();
-            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(_mapper.Map<CatalogTopicReadDto>(ent)));
+            var result = await _updateCatalogTopicCommand.ExecuteAsync(code, dto);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(result.Data));
         }
 
         [HttpDelete("delete/{code}")]
         public async Task<IActionResult> Delete(string code)
         {
-            var ent = await _uow.CatalogTopics.GetByCodeAsync(code);
-            if (ent == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            _uow.CatalogTopics.Remove(ent);
-            await _uow.SaveChangesAsync();
+            var result = await _deleteCatalogTopicCommand.ExecuteAsync(code);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
             return Ok(ApiResponse<object>.SuccessResponse(null));
         }
     }

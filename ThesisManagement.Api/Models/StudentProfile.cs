@@ -10,6 +10,7 @@ namespace ThesisManagement.Api.Models
         public string? UserCode { get; set; } // New: reference by code
         public int? DepartmentID { get; set; } // Keep for internal use
         public string? DepartmentCode { get; set; } // New: reference by code
+        public int? ClassID { get; set; }
         public string? ClassCode { get; set; }
         public string? FacultyCode { get; set; }
         public string? StudentImage { get; set; }
@@ -30,6 +31,7 @@ namespace ThesisManagement.Api.Models
 
         public User? User { get; set; }
         public Department? Department { get; set; }
+        public Class? Class { get; set; }
         // Navigation collections removed to avoid EF creating shadow properties
         // public ICollection<Topic>? ProposedTopics { get; set; }
         // public ICollection<ProgressSubmission>? ProgressSubmissions { get; set; }

@@ -1,8 +1,8 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Query.SystemActivityLogs;
 using ThesisManagement.Api.DTOs;
-using ThesisManagement.Api.Helpers;
+using ThesisManagement.Api.DTOs.SystemActivityLogs.Query;
 using ThesisManagement.Api.Services;
 
 namespace ThesisManagement.Api.Controllers
@@ -12,8 +12,32 @@ namespace ThesisManagement.Api.Controllers
     /// </summary>
     public class SystemActivityLogsController : BaseApiController
     {
-        public SystemActivityLogsController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper) 
-            : base(uow, codeGen, mapper) { }
+        private readonly IGetSystemActivityLogsListQuery _getSystemActivityLogsListQuery;
+        private readonly IGetSystemActivityLogDetailQuery _getSystemActivityLogDetailQuery;
+        private readonly IGetSystemActivityLogsByEntityQuery _getSystemActivityLogsByEntityQuery;
+        private readonly IGetSystemActivityLogsByUserQuery _getSystemActivityLogsByUserQuery;
+        private readonly IGetSystemActivityLogsByModuleQuery _getSystemActivityLogsByModuleQuery;
+        private readonly IGetSystemActivityLogStatsQuery _getSystemActivityLogStatsQuery;
+
+        public SystemActivityLogsController(
+            IUnitOfWork uow,
+            ICodeGenerator codeGen,
+            IMapper mapper,
+            IGetSystemActivityLogsListQuery getSystemActivityLogsListQuery,
+            IGetSystemActivityLogDetailQuery getSystemActivityLogDetailQuery,
+            IGetSystemActivityLogsByEntityQuery getSystemActivityLogsByEntityQuery,
+            IGetSystemActivityLogsByUserQuery getSystemActivityLogsByUserQuery,
+            IGetSystemActivityLogsByModuleQuery getSystemActivityLogsByModuleQuery,
+            IGetSystemActivityLogStatsQuery getSystemActivityLogStatsQuery)
+            : base(uow, codeGen, mapper)
+        {
+            _getSystemActivityLogsListQuery = getSystemActivityLogsListQuery;
+            _getSystemActivityLogDetailQuery = getSystemActivityLogDetailQuery;
+            _getSystemActivityLogsByEntityQuery = getSystemActivityLogsByEntityQuery;
+            _getSystemActivityLogsByUserQuery = getSystemActivityLogsByUserQuery;
+            _getSystemActivityLogsByModuleQuery = getSystemActivityLogsByModuleQuery;
+            _getSystemActivityLogStatsQuery = getSystemActivityLogStatsQuery;
+        }
 
         /// <summary>
         /// Lấy danh sách activity logs với filter và phân trang
@@ -23,14 +47,8 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] SystemActivityLogFilter filter)
         {
-            var result = await _uow.SystemActivityLogs.GetPagedWithFilterAsync(
-                filter.Page, 
-                filter.PageSize, 
-                filter,
-                (query, f) => query.ApplyFilter(f));
-            
-            var dtos = result.Items.Select(x => _mapper.Map<SystemActivityLogReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getSystemActivityLogsListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         /// <summary>
@@ -41,11 +59,11 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-detail/{id}")]
         public async Task<IActionResult> GetDetail(int id)
         {
-            var ent = await _uow.SystemActivityLogs.GetByIdAsync(id);
-            if (ent == null) 
+            var dto = await _getSystemActivityLogDetailQuery.ExecuteAsync(id);
+            if (dto == null)
                 return NotFound(ApiResponse<object>.Fail("Activity log not found", 404));
-            
-            return Ok(ApiResponse<SystemActivityLogReadDto>.SuccessResponse(_mapper.Map<SystemActivityLogReadDto>(ent)));
+
+            return Ok(ApiResponse<SystemActivityLogReadDto>.SuccessResponse(dto));
         }
 
         /// <summary>
@@ -61,17 +79,8 @@ namespace ThesisManagement.Api.Controllers
             [FromQuery] string entityId,
             [FromQuery] SystemActivityLogFilter filter)
         {
-            filter.EntityName = entityName;
-            filter.EntityID = entityId;
-
-            var result = await _uow.SystemActivityLogs.GetPagedWithFilterAsync(
-                filter.Page,
-                filter.PageSize,
-                filter,
-                (query, f) => query.ApplyFilter(f));
-
-            var dtos = result.Items.Select(x => _mapper.Map<SystemActivityLogReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getSystemActivityLogsByEntityQuery.ExecuteAsync(entityName, entityId, filter);
+            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         /// <summary>
@@ -85,16 +94,8 @@ namespace ThesisManagement.Api.Controllers
             string userCode,
             [FromQuery] SystemActivityLogFilter filter)
         {
-            filter.UserCode = userCode;
-
-            var result = await _uow.SystemActivityLogs.GetPagedWithFilterAsync(
-                filter.Page,
-                filter.PageSize,
-                filter,
-                (query, f) => query.ApplyFilter(f));
-
-            var dtos = result.Items.Select(x => _mapper.Map<SystemActivityLogReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getSystemActivityLogsByUserQuery.ExecuteAsync(userCode, filter);
+            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         /// <summary>
@@ -108,16 +109,8 @@ namespace ThesisManagement.Api.Controllers
             string module,
             [FromQuery] SystemActivityLogFilter filter)
         {
-            filter.Module = module;
-
-            var result = await _uow.SystemActivityLogs.GetPagedWithFilterAsync(
-                filter.Page,
-                filter.PageSize,
-                filter,
-                (query, f) => query.ApplyFilter(f));
-
-            var dtos = result.Items.Select(x => _mapper.Map<SystemActivityLogReadDto>(x));
-            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(dtos, result.TotalCount));
+            var result = await _getSystemActivityLogsByModuleQuery.ExecuteAsync(module, filter);
+            return Ok(ApiResponse<IEnumerable<SystemActivityLogReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         /// <summary>
@@ -131,23 +124,7 @@ namespace ThesisManagement.Api.Controllers
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to)
         {
-            var query = _uow.SystemActivityLogs.Query();
-
-            if (from.HasValue)
-                query = query.Where(x => x.PerformedAt >= from.Value);
-
-            if (to.HasValue)
-                query = query.Where(x => x.PerformedAt <= to.Value);
-
-            var stats = await query
-                .GroupBy(x => x.ActionType)
-                .Select(g => new 
-                { 
-                    ActionType = g.Key, 
-                    Count = g.Count() 
-                })
-                .ToListAsync();
-
+            var stats = await _getSystemActivityLogStatsQuery.GetByActionTypeAsync(from, to);
             return Ok(ApiResponse<object>.SuccessResponse(stats, stats.Count));
         }
 
@@ -162,23 +139,7 @@ namespace ThesisManagement.Api.Controllers
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to)
         {
-            var query = _uow.SystemActivityLogs.Query();
-
-            if (from.HasValue)
-                query = query.Where(x => x.PerformedAt >= from.Value);
-
-            if (to.HasValue)
-                query = query.Where(x => x.PerformedAt <= to.Value);
-
-            var stats = await query
-                .GroupBy(x => x.Module)
-                .Select(g => new 
-                { 
-                    Module = g.Key, 
-                    Count = g.Count() 
-                })
-                .ToListAsync();
-
+            var stats = await _getSystemActivityLogStatsQuery.GetByModuleAsync(from, to);
             return Ok(ApiResponse<object>.SuccessResponse(stats, stats.Count));
         }
     }
