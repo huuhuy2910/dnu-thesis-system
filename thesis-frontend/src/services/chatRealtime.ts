@@ -33,6 +33,8 @@ export class ChatRealtimeService {
 
   private joinedConversationIds = new Set<number>();
 
+  private conversationCodeToId = new Map<string, number>();
+
   private started = false;
 
   private notify(event: ChatRealtimeEvent) {
@@ -56,7 +58,14 @@ export class ChatRealtimeService {
         try {
           await connection.invoke("JoinConversation", conversationCode);
         } catch {
-          // ignore and continue to keep reconnect resilient
+          const fallbackId = this.conversationCodeToId.get(conversationCode);
+          if (fallbackId && Number.isFinite(fallbackId)) {
+            try {
+              await connection.invoke("JoinConversationById", fallbackId);
+            } catch {
+              // ignore and continue to keep reconnect resilient
+            }
+          }
         }
       }
 
@@ -313,6 +322,7 @@ export class ChatRealtimeService {
       this.started = false;
       this.joinedConversations.clear();
       this.joinedConversationIds.clear();
+      this.conversationCodeToId.clear();
     }
   }
 
@@ -323,7 +333,10 @@ export class ChatRealtimeService {
     };
   }
 
-  async joinConversation(conversationCode: string): Promise<void> {
+  async joinConversation(
+    conversationCode: string,
+    conversationId?: number,
+  ): Promise<void> {
     const code = String(conversationCode || "").trim();
     if (!code) return;
 
@@ -334,6 +347,12 @@ export class ChatRealtimeService {
 
     await connection.invoke("JoinConversation", code);
     this.joinedConversations.add(code);
+
+    const id = Number(conversationId);
+    if (Number.isFinite(id) && id > 0) {
+      this.joinedConversationIds.add(id);
+      this.conversationCodeToId.set(code, id);
+    }
   }
 
   async joinConversationById(conversationId: number): Promise<void> {
@@ -358,6 +377,7 @@ export class ChatRealtimeService {
     }
 
     this.joinedConversations.delete(code);
+    this.conversationCodeToId.delete(code);
   }
 
   async leaveConversationById(conversationId: number): Promise<void> {

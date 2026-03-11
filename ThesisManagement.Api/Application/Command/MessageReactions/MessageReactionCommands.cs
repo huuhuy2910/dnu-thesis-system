@@ -68,17 +68,19 @@ namespace ThesisManagement.Api.Application.Command.MessageReactions
             if (!isMember)
                 return OperationResult<MessageReactionReadDto>.Failed("User is not an active member of this conversation", 403);
 
+            var normalizedReactionType = dto.ReactionType.Trim().ToUpperInvariant();
+
             var existed = _uow.MessageReactions.Query().FirstOrDefault(x =>
-                x.MessageID == dto.MessageID && x.UserCode == actorUserCode && x.ReactionType == dto.ReactionType);
+                x.MessageID == dto.MessageID && x.UserCode == actorUserCode && x.ReactionType == normalizedReactionType);
             if (existed != null)
-                return OperationResult<MessageReactionReadDto>.Succeeded(_mapper.Map<MessageReactionReadDto>(existed));
+                return OperationResult<MessageReactionReadDto>.Succeeded(await BuildPayloadAsync(existed));
 
             var entity = new MessageReaction
             {
                 MessageID = dto.MessageID,
                 UserID = actorUser.UserID,
                 UserCode = actorUserCode,
-                ReactionType = dto.ReactionType.Trim().ToUpperInvariant(),
+                ReactionType = normalizedReactionType,
                 ReactedAt = DateTime.UtcNow
             };
 

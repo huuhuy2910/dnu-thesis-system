@@ -16,6 +16,7 @@ import {
   X,
   Eye,
 } from "lucide-react";
+import "./ChatWidget.css";
 import { getAvatarUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useChat } from "../../hooks/useChat";
@@ -207,6 +208,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
   const [hoveredReactionKey, setHoveredReactionKey] = useState<string | null>(
     null,
   );
+  const [readPopoverAnchor, setReadPopoverAnchor] = useState<{
+    key: string;
+    left: number;
+    top: number;
+    placeBelow: boolean;
+  } | null>(null);
   const pickerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
@@ -403,6 +410,27 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     }));
   };
 
+  const openReadPopover = (key: string, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const popoverWidth = 240;
+    const screenMargin = 8;
+    const left = Math.min(
+      window.innerWidth - popoverWidth - screenMargin,
+      Math.max(
+        screenMargin,
+        rect.left + rect.width / 2 - popoverWidth / 2,
+      ),
+    );
+    const placeBelow = rect.top < 180;
+
+    setReadPopoverAnchor({
+      key,
+      left,
+      top: placeBelow ? rect.bottom + 8 : rect.top - 8,
+      placeBelow,
+    });
+  };
+
   return (
     <div
       ref={widgetRef}
@@ -532,6 +560,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
               topConversations.map((conversation) => {
                 const conversationTitle =
                   conversation.title?.trim() || conversation.conversationCode;
+                const isDirectConversation =
+                  String(conversation.conversationType || "").toLowerCase() ===
+                  "direct";
                 const unreadCount = Number(conversation.unreadCount || 0);
                 const members = Array.isArray(conversation.members)
                   ? conversation.members
@@ -542,6 +573,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     auth.user?.userCode &&
                     item.userCode !== auth.user.userCode,
                 );
+                const displayAvatar = isDirectConversation
+                  ? targetMember?.avatarURL
+                  : conversation.avatarURL;
+                const displayTitle = isDirectConversation
+                  ? targetMember?.fullName || conversationTitle
+                  : conversationTitle;
 
                 return (
                   <button
@@ -577,12 +614,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                         overflow: "hidden",
                       }}
                     >
-                      {targetMember?.avatarURL || conversation.avatarURL ? (
+                      {displayAvatar ? (
                         <img
-                          src={getAvatarUrl(
-                            targetMember?.avatarURL || conversation.avatarURL,
-                          )}
-                          alt={conversationTitle}
+                          src={getAvatarUrl(displayAvatar)}
+                          alt={displayTitle}
                           style={{
                             width: "100%",
                             height: "100%",
@@ -590,7 +625,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                           }}
                         />
                       ) : (
-                        <span>{conversationTitle.charAt(0).toUpperCase()}</span>
+                        <span>{displayTitle.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -612,7 +647,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {targetMember?.fullName || conversationTitle}
+                          {displayTitle}
                         </span>
                         {unreadCount > 0 && (
                           <span
@@ -659,12 +694,25 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
         const members = Array.isArray(conversation.members)
           ? conversation.members
           : [];
+        const isDirectConversation =
+          String(conversation.conversationType || "").toLowerCase() ===
+          "direct";
         const otherMember = members.find(
           (member: ChatConversationMember) =>
             member.userCode &&
             auth.user?.userCode &&
             member.userCode !== auth.user.userCode,
         );
+        const headerAvatar = isDirectConversation
+          ? otherMember?.avatarURL
+          : conversation.avatarURL;
+        const headerTitle =
+          (isDirectConversation
+            ? otherMember?.fullName
+            : conversation.title?.trim()) || conversation.conversationCode;
+        const headerSubtitle = isDirectConversation
+          ? otherMember?.userRole || "Trò chuyện trực tiếp"
+          : "Nhóm chat";
 
         const messages: ChatMessage[] = getConversationMessages(
           conversation.conversationID,
@@ -727,14 +775,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     fontWeight: 700,
                   }}
                 >
-                  {otherMember?.avatarURL ? (
+                  {headerAvatar ? (
                     <img
-                      src={getAvatarUrl(otherMember.avatarURL)}
-                      alt={
-                        otherMember.fullName ||
-                        conversation.title ||
-                        "chat-user"
-                      }
+                      src={getAvatarUrl(headerAvatar)}
+                      alt={headerTitle}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -743,9 +787,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     />
                   ) : (
                     <span>
-                      {(otherMember?.fullName || conversation.title || "C")
-                        .charAt(0)
-                        .toUpperCase()}
+                      {headerTitle.charAt(0).toUpperCase()}
                     </span>
                   )}
                 </div>
@@ -760,12 +802,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {otherMember?.fullName ||
-                      conversation.title ||
-                      conversation.conversationCode}
+                    {headerTitle}
                   </div>
                   <div style={{ fontSize: 12, color: palette.subtitleColor }}>
-                    {otherMember?.userRole || "Trò chuyện trực tiếp"}
+                    {headerSubtitle}
                   </div>
                 </div>
               </div>
@@ -851,11 +891,17 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                 </div>
               )}
 
-              {messages.map((message: ChatMessage) => {
+              {messages.map((message: ChatMessage, messageIndex: number) => {
                 const isMine =
                   !!message.senderUserCode &&
                   !!auth.user?.userCode &&
                   String(message.senderUserCode) === String(auth.user.userCode);
+                const nextMessage = messages[messageIndex + 1];
+                const showSenderAvatar =
+                  !isMine &&
+                  (!nextMessage ||
+                    String(nextMessage.senderUserCode || "") !==
+                      String(message.senderUserCode || ""));
 
                 const attachments = Array.isArray(message.attachments)
                   ? message.attachments
@@ -869,6 +915,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     .filter((member) => !!member.userCode)
                     .map((member) => [String(member.userCode), member]),
                 );
+                const senderMember = message.senderUserCode
+                  ? memberByCode.get(String(message.senderUserCode))
+                  : undefined;
 
                 const reactionGroups = Object.values(
                   reactions.reduce<
@@ -939,38 +988,86 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     key={String(message.messageID)}
                     style={{
                       alignSelf: isMine ? "flex-end" : "flex-start",
-                      maxWidth: "85%",
-                      padding: "8px 10px",
-                      borderRadius: 12,
-                      background: isMine
-                        ? palette.selfMessageBg
-                        : palette.otherMessageBg,
-                      border: "1px solid rgba(148,163,184,0.15)",
-                      position: "relative",
-                      marginBottom: reactions.length > 0 ? 28 : 20,
+                      maxWidth: "100%",
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: 6,
+                      marginBottom:
+                        reactions.length > 0 || (hasReaders && isLatestForSender)
+                          ? 28
+                          : 20,
                     }}
                   >
                     {!isMine && (
                       <div
                         style={{
-                          fontSize: 11,
-                          color: palette.subtitleColor,
-                          marginBottom: 3,
-                          fontWeight: 600,
+                          width: 24,
+                          height: 24,
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        {otherMember?.fullName ||
-                          message.senderUserCode ||
-                          "Người dùng"}
+                        {showSenderAvatar &&
+                        (senderMember?.avatarURL || otherMember?.avatarURL) ? (
+                          <img
+                            src={getAvatarUrl(
+                              senderMember?.avatarURL || otherMember?.avatarURL,
+                            )}
+                            alt={
+                              senderMember?.fullName ||
+                              message.senderUserCode ||
+                              "chat-user"
+                            }
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : null}
                       </div>
                     )}
+
+                    <div
+                      style={{
+                        width: "fit-content",
+                        minWidth: isMine && message.content ? 132 : undefined,
+                        maxWidth: isMine ? "98%" : "85%",
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        background: isMine
+                          ? palette.selfMessageBg
+                          : palette.otherMessageBg,
+                        border: "1px solid rgba(148,163,184,0.15)",
+                        position: "relative",
+                      }}
+                    >
+                      {!isMine && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: palette.subtitleColor,
+                            marginBottom: 3,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {senderMember?.fullName ||
+                            message.senderUserCode ||
+                            "Người dùng"}
+                        </div>
+                      )}
 
                     {!!message.content && (
                       <div
                         style={{
                           color: palette.titleColor,
-                          fontSize: 13,
+                          fontSize: isMine ? 14 : 13,
                           lineHeight: 1.45,
+                          whiteSpace: "normal",
+                          wordBreak: "normal",
                           marginBottom: attachments.length ? 8 : 0,
                         }}
                       >
@@ -1229,21 +1326,113 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                         zIndex: 3,
                         display: "flex",
                         alignItems: "center",
+                        justifyContent: isMine ? "flex-start" : "flex-end",
                         gap: 6,
+                        width: "calc(100% - 16px)",
                         maxWidth: "100%",
                       }}
                     >
-                      {reactionGroups.length > 0 && (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            flexWrap: "wrap",
-                            maxWidth: 250,
+                      <div
+                        style={{
+                          position: "relative",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          order: 2,
+                        }}
+                      >
+                        <button
+                          onMouseEnter={() => {
+                            if (!myReaction) {
+                              setPickerMessageId(message.messageID);
+                            }
                           }}
+                          onClick={() => {
+                            if (myReaction) {
+                              void toggleReaction(
+                                message.conversationID,
+                                message.messageID,
+                                myReaction.reactionType,
+                                true,
+                              );
+                              return;
+                            }
+                            setPickerMessageId(message.messageID);
+                          }}
+                          className={`chat-reaction-toggle ${
+                            myReaction ? "is-reacted" : ""
+                          }`}
+                          style={{
+                            fontSize: myReaction ? 15 : 12,
+                            color: myReaction ? palette.titleColor : "#94a3b8",
+                          }}
+                          title={
+                            myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"
+                          }
                         >
-                          {reactionGroups.map((group) => {
+                          {myReaction ? (
+                            String(
+                              reactionIconMap[myReaction.reactionType] || "🙂",
+                            )
+                          ) : (
+                            <Smile size={14} />
+                          )}
+                        </button>
+
+                        {pickerMessageId === message.messageID && !myReaction && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              bottom: "calc(100% + 6px)",
+                              left: "50%",
+                              transform: "translateX(-50%)",
+                              display: "flex",
+                              gap: 2,
+                              padding: 4,
+                              background: "#fff",
+                              border: "1px solid rgba(148,163,184,0.25)",
+                              borderRadius: 999,
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                              zIndex: 1500,
+                            }}
+                          >
+                            {Object.entries(reactionIconMap).map(
+                              ([reactionType, icon]) => {
+                                return (
+                                  <button
+                                    key={`${message.messageID}-picker-${reactionType}`}
+                                    onClick={() => {
+                                      void toggleReaction(
+                                        message.conversationID,
+                                        message.messageID,
+                                        reactionType,
+                                        false,
+                                      );
+                                      setPickerMessageId(null);
+                                    }}
+                                    style={{
+                                      border: "none",
+                                      background: "transparent",
+                                      cursor: "pointer",
+                                      fontSize: 14,
+                                      opacity: 0.85,
+                                      padding: "0 2px",
+                                    }}
+                                    title={`Reaction ${reactionType}`}
+                                  >
+                                    {String(icon)}
+                                  </button>
+                                );
+                              },
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {(reactionGroups.length > 0 ||
+                        (hasReaders && isLatestForSender)) && (
+                        <div className="chat-reaction-group">
+                          {reactionGroups.length > 0 &&
+                            reactionGroups.map((group) => {
                             const reactionIcon =
                               reactionIconMap[group.reactionType] || "🙂";
                             const hoverKey = `${conversation.conversationID}:${message.messageID}:${group.reactionType}`;
@@ -1260,19 +1449,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                               >
                                 <button
                                   type="button"
-                                  style={{
-                                    border: "1px solid rgba(148,163,184,0.35)",
-                                    background: "rgba(255,255,255,0.95)",
-                                    borderRadius: 999,
-                                    padding: "2px 8px",
-                                    fontSize: 12,
-                                    color: palette.titleColor,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    cursor: "default",
-                                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-                                  }}
+                                  className="chat-reaction-count-chip"
+                                  style={{ color: palette.titleColor }}
                                 >
                                   <span>{String(reactionIcon)}</span>
                                   <span style={{ fontWeight: 600 }}>
@@ -1287,6 +1465,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                       bottom: "calc(100% + 6px)",
                                       left: "50%",
                                       transform: "translateX(-50%)",
+                                      marginLeft: isMine ? 0 : 20,
                                       minWidth: 180,
                                       maxWidth: 240,
                                       background: "#fff",
@@ -1392,240 +1571,145 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                 )}
                               </div>
                             );
-                          })}
-                          {hasReaders && isLatestForSender && (
-                            <div
-                              style={{
-                                position: "relative",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                marginLeft: "auto",
-                              }}
-                              onMouseEnter={() =>
-                                setHoveredReactionKey(readerKey)
-                              }
-                              onMouseLeave={() => setHoveredReactionKey(null)}
-                            >
-                              <button
-                                type="button"
-                                style={{
-                                  border: "1px solid rgba(148,163,184,0.35)",
-                                  background: "rgba(255,255,255,0.95)",
-                                  borderRadius: 999,
-                                  padding: "2px 8px",
-                                  fontSize: 12,
-                                  color: palette.titleColor,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  cursor: "default",
-                                  boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-                                }}
-                              >
-                                <Eye size={14} />
-                                <span style={{ fontWeight: 600 }}>
-                                  {readers.length}
-                                </span>
-                              </button>
-                              {hoveredReactionKey === readerKey && (
-                                <div
-                                  style={{
-                                    position: "absolute",
-                                    bottom: "calc(100% + 6px)",
-                                    left: "50%",
-                                    transform: "translateX(-50%)",
-                                    minWidth: 180,
-                                    maxWidth: 240,
-                                    background: "#fff",
-                                    border: "1px solid rgba(148,163,184,0.25)",
-                                    borderRadius: 10,
-                                    boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
-                                    padding: 8,
-                                    zIndex: 1500,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      color: palette.subtitleColor,
-                                      marginBottom: 6,
-                                    }}
-                                  >
-                                    <Eye size={12} /> {readers.length} đã xem
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: 5,
-                                      maxHeight: 140,
-                                      overflowY: "auto",
-                                    }}
-                                  >
-                                    {readers.map((reader) => {
-                                      const avatar = reader.avatarURL
-                                        ? getAvatarUrl(reader.avatarURL)
-                                        : "";
-                                      const displayName =
-                                        reader.fullName ||
-                                        reader.userCode ||
-                                        "Người dùng";
-                                      return (
-                                        <div
-                                          key={reader.userCode}
-                                          style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 6,
-                                          }}
-                                        >
-                                          <div
-                                            style={{
-                                              width: 20,
-                                              height: 20,
-                                              borderRadius: "50%",
-                                              overflow: "hidden",
-                                              background:
-                                                "rgba(148,163,184,0.2)",
-                                              display: "flex",
-                                              alignItems: "center",
-                                              justifyContent: "center",
-                                              fontSize: 10,
-                                              fontWeight: 700,
-                                            }}
-                                          >
-                                            {avatar ? (
-                                              <img
-                                                src={avatar}
-                                                alt={displayName}
-                                                style={{
-                                                  width: "100%",
-                                                  height: "100%",
-                                                  objectFit: "cover",
-                                                }}
-                                              />
-                                            ) : (
-                                              <span>
-                                                {String(displayName)
-                                                  .charAt(0)
-                                                  .toUpperCase()}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span
-                                            style={{
-                                              fontSize: 12,
-                                              color: palette.titleColor,
-                                            }}
-                                          >
-                                            {displayName}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                            })}
                         </div>
                       )}
 
-                      <button
-                        onMouseEnter={() => {
-                          if (!myReaction) {
-                            setPickerMessageId(message.messageID);
-                          }
-                        }}
-                        onClick={() => {
-                          if (myReaction) {
-                            void toggleReaction(
-                              message.conversationID,
-                              message.messageID,
-                              myReaction.reactionType,
-                              true,
-                            );
-                            return;
-                          }
-                          setPickerMessageId(message.messageID);
-                        }}
-                        style={{
-                          border: "1px solid rgba(148,163,184,0.35)",
-                          background: "rgba(255,255,255,0.95)",
-                          cursor: "pointer",
-                          fontSize: myReaction ? 15 : 12,
-                          color: myReaction ? palette.titleColor : "#94a3b8",
-                          width: 26,
-                          height: 26,
-                          borderRadius: 999,
-                          outline: "none",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
-                          padding: 0,
-                        }}
-                        title={myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"}
-                      >
-                        {myReaction ? (
-                          String(
-                            reactionIconMap[myReaction.reactionType] || "🙂",
-                          )
-                        ) : (
-                          <Smile size={14} />
-                        )}
-                      </button>
-
-                      {pickerMessageId === message.messageID && !myReaction && (
+                      {hasReaders && isLatestForSender && (
                         <div
-                          style={{
-                            position: "absolute",
-                            bottom: "calc(100% + 6px)",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            display: "flex",
-                            gap: 2,
-                            padding: 4,
-                            background: "#fff",
-                            border: "1px solid rgba(148,163,184,0.25)",
-                            borderRadius: 999,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                            zIndex: 1500,
+                          className="chat-read-chip-wrap"
+                          onMouseEnter={(event) => {
+                            setHoveredReactionKey(readerKey);
+                            openReadPopover(
+                              readerKey,
+                              event.currentTarget as HTMLDivElement,
+                            );
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredReactionKey(null);
+                            setReadPopoverAnchor(null);
                           }}
                         >
-                          {Object.entries(reactionIconMap).map(
-                            ([reactionType, icon]) => {
-                              return (
-                                <button
-                                  key={`${message.messageID}-picker-${reactionType}`}
-                                  onClick={() => {
-                                    void toggleReaction(
-                                      message.conversationID,
-                                      message.messageID,
-                                      reactionType,
-                                      false,
-                                    );
-                                    setPickerMessageId(null);
-                                  }}
+                          <button
+                            type="button"
+                            className="chat-read-chip"
+                            style={{ color: palette.titleColor }}
+                          >
+                            <Eye size={14} />
+                            <span style={{ fontWeight: 600 }}>{readers.length}</span>
+                          </button>
+                          {hoveredReactionKey === readerKey &&
+                            readPopoverAnchor?.key === readerKey &&
+                            typeof document !== "undefined" &&
+                            createPortal(
+                              <div
+                                style={{
+                                  position: "fixed",
+                                  left: readPopoverAnchor.left,
+                                  top: readPopoverAnchor.top,
+                                  transform: readPopoverAnchor.placeBelow
+                                    ? "none"
+                                    : "translateY(-100%)",
+                                  minWidth: 180,
+                                  maxWidth: 240,
+                                  background: "#fff",
+                                  border: "1px solid rgba(148,163,184,0.25)",
+                                  borderRadius: 10,
+                                  boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
+                                  padding: 8,
+                                  zIndex: 2000,
+                                }}
+                              >
+                                <div
                                   style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    cursor: "pointer",
-                                    fontSize: 14,
-                                    opacity: 0.85,
-                                    padding: "0 2px",
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: palette.subtitleColor,
+                                    marginBottom: 6,
                                   }}
-                                  title={`Reaction ${reactionType}`}
                                 >
-                                  {String(icon)}
-                                </button>
-                              );
-                            },
-                          )}
+                                  <Eye size={12} /> {readers.length} đã xem
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 5,
+                                    maxHeight: 140,
+                                    overflowY: "auto",
+                                  }}
+                                >
+                                  {readers.map((reader) => {
+                                    const avatar = reader.avatarURL
+                                      ? getAvatarUrl(reader.avatarURL)
+                                      : "";
+                                    const displayName =
+                                      reader.fullName ||
+                                      reader.userCode ||
+                                      "Người dùng";
+                                    return (
+                                      <div
+                                        key={reader.userCode}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 6,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            width: 20,
+                                            height: 20,
+                                            borderRadius: "50%",
+                                            overflow: "hidden",
+                                            background:
+                                              "rgba(148,163,184,0.2)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          {avatar ? (
+                                            <img
+                                              src={avatar}
+                                              alt={displayName}
+                                              style={{
+                                                width: "100%",
+                                                height: "100%",
+                                                objectFit: "cover",
+                                              }}
+                                            />
+                                          ) : (
+                                            <span>
+                                              {String(displayName)
+                                                .charAt(0)
+                                                .toUpperCase()}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span
+                                          style={{
+                                            fontSize: 12,
+                                            color: palette.titleColor,
+                                          }}
+                                        >
+                                          {displayName}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>,
+                              document.body,
+                            )}
                         </div>
                       )}
+
                     </div>
+                    </div>
+
                   </div>
                 );
               })}

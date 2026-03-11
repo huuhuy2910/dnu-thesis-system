@@ -198,6 +198,32 @@ function normalizeMessage(source: Partial<ChatMessage>): ChatMessage {
   };
 }
 
+function normalizeReaction(source: unknown): ChatMessageReaction {
+  const payload =
+    source && typeof source === "object"
+      ? (source as Record<string, unknown>)
+      : {};
+
+  const reactionIdRaw =
+    payload.reactionID ?? payload.reactionId ?? payload.ReactionID ?? 0;
+  const messageIdRaw =
+    payload.messageID ?? payload.messageId ?? payload.MessageID ?? 0;
+
+  return {
+    reactionID: Number(reactionIdRaw || 0),
+    messageID: Number(messageIdRaw || 0),
+    userCode: String(payload.userCode ?? payload.UserCode ?? ""),
+    reactionType: String(payload.reactionType ?? payload.ReactionType ?? ""),
+    reactedAt: String(payload.reactedAt ?? payload.ReactedAt ?? ""),
+    displayName: String(
+      payload.displayName ?? payload.fullName ?? payload.userName ?? "",
+    ),
+    avatarUrl: String(
+      payload.avatarUrl ?? payload.avatarURL ?? payload.profileImage ?? "",
+    ),
+  };
+}
+
 function extractFileExtension(value?: string | null): string {
   if (!value) return "";
   const cleaned = String(value).split("?")[0].split("#")[0];
@@ -465,13 +491,15 @@ export const chatApi = {
       },
       "Không thể tải danh sách biểu cảm.",
     );
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(data)
+      ? data.map((item) => normalizeReaction(item))
+      : [];
   },
 
   async addReaction(
     payload: CreateReactionPayload,
   ): Promise<ChatMessageReaction> {
-    return await requestEnvelope<ChatMessageReaction>(
+    const data = await requestEnvelope<ChatMessageReaction>(
       {
         method: "POST",
         url: "/MessageReactions/create",
@@ -479,13 +507,14 @@ export const chatApi = {
       },
       "Không thể thêm biểu cảm.",
     );
+    return normalizeReaction(data);
   },
 
   async updateReaction(
     reactionID: number,
     payload: CreateReactionUpdatePayload,
   ): Promise<ChatMessageReaction> {
-    return await requestEnvelope<ChatMessageReaction>(
+    const data = await requestEnvelope<ChatMessageReaction>(
       {
         method: "PUT",
         url: `/MessageReactions/update/${reactionID}`,
@@ -493,6 +522,7 @@ export const chatApi = {
       },
       "Không thể cập nhật biểu cảm.",
     );
+    return normalizeReaction(data);
   },
 
   async deleteReaction(reactionID: number): Promise<void> {
