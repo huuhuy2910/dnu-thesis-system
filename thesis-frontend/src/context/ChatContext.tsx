@@ -240,7 +240,8 @@ function mergeReactionWithTempReconcile(
   }
 
   const tempIndex = current.findIndex(
-    (item) => Number(item.reactionID) <= 0 && isSameReactionIdentity(item, reaction),
+    (item) =>
+      Number(item.reactionID) <= 0 && isSameReactionIdentity(item, reaction),
   );
   if (tempIndex >= 0) {
     const next = [...current];
@@ -587,7 +588,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             .listConversationMembers(conversation.conversationID)
             .catch(() => []);
           const hydratedMembers = await hydrateMemberProfiles(rawMembers);
-          return [String(conversation.conversationID), hydratedMembers] as const;
+          return [
+            String(conversation.conversationID),
+            hydratedMembers,
+          ] as const;
         }),
       );
 
@@ -1104,7 +1108,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const myReaction = currentReactions.find(
         (item) => item.userCode === currentUserCode,
       );
-      const optimisticReactionId = -(Date.now() + Math.floor(Math.random() * 1000));
+      const optimisticReactionId = -(
+        Date.now() + Math.floor(Math.random() * 1000)
+      );
 
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -1351,7 +1357,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           reactionID,
           messageID: eventMessageId,
           userCode: String(payload.userCode ?? payload.UserCode ?? ""),
-          reactionType: String(payload.reactionType ?? payload.ReactionType ?? ""),
+          reactionType: String(
+            payload.reactionType ?? payload.ReactionType ?? "",
+          ),
           reactedAt: String(
             payload.reactedAt ?? payload.ReactedAt ?? new Date().toISOString(),
           ),

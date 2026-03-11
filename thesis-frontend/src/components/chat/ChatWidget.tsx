@@ -214,7 +214,14 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     top: number;
     placeBelow: boolean;
   } | null>(null);
+  const [pickerPopoverAnchor, setPickerPopoverAnchor] = useState<{
+    messageId: number;
+    left: number;
+    top: number;
+    placeBelow: boolean;
+  } | null>(null);
   const pickerContainerRef = useRef<HTMLDivElement | null>(null);
+  const pickerPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const messageListRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -332,10 +339,15 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
   useEffect(() => {
     const handleOutside = (event: MouseEvent) => {
       if (!pickerMessageId) return;
+      const target = event.target as Node;
       const node = pickerContainerRef.current;
-      if (node && !node.contains(event.target as Node)) {
-        setPickerMessageId(null);
-      }
+      const popupNode = pickerPopoverRef.current;
+
+      if (node && node.contains(target)) return;
+      if (popupNode && popupNode.contains(target)) return;
+
+      setPickerMessageId(null);
+      setPickerPopoverAnchor(null);
     };
 
     if (pickerMessageId) {
@@ -344,6 +356,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     return () => {
       document.removeEventListener("mousedown", handleOutside);
     };
+  }, [pickerMessageId]);
+
+  useEffect(() => {
+    if (!pickerMessageId) {
+      setPickerPopoverAnchor(null);
+    }
   }, [pickerMessageId]);
 
   if (!enabled) return null;
@@ -416,15 +434,34 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     const screenMargin = 8;
     const left = Math.min(
       window.innerWidth - popoverWidth - screenMargin,
-      Math.max(
-        screenMargin,
-        rect.left + rect.width / 2 - popoverWidth / 2,
-      ),
+      Math.max(screenMargin, rect.left + rect.width / 2 - popoverWidth / 2),
     );
     const placeBelow = rect.top < 180;
 
     setReadPopoverAnchor({
       key,
+      left,
+      top: placeBelow ? rect.bottom + 8 : rect.top - 8,
+      placeBelow,
+    });
+  };
+
+  const openReactionPickerPopover = (
+    messageId: number,
+    target: HTMLElement,
+    mine: boolean,
+  ) => {
+    const rect = target.getBoundingClientRect();
+    const screenMargin = 12;
+    const centerX = rect.left + rect.width / 2 + (mine ? -20 : 0);
+    const left = Math.min(
+      window.innerWidth - screenMargin,
+      Math.max(screenMargin, centerX),
+    );
+    const placeBelow = rect.top < 170;
+
+    setPickerPopoverAnchor({
+      messageId,
       left,
       top: placeBelow ? rect.bottom + 8 : rect.top - 8,
       placeBelow,
@@ -786,9 +823,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                       }}
                     />
                   ) : (
-                    <span>
-                      {headerTitle.charAt(0).toUpperCase()}
-                    </span>
+                    <span>{headerTitle.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -993,7 +1028,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                       alignItems: "flex-end",
                       gap: 6,
                       marginBottom:
-                        reactions.length > 0 || (hasReaders && isLatestForSender)
+                        reactions.length > 0 ||
+                        (hasReaders && isLatestForSender)
                           ? 28
                           : 20,
                     }}
@@ -1060,97 +1096,198 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                         </div>
                       )}
 
-                    {!!message.content && (
-                      <div
-                        style={{
-                          color: palette.titleColor,
-                          fontSize: isMine ? 14 : 13,
-                          lineHeight: 1.45,
-                          whiteSpace: "normal",
-                          wordBreak: "normal",
-                          marginBottom: attachments.length ? 8 : 0,
-                        }}
-                      >
-                        {message.content}
-                      </div>
-                    )}
+                      {!!message.content && (
+                        <div
+                          style={{
+                            color: palette.titleColor,
+                            fontSize: isMine ? 14 : 13,
+                            lineHeight: 1.45,
+                            whiteSpace: "normal",
+                            wordBreak: "normal",
+                            marginBottom: attachments.length ? 8 : 0,
+                          }}
+                        >
+                          {message.content}
+                        </div>
+                      )}
 
-                    {attachments.length > 0 && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                          marginBottom: 8,
-                        }}
-                      >
-                        {attachments.map((attachment) => {
-                          const resolvedUrl = resolveAttachmentUrl(
-                            attachment.fileURL ||
-                              attachment.fileUrl ||
-                              attachment.localPreviewURL,
-                          );
-                          const isFailed = attachment.uploadStatus === "failed";
-                          const isUploading =
-                            attachment.uploadStatus === "uploading";
+                      {attachments.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {attachments.map((attachment) => {
+                            const resolvedUrl = resolveAttachmentUrl(
+                              attachment.fileURL ||
+                                attachment.fileUrl ||
+                                attachment.localPreviewURL,
+                            );
+                            const isFailed =
+                              attachment.uploadStatus === "failed";
+                            const isUploading =
+                              attachment.uploadStatus === "uploading";
 
-                          if (isImageAttachment(attachment)) {
+                            if (isImageAttachment(attachment)) {
+                              return (
+                                <div
+                                  key={attachment.attachmentID}
+                                  style={{
+                                    display: "block",
+                                    width: "100%",
+                                    borderRadius: 10,
+                                    overflow: "hidden",
+                                    border: "1px solid rgba(148,163,184,0.25)",
+                                    background: "#fff",
+                                  }}
+                                >
+                                  {resolvedUrl ? (
+                                    <a
+                                      href={resolvedUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      style={{ display: "block" }}
+                                    >
+                                      <img
+                                        src={resolvedUrl}
+                                        alt={
+                                          attachment.fileName ||
+                                          "attachment-image"
+                                        }
+                                        style={{
+                                          width: "100%",
+                                          maxHeight: 220,
+                                          objectFit: "cover",
+                                          opacity: isFailed ? 0.7 : 1,
+                                        }}
+                                      />
+                                    </a>
+                                  ) : null}
+
+                                  {(isUploading || isFailed) && (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        gap: 8,
+                                        padding: "6px 8px",
+                                        fontSize: 11,
+                                        color: isFailed
+                                          ? "#dc2626"
+                                          : palette.subtitleColor,
+                                        borderTop:
+                                          "1px solid rgba(148,163,184,0.2)",
+                                      }}
+                                    >
+                                      <span>
+                                        {isUploading
+                                          ? "Đang tải ảnh..."
+                                          : attachment.uploadError ||
+                                            "Tải ảnh thất bại"}
+                                      </span>
+                                      {isFailed && (
+                                        <button
+                                          onClick={() => {
+                                            void retryAttachmentUpload(
+                                              conversation.conversationID,
+                                              message.messageID,
+                                              attachment.attachmentID,
+                                            );
+                                          }}
+                                          style={{
+                                            border: "none",
+                                            background: "transparent",
+                                            color: "#2563eb",
+                                            cursor: "pointer",
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Thử lại
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
                             return (
                               <div
                                 key={attachment.attachmentID}
                                 style={{
-                                  display: "block",
-                                  width: "100%",
-                                  borderRadius: 10,
-                                  overflow: "hidden",
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  flexDirection: "column",
+                                  gap: 8,
                                   border: "1px solid rgba(148,163,184,0.25)",
+                                  borderRadius: 10,
+                                  padding: "6px 8px",
+                                  color: palette.titleColor,
                                   background: "#fff",
                                 }}
                               >
-                                {resolvedUrl ? (
-                                  <a
-                                    href={resolvedUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{ display: "block" }}
-                                  >
-                                    <img
-                                      src={resolvedUrl}
-                                      alt={
-                                        attachment.fileName ||
-                                        "attachment-image"
-                                      }
+                                <a
+                                  href={resolvedUrl || undefined}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    textDecoration: "none",
+                                    color: palette.titleColor,
+                                    width: "100%",
+                                    opacity: isFailed ? 0.7 : 1,
+                                  }}
+                                >
+                                  <Paperclip size={14} />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div
                                       style={{
-                                        width: "100%",
-                                        maxHeight: 220,
-                                        objectFit: "cover",
-                                        opacity: isFailed ? 0.7 : 1,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
                                       }}
-                                    />
-                                  </a>
-                                ) : null}
+                                    >
+                                      {attachment.fileName || "Tệp đính kèm"}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: palette.subtitleColor,
+                                      }}
+                                    >
+                                      {formatFileSize(attachment.fileSizeBytes)}
+                                    </div>
+                                  </div>
+                                </a>
 
                                 {(isUploading || isFailed) && (
                                   <div
                                     style={{
+                                      width: "100%",
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "space-between",
                                       gap: 8,
-                                      padding: "6px 8px",
                                       fontSize: 11,
                                       color: isFailed
                                         ? "#dc2626"
                                         : palette.subtitleColor,
-                                      borderTop:
-                                        "1px solid rgba(148,163,184,0.2)",
                                     }}
                                   >
                                     <span>
                                       {isUploading
-                                        ? "Đang tải ảnh..."
+                                        ? "Đang tải tệp..."
                                         : attachment.uploadError ||
-                                          "Tải ảnh thất bại"}
+                                          "Tải tệp thất bại"}
                                     </span>
                                     {isFailed && (
                                       <button
@@ -1177,539 +1314,471 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                 )}
                               </div>
                             );
-                          }
-
-                          return (
-                            <div
-                              key={attachment.attachmentID}
-                              style={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                flexDirection: "column",
-                                gap: 8,
-                                border: "1px solid rgba(148,163,184,0.25)",
-                                borderRadius: 10,
-                                padding: "6px 8px",
-                                color: palette.titleColor,
-                                background: "#fff",
-                              }}
-                            >
-                              <a
-                                href={resolvedUrl || undefined}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  textDecoration: "none",
-                                  color: palette.titleColor,
-                                  width: "100%",
-                                  opacity: isFailed ? 0.7 : 1,
-                                }}
-                              >
-                                <Paperclip size={14} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div
-                                    style={{
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {attachment.fileName || "Tệp đính kèm"}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: 11,
-                                      color: palette.subtitleColor,
-                                    }}
-                                  >
-                                    {formatFileSize(attachment.fileSizeBytes)}
-                                  </div>
-                                </div>
-                              </a>
-
-                              {(isUploading || isFailed) && (
-                                <div
-                                  style={{
-                                    width: "100%",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: 8,
-                                    fontSize: 11,
-                                    color: isFailed
-                                      ? "#dc2626"
-                                      : palette.subtitleColor,
-                                  }}
-                                >
-                                  <span>
-                                    {isUploading
-                                      ? "Đang tải tệp..."
-                                      : attachment.uploadError ||
-                                        "Tải tệp thất bại"}
-                                  </span>
-                                  {isFailed && (
-                                    <button
-                                      onClick={() => {
-                                        void retryAttachmentUpload(
-                                          conversation.conversationID,
-                                          message.messageID,
-                                          attachment.attachmentID,
-                                        );
-                                      }}
-                                      style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#2563eb",
-                                        cursor: "pointer",
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      Thử lại
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        marginTop: 4,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: palette.subtitleColor,
-                          fontStyle: message.isOptimistic ? "italic" : "normal",
-                        }}
-                      >
-                        {message.isOptimistic
-                          ? "Đang gửi..."
-                          : formatMessageTime(message.sentAt)}
-                      </span>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        {/* read count handled by chip below */}
-                      </div>
-                    </div>
-
-                    <div
-                      ref={
-                        message.messageID === pickerMessageId
-                          ? pickerContainerRef
-                          : undefined
-                      }
-                      style={{
-                        position: "absolute",
-                        bottom: -22,
-                        [isMine ? "left" : "right"]: 8,
-                        zIndex: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: isMine ? "flex-start" : "flex-end",
-                        gap: 6,
-                        width: "calc(100% - 16px)",
-                        maxWidth: "100%",
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "relative",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          order: 2,
-                        }}
-                      >
-                        <button
-                          onMouseEnter={() => {
-                            if (!myReaction) {
-                              setPickerMessageId(message.messageID);
-                            }
-                          }}
-                          onClick={() => {
-                            if (myReaction) {
-                              void toggleReaction(
-                                message.conversationID,
-                                message.messageID,
-                                myReaction.reactionType,
-                                true,
-                              );
-                              return;
-                            }
-                            setPickerMessageId(message.messageID);
-                          }}
-                          className={`chat-reaction-toggle ${
-                            myReaction ? "is-reacted" : ""
-                          }`}
-                          style={{
-                            fontSize: myReaction ? 15 : 12,
-                            color: myReaction ? palette.titleColor : "#94a3b8",
-                          }}
-                          title={
-                            myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"
-                          }
-                        >
-                          {myReaction ? (
-                            String(
-                              reactionIconMap[myReaction.reactionType] || "🙂",
-                            )
-                          ) : (
-                            <Smile size={14} />
-                          )}
-                        </button>
-
-                        {pickerMessageId === message.messageID && !myReaction && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              bottom: "calc(100% + 6px)",
-                              left: "50%",
-                              transform: "translateX(-50%)",
-                              display: "flex",
-                              gap: 2,
-                              padding: 4,
-                              background: "#fff",
-                              border: "1px solid rgba(148,163,184,0.25)",
-                              borderRadius: 999,
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                              zIndex: 1500,
-                            }}
-                          >
-                            {Object.entries(reactionIconMap).map(
-                              ([reactionType, icon]) => {
-                                return (
-                                  <button
-                                    key={`${message.messageID}-picker-${reactionType}`}
-                                    onClick={() => {
-                                      void toggleReaction(
-                                        message.conversationID,
-                                        message.messageID,
-                                        reactionType,
-                                        false,
-                                      );
-                                      setPickerMessageId(null);
-                                    }}
-                                    style={{
-                                      border: "none",
-                                      background: "transparent",
-                                      cursor: "pointer",
-                                      fontSize: 14,
-                                      opacity: 0.85,
-                                      padding: "0 2px",
-                                    }}
-                                    title={`Reaction ${reactionType}`}
-                                  >
-                                    {String(icon)}
-                                  </button>
-                                );
-                              },
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {(reactionGroups.length > 0 ||
-                        (hasReaders && isLatestForSender)) && (
-                        <div className="chat-reaction-group">
-                          {reactionGroups.length > 0 &&
-                            reactionGroups.map((group) => {
-                            const reactionIcon =
-                              reactionIconMap[group.reactionType] || "🙂";
-                            const hoverKey = `${conversation.conversationID}:${message.messageID}:${group.reactionType}`;
-                            const hovered = hoveredReactionKey === hoverKey;
-
-                            return (
-                              <div
-                                key={hoverKey}
-                                style={{ position: "relative" }}
-                                onMouseEnter={() =>
-                                  setHoveredReactionKey(hoverKey)
-                                }
-                                onMouseLeave={() => setHoveredReactionKey(null)}
-                              >
-                                <button
-                                  type="button"
-                                  className="chat-reaction-count-chip"
-                                  style={{ color: palette.titleColor }}
-                                >
-                                  <span>{String(reactionIcon)}</span>
-                                  <span style={{ fontWeight: 600 }}>
-                                    {group.count}
-                                  </span>
-                                </button>
-
-                                {hovered && (
-                                  <div
-                                    style={{
-                                      position: "absolute",
-                                      bottom: "calc(100% + 6px)",
-                                      left: "50%",
-                                      transform: "translateX(-50%)",
-                                      marginLeft: isMine ? 0 : 20,
-                                      minWidth: 180,
-                                      maxWidth: 240,
-                                      background: "#fff",
-                                      border:
-                                        "1px solid rgba(148,163,184,0.25)",
-                                      borderRadius: 10,
-                                      boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
-                                      padding: 8,
-                                      zIndex: 1500,
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: palette.subtitleColor,
-                                        marginBottom: 6,
-                                      }}
-                                    >
-                                      {String(reactionIcon)} {group.count} người
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: 5,
-                                        maxHeight: 140,
-                                        overflowY: "auto",
-                                      }}
-                                    >
-                                      {group.items.map((reaction) => {
-                                        const member = reaction.userCode
-                                          ? memberByCode.get(
-                                              String(reaction.userCode),
-                                            )
-                                          : undefined;
-                                        const displayName =
-                                          reaction.displayName ||
-                                          member?.fullName ||
-                                          reaction.userCode ||
-                                          "Người dùng";
-                                        const avatar = resolveReactionAvatar(
-                                          reaction.avatarUrl ||
-                                            member?.avatarURL ||
-                                            "",
-                                        );
-
-                                        return (
-                                          <div
-                                            key={`${hoverKey}-${reaction.reactionID}`}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 6,
-                                            }}
-                                          >
-                                            <div
-                                              style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: "50%",
-                                                overflow: "hidden",
-                                                background:
-                                                  "rgba(148,163,184,0.2)",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                              }}
-                                            >
-                                              {avatar ? (
-                                                <img
-                                                  src={avatar}
-                                                  alt={displayName}
-                                                  style={{
-                                                    width: "100%",
-                                                    height: "100%",
-                                                    objectFit: "cover",
-                                                  }}
-                                                />
-                                              ) : (
-                                                <span>
-                                                  {String(displayName)
-                                                    .charAt(0)
-                                                    .toUpperCase()}
-                                                </span>
-                                              )}
-                                            </div>
-                                            <span
-                                              style={{
-                                                fontSize: 12,
-                                                color: palette.titleColor,
-                                              }}
-                                            >
-                                              {displayName}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                            })}
+                          })}
                         </div>
                       )}
 
-                      {hasReaders && isLatestForSender && (
-                        <div
-                          className="chat-read-chip-wrap"
-                          onMouseEnter={(event) => {
-                            setHoveredReactionKey(readerKey);
-                            openReadPopover(
-                              readerKey,
-                              event.currentTarget as HTMLDivElement,
-                            );
+                      <div
+                        style={{
+                          marginTop: 4,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: palette.subtitleColor,
+                            fontStyle: message.isOptimistic
+                              ? "italic"
+                              : "normal",
                           }}
-                          onMouseLeave={() => {
-                            setHoveredReactionKey(null);
-                            setReadPopoverAnchor(null);
+                        >
+                          {message.isOptimistic
+                            ? "Đang gửi..."
+                            : formatMessageTime(message.sentAt)}
+                        </span>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {/* read count handled by chip below */}
+                        </div>
+                      </div>
+
+                      <div
+                        ref={
+                          message.messageID === pickerMessageId
+                            ? pickerContainerRef
+                            : undefined
+                        }
+                        style={{
+                          position: "absolute",
+                          bottom: -22,
+                          [isMine ? "left" : "right"]: 8,
+                          zIndex: 3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: isMine ? "flex-start" : "flex-end",
+                          gap: 6,
+                          width: "calc(100% - 16px)",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "relative",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            order: 2,
                           }}
                         >
                           <button
-                            type="button"
-                            className="chat-read-chip"
-                            style={{ color: palette.titleColor }}
+                            onMouseEnter={(event) => {
+                              if (!myReaction) {
+                                setPickerMessageId(message.messageID);
+                                openReactionPickerPopover(
+                                  message.messageID,
+                                  event.currentTarget,
+                                  isMine,
+                                );
+                              }
+                            }}
+                            onClick={(event) => {
+                              if (myReaction) {
+                                void toggleReaction(
+                                  message.conversationID,
+                                  message.messageID,
+                                  myReaction.reactionType,
+                                  true,
+                                );
+                                return;
+                              }
+                              setPickerMessageId(message.messageID);
+                              openReactionPickerPopover(
+                                message.messageID,
+                                event.currentTarget,
+                                isMine,
+                              );
+                            }}
+                            className={`chat-reaction-toggle ${
+                              myReaction ? "is-reacted" : ""
+                            }`}
+                            style={{
+                              fontSize: myReaction ? 15 : 12,
+                              color: myReaction
+                                ? palette.titleColor
+                                : "#94a3b8",
+                            }}
+                            title={
+                              myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"
+                            }
                           >
-                            <Eye size={14} />
-                            <span style={{ fontWeight: 600 }}>{readers.length}</span>
+                            {myReaction ? (
+                              String(
+                                reactionIconMap[myReaction.reactionType] ||
+                                  "🙂",
+                              )
+                            ) : (
+                              <Smile size={14} />
+                            )}
                           </button>
-                          {hoveredReactionKey === readerKey &&
-                            readPopoverAnchor?.key === readerKey &&
+
+                          {pickerMessageId === message.messageID &&
+                            !myReaction &&
+                            pickerPopoverAnchor?.messageId === message.messageID &&
                             typeof document !== "undefined" &&
                             createPortal(
                               <div
+                                ref={pickerPopoverRef}
                                 style={{
                                   position: "fixed",
-                                  left: readPopoverAnchor.left,
-                                  top: readPopoverAnchor.top,
-                                  transform: readPopoverAnchor.placeBelow
-                                    ? "none"
-                                    : "translateY(-100%)",
-                                  minWidth: 180,
-                                  maxWidth: 240,
+                                  left: pickerPopoverAnchor.left,
+                                  top: pickerPopoverAnchor.top,
+                                  transform: pickerPopoverAnchor.placeBelow
+                                    ? "translateX(-50%)"
+                                    : "translate(-50%, -100%)",
+                                  display: "flex",
+                                  gap: 2,
+                                  padding: 4,
                                   background: "#fff",
                                   border: "1px solid rgba(148,163,184,0.25)",
-                                  borderRadius: 10,
-                                  boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
-                                  padding: 8,
+                                  borderRadius: 999,
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                                  maxWidth: "calc(100vw - 24px)",
+                                  boxSizing: "border-box",
+                                  overflowX: "auto",
                                   zIndex: 2000,
                                 }}
                               >
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: palette.subtitleColor,
-                                    marginBottom: 6,
-                                  }}
-                                >
-                                  <Eye size={12} /> {readers.length} đã xem
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: 5,
-                                    maxHeight: 140,
-                                    overflowY: "auto",
-                                  }}
-                                >
-                                  {readers.map((reader) => {
-                                    const avatar = reader.avatarURL
-                                      ? getAvatarUrl(reader.avatarURL)
-                                      : "";
-                                    const displayName =
-                                      reader.fullName ||
-                                      reader.userCode ||
-                                      "Người dùng";
+                                {Object.entries(reactionIconMap).map(
+                                  ([reactionType, icon]) => {
                                     return (
-                                      <div
-                                        key={reader.userCode}
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: 6,
+                                      <button
+                                        key={`${message.messageID}-picker-${reactionType}`}
+                                        onClick={() => {
+                                          void toggleReaction(
+                                            message.conversationID,
+                                            message.messageID,
+                                            reactionType,
+                                            false,
+                                          );
+                                          setPickerMessageId(null);
+                                          setPickerPopoverAnchor(null);
                                         }}
+                                        style={{
+                                          border: "none",
+                                          background: "transparent",
+                                          cursor: "pointer",
+                                          fontSize: 14,
+                                          opacity: 0.85,
+                                          padding: "0 2px",
+                                        }}
+                                        title={`Reaction ${reactionType}`}
                                       >
-                                        <div
-                                          style={{
-                                            width: 20,
-                                            height: 20,
-                                            borderRadius: "50%",
-                                            overflow: "hidden",
-                                            background:
-                                              "rgba(148,163,184,0.2)",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            fontSize: 10,
-                                            fontWeight: 700,
-                                          }}
-                                        >
-                                          {avatar ? (
-                                            <img
-                                              src={avatar}
-                                              alt={displayName}
-                                              style={{
-                                                width: "100%",
-                                                height: "100%",
-                                                objectFit: "cover",
-                                              }}
-                                            />
-                                          ) : (
-                                            <span>
-                                              {String(displayName)
-                                                .charAt(0)
-                                                .toUpperCase()}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <span
-                                          style={{
-                                            fontSize: 12,
-                                            color: palette.titleColor,
-                                          }}
-                                        >
-                                          {displayName}
-                                        </span>
-                                      </div>
+                                        {String(icon)}
+                                      </button>
                                     );
-                                  })}
-                                </div>
+                                  },
+                                )}
                               </div>,
                               document.body,
                             )}
                         </div>
-                      )}
 
-                    </div>
-                    </div>
+                        {(reactionGroups.length > 0 ||
+                          (hasReaders && isLatestForSender)) && (
+                          <div className="chat-reaction-group">
+                            {reactionGroups.length > 0 &&
+                              reactionGroups.map((group) => {
+                                const reactionIcon =
+                                  reactionIconMap[group.reactionType] || "🙂";
+                                const hoverKey = `${conversation.conversationID}:${message.messageID}:${group.reactionType}`;
+                                const hovered = hoveredReactionKey === hoverKey;
 
+                                return (
+                                  <div
+                                    key={hoverKey}
+                                    style={{ position: "relative" }}
+                                    onMouseEnter={() =>
+                                      setHoveredReactionKey(hoverKey)
+                                    }
+                                    onMouseLeave={() =>
+                                      setHoveredReactionKey(null)
+                                    }
+                                  >
+                                    <button
+                                      type="button"
+                                      className="chat-reaction-count-chip"
+                                      style={{ color: palette.titleColor }}
+                                    >
+                                      <span>{String(reactionIcon)}</span>
+                                      <span style={{ fontWeight: 600 }}>
+                                        {group.count}
+                                      </span>
+                                    </button>
+
+                                    {hovered && (
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          bottom: "calc(100% + 6px)",
+                                          left: "50%",
+                                          transform: "translateX(-50%)",
+                                          marginLeft: isMine ? 0 : 20,
+                                          minWidth: 180,
+                                          maxWidth: 240,
+                                          background: "#fff",
+                                          border:
+                                            "1px solid rgba(148,163,184,0.25)",
+                                          borderRadius: 10,
+                                          boxShadow:
+                                            "0 8px 18px rgba(0,0,0,0.16)",
+                                          padding: 8,
+                                          zIndex: 1500,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: palette.subtitleColor,
+                                            marginBottom: 6,
+                                          }}
+                                        >
+                                          {String(reactionIcon)} {group.count}{" "}
+                                          người
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 5,
+                                            maxHeight: 140,
+                                            overflowY: "auto",
+                                          }}
+                                        >
+                                          {group.items.map((reaction) => {
+                                            const member = reaction.userCode
+                                              ? memberByCode.get(
+                                                  String(reaction.userCode),
+                                                )
+                                              : undefined;
+                                            const displayName =
+                                              reaction.displayName ||
+                                              member?.fullName ||
+                                              reaction.userCode ||
+                                              "Người dùng";
+                                            const avatar =
+                                              resolveReactionAvatar(
+                                                reaction.avatarUrl ||
+                                                  member?.avatarURL ||
+                                                  "",
+                                              );
+
+                                            return (
+                                              <div
+                                                key={`${hoverKey}-${reaction.reactionID}`}
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: 6,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    width: 20,
+                                                    height: 20,
+                                                    borderRadius: "50%",
+                                                    overflow: "hidden",
+                                                    background:
+                                                      "rgba(148,163,184,0.2)",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                  }}
+                                                >
+                                                  {avatar ? (
+                                                    <img
+                                                      src={avatar}
+                                                      alt={displayName}
+                                                      style={{
+                                                        width: "100%",
+                                                        height: "100%",
+                                                        objectFit: "cover",
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    <span>
+                                                      {String(displayName)
+                                                        .charAt(0)
+                                                        .toUpperCase()}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <span
+                                                  style={{
+                                                    fontSize: 12,
+                                                    color: palette.titleColor,
+                                                  }}
+                                                >
+                                                  {displayName}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+
+                        {hasReaders && isLatestForSender && (
+                          <div
+                            className="chat-read-chip-wrap"
+                            onMouseEnter={(event) => {
+                              setHoveredReactionKey(readerKey);
+                              openReadPopover(
+                                readerKey,
+                                event.currentTarget as HTMLDivElement,
+                              );
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredReactionKey(null);
+                              setReadPopoverAnchor(null);
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="chat-read-chip"
+                              style={{ color: palette.titleColor }}
+                            >
+                              <Eye size={14} />
+                              <span style={{ fontWeight: 600 }}>
+                                {readers.length}
+                              </span>
+                            </button>
+                            {hoveredReactionKey === readerKey &&
+                              readPopoverAnchor?.key === readerKey &&
+                              typeof document !== "undefined" &&
+                              createPortal(
+                                <div
+                                  style={{
+                                    position: "fixed",
+                                    left: readPopoverAnchor.left,
+                                    top: readPopoverAnchor.top,
+                                    transform: readPopoverAnchor.placeBelow
+                                      ? "none"
+                                      : "translateY(-100%)",
+                                    minWidth: 180,
+                                    maxWidth: 240,
+                                    background: "#fff",
+                                    border: "1px solid rgba(148,163,184,0.25)",
+                                    borderRadius: 10,
+                                    boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
+                                    padding: 8,
+                                    zIndex: 2000,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: palette.subtitleColor,
+                                      marginBottom: 6,
+                                    }}
+                                  >
+                                    <Eye size={12} /> {readers.length} đã xem
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: 5,
+                                      maxHeight: 140,
+                                      overflowY: "auto",
+                                    }}
+                                  >
+                                    {readers.map((reader) => {
+                                      const avatar = reader.avatarURL
+                                        ? getAvatarUrl(reader.avatarURL)
+                                        : "";
+                                      const displayName =
+                                        reader.fullName ||
+                                        reader.userCode ||
+                                        "Người dùng";
+                                      return (
+                                        <div
+                                          key={reader.userCode}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 6,
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              width: 20,
+                                              height: 20,
+                                              borderRadius: "50%",
+                                              overflow: "hidden",
+                                              background:
+                                                "rgba(148,163,184,0.2)",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "center",
+                                              fontSize: 10,
+                                              fontWeight: 700,
+                                            }}
+                                          >
+                                            {avatar ? (
+                                              <img
+                                                src={avatar}
+                                                alt={displayName}
+                                                style={{
+                                                  width: "100%",
+                                                  height: "100%",
+                                                  objectFit: "cover",
+                                                }}
+                                              />
+                                            ) : (
+                                              <span>
+                                                {String(displayName)
+                                                  .charAt(0)
+                                                  .toUpperCase()}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              color: palette.titleColor,
+                                            }}
+                                          >
+                                            {displayName}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>,
+                                document.body,
+                              )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
