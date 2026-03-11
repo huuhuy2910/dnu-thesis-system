@@ -1432,7 +1432,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
 
                           {pickerMessageId === message.messageID &&
                             !myReaction &&
-                            pickerPopoverAnchor?.messageId === message.messageID &&
+                            pickerPopoverAnchor?.messageId ===
+                              message.messageID &&
                             typeof document !== "undefined" &&
                             createPortal(
                               <div
