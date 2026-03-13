@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import LoginPage from "../pages/auth/LoginPage";
+import Forbidden from "../pages/Forbidden";
 import StudentLayout from "../components/Layouts/StudentLayout";
 import LecturerLayout from "../components/Layouts/LecturerLayout";
 import AdminLayout from "../components/Layouts/AdminLayout";
@@ -31,6 +32,11 @@ import LecturerNotifications from "../pages/lecturer/Notifications";
 import CommitteeManagement from "../pages/admin/CommitteeManagement";
 import SystemActivityLogs from "../pages/admin/SystemActivityLogs";
 import LecturerTopicReviewPage from "../pages/lecturer/LecturerTopicReview";
+import StudentProfilesManagement from "../pages/studentservices/StudentProfilesManagement";
+import LecturerProfilesManagement from "../pages/studentservices/LecturerProfilesManagement";
+import DepartmentsManagement from "../pages/studentservices/DepartmentsManagement";
+import TopicsManagement from "../pages/studentservices/TopicsManagement";
+import AcademicDataManagementPage from "../pages/studentservices/AcademicDataManagementPage";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -42,6 +48,7 @@ const AppRoutes: React.FC = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/403" element={<Forbidden />} />
 
         {/* STUDENT */}
         <Route
@@ -92,24 +99,13 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         >
-          <Route index element={<AdminDashboard />} />
+          <Route index element={<AcademicDataManagementPage />} />
           <Route path="users" element={<UsersManagement />} />
-          <Route path="system-config" element={<SystemConfig />} />
+          <Route path="students" element={<StudentProfilesManagement />} />
+          <Route path="lecturers" element={<LecturerProfilesManagement />} />
+          <Route path="departments" element={<DepartmentsManagement />} />
+          <Route path="topics" element={<TopicsManagement />} />
           <Route path="topic-review" element={<LecturerTopicReview />} />
-          <Route path="notifications/create" element={<CreateNotification />} />
-          {/* thêm các route con khác của admin ở đây */}
-        </Route>
-        {/* ADMIN */}
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<AdminDashboard />} />
-          <Route path="users" element={<UsersManagement />} />
           <Route path="committees" element={<CommitteeManagement />} />
           <Route
             path="defense-assignments"
@@ -118,7 +114,23 @@ const AppRoutes: React.FC = () => {
           <Route path="system-config" element={<SystemConfig />} />
           <Route path="notifications/create" element={<CreateNotification />} />
           <Route path="activity-logs" element={<SystemActivityLogs />} />
-          {/* thêm các route con khác của admin ở đây */}
+        </Route>
+
+        {/* STUDENT SERVICE */}
+        <Route
+          path="/student-service/*"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN", "STUDENTSERVICE"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UsersManagement />} />
+          <Route path="students" element={<StudentProfilesManagement />} />
+          <Route path="lecturers" element={<LecturerProfilesManagement />} />
+          <Route path="departments" element={<DepartmentsManagement />} />
+          <Route path="topics" element={<TopicsManagement />} />
         </Route>
 
         {/* fallback: nếu không match => điều hướng về /login */}

@@ -6,6 +6,7 @@ import {
   hasValidAccessToken,
   markSessionExpiredMessage,
 } from "../services/auth-session.service";
+import { normalizeRole, RolePaths } from "../utils/role";
 
 interface Props {
   children: React.ReactElement;
@@ -25,13 +26,16 @@ const ProtectedRoute: React.FC<Props> = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && allowedRoles.length > 0) {
-    const role = auth.user?.role ?? "";
-    if (!allowedRoles.includes(role)) {
-      return (
-        <div style={{ padding: 20 }}>
-          Unauthorized — bạn không có quyền truy cập.
-        </div>
-      );
+    const role = normalizeRole(auth.user?.role ?? "");
+    const normalizedAllowedRoles = allowedRoles.map((item) =>
+      normalizeRole(item),
+    );
+    if (!normalizedAllowedRoles.includes(role)) {
+      const fallbackPath = RolePaths[role];
+      if (fallbackPath) {
+        return <Navigate to={fallbackPath} replace />;
+      }
+      return <Navigate to="/403" replace />;
     }
   }
 

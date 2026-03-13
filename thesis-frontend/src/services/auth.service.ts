@@ -1,6 +1,7 @@
 import { fetchData } from "../api/fetchData";
 import type { ApiResponse } from "../types/api";
 import type { User } from "../types/user";
+import { normalizeRole } from "../utils/role";
 
 export interface LoginRequest {
   username: string;
@@ -34,7 +35,7 @@ function extractUserFromApiData(data: unknown): User | null {
 }
 
 export async function login(
-  credentials: LoginRequest
+  credentials: LoginRequest,
 ): Promise<ApiResponse<unknown>> {
   return await fetchData<ApiResponse<unknown>>("/Auth/login", {
     method: "POST",
@@ -69,16 +70,7 @@ export function parseLoginResponse(resp: ApiResponse<unknown>): LoginResult {
   // Normalize role to canonical uppercase values used by routing
   if (user && user.role) {
     try {
-      const normalized = String(user.role).trim().toUpperCase();
-      if (["STUDENT", "LECTURER", "ADMIN"].includes(normalized)) {
-        user.role = normalized as unknown as User["role"];
-      } else {
-        // Map some common variants (e.g., 'Student' -> 'STUDENT')
-        if (normalized === "STUDENT") user.role = "STUDENT";
-        else if (normalized === "LECTURER") user.role = "LECTURER";
-        else if (normalized === "ADMIN") user.role = "ADMIN";
-        else user.role = normalized as unknown as User["role"]; // leave as-is
-      }
+      user.role = normalizeRole(user.role) as unknown as User["role"];
     } catch {
       /* noop */
     }

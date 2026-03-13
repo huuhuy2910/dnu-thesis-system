@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ThesisManagement.Api.Application.Command.LecturerProfiles;
 using ThesisManagement.Api.Application.Query.LecturerProfiles;
