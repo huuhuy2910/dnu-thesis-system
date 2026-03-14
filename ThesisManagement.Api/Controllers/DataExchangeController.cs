@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.DataExchange;
@@ -22,14 +21,14 @@ namespace ThesisManagement.Api.Controllers
 
         [HttpPost("import/{module}")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> Import(string module, [FromForm] IFormFile file, [FromQuery] string? format = null)
+        public async Task<IActionResult> Import(string module, [FromForm] DataImportRequestDto request)
         {
-            if (file == null || file.Length == 0)
+            if (request.File == null || request.File.Length == 0)
                 return BadRequest(ApiResponse<object>.Fail("File is required", 400));
 
             try
             {
-                var result = await _dataExchangeService.ImportAsync(module, file, format);
+                var result = await _dataExchangeService.ImportAsync(module, request.File, request.Format);
                 return Ok(ApiResponse<DataImportResultDto>.SuccessResponse(result));
             }
             catch (Exception ex)

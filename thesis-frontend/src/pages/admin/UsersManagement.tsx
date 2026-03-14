@@ -17,6 +17,13 @@ import { hasUserManagementPermission } from "../../utils/permissions";
 import "../admin/Dashboard.css";
 
 type UserRow = Record<string, unknown>;
+type LinkedProfile = Record<string, unknown>;
+type LinkedProfileType = "student" | "lecturer";
+
+interface LinkedProfileState {
+  profileType: LinkedProfileType;
+  data: LinkedProfile;
+}
 
 type UserCreatePayload = {
   userCode: string;
@@ -62,6 +69,75 @@ async function requestApi<T>(
   };
 }
 
+function normalizeItems(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload as Record<string, unknown>[];
+  }
+  if (payload && typeof payload === "object") {
+    const source = payload as Record<string, unknown>;
+    const nested = [
+      source.items,
+      source.records,
+      source.result,
+      source.data,
+      source.list,
+    ];
+    const arr = nested.find((candidate) => Array.isArray(candidate));
+    if (Array.isArray(arr)) {
+      return arr as Record<string, unknown>[];
+    }
+  }
+  return [];
+}
+
+async function findStudentProfileByUserCode(
+  userCode: string,
+): Promise<LinkedProfile | null> {
+  const query = new URLSearchParams({
+    page: "1",
+    pageSize: "1",
+    userCode,
+  });
+  const { data } = await requestApi<unknown>(
+    `/StudentProfiles/get-list?${query.toString()}`,
+    { method: "GET" },
+    "Không thể tải dữ liệu StudentProfile.",
+  );
+  const items = normalizeItems(data);
+  return items[0] ?? null;
+}
+
+async function findLecturerProfileByUserCode(
+  userCode: string,
+): Promise<LinkedProfile | null> {
+  const query = new URLSearchParams({
+    page: "1",
+    pageSize: "1",
+    userCode,
+  });
+  const { data } = await requestApi<unknown>(
+    `/LecturerProfiles/get-list?${query.toString()}`,
+    { method: "GET" },
+    "Không thể tải dữ liệu LecturerProfile.",
+  );
+  const items = normalizeItems(data);
+  return items[0] ?? null;
+}
+
+function resolveDisplayValue(
+  user: UserRow,
+  linked: LinkedProfileState | null,
+  key: "fullName" | "email",
+): string {
+  const profile = linked?.data || {};
+  if (key === "fullName") {
+    const candidate = profile.fullName ?? user.fullName;
+    return String(candidate ?? "");
+  }
+  const candidate = profile.studentEmail ?? profile.email ?? user.email;
+  return String(candidate ?? "");
+}
+
 const UsersManagement: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -87,6 +163,11 @@ const UsersManagement: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [selectedLinkedProfile, setSelectedLinkedProfile] =
+    useState<LinkedProfileState | null>(null);
+  const [linkedProfilesByUserCode, setLinkedProfilesByUserCode] = useState<
+    Record<string, LinkedProfileState>
+  >({});
   const [createForm, setCreateForm] = useState<UserCreatePayload>({
     userCode: "",
     password: "",
@@ -187,6 +268,71 @@ const UsersManagement: React.FC = () => {
     void loadUsers();
   }, [loadUsers]);
 
+  useEffect(() => {
+    if (!rows.length) {
+      setLinkedProfilesByUserCode({});
+      return;
+    }
+
+    let cancelled = false;
+    const loadLinkedProfiles = async () => {
+      const entries = await Promise.all(
+        rows.map(async (row) => {
+          const userCode = String(row.userCode ?? "").trim();
+          const roleName = String(row.role ?? "")
+            .trim()
+            .toUpperCase();
+          if (!userCode) return null;
+
+          try {
+            if (roleName === "STUDENT") {
+              const profile = await findStudentProfileByUserCode(userCode);
+              if (profile) {
+                return [
+                  userCode,
+                  { profileType: "student" as const, data: profile },
+                ];
+              }
+            }
+
+            if (roleName === "LECTURER") {
+              const profile = await findLecturerProfileByUserCode(userCode);
+              if (profile) {
+                return [
+                  userCode,
+                  { profileType: "lecturer" as const, data: profile },
+                ];
+              }
+            }
+          } catch {
+            return null;
+          }
+
+          return null;
+        }),
+      );
+
+      if (cancelled) return;
+
+      const map = entries.reduce<Record<string, LinkedProfileState>>(
+        (acc, entry) => {
+          if (!entry) return acc;
+          const [userCode, profile] = entry;
+          acc[userCode] = profile;
+          return acc;
+        },
+        {},
+      );
+      setLinkedProfilesByUserCode(map);
+    };
+
+    void loadLinkedProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
   const openDetail = async (row: UserRow) => {
     if (!canDetail) return;
     const code = String(row.userCode ?? row.code ?? "").trim();
@@ -200,7 +346,26 @@ const UsersManagement: React.FC = () => {
         { method: "GET" },
         "Không thể tải chi tiết tài khoản.",
       );
+
+      const roleName = String(data.role ?? row.role ?? "")
+        .trim()
+        .toUpperCase();
+      let linked: LinkedProfileState | null = null;
+      if (roleName === "STUDENT") {
+        const profile = await findStudentProfileByUserCode(code);
+        if (profile) {
+          linked = { profileType: "student", data: profile };
+        }
+      }
+      if (roleName === "LECTURER") {
+        const profile = await findLecturerProfileByUserCode(code);
+        if (profile) {
+          linked = { profileType: "lecturer", data: profile };
+        }
+      }
+
       setSelectedUser(data);
+      setSelectedLinkedProfile(linked);
       setShowDetailModal(true);
     } catch (error) {
       handleApiError(error, "Không thể tải chi tiết tài khoản.");
@@ -483,8 +648,22 @@ const UsersManagement: React.FC = () => {
                   <tr key={id || String(row.userCode ?? Math.random())}>
                     <td>{String(row.userID ?? row.id ?? "")}</td>
                     <td>{String(row.userCode ?? "")}</td>
-                    <td>{String(row.fullName ?? "")}</td>
-                    <td>{String(row.email ?? "")}</td>
+                    <td>
+                      {resolveDisplayValue(
+                        row,
+                        linkedProfilesByUserCode[String(row.userCode ?? "")] ||
+                          null,
+                        "fullName",
+                      )}
+                    </td>
+                    <td>
+                      {resolveDisplayValue(
+                        row,
+                        linkedProfilesByUserCode[String(row.userCode ?? "")] ||
+                          null,
+                        "email",
+                      )}
+                    </td>
                     <td>
                       <span className="status-badge in-progress">
                         {String(row.role ?? "")}
@@ -905,6 +1084,50 @@ const UsersManagement: React.FC = () => {
                   <span>{String(value ?? "")}</span>
                 </div>
               ))}
+
+              <div
+                style={{
+                  marginTop: 10,
+                  paddingTop: 12,
+                  borderTop: "1px dashed #cbd5e1",
+                  display: "grid",
+                  gap: 8,
+                }}
+              >
+                <h4 style={{ margin: 0, color: "#0f172a" }}>
+                  Thông tin hồ sơ liên kết theo userCode
+                </h4>
+                {selectedLinkedProfile ? (
+                  <>
+                    <div style={{ color: "#475569", fontSize: 13 }}>
+                      Nguồn dữ liệu:{" "}
+                      {selectedLinkedProfile.profileType === "student"
+                        ? "StudentProfiles"
+                        : "LecturerProfiles"}
+                    </div>
+                    {Object.entries(selectedLinkedProfile.data).map(
+                      ([key, value]) => (
+                        <div
+                          key={`linked-${key}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "200px 1fr",
+                            gap: 8,
+                          }}
+                        >
+                          <strong>{key}</strong>
+                          <span>{String(value ?? "")}</span>
+                        </div>
+                      ),
+                    )}
+                  </>
+                ) : (
+                  <div style={{ color: "#64748b" }}>
+                    Không tìm thấy hồ sơ StudentProfile/LecturerProfile theo
+                    userCode.
+                  </div>
+                )}
+              </div>
             </div>
             <div
               style={{
@@ -916,7 +1139,10 @@ const UsersManagement: React.FC = () => {
             >
               <button
                 type="button"
-                onClick={() => setShowDetailModal(false)}
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setSelectedLinkedProfile(null);
+                }}
                 style={{
                   border: "1px solid #cbd5e1",
                   borderRadius: 8,

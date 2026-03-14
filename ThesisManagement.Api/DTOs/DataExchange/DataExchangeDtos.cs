@@ -1,8 +1,15 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 
 namespace ThesisManagement.Api.DTOs.DataExchange
 {
+    public class DataImportRequestDto
+    {
+        public IFormFile? File { get; set; }
+        public string? Format { get; set; }
+    }
+
     public class DataImportResultDto
     {
         public string Module { get; set; } = string.Empty;

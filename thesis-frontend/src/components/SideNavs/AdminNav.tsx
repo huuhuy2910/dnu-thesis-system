@@ -4,6 +4,7 @@ import {
   Home,
   Users,
   ClipboardList,
+  BookOpen,
   FileCog,
   ShieldCheck,
   Bell,
@@ -64,6 +65,11 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
   const roleCanSeeUsers = hasUserManagementPermission(role, "users:list");
 
   const adminOnlyItems = [
+    {
+      path: `${basePath}/topic-review`,
+      label: "Duyệt đề tài",
+      icon: <BookOpen size={18} />,
+    },
     {
       path: `${basePath}/committees`,
       label: "Hội đồng & phân công",

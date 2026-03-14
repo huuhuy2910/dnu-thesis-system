@@ -17,44 +17,88 @@ interface FieldDef {
   required?: boolean;
 }
 
+interface ColumnDef {
+  key: string;
+  label: string;
+  aliases?: string[];
+}
+
 const fields: FieldDef[] = [
   { name: "topicCode", label: "topicCode" },
-  { name: "topicTitle", label: "topicTitle", required: true },
-  { name: "description", label: "description", type: "textarea" },
-  { name: "departmentCode", label: "departmentCode" },
+  { name: "title", label: "title", required: true },
+  { name: "summary", label: "summary", type: "textarea" },
+  { name: "type", label: "type" },
+  { name: "proposerUserID", label: "proposerUserID", type: "number" },
+  { name: "proposerUserCode", label: "proposerUserCode" },
   {
-    name: "proposerLecturerCode",
-    label: "proposerLecturerCode",
-    required: true,
+    name: "proposerStudentProfileID",
+    label: "proposerStudentProfileID",
+    type: "number",
   },
-  { name: "maxStudents", label: "maxStudents", type: "number" },
+  { name: "proposerStudentCode", label: "proposerStudentCode" },
+  { name: "supervisorUserID", label: "supervisorUserID", type: "number" },
+  { name: "supervisorUserCode", label: "supervisorUserCode" },
+  {
+    name: "supervisorLecturerProfileID",
+    label: "supervisorLecturerProfileID",
+    type: "number",
+  },
+  { name: "supervisorLecturerCode", label: "supervisorLecturerCode" },
+  { name: "catalogTopicID", label: "catalogTopicID", type: "number" },
+  { name: "catalogTopicCode", label: "catalogTopicCode" },
+  { name: "departmentID", label: "departmentID", type: "number" },
+  { name: "departmentCode", label: "departmentCode" },
   { name: "status", label: "status" },
-  { name: "approvedAt", label: "approvedAt", type: "date" },
-  { name: "approvedBy", label: "approvedBy" },
-  { name: "tags", label: "tags" },
+  { name: "resubmitCount", label: "resubmitCount", type: "number" },
+  { name: "lecturerComment", label: "lecturerComment", type: "textarea" },
 ];
 
 const filterFields: FieldDef[] = [
   { name: "topicCode", label: "Mã đề tài" },
-  { name: "topicTitle", label: "Tên đề tài" },
+  { name: "title", label: "Tên đề tài" },
   { name: "departmentCode", label: "Khoa/Bộ môn" },
   { name: "status", label: "Trạng thái" },
-  { name: "proposerLecturerCode", label: "Mã giảng viên đề xuất" },
-  { name: "approvedBy", label: "Người duyệt" },
+  { name: "type", label: "Loại đề tài" },
+  { name: "proposerUserCode", label: "Mã người đề xuất" },
+  { name: "supervisorUserCode", label: "Mã GV hướng dẫn" },
 ];
 
-const columns = [
-  { key: "topicCode", label: "Mã đề tài" },
-  { key: "topicTitle", label: "Tên đề tài" },
-  { key: "departmentCode", label: "Khoa/Bộ môn" },
-  { key: "proposerLecturerCode", label: "GV đề xuất" },
-  { key: "status", label: "Trạng thái" },
+const columns: ColumnDef[] = [
+  { key: "topicCode", label: "Mã đề tài", aliases: ["code"] },
+  { key: "title", label: "Tên đề tài", aliases: ["topicTitle", "name"] },
+  {
+    key: "departmentCode",
+    label: "Khoa/Bộ môn",
+    aliases: ["departmentName", "department"],
+  },
+  {
+    key: "proposerUserCode",
+    label: "Người đề xuất",
+    aliases: ["proposerStudentCode", "proposerCode", "proposerName"],
+  },
+  {
+    key: "supervisorLecturerCode",
+    label: "GV hướng dẫn",
+    aliases: ["supervisorUserCode", "supervisorCode"],
+  },
+  { key: "status", label: "Trạng thái", aliases: ["topicStatus", "isActive"] },
 ];
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function getColumnValue(row: RecordData, column: ColumnDef): unknown {
+  const keys = [column.key, ...(column.aliases ?? [])];
+  for (const key of keys) {
+    const value = row[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    return value;
+  }
+  return "";
 }
 
 function toFormRecord(data: RecordData): Record<string, string> {
@@ -314,8 +358,10 @@ const TopicsManagement: React.FC = () => {
       return;
     }
 
-    if (!String(payload.proposerLecturerCode ?? "").trim()) {
-      addToast("Trường proposerLecturerCode là bắt buộc.", "warning");
+    const proposerUserID = Number(payload.proposerUserID ?? 0);
+    const proposerUserCode = String(payload.proposerUserCode ?? "").trim();
+    if (!proposerUserID && !proposerUserCode) {
+      addToast("Cần proposerUserID hoặc proposerUserCode.", "warning");
       return;
     }
 
@@ -368,7 +414,10 @@ const TopicsManagement: React.FC = () => {
     <div className="admin-dashboard topics-module">
       <div className="dashboard-header">
         <h1>Quản lý đề tài</h1>
-        <p>CRUD đề tài khóa luận và import/export dữ liệu.</p>
+        <p>
+          Dữ liệu chuẩn theo schema Topics (title, summary, proposerUserCode,
+          supervisorLecturerCode, status...).
+        </p>
       </div>
 
       <div
@@ -555,7 +604,7 @@ const TopicsManagement: React.FC = () => {
                 <tr key={`topics-${index}-${String(row.topicCode ?? "")}`}>
                   {columns.map((column) => (
                     <td key={`${column.key}-${index}`}>
-                      {toDisplay(row[column.key])}
+                      {toDisplay(getColumnValue(row, column))}
                     </td>
                   ))}
                   <td>
@@ -718,20 +767,64 @@ const TopicsManagement: React.FC = () => {
             </div>
 
             {activeModal === "detail" ? (
-              <div style={{ padding: 16, display: "grid", gap: 8 }}>
-                {Object.entries(selectedRow || {}).map(([key, value]) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "220px 1fr",
-                      gap: 8,
-                    }}
-                  >
-                    <strong>{key}</strong>
-                    <span>{toDisplay(value)}</span>
-                  </div>
-                ))}
+              <div
+                style={{
+                  padding: "24px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: "16px",
+                  background: "#f8fafc",
+                }}
+              >
+                {Object.entries(selectedRow || {}).map(([key, value]) => {
+                  const strVal = toDisplay(value);
+                  const isLong = strVal.length > 60;
+                  return (
+                    <div
+                      key={key}
+                      style={{
+                        padding: "16px",
+                        background: "#fff",
+                        borderRadius: "10px",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+                        gridColumn: isLong ? "1 / -1" : "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        {key}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#0f172a",
+                          lineHeight: "1.5",
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {strVal || (
+                          <span
+                            style={{ color: "#94a3b8", fontStyle: "italic" }}
+                          >
+                            Trống
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div

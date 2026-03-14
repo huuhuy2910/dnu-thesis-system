@@ -43,9 +43,13 @@ const studentsFields: EntityField[] = [
   { name: "studentCode", label: "studentCode" },
   { name: "userCode", label: "userCode", required: true },
   { name: "departmentCode", label: "departmentCode" },
+  { name: "classCode", label: "classCode" },
+  { name: "facultyCode", label: "facultyCode" },
+  { name: "studentImage", label: "studentImage" },
   { name: "fullName", label: "fullName" },
   { name: "studentEmail", label: "studentEmail" },
   { name: "phoneNumber", label: "phoneNumber" },
+  { name: "academicStanding", label: "academicStanding" },
   { name: "status", label: "status" },
   { name: "enrollmentYear", label: "enrollmentYear", type: "number" },
   { name: "graduationYear", label: "graduationYear", type: "number" },
@@ -67,6 +71,7 @@ const lecturersFields: EntityField[] = [
   { name: "guideQuota", label: "guideQuota", type: "number" },
   { name: "defenseQuota", label: "defenseQuota", type: "number" },
   { name: "currentGuidingCount", label: "currentGuidingCount", type: "number" },
+  { name: "profileImage", label: "profileImage" },
   { name: "gender", label: "gender" },
   { name: "dateOfBirth", label: "dateOfBirth", type: "date" },
   { name: "address", label: "address" },
@@ -86,7 +91,11 @@ const topicsFields: EntityField[] = [
   { name: "type", label: "type" },
   { name: "proposerUserID", label: "proposerUserID", type: "number" },
   { name: "proposerUserCode", label: "proposerUserCode" },
-  { name: "proposerStudentProfileID", label: "proposerStudentProfileID", type: "number" },
+  {
+    name: "proposerStudentProfileID",
+    label: "proposerStudentProfileID",
+    type: "number",
+  },
   { name: "proposerStudentCode", label: "proposerStudentCode" },
   { name: "supervisorUserID", label: "supervisorUserID", type: "number" },
   { name: "supervisorUserCode", label: "supervisorUserCode" },
@@ -113,6 +122,7 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
     tableColumns: [
       { key: "studentCode", label: "Mã SV" },
       { key: "fullName", label: "Họ tên" },
+      { key: "classCode", label: "Lớp" },
       { key: "departmentCode", label: "Khoa/Bộ môn" },
       { key: "studentEmail", label: "Email" },
       { key: "status", label: "Trạng thái" },
@@ -122,6 +132,9 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       { name: "studentCode", label: "Mã sinh viên" },
       { name: "userCode", label: "Mã user" },
       { name: "departmentCode", label: "Khoa/Bộ môn" },
+      { name: "classCode", label: "Lớp" },
+      { name: "facultyCode", label: "Khoa viện" },
+      { name: "academicStanding", label: "Học lực" },
       { name: "status", label: "Trạng thái" },
       { name: "enrollmentYear", label: "Năm nhập học", type: "number" },
       { name: "graduationYear", label: "Năm tốt nghiệp", type: "number" },
@@ -129,7 +142,8 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
     ],
     api: {
       listPath: "/StudentProfiles/get-list",
-      detailPath: (code) => `/StudentProfiles/get-detail/${encodeURIComponent(code)}`,
+      detailPath: (code) =>
+        `/StudentProfiles/get-detail/${encodeURIComponent(code)}`,
       createTemplatePath: "/StudentProfiles/get-create",
       createPath: "/StudentProfiles/create",
       updateTemplatePath: (token) =>
@@ -153,6 +167,7 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       { key: "departmentCode", label: "Khoa/Bộ môn" },
       { key: "email", label: "Email" },
       { key: "degree", label: "Học vị" },
+      { key: "currentGuidingCount", label: "Đang hướng dẫn" },
     ],
     fields: lecturersFields,
     advancedFilters: [
@@ -160,11 +175,13 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       { name: "userCode", label: "Mã user" },
       { name: "departmentCode", label: "Khoa/Bộ môn" },
       { name: "degree", label: "Học vị" },
+      { name: "guideQuota", label: "Chỉ tiêu hướng dẫn", type: "number" },
       { name: "gender", label: "Giới tính" },
     ],
     api: {
       listPath: "/LecturerProfiles/get-list",
-      detailPath: (code) => `/LecturerProfiles/get-detail/${encodeURIComponent(code)}`,
+      detailPath: (code) =>
+        `/LecturerProfiles/get-detail/${encodeURIComponent(code)}`,
       createTemplatePath: "/LecturerProfiles/get-create",
       createPath: "/LecturerProfiles/create",
       updateTemplatePath: (token) =>
@@ -194,16 +211,20 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
     ],
     api: {
       listPath: "/Departments/get-list",
-      detailPath: (code) => `/Departments/get-detail/${encodeURIComponent(code)}`,
+      detailPath: (code) =>
+        `/Departments/get-detail/${encodeURIComponent(code)}`,
       createTemplatePath: "/Departments/get-create",
       createPath: "/Departments/create",
-      updateTemplatePath: (token) => `/Departments/get-update/${Number(token)}`,
-      updatePath: (token) => `/Departments/update/${Number(token)}`,
-      deletePath: (token) => `/Departments/delete/${Number(token)}`,
+      updateTemplatePath: (token) =>
+        `/Departments/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/Departments/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/Departments/delete/${encodeURIComponent(String(token))}`,
     },
     getDetailCode: (row) => String(row.departmentCode ?? ""),
-    getUpdateToken: (row) => Number(row.departmentID ?? 0),
-    getDeleteToken: (row) => Number(row.departmentID ?? 0),
+    getUpdateToken: (row) => String(row.departmentCode ?? ""),
+    getDeleteToken: (row) => String(row.departmentCode ?? ""),
   },
   topics: {
     moduleName: "topics",
@@ -212,6 +233,8 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
     tableColumns: [
       { key: "topicCode", label: "Mã đề tài" },
       { key: "title", label: "Tiêu đề" },
+      { key: "proposerUserCode", label: "Người đề xuất" },
+      { key: "supervisorLecturerCode", label: "GV hướng dẫn" },
       { key: "departmentCode", label: "Khoa" },
       { key: "status", label: "Trạng thái" },
     ],
@@ -230,13 +253,16 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       detailPath: (code) => `/Topics/get-detail/${encodeURIComponent(code)}`,
       createTemplatePath: "/Topics/get-create",
       createPath: "/Topics/create",
-      updateTemplatePath: (token) => `/Topics/get-update/${Number(token)}`,
-      updatePath: (token) => `/Topics/update/${Number(token)}`,
-      deletePath: (token) => `/Topics/delete/${Number(token)}`,
+      updateTemplatePath: (token) =>
+        `/Topics/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/Topics/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/Topics/delete/${encodeURIComponent(String(token))}`,
     },
     getDetailCode: (row) => String(row.topicCode ?? ""),
-    getUpdateToken: (row) => Number(row.topicID ?? 0),
-    getDeleteToken: (row) => Number(row.topicID ?? 0),
+    getUpdateToken: (row) => String(row.topicCode ?? ""),
+    getDeleteToken: (row) => String(row.topicCode ?? ""),
     validate: (payload) => {
       const proposerUserID = Number(payload.proposerUserID ?? 0);
       const proposerUserCode = String(payload.proposerUserCode ?? "").trim();

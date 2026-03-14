@@ -17,29 +17,44 @@ interface FieldDef {
   required?: boolean;
 }
 
+interface ColumnDef {
+  key: string;
+  label: string;
+  aliases?: string[];
+}
+
 const fields: FieldDef[] = [
   { name: "departmentCode", label: "departmentCode", required: true },
-  { name: "departmentName", label: "departmentName", required: true },
+  { name: "name", label: "name", required: true },
   { name: "description", label: "description", type: "textarea" },
-  { name: "status", label: "status" },
 ];
 
 const filterFields: FieldDef[] = [
   { name: "departmentCode", label: "Mã khoa/bộ môn" },
-  { name: "departmentName", label: "Tên khoa/bộ môn" },
-  { name: "status", label: "Trạng thái" },
+  { name: "name", label: "Tên khoa/bộ môn" },
 ];
 
-const columns = [
-  { key: "departmentCode", label: "Mã khoa/bộ môn" },
-  { key: "departmentName", label: "Tên khoa/bộ môn" },
-  { key: "status", label: "Trạng thái" },
+const columns: ColumnDef[] = [
+  { key: "departmentCode", label: "Mã khoa/bộ môn", aliases: ["code"] },
+  { key: "name", label: "Tên khoa/bộ môn", aliases: ["departmentName"] },
+  { key: "description", label: "Mô tả", aliases: ["departmentDescription"] },
 ];
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function getColumnValue(row: RecordData, column: ColumnDef): unknown {
+  const keys = [column.key, ...(column.aliases ?? [])];
+  for (const key of keys) {
+    const value = row[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    return value;
+  }
+  return "";
 }
 
 function toFormRecord(data: RecordData): Record<string, string> {
@@ -348,7 +363,10 @@ const DepartmentsManagement: React.FC = () => {
     <div className="admin-dashboard departments-module">
       <div className="dashboard-header">
         <h1>Quản lý khoa/bộ môn</h1>
-        <p>CRUD thông tin khoa/bộ môn và import/export dữ liệu.</p>
+        <p>
+          Dữ liệu chuẩn theo schema Departments (departmentCode, name,
+          description).
+        </p>
       </div>
 
       <div
@@ -537,7 +555,7 @@ const DepartmentsManagement: React.FC = () => {
                 >
                   {columns.map((column) => (
                     <td key={`${column.key}-${index}`}>
-                      {toDisplay(row[column.key])}
+                      {toDisplay(getColumnValue(row, column))}
                     </td>
                   ))}
                   <td>
@@ -700,20 +718,64 @@ const DepartmentsManagement: React.FC = () => {
             </div>
 
             {activeModal === "detail" ? (
-              <div style={{ padding: 16, display: "grid", gap: 8 }}>
-                {Object.entries(selectedRow || {}).map(([key, value]) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "220px 1fr",
-                      gap: 8,
-                    }}
-                  >
-                    <strong>{key}</strong>
-                    <span>{toDisplay(value)}</span>
-                  </div>
-                ))}
+              <div
+                style={{
+                  padding: "24px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: "16px",
+                  background: "#f8fafc",
+                }}
+              >
+                {Object.entries(selectedRow || {}).map(([key, value]) => {
+                  const strVal = toDisplay(value);
+                  const isLong = strVal.length > 60;
+                  return (
+                    <div
+                      key={key}
+                      style={{
+                        padding: "16px",
+                        background: "#fff",
+                        borderRadius: "10px",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+                        gridColumn: isLong ? "1 / -1" : "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        {key}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#0f172a",
+                          lineHeight: "1.5",
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {strVal || (
+                          <span
+                            style={{ color: "#94a3b8", fontStyle: "italic" }}
+                          >
+                            Trống
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div

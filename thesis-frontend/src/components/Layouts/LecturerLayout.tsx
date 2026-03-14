@@ -2,15 +2,7 @@ import React, { useEffect, useState } from "react";
 import LecturerNav from "../SideNavs/LecturerNav";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import {
-  LogOut,
-  ChevronDown,
-  User,
-  Clock,
-  GraduationCap,
-  Menu,
-  X,
-} from "lucide-react";
+import { LogOut, ChevronDown, User, Clock, Menu, X } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
@@ -114,16 +106,6 @@ const LecturerLayout: React.FC = () => {
               left: 0 !important;
               padding: 10px 12px !important;
               height: 60px !important;
-            }
-            
-            /* Hide desktop title and icon on mobile */
-            .lecturer-header > div:first-child > div:last-child {
-              display: none !important;
-            }
-            
-            /* Show mobile logo */
-            .lecturer-mobile-logo {
-              display: flex !important;
             }
             
             /* Hide time display on mobile */
@@ -337,57 +319,18 @@ const LecturerLayout: React.FC = () => {
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Mobile Logo - Only visible on mobile */}
+            {/* White Logo - Always visible */}
             <img
               src="/logo-ios.png"
               alt="Đại học Đại Nam"
               className="lecturer-mobile-logo"
               style={{
-                display: "none",
-                height: "36px",
+                display: "flex",
+                height: "50px",
                 width: "auto",
                 filter: "brightness(0) invert(1)",
               }}
             />
-
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <div
-                style={{
-                  width: "48px",
-                  height: "48px",
-                  borderRadius: "12px",
-                  background:
-                    "linear-gradient(135deg, rgba(243, 112, 33, 0.2), rgba(243, 112, 33, 0.1))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 4px 12px rgba(243, 112, 33, 0.2)",
-                }}
-              >
-                <GraduationCap size={24} color="#f37021" />
-              </div>
-              <div>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: "#FFFFFF",
-                    letterSpacing: "0.5px",
-                    textShadow: "0 2px 4px rgba(0, 0, 0, 0.3)",
-                    lineHeight: 1.2,
-                  }}
-                >
-                  Giảng viên Đại học Đại Nam
-                  <br />
-                  <span
-                    style={{ fontSize: 16, fontWeight: 500, color: "#f37021" }}
-                  >
-                    Hệ thống Quản lý Đồ án Tốt nghiệp
-                  </span>
-                </h2>
-              </div>
-            </div>
           </div>
 
           {/* Right Section - Time and User Menu */}

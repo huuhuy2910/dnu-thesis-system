@@ -17,17 +17,27 @@ interface FieldDef {
   required?: boolean;
 }
 
+interface ColumnDef {
+  key: string;
+  label: string;
+  aliases?: string[];
+}
+
 const fields: FieldDef[] = [
   { name: "lecturerCode", label: "lecturerCode" },
   { name: "userCode", label: "userCode", required: true },
   { name: "departmentCode", label: "departmentCode" },
   { name: "fullName", label: "fullName" },
-  { name: "lecturerEmail", label: "lecturerEmail" },
+  { name: "email", label: "email" },
   { name: "phoneNumber", label: "phoneNumber" },
-  { name: "academicRank", label: "academicRank" },
   { name: "degree", label: "degree" },
-  { name: "expertise", label: "expertise" },
-  { name: "status", label: "status" },
+  { name: "guideQuota", label: "guideQuota", type: "number" },
+  { name: "defenseQuota", label: "defenseQuota", type: "number" },
+  { name: "currentGuidingCount", label: "currentGuidingCount", type: "number" },
+  { name: "profileImage", label: "profileImage" },
+  { name: "gender", label: "gender" },
+  { name: "dateOfBirth", label: "dateOfBirth", type: "date" },
+  { name: "address", label: "address" },
   { name: "notes", label: "notes", type: "textarea" },
 ];
 
@@ -35,24 +45,47 @@ const filterFields: FieldDef[] = [
   { name: "lecturerCode", label: "Mã giảng viên" },
   { name: "userCode", label: "Mã user" },
   { name: "departmentCode", label: "Khoa/Bộ môn" },
-  { name: "academicRank", label: "Học hàm" },
   { name: "degree", label: "Học vị" },
-  { name: "status", label: "Trạng thái" },
+  { name: "guideQuota", label: "Chỉ tiêu hướng dẫn", type: "number" },
+  { name: "gender", label: "Giới tính" },
 ];
 
-const columns = [
-  { key: "lecturerCode", label: "Mã GV" },
-  { key: "fullName", label: "Họ tên" },
-  { key: "departmentCode", label: "Khoa/Bộ môn" },
-  { key: "lecturerEmail", label: "Email" },
-  { key: "academicRank", label: "Học hàm" },
-  { key: "status", label: "Trạng thái" },
+const columns: ColumnDef[] = [
+  { key: "lecturerCode", label: "Mã GV", aliases: ["code"] },
+  { key: "fullName", label: "Họ tên", aliases: ["name", "lecturerName"] },
+  {
+    key: "departmentCode",
+    label: "Khoa/Bộ môn",
+    aliases: ["departmentName", "department"],
+  },
+  { key: "email", label: "Email", aliases: ["lecturerEmail"] },
+  {
+    key: "degree",
+    label: "Học vị",
+    aliases: ["academicDegree"],
+  },
+  {
+    key: "currentGuidingCount",
+    label: "Đang hướng dẫn",
+    aliases: ["guidingCount"],
+  },
 ];
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function getColumnValue(row: RecordData, column: ColumnDef): unknown {
+  const keys = [column.key, ...(column.aliases ?? [])];
+  for (const key of keys) {
+    const value = row[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    return value;
+  }
+  return "";
 }
 
 function toFormRecord(data: RecordData): Record<string, string> {
@@ -361,7 +394,10 @@ const LecturerProfilesManagement: React.FC = () => {
     <div className="admin-dashboard lecturer-profiles-module">
       <div className="dashboard-header">
         <h1>Quản lý giảng viên</h1>
-        <p>CRUD hồ sơ giảng viên và import/export dữ liệu.</p>
+        <p>
+          Dữ liệu chuẩn theo schema LecturerProfiles (email, guideQuota,
+          defenseQuota, currentGuidingCount...).
+        </p>
       </div>
 
       <div
@@ -550,7 +586,7 @@ const LecturerProfilesManagement: React.FC = () => {
                 >
                   {columns.map((column) => (
                     <td key={`${column.key}-${index}`}>
-                      {toDisplay(row[column.key])}
+                      {toDisplay(getColumnValue(row, column))}
                     </td>
                   ))}
                   <td>
@@ -713,20 +749,64 @@ const LecturerProfilesManagement: React.FC = () => {
             </div>
 
             {activeModal === "detail" ? (
-              <div style={{ padding: 16, display: "grid", gap: 8 }}>
-                {Object.entries(selectedRow || {}).map(([key, value]) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "220px 1fr",
-                      gap: 8,
-                    }}
-                  >
-                    <strong>{key}</strong>
-                    <span>{toDisplay(value)}</span>
-                  </div>
-                ))}
+              <div
+                style={{
+                  padding: "24px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: "16px",
+                  background: "#f8fafc",
+                }}
+              >
+                {Object.entries(selectedRow || {}).map(([key, value]) => {
+                  const strVal = toDisplay(value);
+                  const isLong = strVal.length > 60;
+                  return (
+                    <div
+                      key={key}
+                      style={{
+                        padding: "16px",
+                        background: "#fff",
+                        borderRadius: "10px",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+                        gridColumn: isLong ? "1 / -1" : "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        {key}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#0f172a",
+                          lineHeight: "1.5",
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {strVal || (
+                          <span
+                            style={{ color: "#94a3b8", fontStyle: "italic" }}
+                          >
+                            Trống
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div

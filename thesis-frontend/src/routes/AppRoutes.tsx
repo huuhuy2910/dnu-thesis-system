@@ -17,7 +17,6 @@ import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import LecturerStudents from "../pages/lecturer/LecturerStudents";
 import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
-import AdminDashboard from "../pages/admin/Dashboard";
 import UsersManagement from "../pages/admin/UsersManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -125,7 +124,7 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         >
-          <Route index element={<AdminDashboard />} />
+          <Route index element={<AcademicDataManagementPage />} />
           <Route path="users" element={<UsersManagement />} />
           <Route path="students" element={<StudentProfilesManagement />} />
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
