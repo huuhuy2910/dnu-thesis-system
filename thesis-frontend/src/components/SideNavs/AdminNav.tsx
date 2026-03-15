@@ -90,6 +90,11 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
       label: "Lịch sử hoạt động",
       icon: <Activity size={18} />,
     },
+    {
+      path: `${basePath}/workflow-audits`,
+      label: "Workflow Audit",
+      icon: <Activity size={18} />,
+    },
   ];
 
   const navItems = [

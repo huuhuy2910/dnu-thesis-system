@@ -9,6 +9,6 @@ namespace ThesisManagement.Api.Application.Query.MilestoneTemplates
 
     public class GetMilestoneTemplateCreateQuery : IGetMilestoneTemplateCreateQuery
     {
-        public MilestoneTemplateCreateDto Execute() => new(string.Empty, string.Empty, null, 1);
+        public MilestoneTemplateCreateDto Execute() => new(string.Empty, string.Empty, null, 1, null);
     }
 }

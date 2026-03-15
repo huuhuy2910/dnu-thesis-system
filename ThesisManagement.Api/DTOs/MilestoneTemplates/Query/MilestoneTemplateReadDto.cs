@@ -8,6 +8,7 @@ namespace ThesisManagement.Api.DTOs.MilestoneTemplates.Query
         string Name,
         string? Description,
         int Ordinal,
+        DateTime? Deadline,
         DateTime CreatedAt,
         DateTime? LastUpdated);
 }

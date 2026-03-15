@@ -50,6 +50,7 @@ namespace ThesisManagement.Api.Data
         public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
         public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
         public DbSet<MessageReadReceipt> MessageReadReceipts => Set<MessageReadReceipt>();
+        public DbSet<TopicWorkflowAudit> TopicWorkflowAudits => Set<TopicWorkflowAudit>();
         
         // System Activity Logs
         public DbSet<SystemActivityLog> SystemActivityLogs => Set<SystemActivityLog>();
@@ -262,6 +263,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Name).HasMaxLength(200).IsRequired();
                 b.Property(x => x.Description);
                 b.Property(x => x.Ordinal).IsRequired();
+                b.Property(x => x.Deadline);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated);
             });
@@ -615,6 +617,71 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.Module);
             });
 
+            // TopicWorkflowAudit
+            modelBuilder.Entity<TopicWorkflowAudit>(b =>
+            {
+                b.ToTable("TOPIC_WORKFLOW_AUDITS");
+                b.HasKey(x => x.AuditID);
+
+                b.Property(x => x.AuditID).HasColumnName("AUDIT_ID");
+                b.Property(x => x.AuditCode).HasColumnName("AUDIT_CODE").HasMaxLength(50).IsRequired();
+                b.HasIndex(x => x.AuditCode).IsUnique();
+
+                b.Property(x => x.ModuleName).HasColumnName("MODULE_NAME").HasMaxLength(50).IsRequired();
+                b.Property(x => x.WorkflowName).HasColumnName("WORKFLOW_NAME").HasMaxLength(100).IsRequired();
+                b.Property(x => x.ActionType).HasColumnName("ACTION_TYPE").HasMaxLength(30).IsRequired();
+                b.Property(x => x.DecisionAction).HasColumnName("DECISION_ACTION").HasMaxLength(30);
+
+                b.Property(x => x.TopicID).HasColumnName("TOPIC_ID");
+                b.Property(x => x.TopicCode).HasColumnName("TOPIC_CODE").HasMaxLength(60);
+                b.Property(x => x.EntityName).HasColumnName("ENTITY_NAME").HasMaxLength(100);
+                b.Property(x => x.EntityID).HasColumnName("ENTITY_ID").HasMaxLength(60);
+                b.Property(x => x.EntityCode).HasColumnName("ENTITY_CODE").HasMaxLength(60);
+
+                b.Property(x => x.OldStatus).HasColumnName("OLD_STATUS").HasMaxLength(50);
+                b.Property(x => x.NewStatus).HasColumnName("NEW_STATUS").HasMaxLength(50);
+                b.Property(x => x.StatusCode).HasColumnName("STATUS_CODE").HasMaxLength(30);
+
+                b.Property(x => x.ResubmitCountBefore).HasColumnName("RESUBMIT_COUNT_BEFORE");
+                b.Property(x => x.ResubmitCountAfter).HasColumnName("RESUBMIT_COUNT_AFTER");
+
+                b.Property(x => x.CommentText).HasColumnName("COMMENT_TEXT");
+                b.Property(x => x.ErrorMessage).HasColumnName("ERROR_MESSAGE");
+                b.Property(x => x.IsSuccess).HasColumnName("IS_SUCCESS").HasDefaultValue(1).IsRequired();
+
+                b.Property(x => x.RequestPayload).HasColumnName("REQUEST_PAYLOAD");
+                b.Property(x => x.ResponsePayload).HasColumnName("RESPONSE_PAYLOAD");
+
+                b.Property(x => x.ChangedFields).HasColumnName("CHANGED_FIELDS");
+                b.Property(x => x.TagsBefore).HasColumnName("TAGS_BEFORE");
+                b.Property(x => x.TagsAfter).HasColumnName("TAGS_AFTER");
+                b.Property(x => x.MilestoneBefore).HasColumnName("MILESTONE_BEFORE");
+                b.Property(x => x.MilestoneAfter).HasColumnName("MILESTONE_AFTER");
+
+                b.Property(x => x.ActorUserID).HasColumnName("ACTOR_USER_ID");
+                b.Property(x => x.ActorUserCode).HasColumnName("ACTOR_USER_CODE").HasMaxLength(60);
+                b.Property(x => x.ActorRole).HasColumnName("ACTOR_ROLE").HasMaxLength(40);
+                b.Property(x => x.ReviewerUserID).HasColumnName("REVIEWER_USER_ID");
+                b.Property(x => x.ReviewerUserCode).HasColumnName("REVIEWER_USER_CODE").HasMaxLength(60);
+
+                b.Property(x => x.CorrelationID).HasColumnName("CORRELATION_ID").HasMaxLength(100);
+                b.Property(x => x.IdempotencyKey).HasColumnName("IDEMPOTENCY_KEY").HasMaxLength(100);
+                b.Property(x => x.RequestID).HasColumnName("REQUEST_ID").HasMaxLength(100);
+
+                b.Property(x => x.IPAddress).HasColumnName("IP_ADDRESS").HasMaxLength(64);
+                b.Property(x => x.UserAgent).HasColumnName("USER_AGENT").HasMaxLength(500);
+                b.Property(x => x.DeviceInfo).HasColumnName("DEVICE_INFO").HasMaxLength(500);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasIndex(x => x.TopicID);
+                b.HasIndex(x => x.TopicCode);
+                b.HasIndex(x => x.ActionType);
+                b.HasIndex(x => x.StatusCode);
+                b.HasIndex(x => x.ActorUserCode);
+                b.HasIndex(x => x.CreatedAt);
+                b.HasIndex(x => x.CorrelationID);
+            });
+
             ApplyOracleIdentifierNamingRules(modelBuilder);
         }
 
@@ -643,6 +710,12 @@ namespace ThesisManagement.Api.Data
                     : tableName.ToUpperInvariant();
 
                 entityType.SetTableName(normalizedTableName);
+
+                // Keep explicit snake_case mappings for audit table.
+                if (string.Equals(normalizedTableName, "TOPIC_WORKFLOW_AUDITS", StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
                 foreach (var property in entityType.GetProperties())
                 {

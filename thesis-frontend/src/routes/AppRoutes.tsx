@@ -36,6 +36,7 @@ import LecturerProfilesManagement from "../pages/studentservices/LecturerProfile
 import DepartmentsManagement from "../pages/studentservices/DepartmentsManagement";
 import TopicsManagement from "../pages/studentservices/TopicsManagement";
 import AcademicDataManagementPage from "../pages/studentservices/AcademicDataManagementPage";
+import TopicWorkflowAudits from "../pages/admin/TopicWorkflowAudits";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -84,6 +85,7 @@ const AppRoutes: React.FC = () => {
           <Route path="committees" element={<LecturerCommittees />} />
           <Route path="reports" element={<LecturerReports />} />
           <Route path="topic-review" element={<LecturerTopicReviewPage />} />
+          <Route path="workflow-audits" element={<TopicWorkflowAudits />} />
           <Route path="profile" element={<LecturerProfilePage />} />
           <Route path="notifications" element={<LecturerNotifications />} />
           {/* thêm các route con của lecturer ở đây */}
@@ -113,6 +115,7 @@ const AppRoutes: React.FC = () => {
           <Route path="system-config" element={<SystemConfig />} />
           <Route path="notifications/create" element={<CreateNotification />} />
           <Route path="activity-logs" element={<SystemActivityLogs />} />
+          <Route path="workflow-audits" element={<TopicWorkflowAudits />} />
         </Route>
 
         {/* STUDENT SERVICE */}
