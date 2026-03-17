@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ThesisManagement.Api.Application.Command.Departments;
 using ThesisManagement.Api.Application.Query.Departments;

@@ -20,7 +20,7 @@ namespace ThesisManagement.Api.Application.Query.MilestoneTemplates
         public async Task<MilestoneTemplateUpdateDto?> ExecuteAsync(int id)
         {
             var entity = await _uow.MilestoneTemplates.GetByIdAsync(id);
-            return entity == null ? null : new MilestoneTemplateUpdateDto(entity.Name, entity.Description, entity.Ordinal);
+            return entity == null ? null : new MilestoneTemplateUpdateDto(entity.Name, entity.Description, entity.Ordinal, entity.Deadline);
         }
     }
 }

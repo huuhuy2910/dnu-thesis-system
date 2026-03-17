@@ -11,8 +11,10 @@ import {
   AuthSessionKeys,
   clearAuthSession,
   consumeSessionExpiredMessage,
+  getRoleClaimFromAccessToken,
   setAuthSession,
 } from "../../services/auth-session.service";
+import { normalizeRole } from "../../utils/role";
 
 type LoginApiResponse = ApiResponse<unknown> & {
   userCode?: string;
@@ -98,8 +100,11 @@ const LoginPage: React.FC = () => {
           // Ignore localStorage failures and continue auth flow
         }
 
+        const role =
+          normalizeRole(getRoleClaimFromAccessToken(resp.accessToken)) ||
+          normalizeRole(user.role);
+        user.role = role;
         auth.login(user);
-        const role = (user.role ?? "").toString().toUpperCase();
         const redirect = RolePaths[role] ?? "/";
         navigate(redirect);
         return;

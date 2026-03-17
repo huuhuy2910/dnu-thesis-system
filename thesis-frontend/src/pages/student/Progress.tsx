@@ -29,18 +29,6 @@ const Progress: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [progressAnimated, setProgressAnimated] = useState(false);
 
-  // Hardcoded deadlines based on ordinal (fallback if needed)
-  const getDeadlineByOrdinal = (ordinal: number): string => {
-    const deadlines: { [key: number]: string } = {
-      1: "2026-01-15",
-      2: "2026-02-28",
-      3: "2026-04-15",
-      4: "2026-05-20",
-      5: "2026-06-10",
-    };
-    return deadlines[ordinal] || "2025-12-31";
-  };
-
   useEffect(() => {
     const loadProgress = async () => {
       if (!auth.user?.userCode) {
@@ -52,7 +40,7 @@ const Progress: React.FC = () => {
         // First, fetch the student's topic
         console.log("Fetching topics for userCode:", auth.user.userCode);
         const topicsRes = (await fetchData(
-          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`
+          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`,
         )) as ApiResponse<Topic[]>;
         console.log("Topics response:", topicsRes);
         console.log("Topics data:", topicsRes.data);
@@ -64,7 +52,7 @@ const Progress: React.FC = () => {
         // Fetch all milestone templates - always show templates even without topic
         console.log("Fetching milestone templates...");
         const templatesRes = (await fetchData(
-          "/MilestoneTemplates/get-list"
+          "/MilestoneTemplates/get-list",
         )) as ApiResponse<MilestoneTemplate[]>;
         console.log("Templates response:", templatesRes);
         if (!templatesRes.data || templatesRes.data.length === 0) {
@@ -81,7 +69,7 @@ const Progress: React.FC = () => {
           // Fetch progress milestones only if student has a topic
           console.log("Fetching progress milestones...");
           const progressRes = (await fetchData(
-            `/ProgressMilestones/get-list?TopicCode=${topicCode}`
+            `/ProgressMilestones/get-list?TopicCode=${topicCode}`,
           )) as ApiResponse<ProgressMilestone[]>;
           console.log("Progress response:", progressRes);
           progressMilestones = progressRes.data || [];
@@ -93,13 +81,13 @@ const Progress: React.FC = () => {
           (template: MilestoneTemplate) => {
             // Find progress milestone by ordinal since milestoneTemplateCode might be null
             const progressMilestone = progressMilestones.find(
-              (pm) => pm.ordinal === template.ordinal
+              (pm) => pm.ordinal === template.ordinal,
             );
 
             let status: "completed" | "in-progress" | "pending" | "overdue" =
               "pending";
             let completedDate: string | undefined;
-            const deadline: string = getDeadlineByOrdinal(template.ordinal);
+            const deadline: string = template.deadline;
 
             if (progressMilestone) {
               // Map completedAt based on milestoneTemplateCode
@@ -160,7 +148,7 @@ const Progress: React.FC = () => {
               completedDate,
               ordinal: template.ordinal,
             };
-          }
+          },
         );
 
         // Logic: Mark milestones as completed based on completedAt fields
@@ -378,7 +366,7 @@ const Progress: React.FC = () => {
   }
 
   const completedCount = milestones.filter(
-    (m) => m.status === "completed"
+    (m) => m.status === "completed",
   ).length;
   const totalCount = milestones.length;
   const progressPercentage = Math.round((completedCount / totalCount) * 100);
@@ -731,8 +719,8 @@ const Progress: React.FC = () => {
                       milestone.status === "completed"
                         ? "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)"
                         : milestone.status === "in-progress"
-                        ? "linear-gradient(135deg, #fff5f0 0%, #ffe8dc 100%)"
-                        : "#fafafa",
+                          ? "linear-gradient(135deg, #fff5f0 0%, #ffe8dc 100%)"
+                          : "#fafafa",
                     border: `2px solid ${getStatusColor(milestone.status)}`,
                     borderRadius: "12px",
                     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -800,7 +788,7 @@ const Progress: React.FC = () => {
                         }}
                       >
                         {new Date(milestone.deadline).toLocaleDateString(
-                          "vi-VN"
+                          "vi-VN",
                         )}
                       </div>
                     </div>
@@ -830,7 +818,7 @@ const Progress: React.FC = () => {
                       <CheckCircle size={16} />
                       Hoàn thành ngày:{" "}
                       {new Date(milestone.completedDate).toLocaleDateString(
-                        "vi-VN"
+                        "vi-VN",
                       )}
                     </div>
                   )}

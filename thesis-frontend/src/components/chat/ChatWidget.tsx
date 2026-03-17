@@ -16,6 +16,7 @@ import {
   X,
   Eye,
 } from "lucide-react";
+import "./ChatWidget.css";
 import { getAvatarUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useChat } from "../../hooks/useChat";
@@ -207,7 +208,20 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
   const [hoveredReactionKey, setHoveredReactionKey] = useState<string | null>(
     null,
   );
+  const [readPopoverAnchor, setReadPopoverAnchor] = useState<{
+    key: string;
+    left: number;
+    top: number;
+    placeBelow: boolean;
+  } | null>(null);
+  const [pickerPopoverAnchor, setPickerPopoverAnchor] = useState<{
+    messageId: number;
+    left: number;
+    top: number;
+    placeBelow: boolean;
+  } | null>(null);
   const pickerContainerRef = useRef<HTMLDivElement | null>(null);
+  const pickerPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const messageListRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -325,10 +339,15 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
   useEffect(() => {
     const handleOutside = (event: MouseEvent) => {
       if (!pickerMessageId) return;
+      const target = event.target as Node;
       const node = pickerContainerRef.current;
-      if (node && !node.contains(event.target as Node)) {
-        setPickerMessageId(null);
-      }
+      const popupNode = pickerPopoverRef.current;
+
+      if (node && node.contains(target)) return;
+      if (popupNode && popupNode.contains(target)) return;
+
+      setPickerMessageId(null);
+      setPickerPopoverAnchor(null);
     };
 
     if (pickerMessageId) {
@@ -337,6 +356,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     return () => {
       document.removeEventListener("mousedown", handleOutside);
     };
+  }, [pickerMessageId]);
+
+  useEffect(() => {
+    if (!pickerMessageId) {
+      setPickerPopoverAnchor(null);
+    }
   }, [pickerMessageId]);
 
   if (!enabled) return null;
@@ -401,6 +426,46 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
         (_, i) => i !== index,
       ),
     }));
+  };
+
+  const openReadPopover = (key: string, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const popoverWidth = 240;
+    const screenMargin = 8;
+    const left = Math.min(
+      window.innerWidth - popoverWidth - screenMargin,
+      Math.max(screenMargin, rect.left + rect.width / 2 - popoverWidth / 2),
+    );
+    const placeBelow = rect.top < 180;
+
+    setReadPopoverAnchor({
+      key,
+      left,
+      top: placeBelow ? rect.bottom + 8 : rect.top - 8,
+      placeBelow,
+    });
+  };
+
+  const openReactionPickerPopover = (
+    messageId: number,
+    target: HTMLElement,
+    mine: boolean,
+  ) => {
+    const rect = target.getBoundingClientRect();
+    const screenMargin = 12;
+    const centerX = rect.left + rect.width / 2 + (mine ? -20 : 0);
+    const left = Math.min(
+      window.innerWidth - screenMargin,
+      Math.max(screenMargin, centerX),
+    );
+    const placeBelow = rect.top < 170;
+
+    setPickerPopoverAnchor({
+      messageId,
+      left,
+      top: placeBelow ? rect.bottom + 8 : rect.top - 8,
+      placeBelow,
+    });
   };
 
   return (
@@ -532,6 +597,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
               topConversations.map((conversation) => {
                 const conversationTitle =
                   conversation.title?.trim() || conversation.conversationCode;
+                const isDirectConversation =
+                  String(conversation.conversationType || "").toLowerCase() ===
+                  "direct";
                 const unreadCount = Number(conversation.unreadCount || 0);
                 const members = Array.isArray(conversation.members)
                   ? conversation.members
@@ -542,6 +610,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     auth.user?.userCode &&
                     item.userCode !== auth.user.userCode,
                 );
+                const displayAvatar = isDirectConversation
+                  ? targetMember?.avatarURL
+                  : conversation.avatarURL;
+                const displayTitle = isDirectConversation
+                  ? targetMember?.fullName || conversationTitle
+                  : conversationTitle;
 
                 return (
                   <button
@@ -577,12 +651,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                         overflow: "hidden",
                       }}
                     >
-                      {targetMember?.avatarURL || conversation.avatarURL ? (
+                      {displayAvatar ? (
                         <img
-                          src={getAvatarUrl(
-                            targetMember?.avatarURL || conversation.avatarURL,
-                          )}
-                          alt={conversationTitle}
+                          src={getAvatarUrl(displayAvatar)}
+                          alt={displayTitle}
                           style={{
                             width: "100%",
                             height: "100%",
@@ -590,7 +662,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                           }}
                         />
                       ) : (
-                        <span>{conversationTitle.charAt(0).toUpperCase()}</span>
+                        <span>{displayTitle.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -612,7 +684,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {targetMember?.fullName || conversationTitle}
+                          {displayTitle}
                         </span>
                         {unreadCount > 0 && (
                           <span
@@ -659,12 +731,25 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
         const members = Array.isArray(conversation.members)
           ? conversation.members
           : [];
+        const isDirectConversation =
+          String(conversation.conversationType || "").toLowerCase() ===
+          "direct";
         const otherMember = members.find(
           (member: ChatConversationMember) =>
             member.userCode &&
             auth.user?.userCode &&
             member.userCode !== auth.user.userCode,
         );
+        const headerAvatar = isDirectConversation
+          ? otherMember?.avatarURL
+          : conversation.avatarURL;
+        const headerTitle =
+          (isDirectConversation
+            ? otherMember?.fullName
+            : conversation.title?.trim()) || conversation.conversationCode;
+        const headerSubtitle = isDirectConversation
+          ? otherMember?.userRole || "Trò chuyện trực tiếp"
+          : "Nhóm chat";
 
         const messages: ChatMessage[] = getConversationMessages(
           conversation.conversationID,
@@ -727,14 +812,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     fontWeight: 700,
                   }}
                 >
-                  {otherMember?.avatarURL ? (
+                  {headerAvatar ? (
                     <img
-                      src={getAvatarUrl(otherMember.avatarURL)}
-                      alt={
-                        otherMember.fullName ||
-                        conversation.title ||
-                        "chat-user"
-                      }
+                      src={getAvatarUrl(headerAvatar)}
+                      alt={headerTitle}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -742,11 +823,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                       }}
                     />
                   ) : (
-                    <span>
-                      {(otherMember?.fullName || conversation.title || "C")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </span>
+                    <span>{headerTitle.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -760,12 +837,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {otherMember?.fullName ||
-                      conversation.title ||
-                      conversation.conversationCode}
+                    {headerTitle}
                   </div>
                   <div style={{ fontSize: 12, color: palette.subtitleColor }}>
-                    {otherMember?.userRole || "Trò chuyện trực tiếp"}
+                    {headerSubtitle}
                   </div>
                 </div>
               </div>
@@ -851,11 +926,17 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                 </div>
               )}
 
-              {messages.map((message: ChatMessage) => {
+              {messages.map((message: ChatMessage, messageIndex: number) => {
                 const isMine =
                   !!message.senderUserCode &&
                   !!auth.user?.userCode &&
                   String(message.senderUserCode) === String(auth.user.userCode);
+                const nextMessage = messages[messageIndex + 1];
+                const showSenderAvatar =
+                  !isMine &&
+                  (!nextMessage ||
+                    String(nextMessage.senderUserCode || "") !==
+                      String(message.senderUserCode || ""));
 
                 const attachments = Array.isArray(message.attachments)
                   ? message.attachments
@@ -869,6 +950,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     .filter((member) => !!member.userCode)
                     .map((member) => [String(member.userCode), member]),
                 );
+                const senderMember = message.senderUserCode
+                  ? memberByCode.get(String(message.senderUserCode))
+                  : undefined;
 
                 const reactionGroups = Object.values(
                   reactions.reduce<
@@ -939,121 +1023,271 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                     key={String(message.messageID)}
                     style={{
                       alignSelf: isMine ? "flex-end" : "flex-start",
-                      maxWidth: "85%",
-                      padding: "8px 10px",
-                      borderRadius: 12,
-                      background: isMine
-                        ? palette.selfMessageBg
-                        : palette.otherMessageBg,
-                      border: "1px solid rgba(148,163,184,0.15)",
-                      position: "relative",
-                      marginBottom: reactions.length > 0 ? 28 : 20,
+                      maxWidth: "100%",
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: 6,
+                      marginBottom:
+                        reactions.length > 0 ||
+                        (hasReaders && isLatestForSender)
+                          ? 28
+                          : 20,
                     }}
                   >
                     {!isMine && (
                       <div
                         style={{
-                          fontSize: 11,
-                          color: palette.subtitleColor,
-                          marginBottom: 3,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {otherMember?.fullName ||
-                          message.senderUserCode ||
-                          "Người dùng"}
-                      </div>
-                    )}
-
-                    {!!message.content && (
-                      <div
-                        style={{
-                          color: palette.titleColor,
-                          fontSize: 13,
-                          lineHeight: 1.45,
-                          marginBottom: attachments.length ? 8 : 0,
-                        }}
-                      >
-                        {message.content}
-                      </div>
-                    )}
-
-                    {attachments.length > 0 && (
-                      <div
-                        style={{
+                          width: 24,
+                          height: 24,
+                          flexShrink: 0,
                           display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                          marginBottom: 8,
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        {attachments.map((attachment) => {
-                          const resolvedUrl = resolveAttachmentUrl(
-                            attachment.fileURL ||
-                              attachment.fileUrl ||
-                              attachment.localPreviewURL,
-                          );
-                          const isFailed = attachment.uploadStatus === "failed";
-                          const isUploading =
-                            attachment.uploadStatus === "uploading";
+                        {showSenderAvatar &&
+                        (senderMember?.avatarURL || otherMember?.avatarURL) ? (
+                          <img
+                            src={getAvatarUrl(
+                              senderMember?.avatarURL || otherMember?.avatarURL,
+                            )}
+                            alt={
+                              senderMember?.fullName ||
+                              message.senderUserCode ||
+                              "chat-user"
+                            }
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    )}
 
-                          if (isImageAttachment(attachment)) {
+                    <div
+                      style={{
+                        width: "fit-content",
+                        minWidth: isMine && message.content ? 132 : undefined,
+                        maxWidth: isMine ? "98%" : "85%",
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        background: isMine
+                          ? palette.selfMessageBg
+                          : palette.otherMessageBg,
+                        border: "1px solid rgba(148,163,184,0.15)",
+                        position: "relative",
+                      }}
+                    >
+                      {!isMine && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: palette.subtitleColor,
+                            marginBottom: 3,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {senderMember?.fullName ||
+                            message.senderUserCode ||
+                            "Người dùng"}
+                        </div>
+                      )}
+
+                      {!!message.content && (
+                        <div
+                          style={{
+                            color: palette.titleColor,
+                            fontSize: isMine ? 14 : 13,
+                            lineHeight: 1.45,
+                            whiteSpace: "normal",
+                            wordBreak: "normal",
+                            marginBottom: attachments.length ? 8 : 0,
+                          }}
+                        >
+                          {message.content}
+                        </div>
+                      )}
+
+                      {attachments.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {attachments.map((attachment) => {
+                            const resolvedUrl = resolveAttachmentUrl(
+                              attachment.fileURL ||
+                                attachment.fileUrl ||
+                                attachment.localPreviewURL,
+                            );
+                            const isFailed =
+                              attachment.uploadStatus === "failed";
+                            const isUploading =
+                              attachment.uploadStatus === "uploading";
+
+                            if (isImageAttachment(attachment)) {
+                              return (
+                                <div
+                                  key={attachment.attachmentID}
+                                  style={{
+                                    display: "block",
+                                    width: "100%",
+                                    borderRadius: 10,
+                                    overflow: "hidden",
+                                    border: "1px solid rgba(148,163,184,0.25)",
+                                    background: "#fff",
+                                  }}
+                                >
+                                  {resolvedUrl ? (
+                                    <a
+                                      href={resolvedUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      style={{ display: "block" }}
+                                    >
+                                      <img
+                                        src={resolvedUrl}
+                                        alt={
+                                          attachment.fileName ||
+                                          "attachment-image"
+                                        }
+                                        style={{
+                                          width: "100%",
+                                          maxHeight: 220,
+                                          objectFit: "cover",
+                                          opacity: isFailed ? 0.7 : 1,
+                                        }}
+                                      />
+                                    </a>
+                                  ) : null}
+
+                                  {(isUploading || isFailed) && (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        gap: 8,
+                                        padding: "6px 8px",
+                                        fontSize: 11,
+                                        color: isFailed
+                                          ? "#dc2626"
+                                          : palette.subtitleColor,
+                                        borderTop:
+                                          "1px solid rgba(148,163,184,0.2)",
+                                      }}
+                                    >
+                                      <span>
+                                        {isUploading
+                                          ? "Đang tải ảnh..."
+                                          : attachment.uploadError ||
+                                            "Tải ảnh thất bại"}
+                                      </span>
+                                      {isFailed && (
+                                        <button
+                                          onClick={() => {
+                                            void retryAttachmentUpload(
+                                              conversation.conversationID,
+                                              message.messageID,
+                                              attachment.attachmentID,
+                                            );
+                                          }}
+                                          style={{
+                                            border: "none",
+                                            background: "transparent",
+                                            color: "#2563eb",
+                                            cursor: "pointer",
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Thử lại
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
                             return (
                               <div
                                 key={attachment.attachmentID}
                                 style={{
-                                  display: "block",
-                                  width: "100%",
-                                  borderRadius: 10,
-                                  overflow: "hidden",
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  flexDirection: "column",
+                                  gap: 8,
                                   border: "1px solid rgba(148,163,184,0.25)",
+                                  borderRadius: 10,
+                                  padding: "6px 8px",
+                                  color: palette.titleColor,
                                   background: "#fff",
                                 }}
                               >
-                                {resolvedUrl ? (
-                                  <a
-                                    href={resolvedUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{ display: "block" }}
-                                  >
-                                    <img
-                                      src={resolvedUrl}
-                                      alt={
-                                        attachment.fileName ||
-                                        "attachment-image"
-                                      }
+                                <a
+                                  href={resolvedUrl || undefined}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    textDecoration: "none",
+                                    color: palette.titleColor,
+                                    width: "100%",
+                                    opacity: isFailed ? 0.7 : 1,
+                                  }}
+                                >
+                                  <Paperclip size={14} />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div
                                       style={{
-                                        width: "100%",
-                                        maxHeight: 220,
-                                        objectFit: "cover",
-                                        opacity: isFailed ? 0.7 : 1,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
                                       }}
-                                    />
-                                  </a>
-                                ) : null}
+                                    >
+                                      {attachment.fileName || "Tệp đính kèm"}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: palette.subtitleColor,
+                                      }}
+                                    >
+                                      {formatFileSize(attachment.fileSizeBytes)}
+                                    </div>
+                                  </div>
+                                </a>
 
                                 {(isUploading || isFailed) && (
                                   <div
                                     style={{
+                                      width: "100%",
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "space-between",
                                       gap: 8,
-                                      padding: "6px 8px",
                                       fontSize: 11,
                                       color: isFailed
                                         ? "#dc2626"
                                         : palette.subtitleColor,
-                                      borderTop:
-                                        "1px solid rgba(148,163,184,0.2)",
                                     }}
                                   >
                                     <span>
                                       {isUploading
-                                        ? "Đang tải ảnh..."
+                                        ? "Đang tải tệp..."
                                         : attachment.uploadError ||
-                                          "Tải ảnh thất bại"}
+                                          "Tải tệp thất bại"}
                                     </span>
                                     {isFailed && (
                                       <button
@@ -1080,360 +1314,374 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                 )}
                               </div>
                             );
-                          }
-
-                          return (
-                            <div
-                              key={attachment.attachmentID}
-                              style={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                flexDirection: "column",
-                                gap: 8,
-                                border: "1px solid rgba(148,163,184,0.25)",
-                                borderRadius: 10,
-                                padding: "6px 8px",
-                                color: palette.titleColor,
-                                background: "#fff",
-                              }}
-                            >
-                              <a
-                                href={resolvedUrl || undefined}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  textDecoration: "none",
-                                  color: palette.titleColor,
-                                  width: "100%",
-                                  opacity: isFailed ? 0.7 : 1,
-                                }}
-                              >
-                                <Paperclip size={14} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div
-                                    style={{
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {attachment.fileName || "Tệp đính kèm"}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: 11,
-                                      color: palette.subtitleColor,
-                                    }}
-                                  >
-                                    {formatFileSize(attachment.fileSizeBytes)}
-                                  </div>
-                                </div>
-                              </a>
-
-                              {(isUploading || isFailed) && (
-                                <div
-                                  style={{
-                                    width: "100%",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: 8,
-                                    fontSize: 11,
-                                    color: isFailed
-                                      ? "#dc2626"
-                                      : palette.subtitleColor,
-                                  }}
-                                >
-                                  <span>
-                                    {isUploading
-                                      ? "Đang tải tệp..."
-                                      : attachment.uploadError ||
-                                        "Tải tệp thất bại"}
-                                  </span>
-                                  {isFailed && (
-                                    <button
-                                      onClick={() => {
-                                        void retryAttachmentUpload(
-                                          conversation.conversationID,
-                                          message.messageID,
-                                          attachment.attachmentID,
-                                        );
-                                      }}
-                                      style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#2563eb",
-                                        cursor: "pointer",
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      Thử lại
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        marginTop: 4,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: palette.subtitleColor,
-                          fontStyle: message.isOptimistic ? "italic" : "normal",
-                        }}
-                      >
-                        {message.isOptimistic
-                          ? "Đang gửi..."
-                          : formatMessageTime(message.sentAt)}
-                      </span>
+                          })}
+                        </div>
+                      )}
 
                       <div
                         style={{
+                          marginTop: 4,
                           display: "flex",
+                          justifyContent: "space-between",
                           alignItems: "center",
-                          gap: 6,
+                          gap: 8,
                         }}
                       >
-                        {/* read count handled by chip below */}
-                      </div>
-                    </div>
-
-                    <div
-                      ref={
-                        message.messageID === pickerMessageId
-                          ? pickerContainerRef
-                          : undefined
-                      }
-                      style={{
-                        position: "absolute",
-                        bottom: -22,
-                        [isMine ? "left" : "right"]: 8,
-                        zIndex: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        maxWidth: "100%",
-                      }}
-                    >
-                      {reactionGroups.length > 0 && (
-                        <div
+                        <span
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            flexWrap: "wrap",
-                            maxWidth: 250,
+                            fontSize: 11,
+                            color: palette.subtitleColor,
+                            fontStyle: message.isOptimistic
+                              ? "italic"
+                              : "normal",
                           }}
                         >
-                          {reactionGroups.map((group) => {
-                            const reactionIcon =
-                              reactionIconMap[group.reactionType] || "🙂";
-                            const hoverKey = `${conversation.conversationID}:${message.messageID}:${group.reactionType}`;
-                            const hovered = hoveredReactionKey === hoverKey;
+                          {message.isOptimistic
+                            ? "Đang gửi..."
+                            : formatMessageTime(message.sentAt)}
+                        </span>
 
-                            return (
-                              <div
-                                key={hoverKey}
-                                style={{ position: "relative" }}
-                                onMouseEnter={() =>
-                                  setHoveredReactionKey(hoverKey)
-                                }
-                                onMouseLeave={() => setHoveredReactionKey(null)}
-                              >
-                                <button
-                                  type="button"
-                                  style={{
-                                    border: "1px solid rgba(148,163,184,0.35)",
-                                    background: "rgba(255,255,255,0.95)",
-                                    borderRadius: 999,
-                                    padding: "2px 8px",
-                                    fontSize: 12,
-                                    color: palette.titleColor,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    cursor: "default",
-                                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-                                  }}
-                                >
-                                  <span>{String(reactionIcon)}</span>
-                                  <span style={{ fontWeight: 600 }}>
-                                    {group.count}
-                                  </span>
-                                </button>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {/* read count handled by chip below */}
+                        </div>
+                      </div>
 
-                                {hovered && (
-                                  <div
-                                    style={{
-                                      position: "absolute",
-                                      bottom: "calc(100% + 6px)",
-                                      left: "50%",
-                                      transform: "translateX(-50%)",
-                                      minWidth: 180,
-                                      maxWidth: 240,
-                                      background: "#fff",
-                                      border:
-                                        "1px solid rgba(148,163,184,0.25)",
-                                      borderRadius: 10,
-                                      boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
-                                      padding: 8,
-                                      zIndex: 1500,
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: palette.subtitleColor,
-                                        marginBottom: 6,
-                                      }}
-                                    >
-                                      {String(reactionIcon)} {group.count} người
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: 5,
-                                        maxHeight: 140,
-                                        overflowY: "auto",
-                                      }}
-                                    >
-                                      {group.items.map((reaction) => {
-                                        const member = reaction.userCode
-                                          ? memberByCode.get(
-                                              String(reaction.userCode),
-                                            )
-                                          : undefined;
-                                        const displayName =
-                                          reaction.displayName ||
-                                          member?.fullName ||
-                                          reaction.userCode ||
-                                          "Người dùng";
-                                        const avatar = resolveReactionAvatar(
-                                          reaction.avatarUrl ||
-                                            member?.avatarURL ||
-                                            "",
-                                        );
-
-                                        return (
-                                          <div
-                                            key={`${hoverKey}-${reaction.reactionID}`}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 6,
-                                            }}
-                                          >
-                                            <div
-                                              style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: "50%",
-                                                overflow: "hidden",
-                                                background:
-                                                  "rgba(148,163,184,0.2)",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                              }}
-                                            >
-                                              {avatar ? (
-                                                <img
-                                                  src={avatar}
-                                                  alt={displayName}
-                                                  style={{
-                                                    width: "100%",
-                                                    height: "100%",
-                                                    objectFit: "cover",
-                                                  }}
-                                                />
-                                              ) : (
-                                                <span>
-                                                  {String(displayName)
-                                                    .charAt(0)
-                                                    .toUpperCase()}
-                                                </span>
-                                              )}
-                                            </div>
-                                            <span
-                                              style={{
-                                                fontSize: 12,
-                                                color: palette.titleColor,
-                                              }}
-                                            >
-                                              {displayName}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {hasReaders && isLatestForSender && (
-                            <div
-                              style={{
-                                position: "relative",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                marginLeft: "auto",
-                              }}
-                              onMouseEnter={() =>
-                                setHoveredReactionKey(readerKey)
+                      <div
+                        ref={
+                          message.messageID === pickerMessageId
+                            ? pickerContainerRef
+                            : undefined
+                        }
+                        style={{
+                          position: "absolute",
+                          bottom: -22,
+                          [isMine ? "left" : "right"]: 8,
+                          zIndex: 3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: isMine ? "flex-start" : "flex-end",
+                          gap: 6,
+                          width: "calc(100% - 16px)",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "relative",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            order: 2,
+                          }}
+                        >
+                          <button
+                            onMouseEnter={(event) => {
+                              if (!myReaction) {
+                                setPickerMessageId(message.messageID);
+                                openReactionPickerPopover(
+                                  message.messageID,
+                                  event.currentTarget,
+                                  isMine,
+                                );
                               }
-                              onMouseLeave={() => setHoveredReactionKey(null)}
-                            >
-                              <button
-                                type="button"
+                            }}
+                            onClick={(event) => {
+                              if (myReaction) {
+                                void toggleReaction(
+                                  message.conversationID,
+                                  message.messageID,
+                                  myReaction.reactionType,
+                                  true,
+                                );
+                                return;
+                              }
+                              setPickerMessageId(message.messageID);
+                              openReactionPickerPopover(
+                                message.messageID,
+                                event.currentTarget,
+                                isMine,
+                              );
+                            }}
+                            className={`chat-reaction-toggle ${
+                              myReaction ? "is-reacted" : ""
+                            }`}
+                            style={{
+                              fontSize: myReaction ? 15 : 12,
+                              color: myReaction
+                                ? palette.titleColor
+                                : "#94a3b8",
+                            }}
+                            title={
+                              myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"
+                            }
+                          >
+                            {myReaction ? (
+                              String(
+                                reactionIconMap[myReaction.reactionType] ||
+                                  "🙂",
+                              )
+                            ) : (
+                              <Smile size={14} />
+                            )}
+                          </button>
+
+                          {pickerMessageId === message.messageID &&
+                            !myReaction &&
+                            pickerPopoverAnchor?.messageId ===
+                              message.messageID &&
+                            typeof document !== "undefined" &&
+                            createPortal(
+                              <div
+                                ref={pickerPopoverRef}
                                 style={{
-                                  border: "1px solid rgba(148,163,184,0.35)",
-                                  background: "rgba(255,255,255,0.95)",
+                                  position: "fixed",
+                                  left: pickerPopoverAnchor.left,
+                                  top: pickerPopoverAnchor.top,
+                                  transform: pickerPopoverAnchor.placeBelow
+                                    ? "translateX(-50%)"
+                                    : "translate(-50%, -100%)",
+                                  display: "flex",
+                                  gap: 2,
+                                  padding: 4,
+                                  background: "#fff",
+                                  border: "1px solid rgba(148,163,184,0.25)",
                                   borderRadius: 999,
-                                  padding: "2px 8px",
-                                  fontSize: 12,
-                                  color: palette.titleColor,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  cursor: "default",
-                                  boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                                  maxWidth: "calc(100vw - 24px)",
+                                  boxSizing: "border-box",
+                                  overflowX: "auto",
+                                  zIndex: 2000,
                                 }}
                               >
-                                <Eye size={14} />
-                                <span style={{ fontWeight: 600 }}>
-                                  {readers.length}
-                                </span>
-                              </button>
-                              {hoveredReactionKey === readerKey && (
+                                {Object.entries(reactionIconMap).map(
+                                  ([reactionType, icon]) => {
+                                    return (
+                                      <button
+                                        key={`${message.messageID}-picker-${reactionType}`}
+                                        onClick={() => {
+                                          void toggleReaction(
+                                            message.conversationID,
+                                            message.messageID,
+                                            reactionType,
+                                            false,
+                                          );
+                                          setPickerMessageId(null);
+                                          setPickerPopoverAnchor(null);
+                                        }}
+                                        style={{
+                                          border: "none",
+                                          background: "transparent",
+                                          cursor: "pointer",
+                                          fontSize: 14,
+                                          opacity: 0.85,
+                                          padding: "0 2px",
+                                        }}
+                                        title={`Reaction ${reactionType}`}
+                                      >
+                                        {String(icon)}
+                                      </button>
+                                    );
+                                  },
+                                )}
+                              </div>,
+                              document.body,
+                            )}
+                        </div>
+
+                        {(reactionGroups.length > 0 ||
+                          (hasReaders && isLatestForSender)) && (
+                          <div className="chat-reaction-group">
+                            {reactionGroups.length > 0 &&
+                              reactionGroups.map((group) => {
+                                const reactionIcon =
+                                  reactionIconMap[group.reactionType] || "🙂";
+                                const hoverKey = `${conversation.conversationID}:${message.messageID}:${group.reactionType}`;
+                                const hovered = hoveredReactionKey === hoverKey;
+
+                                return (
+                                  <div
+                                    key={hoverKey}
+                                    style={{ position: "relative" }}
+                                    onMouseEnter={() =>
+                                      setHoveredReactionKey(hoverKey)
+                                    }
+                                    onMouseLeave={() =>
+                                      setHoveredReactionKey(null)
+                                    }
+                                  >
+                                    <button
+                                      type="button"
+                                      className="chat-reaction-count-chip"
+                                      style={{ color: palette.titleColor }}
+                                    >
+                                      <span>{String(reactionIcon)}</span>
+                                      <span style={{ fontWeight: 600 }}>
+                                        {group.count}
+                                      </span>
+                                    </button>
+
+                                    {hovered && (
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          bottom: "calc(100% + 6px)",
+                                          left: "50%",
+                                          transform: "translateX(-50%)",
+                                          marginLeft: isMine ? 0 : 20,
+                                          minWidth: 180,
+                                          maxWidth: 240,
+                                          background: "#fff",
+                                          border:
+                                            "1px solid rgba(148,163,184,0.25)",
+                                          borderRadius: 10,
+                                          boxShadow:
+                                            "0 8px 18px rgba(0,0,0,0.16)",
+                                          padding: 8,
+                                          zIndex: 1500,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: palette.subtitleColor,
+                                            marginBottom: 6,
+                                          }}
+                                        >
+                                          {String(reactionIcon)} {group.count}{" "}
+                                          người
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 5,
+                                            maxHeight: 140,
+                                            overflowY: "auto",
+                                          }}
+                                        >
+                                          {group.items.map((reaction) => {
+                                            const member = reaction.userCode
+                                              ? memberByCode.get(
+                                                  String(reaction.userCode),
+                                                )
+                                              : undefined;
+                                            const displayName =
+                                              reaction.displayName ||
+                                              member?.fullName ||
+                                              reaction.userCode ||
+                                              "Người dùng";
+                                            const avatar =
+                                              resolveReactionAvatar(
+                                                reaction.avatarUrl ||
+                                                  member?.avatarURL ||
+                                                  "",
+                                              );
+
+                                            return (
+                                              <div
+                                                key={`${hoverKey}-${reaction.reactionID}`}
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: 6,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    width: 20,
+                                                    height: 20,
+                                                    borderRadius: "50%",
+                                                    overflow: "hidden",
+                                                    background:
+                                                      "rgba(148,163,184,0.2)",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                  }}
+                                                >
+                                                  {avatar ? (
+                                                    <img
+                                                      src={avatar}
+                                                      alt={displayName}
+                                                      style={{
+                                                        width: "100%",
+                                                        height: "100%",
+                                                        objectFit: "cover",
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    <span>
+                                                      {String(displayName)
+                                                        .charAt(0)
+                                                        .toUpperCase()}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <span
+                                                  style={{
+                                                    fontSize: 12,
+                                                    color: palette.titleColor,
+                                                  }}
+                                                >
+                                                  {displayName}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+
+                        {hasReaders && isLatestForSender && (
+                          <div
+                            className="chat-read-chip-wrap"
+                            onMouseEnter={(event) => {
+                              setHoveredReactionKey(readerKey);
+                              openReadPopover(
+                                readerKey,
+                                event.currentTarget as HTMLDivElement,
+                              );
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredReactionKey(null);
+                              setReadPopoverAnchor(null);
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="chat-read-chip"
+                              style={{ color: palette.titleColor }}
+                            >
+                              <Eye size={14} />
+                              <span style={{ fontWeight: 600 }}>
+                                {readers.length}
+                              </span>
+                            </button>
+                            {hoveredReactionKey === readerKey &&
+                              readPopoverAnchor?.key === readerKey &&
+                              typeof document !== "undefined" &&
+                              createPortal(
                                 <div
                                   style={{
-                                    position: "absolute",
-                                    bottom: "calc(100% + 6px)",
-                                    left: "50%",
-                                    transform: "translateX(-50%)",
+                                    position: "fixed",
+                                    left: readPopoverAnchor.left,
+                                    top: readPopoverAnchor.top,
+                                    transform: readPopoverAnchor.placeBelow
+                                      ? "none"
+                                      : "translateY(-100%)",
                                     minWidth: 180,
                                     maxWidth: 240,
                                     background: "#fff",
@@ -1441,7 +1689,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                     borderRadius: 10,
                                     boxShadow: "0 8px 18px rgba(0,0,0,0.16)",
                                     padding: 8,
-                                    zIndex: 1500,
+                                    zIndex: 2000,
                                   }}
                                 >
                                   <div
@@ -1525,106 +1773,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                                       );
                                     })}
                                   </div>
-                                </div>
+                                </div>,
+                                document.body,
                               )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <button
-                        onMouseEnter={() => {
-                          if (!myReaction) {
-                            setPickerMessageId(message.messageID);
-                          }
-                        }}
-                        onClick={() => {
-                          if (myReaction) {
-                            void toggleReaction(
-                              message.conversationID,
-                              message.messageID,
-                              myReaction.reactionType,
-                              true,
-                            );
-                            return;
-                          }
-                          setPickerMessageId(message.messageID);
-                        }}
-                        style={{
-                          border: "1px solid rgba(148,163,184,0.35)",
-                          background: "rgba(255,255,255,0.95)",
-                          cursor: "pointer",
-                          fontSize: myReaction ? 15 : 12,
-                          color: myReaction ? palette.titleColor : "#94a3b8",
-                          width: 26,
-                          height: 26,
-                          borderRadius: 999,
-                          outline: "none",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
-                          padding: 0,
-                        }}
-                        title={myReaction ? "Bấm để gỡ cảm xúc" : "Thả cảm xúc"}
-                      >
-                        {myReaction ? (
-                          String(
-                            reactionIconMap[myReaction.reactionType] || "🙂",
-                          )
-                        ) : (
-                          <Smile size={14} />
+                          </div>
                         )}
-                      </button>
-
-                      {pickerMessageId === message.messageID && !myReaction && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: "calc(100% + 6px)",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            display: "flex",
-                            gap: 2,
-                            padding: 4,
-                            background: "#fff",
-                            border: "1px solid rgba(148,163,184,0.25)",
-                            borderRadius: 999,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                            zIndex: 1500,
-                          }}
-                        >
-                          {Object.entries(reactionIconMap).map(
-                            ([reactionType, icon]) => {
-                              return (
-                                <button
-                                  key={`${message.messageID}-picker-${reactionType}`}
-                                  onClick={() => {
-                                    void toggleReaction(
-                                      message.conversationID,
-                                      message.messageID,
-                                      reactionType,
-                                      false,
-                                    );
-                                    setPickerMessageId(null);
-                                  }}
-                                  style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    cursor: "pointer",
-                                    fontSize: 14,
-                                    opacity: 0.85,
-                                    padding: "0 2px",
-                                  }}
-                                  title={`Reaction ${reactionType}`}
-                                >
-                                  {String(icon)}
-                                </button>
-                              );
-                            },
-                          )}
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );

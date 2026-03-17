@@ -266,7 +266,7 @@ const LecturerReports: React.FC = () => {
 
     try {
       const response = await fetchData(
-        `/LecturerProfiles/get-list?UserCode=${auth.user.userCode}`,
+        `/LecturerPxrofiles/get-list?UserCode=${auth.user.userCode}`,
       );
       const data = (response as ApiResponse<LecturerProfile[]>).data || [];
       if (data.length > 0) {

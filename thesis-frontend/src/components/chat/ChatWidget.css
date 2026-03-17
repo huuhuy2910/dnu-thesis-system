@@ -1,0 +1,62 @@
+.chat-reaction-toggle {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  padding: 0;
+  order: 2;
+}
+
+.chat-reaction-toggle.is-reacted {
+  border-color: rgba(243, 112, 33, 0.45);
+}
+
+.chat-reaction-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 250px;
+  order: 1;
+}
+
+.chat-reaction-count-chip {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.chat-read-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  order: 3;
+  margin-left: auto;
+}
+
+.chat-read-chip {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}

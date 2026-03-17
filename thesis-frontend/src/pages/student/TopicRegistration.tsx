@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import /* useNavigate */ "react-router-dom";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, FetchDataError } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
 import type { CatalogTopic } from "../../types/catalog-topic";
@@ -24,6 +24,86 @@ import {
   CheckCircle,
   Edit,
 } from "lucide-react";
+import {
+  type WorkflowDetailResponse,
+  type WorkflowMutationResponse,
+  type WorkflowRollbackResponse,
+  type WorkflowResubmitRequest,
+  type WorkflowTopic,
+} from "../../types/workflow-topic";
+
+const WORKFLOW_BASE = "/workflows/topics";
+
+function ensureWorkflowSuccess<T>(
+  envelope: ApiResponse<T>,
+  fallbackMessage: string,
+): { data: T; totalCount: number } {
+  if (
+    !envelope.success ||
+    envelope.data === null ||
+    envelope.data === undefined
+  ) {
+    throw new Error(envelope.message || envelope.title || fallbackMessage);
+  }
+  return {
+    data: envelope.data,
+    totalCount: Number(envelope.totalCount || 0),
+  };
+}
+
+async function getWorkflowTopicDetailApi(
+  topicId: number,
+): Promise<WorkflowDetailResponse> {
+  const envelope = await fetchData<ApiResponse<WorkflowDetailResponse>>(
+    `${WORKFLOW_BASE}/detail/${topicId}`,
+    { method: "GET" },
+  );
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể tải chi tiết workflow đề tài.",
+  ).data;
+}
+
+async function submitTopicApi(
+  payload: WorkflowResubmitRequest,
+): Promise<WorkflowMutationResponse> {
+  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
+    `${WORKFLOW_BASE}/submit`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return ensureWorkflowSuccess(envelope, "Không thể gửi đề tài lần đầu.").data;
+}
+
+async function resubmitWorkflowTopicApi(
+  payload: WorkflowResubmitRequest,
+): Promise<WorkflowMutationResponse> {
+  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
+    `${WORKFLOW_BASE}/resubmit`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return ensureWorkflowSuccess(envelope, "Không thể gửi đề tài theo workflow.")
+    .data;
+}
+
+async function rollbackWorkflowMyTestDataApi(
+  topicCode?: string,
+): Promise<WorkflowRollbackResponse> {
+  const query = topicCode ? `?topicCode=${encodeURIComponent(topicCode)}` : "";
+  const envelope = await fetchData<ApiResponse<WorkflowRollbackResponse>>(
+    `${WORKFLOW_BASE}/rollback-my-test-data${query}`,
+    { method: "DELETE" },
+  );
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể rollback dữ liệu test workflow.",
+  ).data;
+}
 
 const TopicRegistration: React.FC = () => {
   const auth = useAuth();
@@ -43,10 +123,6 @@ const TopicRegistration: React.FC = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagInfo, setSelectedTagInfo] = useState<Tag | null>(null);
   const [selectedTagIDs, setSelectedTagIDs] = useState<number[]>([]);
-  // existing topicTag records for the topic when editing (used to compute adds/removes)
-  const [existingTopicTagRecords, setExistingTopicTagRecords] = useState<
-    TopicTag[]
-  >([]);
   const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
   const [topicTagNames, setTopicTagNames] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +131,8 @@ const TopicRegistration: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [existingTopic, setExistingTopic] = useState<Topic | null>(null);
+  const [workflowDetail, setWorkflowDetail] =
+    useState<WorkflowDetailResponse | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<TopicFormData>({
     topicCode: "",
@@ -218,8 +296,88 @@ const TopicRegistration: React.FC = () => {
     setSelectedTagInfo(null);
     setFilteredLecturers([]);
     setSelectedTagIDs([]);
+    setWorkflowDetail(null);
     setIsEditing(false);
   };
+
+  const toTopicModel = useCallback(
+    (wfTopic: WorkflowTopic, tagCode?: string | null): Topic => ({
+      topicID: wfTopic.topicID,
+      topicCode: wfTopic.topicCode,
+      title: wfTopic.title,
+      summary: wfTopic.summary,
+      type: wfTopic.type,
+      proposerUserID: wfTopic.proposerUserID,
+      proposerUserCode: wfTopic.proposerUserCode,
+      proposerStudentProfileID: wfTopic.proposerStudentProfileID,
+      proposerStudentCode: wfTopic.proposerStudentCode,
+      supervisorUserID: wfTopic.supervisorUserID,
+      supervisorUserCode: wfTopic.supervisorUserCode,
+      supervisorLecturerProfileID: wfTopic.supervisorLecturerProfileID,
+      supervisorLecturerCode: wfTopic.supervisorLecturerCode,
+      catalogTopicID: wfTopic.catalogTopicID,
+      catalogTopicCode: wfTopic.catalogTopicCode,
+      departmentID: wfTopic.departmentID,
+      departmentCode: wfTopic.departmentCode,
+      status: wfTopic.status,
+      resubmitCount: wfTopic.resubmitCount,
+      createdAt: wfTopic.createdAt,
+      lastUpdated: wfTopic.lastUpdated,
+      tagID: null,
+      tagCode: tagCode ?? null,
+      lecturerComment: wfTopic.lecturerComment ?? "",
+    }),
+    [],
+  );
+
+  const syncWorkflowTopicById = useCallback(
+    async (topicId: number) => {
+      const detail = await getWorkflowTopicDetailApi(topicId);
+      setWorkflowDetail(detail);
+
+      const firstTagCode = detail.tagCodes[0] ?? null;
+      setExistingTopic(toTopicModel(detail.topic, firstTagCode));
+
+      const selected = tags.filter((tag) =>
+        detail.tagCodes.includes(tag.tagCode),
+      );
+      setTopicTagNames(selected);
+      setSelectedTagIDs(selected.map((tag) => tag.tagID));
+
+      // Preserve existing list type for compatibility with current UI blocks.
+      setTopicTags(
+        detail.tagCodes.map((tagCode, idx) => ({
+          topicTagID: idx + 1,
+          topicCode: detail.topic.topicCode,
+          tagID: selected.find((tag) => tag.tagCode === tagCode)?.tagID || 0,
+          tagCode,
+          catalogTopicCode: detail.topic.catalogTopicCode,
+          createdAt: detail.topic.createdAt,
+        })),
+      );
+    },
+    [tags, toTopicModel],
+  );
+
+  useEffect(() => {
+    if (!existingTopic?.topicID) {
+      setWorkflowDetail(null);
+      return;
+    }
+
+    if (isEditing) return;
+
+    const refreshDetail = async () => {
+      try {
+        const detail = await getWorkflowTopicDetailApi(existingTopic.topicID);
+        setWorkflowDetail(detail);
+      } catch (err) {
+        console.error("Error loading workflow detail:", err);
+      }
+    };
+
+    void refreshDetail();
+  }, [existingTopic?.topicID, isEditing]);
 
   const handleEditTopic = async () => {
     if (!existingTopic) return;
@@ -228,31 +386,21 @@ const TopicRegistration: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch current topic data for editing
-      const topicUpdateRes = await fetchData(
-        `/Topics/get-update/${existingTopic.topicID}`,
-      );
-      const topicData = (topicUpdateRes as ApiResponse)?.data as Record<
-        string,
-        unknown
-      >;
-
-      if (!topicData) {
-        throw new Error("Không thể tải dữ liệu đề tài");
-      }
+      const detail = await getWorkflowTopicDetailApi(existingTopic.topicID);
+      const topicData = detail.topic;
 
       // Populate form with existing data
       setEditFormData({
-        topicCode: topicData.topicCode as string,
-        title: topicData.title as string,
-        summary: topicData.summary as string,
-        type: (topicData.type as string) === "CATALOG" ? "CATALOG" : "SELF",
-        catalogTopicID: topicData.catalogTopicID as number | null,
-        supervisorLecturerProfileID: topicData.supervisorLecturerProfileID as
-          | number
-          | null,
-        departmentID: topicData.departmentID as number | null,
-        tagID: topicData.tagID as number | null,
+        topicCode: topicData.topicCode,
+        title: topicData.title,
+        summary: topicData.summary,
+        type: topicData.type === "CATALOG" ? "CATALOG" : "SELF",
+        catalogTopicID: topicData.catalogTopicID,
+        supervisorLecturerProfileID: topicData.supervisorLecturerProfileID,
+        departmentID: topicData.departmentID,
+        tagID:
+          tags.find((tag) => detail.tagCodes.includes(tag.tagCode))?.tagID ||
+          null,
       });
 
       // Set registration type based on topic type
@@ -303,10 +451,12 @@ const TopicRegistration: React.FC = () => {
             console.error("Error loading catalog topic tag:", error);
           }
         }
-      } else if (topicData.type === "SELF" && topicData.tagID) {
+      } else if (topicData.type === "SELF" && detail.tagCodes.length > 0) {
         // For self-proposed topics, load tag from tagID
         try {
-          const tagRes = await fetchData(`/Tags/list?TagID=${topicData.tagID}`);
+          const tagRes = await fetchData(
+            `/Tags/list?TagCode=${detail.tagCodes[0]}`,
+          );
           const tagData = (tagRes as ApiResponse<Tag[]>)?.data || [];
 
           if (tagData.length > 0) {
@@ -332,37 +482,10 @@ const TopicRegistration: React.FC = () => {
         }
       }
 
-      // Load existing TopicTag records for this topic so we can allow editing multiple tags
-      try {
-        const topicTagsRes = await fetchData(
-          `/TopicTags/by-topic/${existingTopic.topicCode}`,
-        );
-        const existingTopicTags =
-          (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
-        setExistingTopicTagRecords(existingTopicTags);
-
-        // initialize selectedTagIDs from existingTopicTags
-        const existingTagIDs = existingTopicTags.map((tt) => tt.tagID);
-        setSelectedTagIDs(existingTagIDs);
-      } catch (error) {
-        // fallback to old list endpoint if by-topic not available
-        console.warn(
-          "/TopicTags/by-topic failed, falling back to /TopicTags/list",
-          error,
-        );
-        try {
-          const topicTagsRes = await fetchData(
-            `/TopicTags/list?TopicCode=${existingTopic.topicCode}`,
-          );
-          const existingTopicTags =
-            (topicTagsRes as ApiResponse<TopicTag[]>)?.data || [];
-          setExistingTopicTagRecords(existingTopicTags);
-          const existingTagIDs = existingTopicTags.map((tt) => tt.tagID);
-          setSelectedTagIDs(existingTagIDs);
-        } catch (error) {
-          console.error("Error loading existing topic tags for edit:", error);
-        }
-      }
+      const selectedTagIDsFromCodes = tags
+        .filter((tag) => detail.tagCodes.includes(tag.tagCode))
+        .map((tag) => tag.tagID);
+      setSelectedTagIDs(selectedTagIDsFromCodes);
 
       setIsEditing(true);
       // Don't set existingTopic to null - we need it for the update API call
@@ -569,29 +692,47 @@ const TopicRegistration: React.FC = () => {
         return;
       }
 
-      // Get the first tag (assuming one topic has one tag)
-      const tagCode = catalogTopicTags[0].tagCode;
+      const uniqueTagCodes = [
+        ...new Set(
+          catalogTopicTags
+            .map((item) => item.tagCode)
+            .filter(
+              (code) => typeof code === "string" && code.trim().length > 0,
+            ),
+        ),
+      ];
 
-      // Step 2: Get tag details
-      const tagRes = await fetchData(`/Tags/list?TagCode=${tagCode}`);
-      const tagData = (tagRes as ApiResponse<Tag[]>)?.data || [];
+      const tagRequests = uniqueTagCodes.map((tagCode) =>
+        fetchData(`/Tags/list?TagCode=${encodeURIComponent(tagCode)}`),
+      );
+      const tagResponses = await Promise.all(tagRequests);
+      const resolvedTags = tagResponses.flatMap(
+        (response) => (response as ApiResponse<Tag[]>)?.data || [],
+      );
 
-      if (tagData.length === 0) {
+      if (resolvedTags.length === 0) {
         setError("Không tìm thấy thông tin thẻ");
         return;
       }
 
-      const tagInfo = tagData[0];
+      const uniqueTags = Array.from(
+        new Map(resolvedTags.map((tag) => [tag.tagID, tag])).values(),
+      );
+      const firstTag = uniqueTags[0];
 
       // Step 3: Get lecturers for this tag
+      const tagCodesQuery = uniqueTagCodes
+        .map((code) => `TagCodes=${encodeURIComponent(code)}`)
+        .join("&");
       const lecturersRes = await fetchData(
-        `/LecturerProfiles/get-list?TagCodes=${tagCode}`,
+        `/LecturerProfiles/get-list?${tagCodesQuery}`,
       );
       const availableLecturers =
         (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
 
       // Update state
-      setSelectedTagInfo(tagInfo);
+      setSelectedTagInfo(firstTag || null);
+      setSelectedTagIDs(uniqueTags.map((tag) => tag.tagID));
       setFilteredLecturers(availableLecturers);
 
       // Update form data
@@ -600,7 +741,7 @@ const TopicRegistration: React.FC = () => {
         catalogTopicID,
         title: selectedTopic.title,
         summary: selectedTopic.summary,
-        tagID: tagInfo.tagID,
+        tagID: firstTag?.tagID || null,
         supervisorLecturerProfileID: null, // Reset lecturer selection
       });
 
@@ -619,37 +760,34 @@ const TopicRegistration: React.FC = () => {
     setSuccess(null);
 
     try {
-      // Validate required fields
       if (registrationType === "self" && selectedTagIDs.length === 0) {
         setError("Vui lòng chọn ít nhất một Tag");
         return;
       }
 
-      // Create new topic (existing logic)
-      // First get the create template
-      const createTemplate = await fetchData("/Topics/get-create");
-
-      // Prepare the payload
-      const templateData =
-        ((createTemplate as ApiResponse)?.data as Record<string, unknown>) ||
-        {};
-
-      // Get additional data for payload
       const selectedLecturer = lecturers.find(
         (l) => l.lecturerProfileID === formData.supervisorLecturerProfileID,
       );
       const selectedDepartment = defaultDepartment;
-      const selectedTag = tags.find((t) => t.tagID === formData.tagID);
       const selectedCatalogTopic = catalogTopics.find(
         (c) => c.catalogTopicID === formData.catalogTopicID,
       );
 
-      // Resolve supervisorUserID from selected lecturer (try in-memory value first,
-      // then attempt to query Users endpoints). If not found, keep 0 so backend
-      // may resolve from supervisorUserCode.
+      if (!selectedLecturer) {
+        setError("Vui lòng chọn giảng viên hướng dẫn.");
+        return;
+      }
+
+      if (
+        !selectedDepartment?.departmentID ||
+        !selectedDepartment.departmentCode
+      ) {
+        setError("Không xác định được thông tin khoa/bộ môn.");
+        return;
+      }
+
       const supervisorUserID = await resolveSupervisorUserID(selectedLecturer);
 
-      // Get student profile for proposer
       let proposerStudentProfileID = 0;
       let proposerStudentCode = "";
       if (auth.user?.userCode) {
@@ -668,129 +806,66 @@ const TopicRegistration: React.FC = () => {
         }
       }
 
-      const payload = {
-        ...templateData,
-        topicCode: templateData.topicCode || "",
+      if (!proposerStudentProfileID || !proposerStudentCode) {
+        setError("Không tìm thấy hồ sơ sinh viên để gửi đề tài.");
+        return;
+      }
+
+      const effectiveTagIds =
+        selectedTagIDs.length > 0
+          ? selectedTagIDs
+          : [formData.tagID, selectedTagInfo?.tagID].filter(
+              (id): id is number => typeof id === "number" && id > 0,
+            );
+      const chosenTags = tags.filter((tag) =>
+        effectiveTagIds.includes(tag.tagID),
+      );
+      const submitPayload: WorkflowResubmitRequest = {
+        topicID: null,
+        topicCode: null,
         title: formData.title,
         summary: formData.summary,
-        type: formData.type, // "CATALOG" for existing topics, "SELF" for self-proposed topics
+        type: formData.type,
         proposerUserID: auth.user?.userID || 0,
         proposerUserCode: auth.user?.userCode || "",
-        proposerStudentProfileID: proposerStudentProfileID,
-        proposerStudentCode: proposerStudentCode,
-        supervisorUserID: supervisorUserID,
-        supervisorUserCode: selectedLecturer?.userCode || "",
+        proposerStudentProfileID,
+        proposerStudentCode,
+        supervisorUserID,
+        supervisorUserCode: selectedLecturer.userCode || "",
         supervisorLecturerProfileID: formData.supervisorLecturerProfileID || 0,
-        supervisorLecturerCode: selectedLecturer?.lecturerCode || "",
-        catalogTopicID: formData.catalogTopicID || 0,
-        catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || "",
-        departmentID: formData.departmentID || 0,
-        departmentCode: selectedDepartment?.departmentCode || "",
-        status: "Đang chờ",
-        resubmitCount: 0,
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        tagID: formData.tagID || 0,
-        tagCode: selectedTag?.tagCode || "",
+        supervisorLecturerCode: selectedLecturer.lecturerCode || "",
+        catalogTopicID: formData.catalogTopicID,
+        catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || null,
+        departmentID: formData.departmentID || selectedDepartment.departmentID,
+        departmentCode: selectedDepartment.departmentCode,
+        tagIDs: chosenTags.map((tag) => tag.tagID),
+        tagCodes: chosenTags.map((tag) => tag.tagCode),
+        useCatalogTopicTags: formData.type === "CATALOG",
+        forceCreateNewTopic: true,
+        studentNote: "Nộp lần đầu",
       };
 
-      await fetchData("/Topics/create", {
-        method: "POST",
-        body: payload,
-      });
+      const workflowResult =
+        submitPayload.topicID === null && !submitPayload.topicCode
+          ? await submitTopicApi(submitPayload)
+          : await resubmitWorkflowTopicApi(submitPayload);
+      await syncWorkflowTopicById(workflowResult.topic.topicID);
 
-      // Create initial progress milestone after successful topic creation
-      try {
-        const milestoneTemplate = await fetchData(
-          "/ProgressMilestones/get-create",
-        );
-        const milestoneData =
-          ((milestoneTemplate as ApiResponse)?.data as Record<
-            string,
-            unknown
-          >) || {};
-
-        const milestonePayload = {
-          ...milestoneData,
-          topicCode: templateData.topicCode || "",
-          topicID: null, // Will be set by backend
-          state: "Đang tiến hành",
-          startedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          lastUpdated: new Date().toISOString(),
-        };
-
-        await fetchData("/ProgressMilestones/create", {
-          method: "POST",
-          body: milestonePayload,
-        });
-        console.log("Progress milestone created successfully");
-      } catch (milestoneErr) {
-        console.error("Error creating progress milestone:", milestoneErr);
-        // Don't fail the entire registration if milestone creation fails
-      }
-
-      // Create topic tag associations after successful topic creation
-      try {
-        const topicTagTemplate = await fetchData("/TopicTags/get-create");
-        const topicTagData =
-          ((topicTagTemplate as ApiResponse)?.data as Record<
-            string,
-            unknown
-          >) || {};
-
-        // Resolve tags to create for both flows:
-        // - SELF: from selectedTagIDs
-        // - CATALOG: fallback to formData.tagID / selectedTagInfo.tagID
-        const tagIdsToCreate = Array.from(
-          new Set(
-            selectedTagIDs.length > 0
-              ? selectedTagIDs
-              : [formData.tagID, selectedTagInfo?.tagID].filter(
-                  (id): id is number => typeof id === "number" && id > 0,
-                ),
-          ),
-        );
-
-        const selectedTags = tags.filter((t) =>
-          tagIdsToCreate.includes(t.tagID),
-        );
-
-        for (const tag of selectedTags) {
-          const topicTagPayload = {
-            ...topicTagData,
-            tagID: tag.tagID,
-            tagCode: tag.tagCode,
-            catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || "",
-            topicCode: templateData.topicCode || "",
-          };
-
-          await fetchData("/TopicTags/create", {
-            method: "POST",
-            body: topicTagPayload,
-          });
-        }
-
-        if (selectedTags.length === 0) {
-          console.warn("No valid tags resolved for /TopicTags/create");
-        }
-        console.log("Topic tag associations created successfully");
-      } catch (topicTagErr) {
-        console.error("Error creating topic tag associations:", topicTagErr);
-        // Don't fail the entire registration if topic tag creation fails
-      }
-
-      setSuccess("Đăng ký đề tài thành công!");
+      setSuccess(workflowResult.message || "Đăng ký đề tài thành công!");
       setShowSuccessModal(true);
     } catch (error) {
-      setError("Có lỗi xảy ra khi xử lý đề tài");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra khi xử lý đề tài",
+      );
       console.error("Error submitting topic:", error);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Handle edit form submission - only calls Topics/update API
+  // Handle edit form submission - workflow resubmit
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -802,26 +877,46 @@ const TopicRegistration: React.FC = () => {
         throw new Error("Không tìm thấy đề tài để cập nhật");
       }
 
-      // Validate required fields
       if (selectedTagIDs.length === 0) {
         setError("Vui lòng chọn ít nhất một Tag");
         return;
       }
 
-      // Get selected data for edit form
       const selectedLecturer = lecturers.find(
         (l) => l.lecturerProfileID === editFormData.supervisorLecturerProfileID,
       );
       const selectedDepartment = defaultDepartment;
-      const selectedTag = tags.find((t) => selectedTagIDs.includes(t.tagID));
       const selectedCatalogTopic = catalogTopics.find(
         (c) => c.catalogTopicID === editFormData.catalogTopicID,
       );
 
-      // Resolve supervisorUserID for update payload
-      const supervisorUserID = await resolveSupervisorUserID(selectedLecturer);
+      if (!selectedLecturer) {
+        setError("Vui lòng chọn giảng viên hướng dẫn.");
+        return;
+      }
 
-      const updatePayload = {
+      if (
+        !selectedDepartment?.departmentID ||
+        !selectedDepartment.departmentCode
+      ) {
+        setError("Không xác định được thông tin khoa/bộ môn.");
+        return;
+      }
+
+      const supervisorUserID = await resolveSupervisorUserID(selectedLecturer);
+      const effectiveTagIds =
+        selectedTagIDs.length > 0
+          ? selectedTagIDs
+          : [editFormData.tagID, selectedTagInfo?.tagID].filter(
+              (id): id is number => typeof id === "number" && id > 0,
+            );
+      const chosenTags = tags.filter((tag) =>
+        effectiveTagIds.includes(tag.tagID),
+      );
+
+      const resubmitPayload: WorkflowResubmitRequest = {
+        topicID: existingTopic.topicID,
+        topicCode: existingTopic.topicCode || null,
         title: editFormData.title,
         summary: editFormData.summary,
         type: editFormData.type,
@@ -829,98 +924,97 @@ const TopicRegistration: React.FC = () => {
         proposerUserCode: existingTopic.proposerUserCode,
         proposerStudentProfileID: existingTopic.proposerStudentProfileID,
         proposerStudentCode: existingTopic.proposerStudentCode,
-        supervisorUserID: supervisorUserID,
-        supervisorUserCode: selectedLecturer?.userCode || "",
+        supervisorUserID,
+        supervisorUserCode: selectedLecturer.userCode || "",
         supervisorLecturerProfileID:
           editFormData.supervisorLecturerProfileID || 0,
-        supervisorLecturerCode: selectedLecturer?.lecturerCode || "",
-        catalogTopicID: editFormData.catalogTopicID || 0,
-        catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || "",
-        departmentID: editFormData.departmentID || 0,
-        departmentCode: selectedDepartment?.departmentCode || "",
-        status: "Đang chờ",
-        resubmitCount: existingTopic.resubmitCount || 0,
-        createdAt: existingTopic.createdAt,
-        lastUpdated: new Date().toISOString(),
-        tagID: selectedTag?.tagID || 0,
-        tagCode: selectedTag?.tagCode || "",
-        lecturerComment: "",
+        supervisorLecturerCode: selectedLecturer.lecturerCode || "",
+        catalogTopicID: editFormData.catalogTopicID,
+        catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || null,
+        departmentID:
+          editFormData.departmentID || selectedDepartment.departmentID,
+        departmentCode: selectedDepartment.departmentCode,
+        tagIDs: chosenTags.map((tag) => tag.tagID),
+        tagCodes: chosenTags.map((tag) => tag.tagCode),
+        useCatalogTopicTags: editFormData.type === "CATALOG",
+        forceCreateNewTopic: false,
+        studentNote: "Em đã cập nhật theo góp ý",
       };
 
-      // Only call Topics/update API when editing
-      await fetchData(`/Topics/update/${existingTopic.topicID}`, {
-        method: "PUT",
-        body: updatePayload,
-      });
+      const workflowResult = await resubmitWorkflowTopicApi(resubmitPayload);
+      await syncWorkflowTopicById(workflowResult.topic.topicID);
 
-      // Sync TopicTags: add new selected tags and remove unselected existing tags
-      try {
-        const topicCode = existingTopic.topicCode;
-
-        // existingTopicTagRecords contains TopicTag objects with topicTagID and tagID
-        const existingTagIDs = existingTopicTagRecords.map((t) => t.tagID);
-
-        // Tags to add = selectedTagIDs - existingTagIDs
-        const tagsToAdd = selectedTagIDs.filter(
-          (id) => !existingTagIDs.includes(id),
-        );
-
-        // Tags to remove = existingTopicTagRecords whose tagID not in selectedTagIDs
-        const tagsToRemove = existingTopicTagRecords.filter(
-          (rec) => !selectedTagIDs.includes(rec.tagID),
-        );
-
-        // POST create for each tag to add
-        if (tagsToAdd.length > 0) {
-          const topicTagTemplateRes = await fetchData("/TopicTags/get-create");
-          const topicTagTemplate =
-            ((topicTagTemplateRes as ApiResponse)?.data as Record<
-              string,
-              unknown
-            >) || {};
-
-          for (const tagID of tagsToAdd) {
-            const tagInfo = tags.find((t) => t.tagID === tagID);
-            const payload = {
-              ...topicTagTemplate,
-              tagID: tagInfo?.tagID || tagID,
-              tagCode: tagInfo?.tagCode || "",
-              catalogTopicCode: updatePayload.catalogTopicCode || "",
-              topicCode: topicCode || "",
-            };
-
-            await fetchData(`/TopicTags/create`, {
-              method: "POST",
-              body: payload,
-            });
-          }
-        }
-
-        // DELETE for each tag to remove (use topicTagID)
-        for (const rec of tagsToRemove) {
-          try {
-            await fetchData(
-              `/TopicTags/delete/${topicCode}/${rec.topicTagID}`,
-              {
-                method: "DELETE",
-              },
-            );
-          } catch (delErr) {
-            console.error("Error deleting topicTag", rec, delErr);
-          }
-        }
-      } catch (syncErr) {
-        console.error("Error syncing topic tags after update:", syncErr);
-      }
-
-      setSuccess("Cập nhật đề tài thành công!");
+      setSuccess(workflowResult.message || "Cập nhật đề tài thành công!");
       setShowSuccessModal(true);
       setIsEditing(false);
-      // Reload data to show updated topic
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra khi cập nhật đề tài",
+      );
+      console.error("Error updating topic:", error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRollbackCurrentTopic = async () => {
+    if (!existingTopic?.topicCode) {
+      setError("Không có topicCode hiện tại để rollback.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bạn có chắc muốn rollback dữ liệu test cho đề tài ${existingTopic.topicCode}?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      setSubmitting(true);
+      const result = await rollbackWorkflowMyTestDataApi(
+        existingTopic.topicCode,
+      );
+      setSuccess(result.message || "Rollback theo topic thành công.");
+      setExistingTopic(null);
+      setWorkflowDetail(null);
+      setIsEditing(false);
       await loadInitialData();
     } catch (error) {
-      setError("Có lỗi xảy ra khi cập nhật đề tài");
-      console.error("Error updating topic:", error);
+      if (error instanceof FetchDataError && error.status === 404) {
+        setError("Topic không thuộc user hiện tại hoặc không tồn tại.");
+      } else {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Không thể rollback theo topic.",
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRollbackAllMyTestData = async () => {
+    const confirmed = window.confirm(
+      "Bạn có chắc muốn rollback toàn bộ dữ liệu test workflow của tài khoản hiện tại?",
+    );
+    if (!confirmed) return;
+
+    try {
+      setSubmitting(true);
+      const result = await rollbackWorkflowMyTestDataApi();
+      setSuccess(result.message || "Rollback toàn bộ dữ liệu test thành công.");
+      setExistingTopic(null);
+      setWorkflowDetail(null);
+      setIsEditing(false);
+      await loadInitialData();
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Không thể rollback toàn bộ dữ liệu test.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -934,7 +1028,8 @@ const TopicRegistration: React.FC = () => {
           justifyContent: "center",
           alignItems: "center",
           minHeight: "400px",
-          color: "#f37021",
+          fontSize: "18px",
+          color: "#666",
         }}
       >
         <div style={{ textAlign: "center" }}>
@@ -1812,6 +1907,90 @@ const TopicRegistration: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: "600",
+                    color: "#333",
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Milestone State
+                </label>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "#fff",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    color: "#333",
+                  }}
+                >
+                  {workflowDetail?.milestoneState || "Chưa có"}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: "600",
+                    color: "#333",
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Milestone Template / Ordinal
+                </label>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "#fff",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    color: "#333",
+                  }}
+                >
+                  {workflowDetail?.milestoneTemplateCode || "-"} /{" "}
+                  {workflowDetail?.ordinal ?? "-"}
+                </div>
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: "600",
+                    color: "#333",
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Thời điểm milestone
+                </label>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "#fff",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    color: "#333",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  <div>completedAt1: {workflowDetail?.completedAt1 || "-"}</div>
+                  <div>completedAt2: {workflowDetail?.completedAt2 || "-"}</div>
+                  <div>completedAt3: {workflowDetail?.completedAt3 || "-"}</div>
+                  <div>completedAt4: {workflowDetail?.completedAt4 || "-"}</div>
+                  <div>completedAt5: {workflowDetail?.completedAt5 || "-"}</div>
+                </div>
+              </div>
+
               {/* Lecturer Comment - only show for rejected or revision topics */}
               {(existingTopic.status === "Từ chối" ||
                 existingTopic.status === "Cần sửa đổi") &&
@@ -1941,6 +2120,49 @@ const TopicRegistration: React.FC = () => {
                 Sửa đề tài
               </button>
             )}
+
+            <div
+              style={{
+                marginTop: "16px",
+                display: "flex",
+                gap: "10px",
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => void handleRollbackCurrentTopic()}
+                disabled={submitting || !existingTopic.topicCode}
+                style={{
+                  border: "1px solid #fecaca",
+                  background: "#fff",
+                  color: "#b91c1c",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontWeight: 600,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                }}
+              >
+                Rollback đề tài hiện tại
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRollbackAllMyTestData()}
+                disabled={submitting}
+                style={{
+                  border: "1px solid #fca5a5",
+                  background: "#fff5f5",
+                  color: "#991b1b",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontWeight: 600,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                }}
+              >
+                Rollback toàn bộ dữ liệu test
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -2298,7 +2520,7 @@ const TopicRegistration: React.FC = () => {
             />
             Tags *
           </label>
-          {registrationType === "catalog" && selectedTagInfo ? (
+          {registrationType === "catalog" && selectedTagIDs.length > 0 ? (
             <div
               style={{
                 padding: "12px 16px",
@@ -2308,18 +2530,24 @@ const TopicRegistration: React.FC = () => {
                 fontSize: "16px",
               }}
             >
-              <div
-                style={{
-                  fontWeight: "600",
-                  color: "#f37021",
-                  marginBottom: "4px",
-                }}
-              >
-                {selectedTagInfo.tagName}
-              </div>
-              <div style={{ color: "#666", fontSize: "14px" }}>
-                {selectedTagInfo.description}
-              </div>
+              {tags
+                .filter((tag) => selectedTagIDs.includes(tag.tagID))
+                .map((tag) => (
+                  <div key={tag.tagID} style={{ marginBottom: 8 }}>
+                    <div
+                      style={{
+                        fontWeight: "600",
+                        color: "#f37021",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      {tag.tagName}
+                    </div>
+                    <div style={{ color: "#666", fontSize: "14px" }}>
+                      {tag.description}
+                    </div>
+                  </div>
+                ))}
             </div>
           ) : (
             <div
@@ -2602,6 +2830,49 @@ const TopicRegistration: React.FC = () => {
               </>
             )}
           </button>
+
+          <div
+            style={{
+              marginTop: "14px",
+              display: "flex",
+              gap: "10px",
+              justifyContent: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => void handleRollbackCurrentTopic()}
+              disabled
+              style={{
+                border: "1px solid #fecaca",
+                background: "#fff",
+                color: "#b91c1c",
+                borderRadius: "8px",
+                padding: "8px 12px",
+                fontWeight: 600,
+                cursor: "not-allowed",
+              }}
+            >
+              Rollback theo topic hiện tại
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRollbackAllMyTestData()}
+              disabled={submitting}
+              style={{
+                border: "1px solid #fca5a5",
+                background: "#fff5f5",
+                color: "#991b1b",
+                borderRadius: "8px",
+                padding: "8px 12px",
+                fontWeight: 600,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              Rollback toàn bộ dữ liệu test
+            </button>
+          </div>
         </div>
       </form>
 

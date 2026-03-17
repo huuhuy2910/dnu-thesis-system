@@ -4,51 +4,111 @@ import {
   Home,
   Users,
   ClipboardList,
+  BookOpen,
   FileCog,
   ShieldCheck,
   Bell,
   Activity,
+  GraduationCap,
+  Building2,
 } from "lucide-react";
 import "./SideNav.css";
 import "./AdminNav.css";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  isManagementRole,
+  normalizeRole,
+  ROLE_ADMIN,
+  ROLE_STUDENT_SERVICE,
+} from "../../utils/role";
+import { hasUserManagementPermission } from "../../utils/permissions";
 
 interface AdminNavProps {
   onNavigate?: () => void;
 }
 
 const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
-  const navItems = [
-    { path: "/admin", label: "Trang chủ", icon: <Home size={18} /> },
+  const auth = useAuth();
+  const role = normalizeRole(auth.user?.role);
+
+  if (!isManagementRole(role)) {
+    return null;
+  }
+
+  const basePath =
+    role === ROLE_STUDENT_SERVICE ? "/student-service" : "/admin";
+
+  const commonItems = [
+    { path: `${basePath}`, label: "Trang chủ", icon: <Home size={18} /> },
     {
-      path: "/admin/users",
-      label: "Quản lý người dùng",
+      path: `${basePath}/students`,
+      label: "Quản lý sinh viên",
       icon: <Users size={18} />,
     },
     {
-      path: "/admin/topic-review",
+      path: `${basePath}/lecturers`,
+      label: "Quản lý giảng viên",
+      icon: <GraduationCap size={18} />,
+    },
+    {
+      path: `${basePath}/departments`,
+      label: "Quản lý khoa/bộ môn",
+      icon: <Building2 size={18} />,
+    },
+    {
+      path: `${basePath}/topics`,
       label: "Quản lý đề tài",
       icon: <ClipboardList size={18} />,
     },
+  ];
+
+  const roleCanSeeUsers = hasUserManagementPermission(role, "users:list");
+
+  const adminOnlyItems = [
     {
-      path: "/admin/committees",
+      path: `${basePath}/topic-review`,
+      label: "Duyệt đề tài",
+      icon: <BookOpen size={18} />,
+    },
+    {
+      path: `${basePath}/committees`,
       label: "Hội đồng & phân công",
       icon: <ShieldCheck size={18} />,
     },
     {
-      path: "/admin/notifications/create",
+      path: `${basePath}/notifications/create`,
       label: "Tạo thông báo",
       icon: <Bell size={18} />,
     },
     {
-      path: "/admin/system-config",
+      path: `${basePath}/system-config`,
       label: "Cấu hình hệ thống",
       icon: <FileCog size={18} />,
     },
     {
-      path: "/admin/activity-logs",
+      path: `${basePath}/activity-logs`,
       label: "Lịch sử hoạt động",
       icon: <Activity size={18} />,
     },
+    {
+      path: `${basePath}/workflow-audits`,
+      label: "Workflow Audit",
+      icon: <Activity size={18} />,
+    },
+  ];
+
+  const navItems = [
+    ...commonItems,
+    ...(roleCanSeeUsers
+      ? [
+          {
+            path: `${basePath}/users`,
+            label: "Quản lý người dùng",
+            icon: <Users size={18} />,
+          },
+        ]
+      : []),
+    ...(role === ROLE_ADMIN ? adminOnlyItems : []),
   ];
 
   return (

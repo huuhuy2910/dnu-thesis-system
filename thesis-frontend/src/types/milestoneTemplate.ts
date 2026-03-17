@@ -4,6 +4,7 @@ export interface MilestoneTemplate {
   name: string;
   description: string;
   ordinal: number;
+  deadline: string;
   createdAt: string;
   lastUpdated: string | null;
 }
