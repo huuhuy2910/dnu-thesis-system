@@ -1,11 +1,11 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import {
+  CalendarCog,
   Home,
   Users,
   ClipboardList,
   FileCog,
-  ShieldCheck,
   Bell,
   Activity,
 } from "lucide-react";
@@ -31,8 +31,8 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
     },
     {
       path: "/admin/committees",
-      label: "Hội đồng & phân công",
-      icon: <ShieldCheck size={18} />,
+      label: "Điều phối đợt bảo vệ",
+      icon: <CalendarCog size={18} />,
     },
     {
       path: "/admin/notifications/create",

@@ -5,9 +5,7 @@ using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
 using ThesisManagement.Api.DTOs.CommitteeMembers.Query;
-using ThesisManagement.Api.DTOs.Committees.Query;
 using ThesisManagement.Api.DTOs.DefenseAssignments.Query;
-using ThesisManagement.Api.DTOs.DefenseScores.Query;
 using ThesisManagement.Api.DTOs.Departments.Query;
 using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
 using ThesisManagement.Api.DTOs.LecturerTags.Query;
@@ -363,36 +361,6 @@ namespace ThesisManagement.Api.Helpers
             return ApplySorting(query, filter);
         }
 
-        public static IQueryable<Committee> ApplyFilter(this IQueryable<Committee> query, CommitteeFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => x.CommitteeCode.Contains(filter.Search) ||
-                                        (x.Name != null && x.Name.Contains(filter.Search)) ||
-                                        (x.Room != null && x.Room.Contains(filter.Search)));
-            }
-
-            if (!string.IsNullOrEmpty(filter.Name))
-                query = query.Where(x => x.Name != null && x.Name.Contains(filter.Name));
-
-            if (!string.IsNullOrEmpty(filter.CommitteeCode))
-                query = query.Where(x => x.CommitteeCode.Contains(filter.CommitteeCode));
-
-            if (!string.IsNullOrEmpty(filter.Room))
-                query = query.Where(x => x.Room != null && x.Room.Contains(filter.Room));
-
-            if (filter.DefenseDate.HasValue)
-                query = query.Where(x => x.DefenseDate.HasValue && x.DefenseDate.Value.Date == filter.DefenseDate.Value.Date);
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
-
         public static IQueryable<ProgressMilestone> ApplyFilter(this IQueryable<ProgressMilestone> query, ProgressMilestoneFilter filter)
         {
             if (!string.IsNullOrEmpty(filter.Search))
@@ -530,41 +498,6 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrEmpty(filter.Role))
                 query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
-
-            if (filter.FromDate.HasValue)
-                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
-
-            if (filter.ToDate.HasValue)
-                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
-
-            return ApplySorting(query, filter);
-        }
-
-        public static IQueryable<DefenseScore> ApplyFilter(this IQueryable<DefenseScore> query, DefenseScoreFilter filter)
-        {
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query = query.Where(x => x.ScoreCode.Contains(filter.Search) ||
-                                        (x.Comment != null && x.Comment.Contains(filter.Search)));
-            }
-
-            if (!string.IsNullOrEmpty(filter.ScoreCode))
-                query = query.Where(x => x.ScoreCode.Contains(filter.ScoreCode));
-
-            if (!string.IsNullOrWhiteSpace(filter.AssignmentCode))
-                query = query.Where(x => x.AssignmentCode == filter.AssignmentCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.MemberLecturerUserCode))
-                query = query.Where(x => x.MemberLecturerUserCode == filter.MemberLecturerUserCode);
-
-            if (!string.IsNullOrWhiteSpace(filter.MemberLecturerCode))
-                query = query.Where(x => x.MemberLecturerCode == filter.MemberLecturerCode);
-
-            if (filter.MinScore.HasValue)
-                query = query.Where(x => x.Score >= filter.MinScore.Value);
-
-            if (filter.MaxScore.HasValue)
-                query = query.Where(x => x.Score <= filter.MaxScore.Value);
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);

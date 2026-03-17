@@ -12,8 +12,10 @@ namespace ThesisManagement.Api.Models
         public string? MemberLecturerCode { get; set; } // Code-based reference
         public int? MemberLecturerUserID { get; set; } // Internal reference
         public string? MemberLecturerUserCode { get; set; } // Code-based reference
+        public string? Role { get; set; }
         public decimal Score { get; set; }
         public string? Comment { get; set; }
+        public bool IsSubmitted { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? LastUpdated { get; set; }
 

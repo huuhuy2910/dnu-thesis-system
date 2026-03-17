@@ -94,28 +94,13 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UsersManagement />} />
-          <Route path="system-config" element={<SystemConfig />} />
-          <Route path="topic-review" element={<LecturerTopicReview />} />
-          <Route path="notifications/create" element={<CreateNotification />} />
-          {/* thêm các route con khác của admin ở đây */}
-        </Route>
-        {/* ADMIN */}
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute allowedRoles={["ADMIN"]}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<AdminDashboard />} />
-          <Route path="users" element={<UsersManagement />} />
           <Route path="committees" element={<CommitteeManagement />} />
           <Route
             path="defense-assignments"
             element={<Navigate to="/admin/committees" replace />}
           />
           <Route path="system-config" element={<SystemConfig />} />
+          <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="notifications/create" element={<CreateNotification />} />
           <Route path="activity-logs" element={<SystemActivityLogs />} />
           {/* thêm các route con khác của admin ở đây */}

@@ -1,5 +1,6 @@
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Repositories;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ThesisManagement.Api.Services
 {
@@ -26,6 +27,16 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
+        IGenericRepository<DefenseTerm> DefenseTerms { get; }
+        IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
+        IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
+        IGenericRepository<DefenseGroup> DefenseGroups { get; }
+        IGenericRepository<ExportFile> ExportFiles { get; }
+        IGenericRepository<EvaluationReview> EvaluationReviews { get; }
+        IGenericRepository<DefenseMinute> DefenseMinutes { get; }
+        IGenericRepository<DefenseResult> DefenseResults { get; }
+        IGenericRepository<DefenseRevision> DefenseRevisions { get; }
+        IGenericRepository<DefenseDocument> DefenseDocuments { get; }
         IGenericRepository<CommitteeTag> CommitteeTags { get; }
         IGenericRepository<Tag> Tags { get; }
         IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
@@ -34,6 +45,7 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<LecturerTag> LecturerTags { get; }
         IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
         
+        Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
         Task<int> SaveChangesAsync();
     }
 }

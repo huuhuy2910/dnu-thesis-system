@@ -4,7 +4,6 @@ using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
 using ThesisManagement.Api.DTOs.ConversationMembers.Query;
 using ThesisManagement.Api.DTOs.Conversations.Query;
-using ThesisManagement.Api.DTOs.DefenseScores.Query;
 using ThesisManagement.Api.DTOs.Departments.Query;
 using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
 using ThesisManagement.Api.DTOs.LecturerTags.Query;
@@ -56,7 +55,6 @@ namespace ThesisManagement.Api.Mappings
             // TODO: CreateMap<Committee, CommitteeReadDto>();
             // TODO: CreateMap<CommitteeMember, CommitteeMemberReadDto>();
             // TODO: CreateMap<DefenseAssignment, DefenseAssignmentReadDto>();
-            CreateMap<DefenseScore, DefenseScoreReadDto>();
             
             CreateMap<Tag, TagReadDto>();
             CreateMap<Conversation, ConversationReadDto>();

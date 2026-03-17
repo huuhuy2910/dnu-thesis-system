@@ -14,10 +14,13 @@ namespace ThesisManagement.Api.Models
         public string? CommitteeCode { get; set; }
         public DateTime? ScheduledAt { get; set; }
         public int? Session { get; set; }
+        public string? Shift { get; set; }
+        public int? OrderIndex { get; set; }
         public TimeSpan? StartTime { get; set; }
         public TimeSpan? EndTime { get; set; }
         public string? AssignedBy { get; set; }
         public DateTime? AssignedAt { get; set; }
+        public string? Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
 
