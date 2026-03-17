@@ -8,6 +8,50 @@ const APP_USER_KEY = "app_user";
 let memoryAccessToken: string | null = null;
 let memoryExpiresAt: string | null = null;
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
+    const json = atob(padded);
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function pickRoleClaim(payload: Record<string, unknown>): string | null {
+  const roleCandidates = [
+    payload.role,
+    payload.Role,
+    payload.roles,
+    payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"],
+  ];
+
+  for (const candidate of roleCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      const first = candidate.find(
+        (item) => typeof item === "string" && item.trim(),
+      );
+      if (typeof first === "string") {
+        return first;
+      }
+    }
+  }
+
+  return null;
+}
+
 function getStorageList(): Storage[] {
   if (typeof window === "undefined") return [];
   return [window.localStorage, window.sessionStorage];
@@ -133,6 +177,16 @@ export function getAccessToken(): string | null {
   }
 
   return memoryAccessToken;
+}
+
+export function getRoleClaimFromAccessToken(
+  token?: string | null,
+): string | null {
+  const targetToken = token ?? getAccessToken();
+  if (!targetToken) return null;
+  const payload = decodeJwtPayload(targetToken);
+  if (!payload) return null;
+  return pickRoleClaim(payload);
 }
 
 export function getTokenExpiresAt(): string | null {

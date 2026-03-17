@@ -44,6 +44,7 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<TopicLecturer> TopicLecturers { get; }
         IGenericRepository<LecturerTag> LecturerTags { get; }
         IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
+        IGenericRepository<TopicWorkflowAudit> TopicWorkflowAudits { get; }
         
         Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
         Task<int> SaveChangesAsync();

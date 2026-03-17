@@ -177,7 +177,6 @@ export interface ChatMessageReaction {
 
 export interface CreateReactionPayload {
   messageID: number;
-  userCode: string;
   reactionType: string;
 }
 

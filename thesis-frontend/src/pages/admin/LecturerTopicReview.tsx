@@ -21,10 +21,84 @@ import { useToast } from "../../context/useToast";
 import type { Topic } from "../../types/topic";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { LecturerProfile } from "../../types/lecturer-profile";
-import type { ProgressMilestone } from "../../types/progressMilestone";
 import type { Tag, CatalogTopicTag, TopicTag } from "../../types/tag";
 import type { ApiResponse } from "../../types/api";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  type WorkflowDecisionRequest,
+  type WorkflowDetailResponse,
+  type WorkflowMutationResponse,
+  type WorkflowTimelineResponse,
+} from "../../types/workflow-topic";
+
+const WORKFLOW_BASE = "/workflows/topics";
+
+function ensureWorkflowSuccess<T>(
+  envelope: ApiResponse<T>,
+  fallbackMessage: string,
+): { data: T; totalCount: number } {
+  if (
+    !envelope.success ||
+    envelope.data === null ||
+    envelope.data === undefined
+  ) {
+    throw new Error(envelope.message || envelope.title || fallbackMessage);
+  }
+  return {
+    data: envelope.data,
+    totalCount: Number(envelope.totalCount || 0),
+  };
+}
+
+async function getWorkflowTopicDetailApi(
+  topicId: number,
+): Promise<WorkflowDetailResponse> {
+  const envelope = await fetchData<ApiResponse<WorkflowDetailResponse>>(
+    `${WORKFLOW_BASE}/detail/${topicId}`,
+    { method: "GET" },
+  );
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể tải chi tiết workflow đề tài.",
+  ).data;
+}
+
+async function getWorkflowTopicTimelineApi(
+  topicId: number,
+): Promise<WorkflowTimelineResponse> {
+  const envelope = await fetchData<ApiResponse<WorkflowTimelineResponse>>(
+    `${WORKFLOW_BASE}/timeline/${topicId}`,
+    { method: "GET" },
+  );
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể tải timeline workflow theo topicID.",
+  ).data;
+}
+
+async function decideWorkflowTopicApi(
+  topicId: number,
+  payload: WorkflowDecisionRequest,
+): Promise<WorkflowMutationResponse> {
+  if (
+    (payload.action === "reject" || payload.action === "revision") &&
+    !payload.comment.trim()
+  ) {
+    throw new Error("Reject/Revision bắt buộc phải có comment.");
+  }
+
+  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
+    `${WORKFLOW_BASE}/decision/${topicId}`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể gửi quyết định duyệt đề tài.",
+  ).data;
+}
 
 interface TopicDisplay {
   topicID: number;
@@ -128,6 +202,29 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     revision: 0,
   });
 
+  const mapApiStatusToDisplay = useCallback(
+    (apiStatus: string): TopicDisplay["status"] => {
+      const status = apiStatus.toLowerCase();
+      switch (status) {
+        case "approved":
+        case "đã duyệt":
+          return "Đã duyệt";
+        case "rejected":
+        case "từ chối":
+          return "Từ chối";
+        case "revision":
+        case "cần sửa đổi":
+          return "Cần sửa đổi";
+        case "pending":
+        case "đang chờ":
+        case "chờ duyệt":
+        default:
+          return "Chờ duyệt";
+      }
+    },
+    [],
+  );
+
   // Fetch stats for all topics (not filtered)
   const fetchStats = useCallback(async () => {
     try {
@@ -174,7 +271,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
       console.warn("Failed to fetch stats:", err);
       // Keep existing stats or set to 0
     }
-  }, [currentLecturerCode, currentLecturerOnly]);
+  }, [currentLecturerCode, currentLecturerOnly, mapApiStatusToDisplay]);
 
   useEffect(() => {
     const resolveLecturerCode = async () => {
@@ -380,29 +477,41 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     searchTrigger,
     currentPage,
     pageSize,
+    mapApiStatusToDisplay,
     fetchStats,
   ]);
 
-  // Map API status to display status
-  const mapApiStatusToDisplay = (apiStatus: string): TopicDisplay["status"] => {
-    const status = apiStatus.toLowerCase();
-    switch (status) {
-      case "approved":
-      case "đã duyệt":
-        return "Đã duyệt";
-      case "rejected":
-      case "từ chối":
-        return "Từ chối";
-      case "revision":
-      case "cần sửa đổi":
-        return "Cần sửa đổi";
-      case "pending":
-      case "đang chờ":
-      case "chờ duyệt":
-      default:
-        return "Chờ duyệt";
-    }
-  };
+  const syncTopicFromWorkflow = useCallback(
+    async (topicID: number) => {
+      const [detail, timeline] = await Promise.all([
+        getWorkflowTopicDetailApi(topicID),
+        getWorkflowTopicTimelineApi(topicID),
+      ]);
+
+      const status = mapApiStatusToDisplay(detail.topic.status);
+
+      setTopics((prev) =>
+        prev.map((topic) =>
+          topic.topicID === topicID
+            ? {
+                ...topic,
+                title: detail.topic.title,
+                description: detail.topic.summary,
+                status,
+                comments:
+                  detail.latestLecturerComment ||
+                  detail.topic.lecturerComment ||
+                  topic.comments,
+              }
+            : topic,
+        ),
+      );
+
+      // Timeline is re-fetched to keep workflow state synchronized.
+      void timeline;
+    },
+    [mapApiStatusToDisplay],
+  );
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -452,80 +561,11 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
   const handleApprove = async (topicID: number) => {
     try {
       setUpdatingStatus(`approve-${topicID}`);
-
-      // First, approve the topic
-      await fetchData(`/Topics/update/${topicID}`, {
-        method: "PUT",
-        body: {
-          status: "Đã duyệt",
-          lecturerComment: "",
-        },
+      await decideWorkflowTopicApi(topicID, {
+        action: "approve",
+        comment: "Đề tài đạt yêu cầu",
       });
-
-      // Get the topic details to get topicCode
-      const topic = topics.find((t) => t.topicID === topicID);
-      if (!topic || !topic.supervisorLecturerCode) {
-        throw new Error("Missing topic or lecturer information");
-      }
-
-      // Create TopicLecturer association
-      try {
-        // First get-create to ensure data structure (GET request)
-        await fetchData(`/TopicLecturers/get-create`);
-
-        // Then create the actual association
-        await fetchData(`/TopicLecturers/create`, {
-          method: "POST",
-          body: {
-            topicID: topicID,
-            topicCode: topic.topicCode,
-            lecturerProfileID: topic.supervisorLecturerProfileID || 0,
-            lecturerCode: topic.supervisorLecturerCode,
-            isPrimary: true,
-            createdAt: new Date().toISOString(),
-          },
-        });
-      } catch (lecturerErr) {
-        console.warn(
-          "Failed to create topic-lecturer association:",
-          lecturerErr,
-        );
-        // Continue with approval even if lecturer association fails
-      }
-
-      // Update progress milestone
-      try {
-        // First get current milestone data
-        const currentMilestoneResponse = await fetchData<{
-          data: ProgressMilestone;
-        }>(`/ProgressMilestones/get-update/${topicID}`);
-        const currentMilestone = currentMilestoneResponse.data;
-
-        // Update only the specified fields
-        const updatedMilestone = {
-          ...currentMilestone,
-          milestoneTemplateCode: "MS_PROG1",
-          ordinal: 2,
-          state: "Đang thực hiện",
-          completedAt1: new Date().toISOString(),
-        };
-
-        // Update the milestone by topic ID (PUT request)
-        await fetchData(`/ProgressMilestones/update/${topicID}`, {
-          method: "PUT",
-          body: updatedMilestone,
-        });
-      } catch (progressErr) {
-        console.warn("Failed to update progress milestone:", progressErr);
-        // Continue with approval even if progress update fails
-      }
-
-      // Update local state
-      setTopics(
-        topics.map((t) =>
-          t.topicID === topicID ? { ...t, status: "Đã duyệt" as const } : t,
-        ),
-      );
+      await syncTopicFromWorkflow(topicID);
 
       showSuccessModal(
         "approve",
@@ -546,22 +586,12 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     try {
       setUpdatingStatus(`reject-${topicID}`);
 
-      await fetchData(`/Topics/update/${topicID}`, {
-        method: "PUT",
-        body: {
-          status: "Từ chối",
-          lecturerComment: comment,
-        },
+      await decideWorkflowTopicApi(topicID, {
+        action: "reject",
+        comment,
       });
+      await syncTopicFromWorkflow(topicID);
 
-      // Update local state
-      setTopics(
-        topics.map((topic) =>
-          topic.topicID === topicID
-            ? { ...topic, status: "Từ chối" as const, comments: comment }
-            : topic,
-        ),
-      );
       showSuccessModal(
         "reject",
         topics.find((t) => t.topicID === topicID)?.title || "",
@@ -581,22 +611,12 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     try {
       setUpdatingStatus(`revision-${topicID}`);
 
-      await fetchData(`/Topics/update/${topicID}`, {
-        method: "PUT",
-        body: {
-          status: "Cần sửa đổi",
-          lecturerComment: comment,
-        },
+      await decideWorkflowTopicApi(topicID, {
+        action: "revision",
+        comment,
       });
+      await syncTopicFromWorkflow(topicID);
 
-      // Update local state
-      setTopics(
-        topics.map((topic) =>
-          topic.topicID === topicID
-            ? { ...topic, status: "Cần sửa đổi" as const, comments: comment }
-            : topic,
-        ),
-      );
       showSuccessModal(
         "revision",
         topics.find((t) => t.topicID === topicID)?.title || "",

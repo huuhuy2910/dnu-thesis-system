@@ -6,10 +6,12 @@ namespace ThesisManagement.Api.DTOs.MilestoneTemplates.Command
         string MilestoneTemplateCode,
         string Name,
         string? Description,
-        int Ordinal);
+        int Ordinal,
+        DateTime? Deadline);
 
     public record MilestoneTemplateUpdateDto(
         string? Name,
         string? Description,
-        int? Ordinal);
+        int? Ordinal,
+        DateTime? Deadline);
 }

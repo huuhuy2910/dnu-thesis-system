@@ -42,6 +42,9 @@ namespace ThesisManagement.Api.Application.Command.MilestoneTemplates
             if (dto.Ordinal.HasValue)
                 entity.Ordinal = dto.Ordinal.Value;
 
+            if (dto.Deadline.HasValue)
+                entity.Deadline = dto.Deadline.Value;
+
             entity.LastUpdated = DateTime.UtcNow;
 
             _uow.MilestoneTemplates.Update(entity);

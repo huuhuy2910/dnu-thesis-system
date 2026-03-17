@@ -91,9 +91,17 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(string id)
         {
-            var result = await _deleteMessageReactionCommand.ExecuteAsync(id);
+            if (!long.TryParse(id, out var parsedId))
+                return BadRequest(ApiResponse<object>.Fail("Invalid reaction id format", 400));
+
+            // FE can send temporary client ids (usually negative or larger than Int32).
+            // Treat them as no-op so UI doesn't fail with 400.
+            if (parsedId <= 0 || parsedId > int.MaxValue)
+                return Ok(ApiResponse<object?>.SuccessResponse(null));
+
+            var result = await _deleteMessageReactionCommand.ExecuteAsync((int)parsedId);
             if (!result.Success)
                 return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 

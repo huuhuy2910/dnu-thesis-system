@@ -49,6 +49,7 @@ namespace ThesisManagement.Api.Services
             TopicLecturers = new GenericRepository<TopicLecturer>(_db);
             LecturerTags = new GenericRepository<LecturerTag>(_db);
             SystemActivityLogs = new GenericRepository<SystemActivityLog>(_db);
+            TopicWorkflowAudits = new GenericRepository<TopicWorkflowAudit>(_db);
         }
 
         public IGenericRepository<Department> Departments { get; }
@@ -89,6 +90,7 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<TopicLecturer> TopicLecturers { get; }
         public IGenericRepository<LecturerTag> LecturerTags { get; }
         public IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
+        public IGenericRepository<TopicWorkflowAudit> TopicWorkflowAudits { get; }
 
         public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {

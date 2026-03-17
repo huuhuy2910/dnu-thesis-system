@@ -8,6 +8,7 @@ import {
   FileText,
   Bell,
   BookOpen,
+  Activity,
 } from "lucide-react";
 import "./SideNav.css";
 import "./LecturerNav.css";
@@ -33,6 +34,11 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
       path: "/lecturer/topic-review",
       label: "Duyệt đề tài",
       icon: <BookOpen size={18} />,
+    },
+    {
+      path: "/lecturer/workflow-audits",
+      label: "Workflow Audit",
+      icon: <Activity size={18} />,
     },
     {
       path: "/lecturer/schedule",

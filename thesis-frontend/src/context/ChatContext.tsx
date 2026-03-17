@@ -213,6 +213,73 @@ function mergeReaction(
   return { ...message, reactions: next };
 }
 
+function isSameReactionIdentity(
+  left: ChatMessageReaction,
+  right: ChatMessageReaction,
+): boolean {
+  return (
+    Number(left.messageID) === Number(right.messageID) &&
+    String(left.userCode || "") === String(right.userCode || "") &&
+    String(left.reactionType || "") === String(right.reactionType || "")
+  );
+}
+
+function mergeReactionWithTempReconcile(
+  message: ChatMessage,
+  reaction: ChatMessageReaction,
+): ChatMessage {
+  const current = Array.isArray(message.reactions) ? message.reactions : [];
+
+  const byIdIndex = current.findIndex(
+    (item) => Number(item.reactionID) === Number(reaction.reactionID),
+  );
+  if (byIdIndex >= 0) {
+    const next = [...current];
+    next[byIdIndex] = { ...next[byIdIndex], ...reaction };
+    return { ...message, reactions: next };
+  }
+
+  const tempIndex = current.findIndex(
+    (item) =>
+      Number(item.reactionID) <= 0 && isSameReactionIdentity(item, reaction),
+  );
+  if (tempIndex >= 0) {
+    const next = [...current];
+    next[tempIndex] = { ...next[tempIndex], ...reaction };
+    return { ...message, reactions: next };
+  }
+
+  return { ...message, reactions: [...current, reaction] };
+}
+
+function mergeServerReactionList(
+  message: ChatMessage,
+  serverReactions: ChatMessageReaction[],
+): ChatMessage {
+  const current = Array.isArray(message.reactions) ? message.reactions : [];
+  const serverById = new Map<number, ChatMessageReaction>();
+  serverReactions.forEach((reaction) => {
+    const id = Number(reaction.reactionID);
+    if (id > 0) {
+      serverById.set(id, reaction);
+    }
+  });
+
+  const remainingTemps = current.filter((localReaction) => {
+    if (Number(localReaction.reactionID) > 0) {
+      return false;
+    }
+    return !serverReactions.some((serverReaction) =>
+      isSameReactionIdentity(localReaction, serverReaction),
+    );
+  });
+
+  return {
+    ...message,
+    reactions: [...Array.from(serverById.values()), ...remainingTemps],
+  };
+}
+
 function removeReaction(message: ChatMessage, reactionID: number): ChatMessage {
   const current = Array.isArray(message.reactions) ? message.reactions : [];
   return {
@@ -515,7 +582,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           return acc;
         }, []);
 
-      setConversations(merged);
+      const memberEntries = await Promise.all(
+        merged.map(async (conversation) => {
+          const rawMembers = await chatApi
+            .listConversationMembers(conversation.conversationID)
+            .catch(() => []);
+          const hydratedMembers = await hydrateMemberProfiles(rawMembers);
+          return [
+            String(conversation.conversationID),
+            hydratedMembers,
+          ] as const;
+        }),
+      );
+
+      const membersMap = memberEntries.reduce<
+        Record<string, ChatConversationMember[]>
+      >((acc, [conversationId, members]) => {
+        acc[conversationId] = members;
+        return acc;
+      }, {});
+
+      setConversations(
+        merged.map((conversation) => ({
+          ...conversation,
+          members: membersMap[String(conversation.conversationID)] || [],
+        })),
+      );
+
+      setMembersByConversation((prev) => ({ ...prev, ...membersMap }));
 
       const unreadMap = activeMemberships.reduce<Record<string, number>>(
         (acc, member) => {
@@ -531,7 +625,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setLoadingConversations(false);
     }
-  }, [currentUserCode, enabled, handleChatError]);
+  }, [currentUserCode, enabled, handleChatError, hydrateMemberProfiles]);
 
   const loadMessages = useCallback(
     async (conversationId: number) => {
@@ -560,8 +654,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           [key]: mergeMessagesById(prev[key] || [], sortedData),
         }));
 
-        void loadMessageMeta(conversationId, sortedData);
-        void loadMembers(conversationId);
+        await Promise.all([
+          loadMessageMeta(conversationId, sortedData),
+          loadMembers(conversationId),
+        ]);
       } catch (error) {
         handleChatError(error, "Không thể tải tin nhắn hội thoại.");
       } finally {
@@ -658,6 +754,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         return merged.slice(-2);
       });
 
+      await loadMessages(conversationId);
+
       const selectedConversation = conversations.find(
         (item) => Number(item.conversationID) === Number(conversationId),
       );
@@ -666,6 +764,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         try {
           await chatRealtime.joinConversation(
             selectedConversation.conversationCode,
+            conversationId,
           );
         } catch {
           try {
@@ -681,8 +780,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           // ignore join-by-id error
         }
       }
-
-      await loadMessages(conversationId);
       await markConversationRead(conversationId);
     },
     [conversations, loadMessages, markConversationRead],
@@ -1011,6 +1108,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const myReaction = currentReactions.find(
         (item) => item.userCode === currentUserCode,
       );
+      const optimisticReactionId = -(
+        Date.now() + Math.floor(Math.random() * 1000)
+      );
 
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -1026,7 +1126,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           }
 
           return mergeReaction(msg, {
-            reactionID: -Date.now(),
+            reactionID: optimisticReactionId,
             messageID: messageId,
             userCode: currentUserCode,
             reactionType,
@@ -1037,17 +1137,59 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       try {
         if (myReaction && reactedByMe) {
-          await chatApi.deleteReaction(myReaction.reactionID);
+          if (Number(myReaction.reactionID) > 0) {
+            await chatApi.deleteReaction(myReaction.reactionID);
+          }
         } else if (myReaction && myReaction.reactionType !== reactionType) {
           await chatApi.updateReaction(myReaction.reactionID, { reactionType });
         } else if (!myReaction) {
-          await chatApi.addReaction({
+          const createdReaction = await chatApi.addReaction({
             messageID: messageId,
-            userCode: currentUserCode,
             reactionType,
+          });
+
+          setMessagesByConversation((prev) => {
+            const current = prev[key] || [];
+            return {
+              ...prev,
+              [key]: current.map((msg) => {
+                if (Number(msg.messageID) !== Number(messageId)) return msg;
+                return mergeReactionWithTempReconcile(msg, createdReaction);
+              }),
+            };
           });
         }
       } catch (error) {
+        if (
+          myReaction &&
+          reactedByMe &&
+          myReaction.reactionID > 0 &&
+          error instanceof ChatApiError &&
+          error.status === 404
+        ) {
+          const latestReactions = await chatApi
+            .listReactions({
+              messageID: messageId,
+              page: 1,
+              pageSize: 200,
+            })
+            .catch(() => null);
+
+          if (Array.isArray(latestReactions)) {
+            setMessagesByConversation((prev) => {
+              const current = prev[key] || [];
+              return {
+                ...prev,
+                [key]: current.map((msg) => {
+                  if (Number(msg.messageID) !== Number(messageId)) return msg;
+                  return mergeServerReactionList(msg, latestReactions);
+                }),
+              };
+            });
+            return;
+          }
+        }
+
         setMessagesByConversation((prev) => ({ ...prev, [key]: before }));
         handleChatError(error, "Không thể cập nhật biểu cảm.");
       }
@@ -1206,16 +1348,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           "message.reaction.updated",
           "message.reaction.deleted",
         ].includes(event.type) &&
-        eventConversationId &&
         eventMessageId
       ) {
-        const reactionID = Number(payload.reactionID || 0);
+        const reactionID = Number(
+          payload.reactionID ?? payload.reactionId ?? payload.ReactionID ?? 0,
+        );
         const reactionPayload: ChatMessageReaction = {
           reactionID,
           messageID: eventMessageId,
-          userCode: String(payload.userCode || ""),
-          reactionType: String(payload.reactionType || ""),
-          reactedAt: String(payload.reactedAt || new Date().toISOString()),
+          userCode: String(payload.userCode ?? payload.UserCode ?? ""),
+          reactionType: String(
+            payload.reactionType ?? payload.ReactionType ?? "",
+          ),
+          reactedAt: String(
+            payload.reactedAt ?? payload.ReactedAt ?? new Date().toISOString(),
+          ),
           displayName: String(
             payload.displayName ?? payload.fullName ?? payload.userName ?? "",
           ),
@@ -1228,11 +1375,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         };
 
         setMessagesByConversation((prev) => {
-          const key = String(eventConversationId);
-          const current = prev[key] || [];
-          return {
-            ...prev,
-            [key]: current.map((msg) => {
+          const targetConversationIds = eventConversationId
+            ? [Number(eventConversationId)]
+            : Object.keys(prev)
+                .map((id) => Number(id))
+                .filter((conversationId) => {
+                  const messages = prev[String(conversationId)] || [];
+                  return messages.some(
+                    (msg) => Number(msg.messageID) === Number(eventMessageId),
+                  );
+                });
+
+          if (!targetConversationIds.length) {
+            return prev;
+          }
+
+          const nextState = { ...prev };
+
+          targetConversationIds.forEach((conversationId) => {
+            const key = String(conversationId);
+            const current = prev[key] || [];
+            nextState[key] = current.map((msg) => {
               if (Number(msg.messageID) !== Number(eventMessageId)) return msg;
               if (
                 event.type === "reaction.deleted" ||
@@ -1240,8 +1403,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               ) {
                 return removeReaction(msg, reactionID);
               }
-              return mergeReaction(msg, reactionPayload);
-            }),
+              return mergeReactionWithTempReconcile(msg, reactionPayload);
+            });
+          });
+
+          return {
+            ...nextState,
           };
         });
       }

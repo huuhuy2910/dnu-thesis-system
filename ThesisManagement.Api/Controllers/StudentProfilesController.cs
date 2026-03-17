@@ -1,5 +1,6 @@
 using System;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ThesisManagement.Api.Application.Command.StudentProfiles;
 using ThesisManagement.Api.Application.Query.StudentProfiles;

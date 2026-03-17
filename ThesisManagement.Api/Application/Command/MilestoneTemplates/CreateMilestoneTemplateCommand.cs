@@ -42,6 +42,7 @@ namespace ThesisManagement.Api.Application.Command.MilestoneTemplates
                 Name = dto.Name.Trim(),
                 Description = dto.Description,
                 Ordinal = dto.Ordinal,
+                Deadline = dto.Deadline,
                 CreatedAt = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
