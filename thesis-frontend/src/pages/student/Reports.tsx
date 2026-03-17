@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Upload,
   FileText,
@@ -29,10 +29,100 @@ import type { SubmissionFile } from "../../types/submissionFile";
 import type { Report } from "../../types/report";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer";
+import type { Tag } from "../../types/tag";
+import type {
+  ReportAggregateTag,
+  StudentDashboardPayload,
+  StudentProgressHistoryPayload,
+  StudentProgressHistorySubmission,
+  StudentProgressSubmitPayload,
+  StudentReportAggregateMilestone,
+  StudentReportAggregateSupervisor,
+  StudentReportAggregateTopic,
+} from "../../types/report-aggregate";
 
-import type { Tag, LecturerTag } from "../../types/tag";
-import type { Department } from "../../types/department";
-import type { ProgressMilestone } from "../../types/progressMilestone";
+const mapAggregateTagToTag = (tag: ReportAggregateTag): Tag => ({
+  tagID: 0,
+  tagCode: tag.tagCode,
+  tagName: tag.tagName,
+  description: "",
+  createdAt: "",
+});
+
+const mapAggregateTopicToTopic = (
+  topic: StudentReportAggregateTopic,
+): Topic => ({
+  topicID: topic.topicID,
+  topicCode: topic.topicCode,
+  title: topic.title,
+  summary: topic.summary,
+  type: topic.type,
+  proposerUserID: 0,
+  proposerUserCode: "",
+  proposerStudentProfileID: 0,
+  proposerStudentCode: "",
+  supervisorUserID: null,
+  supervisorUserCode: topic.supervisorLecturerCode,
+  supervisorLecturerProfileID: null,
+  supervisorLecturerCode: topic.supervisorLecturerCode,
+  catalogTopicID: null,
+  catalogTopicCode: topic.catalogTopicCode,
+  departmentID: null,
+  departmentCode: null,
+  status: topic.status,
+  resubmitCount: null,
+  createdAt: topic.createdAt,
+  lastUpdated: topic.lastUpdated,
+  tagID: null,
+  tagCode: null,
+});
+
+const mapAggregateSupervisorToLecturer = (
+  supervisor: StudentReportAggregateSupervisor,
+): LecturerProfile => ({
+  lecturerProfileID: supervisor.lecturerProfileID,
+  lecturerCode: supervisor.lecturerCode,
+  userCode: "",
+  departmentCode: supervisor.departmentCode,
+  degree: supervisor.degree,
+  guideQuota: 0,
+  defenseQuota: 0,
+  currentGuidingCount: 0,
+  gender: "",
+  dateOfBirth: "",
+  email: supervisor.email,
+  phoneNumber: supervisor.phoneNumber,
+  profileImage: "",
+  address: "",
+  notes: "",
+  fullName: supervisor.fullName,
+  createdAt: "",
+  lastUpdated: null,
+});
+
+const mapHistorySubmissionToReport = (
+  submission: StudentProgressHistorySubmission,
+): Report => ({
+  submissionID: submission.submissionID,
+  submissionCode: submission.submissionCode,
+  milestoneID: submission.milestoneID,
+  milestoneCode: submission.milestoneCode,
+  studentUserID: 0,
+  studentUserCode: submission.studentUserCode,
+  studentProfileID: 0,
+  studentProfileCode: submission.studentProfileCode || "",
+  lecturerProfileID: null,
+  lecturerCode: submission.lecturerCode,
+  submittedAt: submission.submittedAt,
+  attemptNumber: submission.attemptNumber,
+  lecturerComment: submission.lecturerComment || undefined,
+  lecturerState: submission.lecturerState || undefined,
+  feedbackLevel: submission.feedbackLevel || undefined,
+  reportTitle: submission.reportTitle,
+  reportDescription: submission.reportDescription,
+  lastUpdated: submission.lastUpdated,
+  files: submission.files || [],
+});
 
 const Reports: React.FC = () => {
   const auth = useAuth();
@@ -51,11 +141,9 @@ const Reports: React.FC = () => {
     useState<LecturerProfile | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [topicTags, setTopicTags] = useState<Tag[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [lecturerTagNames, setLecturerTagNames] = useState<string[]>([]);
-  const [progressMilestones, setProgressMilestones] = useState<
-    ProgressMilestone[]
-  >([]);
+  const [currentMilestone, setCurrentMilestone] =
+    useState<StudentReportAggregateMilestone | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showLecturerTagTooltip, setShowLecturerTagTooltip] = useState(false);
   const [showTopicTagTooltip, setShowTopicTagTooltip] = useState(false);
@@ -66,207 +154,87 @@ const Reports: React.FC = () => {
   }>({});
   const navigate = useNavigate();
 
-  // Fetch topic and lecturer info
-  useEffect(() => {
-    const fetchTopicAndLecturerInfo = async () => {
-      if (!auth.user?.userCode) return;
+  const loadStudentDashboard = useCallback(async (userCode: string) => {
+    const dashboardRes = (await fetchData(
+      `/reports/student/dashboard?userCode=${encodeURIComponent(userCode)}`,
+    )) as ApiResponse<StudentDashboardPayload>;
 
-      try {
-        // Fetch topic
-        const topicsRes = (await fetchData(
-          `/Topics/get-list?ProposerUserCode=${auth.user.userCode}`,
-        )) as ApiResponse<Topic[]>;
+    if (!dashboardRes.success || !dashboardRes.data) {
+      setTopic(null);
+      setTopicTags([]);
+      setCurrentMilestone(null);
+      setLecturerProfile(null);
+      setTags([]);
+      setLecturerTagNames([]);
+      setCanSubmit(false);
+      setSubmitMessage(
+        dashboardRes.message ||
+          "Không thể tải dữ liệu tổng quan báo cáo của sinh viên.",
+      );
+      return;
+    }
 
-        if (topicsRes.data && topicsRes.data.length > 0) {
-          const userTopic = topicsRes.data[0]; // Get the first topic
-          setTopic(userTopic);
-
-          // Fetch topic tags
-          try {
-            let topicTags: Tag[] = [];
-
-            if (userTopic.type === "CATALOG") {
-              // For catalog topics, get tags from CatalogTopicTags
-              const catalogTopicTagsRes = await fetchData(
-                `/CatalogTopicTags/list?CatalogTopicCode=${userTopic.topicCode}`,
-              );
-              const catalogTopicTags =
-                (catalogTopicTagsRes as ApiResponse<Record<string, unknown>[]>)
-                  ?.data || [];
-
-              if (catalogTopicTags.length > 0) {
-                // Get tag details for each tag
-                const tagPromises = catalogTopicTags.map(
-                  async (record: Record<string, unknown>) => {
-                    try {
-                      const tagRes = await fetchData(
-                        `/Tags/get-by-code/${record.tagCode}`,
-                      );
-                      return (tagRes as ApiResponse<Tag>)?.data;
-                    } catch {
-                      return null;
-                    }
-                  },
-                );
-
-                const tagResults = await Promise.all(tagPromises);
-                topicTags = tagResults.filter(
-                  (tag): tag is Tag => tag !== null,
-                );
-              }
-            } else {
-              // For self-proposed topics, get tags from TopicTags
-              const topicTagsRes = await fetchData(
-                `/TopicTags/by-topic/${userTopic.topicCode}`,
-              );
-              const topicTagRecords =
-                (topicTagsRes as ApiResponse<Record<string, unknown>[]>)
-                  ?.data || [];
-
-              if (topicTagRecords.length > 0) {
-                // Get tag details for each tag
-                const tagPromises = topicTagRecords.map(
-                  async (record: Record<string, unknown>) => {
-                    try {
-                      const tagRes = await fetchData(
-                        `/Tags/get-by-code/${record.tagCode}`,
-                      );
-                      return (tagRes as ApiResponse<Tag>)?.data;
-                    } catch {
-                      return null;
-                    }
-                  },
-                );
-
-                const tagResults = await Promise.all(tagPromises);
-                topicTags = tagResults.filter(
-                  (tag): tag is Tag => tag !== null,
-                );
-              }
-            }
-
-            setTopicTags(topicTags);
-          } catch (tagError) {
-            console.error("Error fetching topic tags:", tagError);
-            setTopicTags([]);
-          }
-
-          // Fetch progress milestones
-          try {
-            const progressRes = await fetchData(
-              `/ProgressMilestones/get-list?TopicCode=${userTopic.topicCode}`,
-            );
-            const progressData =
-              (progressRes as ApiResponse<ProgressMilestone[]>)?.data || [];
-            setProgressMilestones(progressData);
-          } catch (progressError) {
-            console.error("Error fetching progress milestones:", progressError);
-            setProgressMilestones([]);
-          }
-
-          // Check if topic is pending approval
-          if (userTopic.status === "Đang chờ") {
-            setCanSubmit(false);
-            setSubmitMessage(
-              "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo.",
-            );
-          }
-
-          // Fetch lecturer profile if supervisor exists
-          if (userTopic.supervisorLecturerCode) {
-            const lecturerRes = (await fetchData(
-              `/LecturerProfiles/get-detail/${userTopic.supervisorLecturerCode}`,
-            )) as ApiResponse<LecturerProfile>;
-
-            if (lecturerRes.data) {
-              setLecturerProfile(lecturerRes.data);
-
-              // Fetch lecturer tags
-              const tagsRes = (await fetchData(
-                `/LecturerTags/list?LecturerCode=${userTopic.supervisorLecturerCode}`,
-              )) as ApiResponse<Record<string, unknown>[]>;
-
-              if (tagsRes.data) {
-                // Fetch tag details
-                const tagCodes = tagsRes.data.map((s) => s.tagCode).join(",");
-                const tagDetailsRes = (await fetchData(
-                  `/Tags/list?TagCode=${tagCodes}`,
-                )) as ApiResponse<Tag[]>;
-
-                if (tagDetailsRes.data) {
-                  setTags(tagDetailsRes.data);
-                }
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching topic and lecturer info:", error);
-      }
-    };
-
-    fetchTopicAndLecturerInfo();
-  }, [auth.user?.userCode]);
-
-  // Fetch departments
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        const deptRes = await fetchData("/Departments/get-list");
-        setDepartments((deptRes as ApiResponse<Department[]>)?.data || []);
-      } catch (error) {
-        console.error("Error fetching departments:", error);
-      }
-    };
-
-    fetchDepartments();
+    const dashboard = dashboardRes.data;
+    setTopic(
+      dashboard.topic ? mapAggregateTopicToTopic(dashboard.topic) : null,
+    );
+    setTopicTags((dashboard.topicTags || []).map(mapAggregateTagToTag));
+    setCurrentMilestone(dashboard.currentMilestone || null);
+    setLecturerProfile(
+      dashboard.supervisor
+        ? mapAggregateSupervisorToLecturer(dashboard.supervisor)
+        : null,
+    );
+    setTags((dashboard.supervisorTags || []).map(mapAggregateTagToTag));
+    setLecturerTagNames(
+      (dashboard.supervisorTags || []).map((tag) => tag.tagName),
+    );
+    setCanSubmit(Boolean(dashboard.canSubmit));
+    setSubmitMessage(dashboard.blockReason || null);
   }, []);
 
-  // Fetch lecturer tags when lecturer profile is available
+  const loadProgressHistory = useCallback(async (userCode: string) => {
+    const historyRes = (await fetchData(
+      `/reports/student/progress-history?userCode=${encodeURIComponent(userCode)}&page=1&pageSize=50`,
+    )) as ApiResponse<StudentProgressHistoryPayload>;
+
+    if (!historyRes.success || !historyRes.data) {
+      setReports([]);
+      return;
+    }
+
+    const items = historyRes.data.items || [];
+    const mappedReports = items
+      .map((item) => item.submission)
+      .filter(Boolean)
+      .map(mapHistorySubmissionToReport);
+    setReports(mappedReports);
+  }, []);
+
   useEffect(() => {
-    const fetchLecturerTags = async () => {
-      if (!lecturerProfile?.lecturerCode) {
-        setLecturerTagNames([]);
-        return;
-      }
+    const userCode = auth.user?.userCode;
+    if (!userCode) {
+      setLoading(false);
+      return;
+    }
 
+    const bootstrap = async () => {
       try {
-        // Get lecturer tags
-        const lecturerTagRes = await fetchData(
-          `/LecturerTags/list?LecturerCode=${lecturerProfile.lecturerCode}`,
-        );
-        const lecturerTagsData =
-          (lecturerTagRes as ApiResponse<LecturerTag[]>)?.data || [];
-
-        if (lecturerTagsData.length === 0) {
-          setLecturerTagNames([]);
-          return;
-        }
-
-        // Get tag names for each tag code
-        const tagNamesPromises = lecturerTagsData.map(async (lt) => {
-          try {
-            const tagRes = await fetchData(`/Tags/list?TagCode=${lt.tagCode}`);
-            const tagData = (tagRes as ApiResponse<Tag[]>)?.data || [];
-            return tagData.length > 0 ? tagData[0].tagName : lt.tagCode;
-          } catch (err) {
-            console.error(`Error loading tag ${lt.tagCode}:`, err);
-            return lt.tagCode;
-          }
-        });
-
-        const names = await Promise.all(tagNamesPromises);
-        setLecturerTagNames(names);
-      } catch (err) {
-        console.error("Error loading lecturer tag names:", err);
-        setLecturerTagNames([]);
+        setLoading(true);
+        await Promise.all([
+          loadStudentDashboard(userCode),
+          loadProgressHistory(userCode),
+        ]);
+      } catch (error) {
+        console.error("Error loading student reports:", error);
+        setReports([]);
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (lecturerProfile?.lecturerCode) {
-      fetchLecturerTags();
-    }
-  }, [lecturerProfile?.lecturerCode]);
+    bootstrap();
+  }, [auth.user?.userCode, loadProgressHistory, loadStudentDashboard]);
 
   // Close tooltips when clicking outside
   useEffect(() => {
@@ -285,133 +253,9 @@ const Reports: React.FC = () => {
     };
   }, [showLecturerTagTooltip, showTopicTagTooltip]);
 
-  // Helper function to get department name
   const getDepartmentName = (departmentCode: string) => {
-    const dept = departments.find((d) => d.departmentCode === departmentCode);
-    return dept?.name || departmentCode;
+    return departmentCode || "N/A";
   };
-
-  // Fetch submission history and check submission permissions
-  useEffect(() => {
-    const fetchReports = async () => {
-      if (!auth.user?.userCode) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        // Fetch submissions
-        const submissionsRes = (await fetchData(
-          `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`,
-        )) as ApiResponse<Record<string, unknown>[]>;
-
-        if (!submissionsRes.data || submissionsRes.data.length === 0) {
-          setReports([]);
-          setLoading(false);
-          return;
-        }
-
-        // Sort by attemptNumber descending and get the latest submission
-        const sortedSubmissions = submissionsRes.data.sort(
-          (a: Record<string, unknown>, b: Record<string, unknown>) =>
-            (b.attemptNumber as number) - (a.attemptNumber as number),
-        );
-
-        // Check if student can submit new report
-        const latestSubmission = sortedSubmissions[0];
-        if (latestSubmission) {
-          const lecturerState = latestSubmission.lecturerState as string;
-          if (!lecturerState || lecturerState.toLowerCase() === "pending") {
-            setCanSubmit(false);
-            setSubmitMessage(
-              "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới.",
-            );
-          } else {
-            setCanSubmit(true);
-            setSubmitMessage(null);
-          }
-        } else {
-          setCanSubmit(true);
-          setSubmitMessage(null);
-        }
-
-        // Fetch files for each submission
-        const reportsWithFiles = await Promise.all(
-          sortedSubmissions.map(async (submission: Record<string, unknown>) => {
-            try {
-              const filesRes = (await fetchData(
-                `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`,
-              )) as ApiResponse<SubmissionFile[]>;
-              return {
-                ...submission,
-                files: filesRes.data || [],
-              };
-            } catch (error) {
-              console.error(
-                "Error fetching files for submission:",
-                submission.submissionCode,
-                error,
-              );
-              return {
-                ...submission,
-                files: [],
-              };
-            }
-          }),
-        );
-
-        setReports(reportsWithFiles as Report[]);
-      } catch (error) {
-        console.error("Error fetching reports:", error);
-        setReports([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReports();
-  }, [auth.user?.userCode]);
-
-  // Check submission permissions based on topic status and latest submission
-  useEffect(() => {
-    // First priority: no topic registered
-    if (!topic) {
-      setCanSubmit(false);
-      setSubmitMessage(
-        "Bạn cần đăng ký đề tài và phải chờ xét duyệt trước khi nộp báo cáo.",
-      );
-      return;
-    }
-
-    // Second priority: topic status
-    if (topic.status === "Đang chờ") {
-      setCanSubmit(false);
-      setSubmitMessage(
-        "Đề tài của bạn chưa được xét duyệt. Vui lòng chờ giảng viên duyệt đề tài trước khi nộp báo cáo.",
-      );
-      return;
-    }
-
-    // Third priority: latest submission status
-    if (reports.length > 0) {
-      const latestSubmission = reports[0];
-      const lecturerState = latestSubmission.lecturerState as string;
-      if (!lecturerState || lecturerState.toLowerCase() === "pending") {
-        setCanSubmit(false);
-        setSubmitMessage(
-          "Bạn cần chờ giảng viên nghiệm thu báo cáo trước khi nộp báo cáo mới.",
-        );
-      } else {
-        setCanSubmit(true);
-        setSubmitMessage(null);
-      }
-    } else {
-      // No submissions yet and topic is approved
-      setCanSubmit(true);
-      setSubmitMessage(null);
-    }
-  }, [topic, reports]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -545,123 +389,51 @@ const Reports: React.FC = () => {
       return;
     }
 
-    if (!selectedFile || !auth.user?.userCode) {
+    if (!selectedFile || !auth.user?.userCode || !topic?.topicCode) {
+      setSubmitting(false);
+      return;
+    }
+
+    if (!currentMilestone?.milestoneCode) {
+      addToast(
+        "Không tìm thấy mốc tiến độ hiện tại để nộp báo cáo.",
+        "warning",
+      );
       setSubmitting(false);
       return;
     }
 
     try {
-      // Get submission template
-      const submissionTemplate = await fetchData(
-        "/ProgressSubmissions/get-create",
-      );
-      const submissionData = (
-        submissionTemplate as ApiResponse<Record<string, unknown>>
-      ).data;
-
-      // Get file template
-      await fetchData("/SubmissionFiles/get-create");
-
-      // Use the submissionCode from the template for both APIs
-      const submissionCode =
-        ((submissionData as Record<string, unknown>)
-          ?.submissionCode as string) || "";
-
-      // Find the current active milestone (state: "Đang thực hiện")
-      const currentMilestone = progressMilestones.find(
-        (milestone) => milestone.state === "Đang thực hiện",
-      );
-
-      // Create submission payload
-      const submissionPayload = {
-        ...submissionData,
-        reportTitle,
-        reportDescription,
-        studentUserCode: auth.user.userCode,
-        studentUserID: auth.user.userID,
-        lecturerProfileID: lecturerProfile?.lecturerProfileID || null,
-        lecturerCode: lecturerProfile?.lecturerCode || null,
-        submittedAt: new Date().toISOString(),
-        milestoneCode: currentMilestone?.milestoneCode || "",
-        milestoneID: currentMilestone?.milestoneID || null,
-      };
-
-      // Create submission
-      const createSubmissionRes = await fetchData(
-        "/ProgressSubmissions/create",
-        {
-          method: "POST",
-          body: submissionPayload,
-        },
-      );
-
-      const createdSubmission = (
-        createSubmissionRes as ApiResponse<Record<string, unknown>>
-      ).data;
-
-      if (!createdSubmission) {
-        throw new Error("Failed to create submission");
-      }
-
-      // Create file payload using FormData (not JSON)
       const formData = new FormData();
-      formData.append(
-        "submissionID",
-        String(
-          (createdSubmission as Record<string, unknown>)?.submissionID || "",
-        ),
-      );
-      formData.append("submissionCode", submissionCode);
-      formData.append("fileName", selectedFile.name);
-      formData.append("fileSizeBytes", String(selectedFile.size));
-      formData.append("mimeType", selectedFile.type);
-      formData.append("uploadedAt", new Date().toISOString());
-      formData.append("uploadedByUserCode", auth.user.userCode);
-      formData.append("uploadedByUserID", String(auth.user.userID));
-      formData.append("file", selectedFile); // Add the actual file
+      formData.append("topicCode", topic.topicCode);
+      formData.append("milestoneCode", currentMilestone.milestoneCode);
+      formData.append("studentUserCode", auth.user.userCode);
+      formData.append("lecturerCode", lecturerProfile?.lecturerCode || "");
+      formData.append("reportTitle", reportTitle.trim());
+      formData.append("reportDescription", reportDescription.trim());
+      formData.append("files", selectedFile);
 
-      // Upload file using FormData
-      await fetchData("/SubmissionFiles/create", {
+      const submitRes = (await fetchData("/reports/student/progress-submit", {
         method: "POST",
         body: formData,
-      });
+      })) as ApiResponse<StudentProgressSubmitPayload>;
+
+      if (!submitRes.success) {
+        throw new Error(submitRes.message || "Submit progress report failed");
+      }
 
       setSuccess("Nộp báo cáo thành công!");
       setReportTitle("");
       setReportDescription("");
       setSelectedFile(null);
 
-      // Refresh reports list
-      const submissionsRes = (await fetchData(
-        `/ProgressSubmissions/get-list?StudentUserCode=${auth.user.userCode}`,
-      )) as ApiResponse<Record<string, unknown>[]>;
-      if (submissionsRes.data) {
-        const reportsWithFiles = await Promise.all(
-          submissionsRes.data.map(
-            async (submission: Record<string, unknown>) => {
-              try {
-                const filesRes = (await fetchData(
-                  `/SubmissionFiles/get-list?SubmissionCode=${submission.submissionCode}`,
-                )) as ApiResponse<SubmissionFile[]>;
-                return {
-                  ...submission,
-                  files: filesRes.data || [],
-                };
-              } catch (error) {
-                console.error("Error fetching files:", error);
-                return {
-                  ...submission,
-                  files: [],
-                };
-              }
-            },
-          ),
-        );
-        setReports(reportsWithFiles as Report[]);
-      }
+      await Promise.all([
+        loadStudentDashboard(auth.user.userCode),
+        loadProgressHistory(auth.user.userCode),
+      ]);
     } catch (err) {
       console.error("Error submitting report:", err);
-      // You might want to show an error message here
+      addToast("Không thể nộp báo cáo. Vui lòng thử lại.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -676,9 +448,9 @@ const Reports: React.FC = () => {
       case "chờ duyệt":
       case "pending":
         return "#f37021";
+      case "revision_required":
       case "từ chối":
       case "rejected":
-        return "#ef4444";
       case "revision":
         return "#eab308"; // Yellow for revision
       default:
@@ -695,6 +467,8 @@ const Reports: React.FC = () => {
       case "chờ duyệt":
       case "pending":
         return "Chờ duyệt";
+      case "revision_required":
+        return "Cần sửa";
       case "từ chối":
       case "rejected":
         return "Từ chối";

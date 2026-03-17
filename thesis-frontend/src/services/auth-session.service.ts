@@ -4,6 +4,8 @@ const LOGIN_RESPONSE_KEY = "login_response";
 const AUTH_SESSION_KEY = "auth_session";
 const EXPIRED_MESSAGE_KEY = "auth_expired_message";
 const APP_USER_KEY = "app_user";
+const STUDENT_CODE_KEY = "student_code";
+const LECTURER_CODE_KEY = "lecturer_code";
 
 let memoryAccessToken: string | null = null;
 let memoryExpiresAt: string | null = null;
@@ -231,9 +233,39 @@ export function clearAuthSession(): void {
     LOGIN_RESPONSE_KEY,
     AUTH_SESSION_KEY,
     APP_USER_KEY,
+    STUDENT_CODE_KEY,
+    LECTURER_CODE_KEY,
   ];
 
   keys.forEach((key) => removeFromAllStorage(key));
+}
+
+export function getStudentCode(): string | null {
+  const value = readFromAnyStorage(STUDENT_CODE_KEY);
+  return value?.trim() || null;
+}
+
+export function setStudentCode(value: string | null | undefined): void {
+  const normalized = value?.trim() || "";
+  if (!normalized) {
+    removeFromAllStorage(STUDENT_CODE_KEY);
+    return;
+  }
+  writeToStorageWithFallback(STUDENT_CODE_KEY, normalized);
+}
+
+export function getLecturerCode(): string | null {
+  const value = readFromAnyStorage(LECTURER_CODE_KEY);
+  return value?.trim() || null;
+}
+
+export function setLecturerCode(value: string | null | undefined): void {
+  const normalized = value?.trim() || "";
+  if (!normalized) {
+    removeFromAllStorage(LECTURER_CODE_KEY);
+    return;
+  }
+  writeToStorageWithFallback(LECTURER_CODE_KEY, normalized);
 }
 
 export const AuthSessionKeys = {
@@ -243,4 +275,6 @@ export const AuthSessionKeys = {
   AUTH_SESSION_KEY,
   EXPIRED_MESSAGE_KEY,
   APP_USER_KEY,
+  STUDENT_CODE_KEY,
+  LECTURER_CODE_KEY,
 };
