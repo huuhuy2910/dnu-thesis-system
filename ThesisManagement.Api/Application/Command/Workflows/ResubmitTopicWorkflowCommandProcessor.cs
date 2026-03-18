@@ -7,6 +7,7 @@ using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.Topics.Query;
 using ThesisManagement.Api.DTOs.Workflows.Command;
 using ThesisManagement.Api.DTOs.Workflows.Query;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
 
@@ -26,6 +27,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
         private readonly ICurrentUserService _currentUserService;
         private readonly ITopicCodeGenerator _topicCodeGenerator;
         private readonly ITopicWorkflowCommandSupport _support;
+        private readonly INotificationEventPublisher _notificationEventPublisher;
 
         public ResubmitTopicWorkflowCommandProcessor(
             ApplicationDbContext db,
@@ -33,7 +35,8 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             IMapper mapper,
             ICurrentUserService currentUserService,
             ITopicCodeGenerator topicCodeGenerator,
-            ITopicWorkflowCommandSupport support)
+            ITopicWorkflowCommandSupport support,
+            INotificationEventPublisher notificationEventPublisher)
         {
             _db = db;
             _uow = uow;
@@ -41,6 +44,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             _currentUserService = currentUserService;
             _topicCodeGenerator = topicCodeGenerator;
             _support = support;
+            _notificationEventPublisher = notificationEventPublisher;
         }
 
         public Task<OperationResult<TopicWorkflowResultDto>> SubmitAsync(TopicResubmitWorkflowRequestDto request)
@@ -246,6 +250,28 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                     requestId: correlationId,
                     idempotencyKey: null,
                     reviewerUserCode: topic.SupervisorUserCode);
+
+                if (!string.IsNullOrWhiteSpace(topic.SupervisorUserCode)
+                    && !string.Equals(topic.SupervisorUserCode, actorUserCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    var title = isNewTopic ? "Có đề tài mới chờ duyệt" : "Có đề tài gửi duyệt lại";
+                    var body = isNewTopic
+                        ? $"Đề tài {topic.TopicCode} - {topic.Title} vừa được gửi để duyệt. Người gửi: {actorUserCode}. Vui lòng vào màn hình duyệt để xem chi tiết nội dung và xử lý."
+                        : $"Đề tài {topic.TopicCode} - {topic.Title} vừa được sinh viên gửi duyệt lại. Người gửi: {actorUserCode}. Vui lòng kiểm tra cập nhật mới và phản hồi sớm.";
+
+                    await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                        NotifCategory: "TOPIC_WORKFLOW",
+                        NotifTitle: title,
+                        NotifBody: body,
+                        NotifPriority: "NORMAL",
+                        ActionType: "OPEN_TOPIC",
+                        ActionUrl: $"/topics/workflow/{topic.TopicCode}",
+                        RelatedEntityName: "TOPIC",
+                        RelatedEntityCode: topic.TopicCode,
+                        RelatedEntityID: topic.TopicID,
+                        IsGlobal: false,
+                        TargetUserCodes: new List<string> { topic.SupervisorUserCode }));
+                }
 
                 return OperationResult<TopicWorkflowResultDto>.Succeeded(result, isNewTopic ? 201 : 200);
             }

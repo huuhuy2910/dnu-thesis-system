@@ -6,6 +6,7 @@ using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.Topics.Query;
 using ThesisManagement.Api.DTOs.Workflows.Command;
 using ThesisManagement.Api.DTOs.Workflows.Query;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Services.Chat;
 
@@ -24,6 +25,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
         private readonly ICurrentUserService _currentUserService;
         private readonly IChatProvisionService _chatProvisionService;
         private readonly ITopicWorkflowCommandSupport _support;
+        private readonly INotificationEventPublisher _notificationEventPublisher;
 
         public DecideTopicWorkflowCommandProcessor(
             ApplicationDbContext db,
@@ -31,7 +33,8 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             IMapper mapper,
             ICurrentUserService currentUserService,
             IChatProvisionService chatProvisionService,
-            ITopicWorkflowCommandSupport support)
+            ITopicWorkflowCommandSupport support,
+            INotificationEventPublisher notificationEventPublisher)
         {
             _db = db;
             _uow = uow;
@@ -39,6 +42,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             _currentUserService = currentUserService;
             _chatProvisionService = chatProvisionService;
             _support = support;
+            _notificationEventPublisher = notificationEventPublisher;
         }
 
         public async Task<OperationResult<TopicWorkflowResultDto>> DecideAsync(int topicId, TopicDecisionWorkflowRequestDto request)
@@ -146,6 +150,37 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                     requestId: correlationId,
                     idempotencyKey: null,
                     reviewerUserCode: _currentUserService.GetUserCode());
+
+                if (!string.IsNullOrWhiteSpace(topic.ProposerUserCode))
+                {
+                    var decisionText = action switch
+                    {
+                        "approve" => "đã được duyệt",
+                        "reject" => "đã bị từ chối",
+                        "revision" => "cần chỉnh sửa",
+                        _ => "đã được cập nhật"
+                    };
+
+                    var title = "Cập nhật kết quả duyệt đề tài";
+                    var body = $"Đề tài {topic.TopicCode} - {topic.Title} {decisionText}. "
+                        + $"Trạng thái hiện tại: {topic.Status}. "
+                        + (string.IsNullOrWhiteSpace(request.Comment)
+                            ? "Vui lòng mở chi tiết đề tài để xem thông tin mới nhất."
+                            : $"Nhận xét từ giảng viên: {request.Comment}");
+
+                    await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                        NotifCategory: "TOPIC_WORKFLOW",
+                        NotifTitle: title,
+                        NotifBody: body,
+                        NotifPriority: action == "approve" ? "NORMAL" : "HIGH",
+                        ActionType: "OPEN_TOPIC",
+                        ActionUrl: $"/topics/{topic.TopicCode}",
+                        RelatedEntityName: "TOPIC",
+                        RelatedEntityCode: topic.TopicCode,
+                        RelatedEntityID: topic.TopicID,
+                        IsGlobal: false,
+                        TargetUserCodes: new List<string> { topic.ProposerUserCode }));
+                }
 
                 await tx.CommitAsync();
 

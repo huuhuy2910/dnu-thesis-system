@@ -7,6 +7,7 @@ import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import ChatWidget from "../chat/ChatWidget.tsx";
+import NotificationBell from "../notifications/NotificationBell";
 
 const LecturerLayout: React.FC = () => {
   const auth = useAuth();
@@ -413,6 +414,8 @@ const LecturerLayout: React.FC = () => {
                 Giảng viên
               </span>
             </div>
+
+            <NotificationBell theme="lecturer" />
 
             <ChatWidget theme="lecturer" />
 

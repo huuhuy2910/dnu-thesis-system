@@ -34,6 +34,10 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<LecturerTag> LecturerTags { get; }
         IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
         IGenericRepository<TopicWorkflowAudit> TopicWorkflowAudits { get; }
+        IGenericRepository<Notification> Notifications { get; }
+        IGenericRepository<NotificationRecipient> NotificationRecipients { get; }
+        IGenericRepository<NotificationPreference> NotificationPreferences { get; }
+        IGenericRepository<NotificationOutbox> NotificationOutbox { get; }
         
         Task<int> SaveChangesAsync();
     }

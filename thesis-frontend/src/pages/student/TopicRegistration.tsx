@@ -131,8 +131,7 @@ const TopicRegistration: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [existingTopic, setExistingTopic] = useState<Topic | null>(null);
-  const [workflowDetail, setWorkflowDetail] =
-    useState<WorkflowDetailResponse | null>(null);
+  const [, setWorkflowDetail] = useState<WorkflowDetailResponse | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<TopicFormData>({
     topicCode: "",
@@ -1904,90 +1903,6 @@ const TopicRegistration: React.FC = () => {
                     )?.tagName;
                     return byCode || existingTopic.tagCode || "Chưa có";
                   })()}
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontWeight: "600",
-                    color: "#333",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
-                  Milestone State
-                </label>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: "#fff",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    color: "#333",
-                  }}
-                >
-                  {workflowDetail?.milestoneState || "Chưa có"}
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontWeight: "600",
-                    color: "#333",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
-                  Milestone Template / Ordinal
-                </label>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: "#fff",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    color: "#333",
-                  }}
-                >
-                  {workflowDetail?.milestoneTemplateCode || "-"} /{" "}
-                  {workflowDetail?.ordinal ?? "-"}
-                </div>
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontWeight: "600",
-                    color: "#333",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
-                  Thời điểm milestone
-                </label>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: "#fff",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    color: "#333",
-                    lineHeight: "1.6",
-                  }}
-                >
-                  <div>completedAt1: {workflowDetail?.completedAt1 || "-"}</div>
-                  <div>completedAt2: {workflowDetail?.completedAt2 || "-"}</div>
-                  <div>completedAt3: {workflowDetail?.completedAt3 || "-"}</div>
-                  <div>completedAt4: {workflowDetail?.completedAt4 || "-"}</div>
-                  <div>completedAt5: {workflowDetail?.completedAt5 || "-"}</div>
                 </div>
               </div>
 

@@ -16,7 +16,7 @@ namespace ThesisManagement.Api.Services.DataExchange
         {
             _uow = uow;
             _codeGenerator = codeGenerator;
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            ExcelPackage.License.SetNonCommercialPersonal("ThesisManagement.Api");
         }
 
         public async Task<DataImportResultDto> ImportAsync(string module, IFormFile file, string? format)

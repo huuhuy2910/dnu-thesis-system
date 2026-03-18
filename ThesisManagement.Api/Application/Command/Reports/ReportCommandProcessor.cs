@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using ThesisManagement.Api.Application.Command.ProgressSubmissions;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.ProgressSubmissions.Command;
@@ -22,15 +23,18 @@ namespace ThesisManagement.Api.Application.Command.Reports
         private readonly IUnitOfWork _uow;
         private readonly ApplicationDbContext _db;
         private readonly IUpdateProgressSubmissionCommand _updateProgressSubmissionCommand;
+        private readonly INotificationEventPublisher _notificationEventPublisher;
 
         public ReportCommandProcessor(
             IUnitOfWork uow,
             ApplicationDbContext db,
-            IUpdateProgressSubmissionCommand updateProgressSubmissionCommand)
+            IUpdateProgressSubmissionCommand updateProgressSubmissionCommand,
+            INotificationEventPublisher notificationEventPublisher)
         {
             _uow = uow;
             _db = db;
             _updateProgressSubmissionCommand = updateProgressSubmissionCommand;
+            _notificationEventPublisher = notificationEventPublisher;
         }
 
         public async Task<OperationResult<StudentProgressSubmitResultDto>> SubmitStudentProgressAsync(StudentProgressSubmitFormDto payload, IReadOnlyList<IFormFile> files)
@@ -153,6 +157,24 @@ namespace ThesisManagement.Api.Application.Command.Reports
 
                 await transaction.CommitAsync();
 
+                if (!string.IsNullOrWhiteSpace(lecturerProfile.UserCode))
+                {
+                    await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                        NotifCategory: "PROGRESS_SUBMISSION",
+                        NotifTitle: "Có báo cáo tiến độ mới",
+                        NotifBody: $"Sinh viên {payload.StudentUserCode} vừa nộp báo cáo {submission.SubmissionCode} cho mốc {submission.MilestoneCode}. "
+                            + $"Tiêu đề báo cáo: {(string.IsNullOrWhiteSpace(submission.ReportTitle) ? "(không có tiêu đề)" : submission.ReportTitle)}. "
+                            + "Vui lòng vào chi tiết để xem tệp đính kèm và thực hiện đánh giá.",
+                        NotifPriority: "NORMAL",
+                        ActionType: "OPEN_SUBMISSION",
+                        ActionUrl: $"/reports/submissions/{submission.SubmissionID}",
+                        RelatedEntityName: "PROGRESS_SUBMISSION",
+                        RelatedEntityCode: submission.SubmissionCode,
+                        RelatedEntityID: submission.SubmissionID,
+                        IsGlobal: false,
+                        TargetUserCodes: new List<string> { lecturerProfile.UserCode }));
+                }
+
                 var result = new StudentProgressSubmitResultDto(
                     new ReportSubmissionDto(
                         submission.SubmissionID,
@@ -187,6 +209,27 @@ namespace ThesisManagement.Api.Application.Command.Reports
             var result = await _updateProgressSubmissionCommand.ExecuteAsync(submissionId, dto);
             if (!result.Success)
                 return OperationResult<object>.Failed(result.ErrorMessage ?? "Request failed", result.StatusCode);
+
+            var reviewedSubmission = await _uow.ProgressSubmissions.GetByIdAsync(submissionId);
+            if (reviewedSubmission != null && !string.IsNullOrWhiteSpace(reviewedSubmission.StudentUserCode))
+            {
+                await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                    NotifCategory: "PROGRESS_REVIEW",
+                    NotifTitle: "Báo cáo tiến độ đã được đánh giá",
+                    NotifBody: $"Báo cáo {reviewedSubmission.SubmissionCode} đã được giảng viên cập nhật kết quả. "
+                        + $"Trạng thái: {(string.IsNullOrWhiteSpace(dto.LecturerState) ? reviewedSubmission.LecturerState : dto.LecturerState)}. "
+                        + (string.IsNullOrWhiteSpace(dto.LecturerComment)
+                            ? "Vui lòng mở chi tiết để xem phản hồi đầy đủ."
+                            : $"Nhận xét: {dto.LecturerComment}"),
+                    NotifPriority: "NORMAL",
+                    ActionType: "OPEN_SUBMISSION",
+                    ActionUrl: $"/reports/submissions/{submissionId}",
+                    RelatedEntityName: "PROGRESS_SUBMISSION",
+                    RelatedEntityCode: reviewedSubmission.SubmissionCode,
+                    RelatedEntityID: reviewedSubmission.SubmissionID,
+                    IsGlobal: false,
+                    TargetUserCodes: new List<string> { reviewedSubmission.StudentUserCode }));
+            }
 
             return OperationResult<object>.Succeeded(result.Data);
         }

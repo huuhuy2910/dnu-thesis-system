@@ -14,6 +14,7 @@ using ThesisManagement.Api.Application.Command.MessageAttachments;
 using ThesisManagement.Api.Application.Command.MessageReadReceipts;
 using ThesisManagement.Api.Application.Command.MessageReactions;
 using ThesisManagement.Api.Application.Command.Messages;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Application.Command.ProgressMilestones;
 using ThesisManagement.Api.Application.Command.ProgressSubmissions;
 using ThesisManagement.Api.Application.Command.Reports;
@@ -39,6 +40,7 @@ using ThesisManagement.Api.Application.Query.MessageAttachments;
 using ThesisManagement.Api.Application.Query.MessageReadReceipts;
 using ThesisManagement.Api.Application.Query.MessageReactions;
 using ThesisManagement.Api.Application.Query.Messages;
+using ThesisManagement.Api.Application.Query.Notifications;
 using ThesisManagement.Api.Application.Query.ProgressMilestones;
 using ThesisManagement.Api.Application.Query.ProgressSubmissions;
 using ThesisManagement.Api.Application.Query.Reports;
@@ -310,6 +312,14 @@ builder.Services.AddScoped<IGetSystemActivityLogsByEntityQuery, GetSystemActivit
 builder.Services.AddScoped<IGetSystemActivityLogsByUserQuery, GetSystemActivityLogsByUserQuery>();
 builder.Services.AddScoped<IGetSystemActivityLogsByModuleQuery, GetSystemActivityLogsByModuleQuery>();
 builder.Services.AddScoped<IGetSystemActivityLogStatsQuery, GetSystemActivityLogStatsQuery>();
+builder.Services.AddScoped<IGetMyNotificationsListQuery, GetMyNotificationsListQuery>();
+builder.Services.AddScoped<IGetMyUnreadCountQuery, GetMyUnreadCountQuery>();
+builder.Services.AddScoped<IGetMyNotificationPreferencesQuery, GetMyNotificationPreferencesQuery>();
+builder.Services.AddScoped<INotificationEventPublisher, NotificationEventPublisher>();
+builder.Services.AddScoped<ICreateNotificationCommand, CreateNotificationCommand>();
+builder.Services.AddScoped<IMarkNotificationReadCommand, MarkNotificationReadCommand>();
+builder.Services.AddScoped<IMarkAllNotificationsReadCommand, MarkAllNotificationsReadCommand>();
+builder.Services.AddScoped<IUpdateMyNotificationPreferenceCommand, UpdateMyNotificationPreferenceCommand>();
 builder.Services.AddScoped<IGetConversationsListQuery, GetConversationsListQuery>();
 builder.Services.AddScoped<IGetConversationDetailQuery, GetConversationDetailQuery>();
 builder.Services.AddScoped<IGetConversationCreateQuery, GetConversationCreateQuery>();
@@ -445,5 +455,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
