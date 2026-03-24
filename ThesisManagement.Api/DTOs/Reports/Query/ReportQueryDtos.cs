@@ -82,6 +82,75 @@ namespace ThesisManagement.Api.DTOs.Reports.Query
         bool CanSubmit,
         string? BlockReason);
 
+    public record StudentDashboardStudentDetailDto(
+        int StudentProfileID,
+        string StudentCode,
+        string? UserCode,
+        string? FullName,
+        string? StudentEmail,
+        string? PhoneNumber,
+        string? DepartmentCode,
+        string? ClassCode,
+        string? FacultyCode,
+        string? StudentImage,
+        decimal? GPA,
+        string? AcademicStanding,
+        string? Gender,
+        DateTime? DateOfBirth,
+        string? Address,
+        int? EnrollmentYear,
+        int? GraduationYear,
+        string? Status,
+        string? Notes,
+        DateTime? CreatedAt,
+        DateTime? LastUpdated);
+
+    public record StudentDashboardListItemDto(
+        StudentDashboardStudentDetailDto? Student,
+        ReportTopicDto? Topic,
+        IReadOnlyList<ReportTagDto> TopicTags,
+        ReportMilestoneDto? CurrentMilestone,
+        ReportSupervisorDto? Supervisor,
+        IReadOnlyList<ReportTagDto> SupervisorTags,
+        bool CanSubmit,
+        string? BlockReason);
+
+    public record StudentDashboardListDto(
+        IReadOnlyList<StudentDashboardListItemDto> Items,
+        int Page,
+        int PageSize,
+        int TotalCount);
+
+    public class StudentDashboardListFilterDto
+    {
+        public int Page { get; set; } = 0;
+        public int? PageSize { get; set; }
+
+        public string? Search { get; set; }
+        public string? UserCode { get; set; }
+        public string? StudentCode { get; set; }
+        public string? FullName { get; set; }
+        public string? StudentEmail { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? DepartmentCode { get; set; }
+        public string? ClassCode { get; set; }
+        public string? FacultyCode { get; set; }
+        public string? Status { get; set; }
+        public string? Gender { get; set; }
+        public int? EnrollmentYearFrom { get; set; }
+        public int? EnrollmentYearTo { get; set; }
+        public int? GraduationYearFrom { get; set; }
+        public int? GraduationYearTo { get; set; }
+        public decimal? MinGpa { get; set; }
+        public decimal? MaxGpa { get; set; }
+
+        public bool? HasTopic { get; set; }
+        public string? TopicCode { get; set; }
+        public string? TopicStatus { get; set; }
+        public string? TopicType { get; set; }
+        public string? SupervisorLecturerCode { get; set; }
+    }
+
     public record StudentProgressHistoryItemDto(
         ReportSubmissionDto Submission);
 

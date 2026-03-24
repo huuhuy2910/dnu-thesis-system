@@ -120,7 +120,7 @@ function toText(value: unknown): string {
 }
 
 function normalizeFieldName(value: string): string {
-  return value.replace(/[\s_\-]/g, "").toLowerCase();
+  return value.replace(/[\s_-]/g, "").toLowerCase();
 }
 
 function getFieldValue(
@@ -311,7 +311,9 @@ async function parseResponseError(response: Response): Promise<string> {
   }
 }
 
-function toPayloadRows(rows: ParsedCatalogTopicRow[]): Array<Record<string, string>> {
+function toPayloadRows(
+  rows: ParsedCatalogTopicRow[],
+): Array<Record<string, string>> {
   return rows.map((row) => {
     const payload: Record<string, string> = {
       title: row.title,
@@ -429,7 +431,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
       );
 
       if (!response?.success) {
-        throw new Error(response?.message || "Không thể tải danh sách kho đề tài.");
+        throw new Error(
+          response?.message || "Không thể tải danh sách kho đề tài.",
+        );
       }
 
       const normalized = normalizeCatalogTopicsWithTags(response.data);
@@ -508,7 +512,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
           : [];
 
       if (!Array.isArray(arr)) {
-        throw new Error("JSON phải là mảng object (hoặc có trường items là mảng).");
+        throw new Error(
+          "JSON phải là mảng object (hoặc có trường items là mảng).",
+        );
       }
 
       const mapped = arr
@@ -534,7 +540,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
       defval: "",
     });
 
-    const mapped = rows.map((row, index) => mapRowToCatalogTopic(row, index + 2));
+    const mapped = rows.map((row, index) =>
+      mapRowToCatalogTopic(row, index + 2),
+    );
     setParsedRows(mapped);
     setPreviewRows(mapped.slice(0, PREVIEW_SIZE));
     setValidation(validateRows(mapped));
@@ -574,7 +582,10 @@ const CatalogTopicsWarehousePage: React.FC = () => {
       setParsingError(
         error instanceof Error ? error.message : "Không thể đọc dữ liệu file.",
       );
-      addToast("Không thể preview file. Bạn vẫn có thể import trực tiếp.", "warning");
+      addToast(
+        "Không thể preview file. Bạn vẫn có thể import trực tiếp.",
+        "warning",
+      );
     }
   };
 
@@ -646,9 +657,13 @@ const CatalogTopicsWarehousePage: React.FC = () => {
           type: "application/json",
         });
         const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
-        const normalizedFile = new File([jsonBlob], `${baseName}-normalized.json`, {
-          type: "application/json",
-        });
+        const normalizedFile = new File(
+          [jsonBlob],
+          `${baseName}-normalized.json`,
+          {
+            type: "application/json",
+          },
+        );
         formData.append("file", normalizedFile);
         formData.append("format", "json");
       } else {
@@ -656,11 +671,14 @@ const CatalogTopicsWarehousePage: React.FC = () => {
         formData.append("format", format);
       }
 
-      const response = await fetch(`${apiBase}/DataExchange/import/catalogtopics`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
+      const response = await fetch(
+        `${apiBase}/DataExchange/import/catalogtopics`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: formData,
+        },
+      );
 
       if (!response.ok) {
         throw new Error(await parseResponseError(response));
@@ -693,7 +711,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
       addToast("Import kho đề tài thành công.", "success");
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Import catalogtopics thất bại.",
+        error instanceof Error
+          ? error.message
+          : "Import catalogtopics thất bại.",
         "error",
       );
     } finally {
@@ -727,8 +747,8 @@ const CatalogTopicsWarehousePage: React.FC = () => {
       <div className="dashboard-header">
         <h1>Kho đề tài có sẵn</h1>
         <p>
-          Quản lý danh sách CatalogTopics theo API mới kèm tags, đồng thời vẫn hỗ
-          trợ import danh mục theo file.
+          Quản lý danh sách CatalogTopics theo API mới kèm tags, đồng thời vẫn
+          hỗ trợ import danh mục theo file.
         </p>
       </div>
 
@@ -855,13 +875,21 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   updateFilter("catalogTopicCode", event.target.value)
                 }
                 placeholder="Mã đề tài"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 value={filters.title}
                 onChange={(event) => updateFilter("title", event.target.value)}
                 placeholder="Tiêu đề"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 value={filters.departmentCode}
@@ -869,7 +897,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   updateFilter("departmentCode", event.target.value)
                 }
                 placeholder="Khoa"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 value={filters.assignedStatus}
@@ -877,35 +909,63 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   updateFilter("assignedStatus", event.target.value)
                 }
                 placeholder="Trạng thái"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 value={filters.tagCode}
-                onChange={(event) => updateFilter("tagCode", event.target.value)}
+                onChange={(event) =>
+                  updateFilter("tagCode", event.target.value)
+                }
                 placeholder="Mã tag"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 value={filters.tagName}
-                onChange={(event) => updateFilter("tagName", event.target.value)}
+                onChange={(event) =>
+                  updateFilter("tagName", event.target.value)
+                }
                 placeholder="Tên tag"
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 type="date"
                 value={filters.fromDate}
-                onChange={(event) => updateFilter("fromDate", event.target.value)}
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                onChange={(event) =>
+                  updateFilter("fromDate", event.target.value)
+                }
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
               <input
                 type="date"
                 value={filters.toDate}
                 onChange={(event) => updateFilter("toDate", event.target.value)}
-                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 8 }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: 8,
+                }}
               />
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div
+              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+            >
               <button
                 type="button"
                 onClick={resetFilters}
@@ -930,7 +990,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("catalogTopicCode")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Mã đề tài
                   </button>
@@ -939,7 +1003,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("title")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Tiêu đề
                   </button>
@@ -949,7 +1017,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("departmentCode")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Khoa
                   </button>
@@ -958,7 +1030,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("assignedStatus")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Trạng thái
                   </button>
@@ -968,7 +1044,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("createdAt")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Ngày tạo
                   </button>
@@ -977,7 +1057,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleSort("lastUpdated")}
-                    style={{ border: "none", background: "transparent", fontWeight: 700 }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontWeight: 700,
+                    }}
                   >
                     Cập nhật
                   </button>
@@ -1016,7 +1100,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                     <td>{row.assignedStatus || "--"}</td>
                     <td>
                       {Array.isArray(row.tags) && row.tags.length > 0 ? (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <div
+                          style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
+                        >
                           {row.tags.map((tag) => (
                             <span
                               key={`${row.catalogTopicID}-${tag.tagID}`}
@@ -1129,7 +1215,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
           }}
         >
           <div style={{ display: "grid", gap: 4 }}>
-            <strong style={{ color: "#0f172a" }}>Bước 1: Tải template trước khi import</strong>
+            <strong style={{ color: "#0f172a" }}>
+              Bước 1: Tải template trước khi import
+            </strong>
             <span style={{ color: "#64748b", fontSize: 13 }}>
               Cột mẫu: {expectedColumns}
             </span>
@@ -1150,7 +1238,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
               <span style={{ fontSize: 13, color: "#334155" }}>Định dạng</span>
               <select
                 value={format}
-                onChange={(event) => setFormat(event.target.value as DataExchangeFormat)}
+                onChange={(event) =>
+                  setFormat(event.target.value as DataExchangeFormat)
+                }
                 style={{
                   border: "none",
                   padding: "8px 0",
@@ -1182,7 +1272,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                 cursor: "pointer",
               }}
             >
-              {isDownloadingTemplate ? <RefreshCw size={16} /> : <Download size={16} />}
+              {isDownloadingTemplate ? (
+                <RefreshCw size={16} />
+              ) : (
+                <Download size={16} />
+              )}
               Tải template
             </button>
           </div>
@@ -1198,8 +1292,17 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             background: "#f8fafc",
           }}
         >
-          <strong style={{ color: "#0f172a" }}>Bước 2: Chọn file để preview và kiểm tra nhanh</strong>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <strong style={{ color: "#0f172a" }}>
+            Bước 2: Chọn file để preview và kiểm tra nhanh
+          </strong>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
             <label
               style={{
                 border: "1px solid #cbd5e1",
@@ -1227,7 +1330,9 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             </label>
 
             <span style={{ color: "#475569", fontSize: 13 }}>
-              {selectedFile ? `Đã chọn: ${selectedFile.name}` : "Chưa chọn file"}
+              {selectedFile
+                ? `Đã chọn: ${selectedFile.name}`
+                : "Chưa chọn file"}
             </span>
 
             {selectedFile && (
@@ -1250,11 +1355,15 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             )}
           </div>
 
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <label
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
             <input
               type="checkbox"
               checked={normalizeBeforeImport}
-              onChange={(event) => setNormalizeBeforeImport(event.target.checked)}
+              onChange={(event) =>
+                setNormalizeBeforeImport(event.target.checked)
+              }
             />
             <span style={{ color: "#334155", fontSize: 13 }}>
               Chuẩn hóa tagCodes và import bằng JSON (khuyến nghị)
@@ -1336,7 +1445,11 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                       <td>{row.departmentCode || "-"}</td>
                       <td>{row.assignedStatus || "-"}</td>
                       <td>{row.assignedAt || "-"}</td>
-                      <td>{Object.prototype.hasOwnProperty.call(row, "tagCodes") ? row.tagCodes || "(xóa tag)" : "(giữ nguyên)"}</td>
+                      <td>
+                        {Object.prototype.hasOwnProperty.call(row, "tagCodes")
+                          ? row.tagCodes || "(xóa tag)"
+                          : "(giữ nguyên)"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1348,7 +1461,14 @@ const CatalogTopicsWarehousePage: React.FC = () => {
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
           <button
             type="button"
             onClick={() => void doImport()}
@@ -1367,17 +1487,34 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             }}
           >
             <Upload size={16} />
-            {isImporting ? "Đang import..." : importResult ? "Import lại" : "Bước 3: Import"}
+            {isImporting
+              ? "Đang import..."
+              : importResult
+                ? "Import lại"
+                : "Bước 3: Import"}
           </button>
         </div>
       </div>
 
       <div style={sectionCardStyle}>
         <strong style={{ color: "#0f172a" }}>Quy tắc tagCodes</strong>
-        <ul style={{ margin: 0, paddingLeft: 18, color: "#334155", lineHeight: 1.5 }}>
-          <li>Có cột tagCodes và để trống: backend sẽ xóa toàn bộ tag đang gán.</li>
-          <li>Không có cột tagCodes: backend giữ nguyên quan hệ tag hiện tại.</li>
-          <li>Nếu tồn tại tagCode chưa có trong hệ thống, cả dòng import sẽ lỗi.</li>
+        <ul
+          style={{
+            margin: 0,
+            paddingLeft: 18,
+            color: "#334155",
+            lineHeight: 1.5,
+          }}
+        >
+          <li>
+            Có cột tagCodes và để trống: backend sẽ xóa toàn bộ tag đang gán.
+          </li>
+          <li>
+            Không có cột tagCodes: backend giữ nguyên quan hệ tag hiện tại.
+          </li>
+          <li>
+            Nếu tồn tại tagCode chưa có trong hệ thống, cả dòng import sẽ lỗi.
+          </li>
         </ul>
       </div>
 
@@ -1405,8 +1542,12 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   background: "#f8fafc",
                 }}
               >
-                <div style={{ color: "#64748b", fontSize: 12 }}>{item.label}</div>
-                <div style={{ color: "#0f172a", fontSize: 22, fontWeight: 700 }}>
+                <div style={{ color: "#64748b", fontSize: 12 }}>
+                  {item.label}
+                </div>
+                <div
+                  style={{ color: "#0f172a", fontSize: 22, fontWeight: 700 }}
+                >
                   {item.value}
                 </div>
               </div>

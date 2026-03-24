@@ -497,7 +497,7 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
                               key={`${index}-${
                                 typeof item === "string"
                                   ? item.slice(0, 24)
-                                  : item.row ?? "na"
+                                  : (item.row ?? "na")
                               }`}
                               style={{ fontSize: 13, marginBottom: 8 }}
                             >

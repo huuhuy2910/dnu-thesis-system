@@ -7,11 +7,7 @@ import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { Department } from "../../types/department";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic, TopicFormData } from "../../types/topic";
-import type {
-  Tag,
-  LecturerTag,
-  TopicTag,
-} from "../../types/tag";
+import type { Tag, LecturerTag, TopicTag } from "../../types/tag";
 import {
   BookOpen,
   FileText,
@@ -155,7 +151,9 @@ const TopicRegistration: React.FC = () => {
   const [registrationType, setRegistrationType] = useState<"catalog" | "self">(
     "catalog",
   );
-  const [catalogTopics, setCatalogTopics] = useState<CatalogTopicWithTags[]>([]);
+  const [catalogTopics, setCatalogTopics] = useState<CatalogTopicWithTags[]>(
+    [],
+  );
   const [lecturers, setLecturers] = useState<LecturerProfile[]>([]);
   const [filteredLecturers, setFilteredLecturers] = useState<LecturerProfile[]>(
     [],
@@ -478,7 +476,8 @@ const TopicRegistration: React.FC = () => {
                 embeddedTags
                   .map((item) => item.tagCode)
                   .filter(
-                    (code) => typeof code === "string" && code.trim().length > 0,
+                    (code) =>
+                      typeof code === "string" && code.trim().length > 0,
                   ),
               ),
             ];

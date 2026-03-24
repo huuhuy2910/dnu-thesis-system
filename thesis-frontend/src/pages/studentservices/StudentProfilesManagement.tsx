@@ -1,77 +1,137 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
-import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Edit,
+  Filter,
+  Plus,
+  Search,
+  Trash,
+  Users,
+  Eye,
+  BookOpen,
+  ChartColumnIncreasing,
+  User,
+} from "lucide-react";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
+import ImportExportActions from "../../components/admin/ImportExportActions";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
-import "../admin/Dashboard.css";
 import "./StudentProfilesManagement.css";
 
-type RecordData = Record<string, unknown>;
+type DashboardStudent = {
+  studentProfileID: number;
+  studentCode: string;
+  userCode: string;
+  fullName: string;
+  studentEmail: string;
+  phoneNumber: string;
+  departmentCode: string;
+  classCode: string;
+  facultyCode: string;
+  studentImage?: string;
+  gpa?: number;
+  academicStanding?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  address?: string;
+  enrollmentYear?: number;
+  graduationYear?: number | null;
+  status?: string;
+};
+
+type DashboardTopic = {
+  topicID: number;
+  topicCode: string;
+  title: string;
+  summary: string;
+  status: string;
+  createdAt: string;
+  lastUpdated: string;
+};
+
+type DashboardTag = {
+  tagCode: string;
+  tagName: string;
+};
+
+type DashboardMilestone = {
+  milestoneTemplateCode: string;
+  ordinal?: number;
+  state?: string;
+};
+
+type DashboardSupervisor = {
+  lecturerCode: string;
+  fullName: string;
+  degree?: string;
+  email: string;
+  phoneNumber: string;
+  guideQuota?: number;
+  currentGuidingCount?: number;
+  departmentCode?: string;
+};
+
+type StudentDashboardItem = {
+  student: DashboardStudent;
+  topic: DashboardTopic;
+  topicTags: DashboardTag[];
+  currentMilestone: DashboardMilestone | null;
+  supervisor: DashboardSupervisor | null;
+  supervisorTags?: DashboardTag[];
+  canSubmit?: boolean;
+  blockReason?: string | null;
+};
+
+type DashboardDataPayload = {
+  items: StudentDashboardItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+};
+
+type MilestoneTemplate = {
+  milestoneTemplateID: number;
+  milestoneTemplateCode: string;
+  ordinal: number;
+};
+
+type RowStatus = "approved" | "pending" | "rejected" | "revision";
+
+type DashboardRowView = StudentDashboardItem & {
+  __status: RowStatus;
+  __progress: number;
+};
+
 type FieldType = "text" | "number" | "date" | "textarea";
 
-interface FieldDef {
+type FieldDef = {
   name: string;
   label: string;
   type?: FieldType;
   required?: boolean;
-}
+};
 
-interface ColumnDef {
-  key: string;
-  label: string;
-  aliases?: string[];
-}
-
-const fields: FieldDef[] = [
-  { name: "studentCode", label: "studentCode" },
-  { name: "userCode", label: "userCode", required: true },
-  { name: "departmentCode", label: "departmentCode" },
-  { name: "classCode", label: "classCode" },
-  { name: "facultyCode", label: "facultyCode" },
-  { name: "studentImage", label: "studentImage" },
-  { name: "fullName", label: "fullName" },
-  { name: "studentEmail", label: "studentEmail" },
-  { name: "phoneNumber", label: "phoneNumber" },
-  { name: "academicStanding", label: "academicStanding" },
-  { name: "status", label: "status" },
-  { name: "enrollmentYear", label: "enrollmentYear", type: "number" },
-  { name: "graduationYear", label: "graduationYear", type: "number" },
-  { name: "gender", label: "gender" },
-  { name: "dateOfBirth", label: "dateOfBirth", type: "date" },
-  { name: "gpa", label: "gpa", type: "number" },
-  { name: "address", label: "address" },
-  { name: "notes", label: "notes", type: "textarea" },
-];
-
-const filterFields: FieldDef[] = [
+const profileFields: FieldDef[] = [
   { name: "studentCode", label: "Mã sinh viên" },
-  { name: "userCode", label: "Mã user" },
+  { name: "userCode", label: "Mã user", required: true },
   { name: "departmentCode", label: "Khoa/Bộ môn" },
   { name: "classCode", label: "Lớp" },
   { name: "facultyCode", label: "Khoa viện" },
+  { name: "studentImage", label: "Ảnh sinh viên" },
+  { name: "fullName", label: "Họ tên" },
+  { name: "studentEmail", label: "Email" },
+  { name: "phoneNumber", label: "Số điện thoại" },
   { name: "academicStanding", label: "Học lực" },
   { name: "status", label: "Trạng thái" },
   { name: "enrollmentYear", label: "Năm nhập học", type: "number" },
   { name: "graduationYear", label: "Năm tốt nghiệp", type: "number" },
   { name: "gender", label: "Giới tính" },
-];
-
-const columns: ColumnDef[] = [
-  { key: "studentCode", label: "Mã SV", aliases: ["code"] },
-  { key: "fullName", label: "Họ tên", aliases: ["name", "studentName"] },
-  { key: "classCode", label: "Lớp", aliases: ["class"] },
-  {
-    key: "departmentCode",
-    label: "Khoa/Bộ môn",
-    aliases: ["departmentName", "department"],
-  },
-  { key: "studentEmail", label: "Email", aliases: ["email"] },
-  {
-    key: "status",
-    label: "Trạng thái",
-    aliases: ["studentStatus", "isActive"],
-  },
+  { name: "dateOfBirth", label: "Ngày sinh", type: "date" },
+  { name: "gpa", label: "GPA", type: "number" },
+  { name: "address", label: "Địa chỉ" },
+  { name: "notes", label: "Ghi chú", type: "textarea" },
 ];
 
 function toDisplay(value: unknown): string {
@@ -80,180 +140,263 @@ function toDisplay(value: unknown): string {
   return String(value);
 }
 
-function getColumnValue(row: RecordData, column: ColumnDef): unknown {
-  const keys = [column.key, ...(column.aliases ?? [])];
-  for (const key of keys) {
-    const value = row[key];
-    if (value === null || value === undefined) continue;
-    if (typeof value === "string" && value.trim() === "") continue;
-    return value;
-  }
-  return "";
-}
-
-function toFormRecord(data: RecordData): Record<string, string> {
-  return fields.reduce<Record<string, string>>((acc, field) => {
+function toFormRecord(data: Record<string, unknown>): Record<string, string> {
+  return profileFields.reduce<Record<string, string>>((acc, field) => {
     acc[field.name] = toDisplay(data[field.name]);
     return acc;
   }, {});
 }
 
-function toPayload(formValues: Record<string, string>): RecordData {
-  return fields.reduce<RecordData>((acc, field) => {
+function toPayload(formValues: Record<string, string>): Record<string, unknown> {
+  return profileFields.reduce<Record<string, unknown>>((acc, field) => {
     const raw = (formValues[field.name] ?? "").trim();
     if (!raw) {
       acc[field.name] = field.type === "number" ? null : "";
       return acc;
     }
+
     if (field.type === "number") {
       const parsed = Number(raw);
       acc[field.name] = Number.isFinite(parsed) ? parsed : raw;
       return acc;
     }
+
     acc[field.name] = raw;
     return acc;
   }, {});
-}
-
-function buildQuery(input: Record<string, unknown>): string {
-  const params = new URLSearchParams();
-  Object.entries(input).forEach(([key, value]) => {
-    if (value === null || value === undefined) return;
-    const normalized = String(value).trim();
-    if (!normalized) return;
-    params.append(key, normalized);
-  });
-  const query = params.toString();
-  return query ? `?${query}` : "";
 }
 
 async function requestApiData<T>(
   path: string,
   options?: Parameters<typeof fetchData>[1],
   fallback = "Không thể tải dữ liệu.",
-): Promise<{ data: T; totalCount: number }> {
+): Promise<{ data: T }> {
   const response = await fetchData<ApiResponse<T>>(path, options);
   if (!response?.success) {
-    throw new Error(response.message || response.title || fallback);
+    throw new Error(response?.message || response?.title || fallback);
   }
-  return {
-    data: response.data as T,
-    totalCount: Number(response.totalCount || 0),
-  };
+  return { data: response.data as T };
 }
 
-function normalizeList(payload: unknown): {
-  items: RecordData[];
-  fallbackTotal: number;
-} {
-  if (Array.isArray(payload)) {
-    return { items: payload as RecordData[], fallbackTotal: payload.length };
-  }
-  if (payload && typeof payload === "object") {
-    const source = payload as Record<string, unknown>;
-    const nested = [
-      source.items,
-      source.records,
-      source.result,
-      source.data,
-      source.list,
-    ];
-    const arr = nested.find((candidate) => Array.isArray(candidate));
-    if (Array.isArray(arr)) {
-      return {
-        items: arr as RecordData[],
-        fallbackTotal: Number(
-          source.totalCount ?? source.total ?? source.count ?? arr.length,
-        ),
-      };
-    }
-  }
-  return { items: [], fallbackTotal: 0 };
+function mapApiStatusToDisplay(apiStatus?: string): RowStatus {
+  const status = (apiStatus || "").toLowerCase();
+  if (status.includes("đã duyệt")) return "approved";
+  if (status.includes("từ chối")) return "rejected";
+  if (status.includes("cần sửa")) return "revision";
+  return "pending";
+}
+
+function getStatusText(status: RowStatus): string {
+  if (status === "approved") return "Đã duyệt";
+  if (status === "rejected") return "Từ chối";
+  if (status === "revision") return "Cần sửa đổi";
+  return "Chờ duyệt";
+}
+
+function formatDate(value?: string): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("vi-VN");
+}
+
+function calcProgress(
+  currentMilestone: DashboardMilestone | null,
+  totalTemplates: number,
+): number {
+  if (!currentMilestone || !totalTemplates) return 0;
+  const ordinal = Number(currentMilestone.ordinal || 0);
+  if (!Number.isFinite(ordinal) || ordinal <= 1) return 0;
+  return Math.max(
+    0,
+    Math.min(100, Math.round(((ordinal - 1) / totalTemplates) * 100)),
+  );
+}
+
+function getMilestoneLabel(code: string): string {
+  const map: Record<string, string> = {
+    MS_REG: "Đăng ký đề tài",
+    MS_PROG1: "Tiến độ 1",
+    MS_PROG2: "Tiến độ 2",
+    MS_FULL: "Nộp full",
+    MS_DEF: "Bảo vệ",
+  };
+  return map[code] || code;
 }
 
 const StudentProfilesManagement: React.FC = () => {
   const { addToast } = useToast();
-  const [rows, setRows] = useState<RecordData[]>([]);
+  const [rows, setRows] = useState<StudentDashboardItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeModal, setActiveModal] = useState<
-    "detail" | "create" | "edit" | null
-  >(null);
-  const [selectedRow, setSelectedRow] = useState<RecordData | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [templates, setTemplates] = useState<MilestoneTemplate[]>([]);
+  const [detailModal, setDetailModal] = useState<{
+    isOpen: boolean;
+    row?: DashboardRowView;
+  }>({ isOpen: false });
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTab, setDetailTab] = useState<"info" | "topic" | "progress">(
+    "info",
+  );
+  const [activeModal, setActiveModal] = useState<"create" | "edit" | null>(
+    null,
+  );
+  const [editingCode, setEditingCode] = useState("");
   const [formValues, setFormValues] = useState<Record<string, string>>({});
 
   const [searchInput, setSearchInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<
-    Record<string, string>
-  >(() =>
-    filterFields.reduce<Record<string, string>>((acc, field) => {
-      acc[field.name] = "";
-      return acc;
-    }, {}),
-  );
-
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const normalizeItems = (items: unknown): StudentDashboardItem[] => {
+    if (!Array.isArray(items)) return [];
+    return items.filter((item): item is StudentDashboardItem => {
+      if (!item || typeof item !== "object") return false;
+      const source = item as Partial<StudentDashboardItem>;
+      return Boolean(source.student && source.topic);
+    });
+  };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearchKeyword(searchInput.trim());
-      setPage(1);
     }, 350);
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  const listQuery = useMemo(
-    () => ({
-      page,
-      pageSize,
-      search: searchKeyword,
-      ...advancedFilters,
-    }),
-    [advancedFilters, page, pageSize, searchKeyword],
-  );
-
-  const loadRows = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const query = buildQuery(listQuery);
-      const { data, totalCount: apiTotal } = await requestApiData<unknown>(
-        `/StudentProfiles/get-list${query}`,
-        { method: "GET" },
-        "Không thể tải danh sách sinh viên.",
-      );
-      const normalized = normalizeList(data);
-      setRows(normalized.items);
-      setTotalCount(apiTotal > 0 ? apiTotal : normalized.fallbackTotal);
-    } catch (error) {
-      addToast(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải danh sách sinh viên.",
-        "error",
-      );
-      setRows([]);
-      setTotalCount(0);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addToast, listQuery]);
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await fetchData<ApiResponse<MilestoneTemplate[]>>(
+          "/MilestoneTemplates/get-list?Page=0&PageSize=50",
+          { method: "GET" },
+        );
+        if (!response?.success) return;
+        setTemplates(response.data || []);
+      } catch {
+        setTemplates([]);
+      }
+    };
+    void fetchTemplates();
+  }, []);
 
   useEffect(() => {
+    const loadRows = async () => {
+      setIsLoading(true);
+      try {
+        const query = new URLSearchParams();
+        query.append("page", String(Math.max(0, page - 1)));
+        query.append("pageSize", String(pageSize));
+
+        const response = await fetchData<ApiResponse<DashboardDataPayload>>(
+          `/reports/student/dashboard/get-list?${query.toString()}`,
+          { method: "GET" },
+        );
+
+        if (!response?.success || !response.data) {
+          throw new Error(response?.message || "Không thể tải danh sách sinh viên.");
+        }
+
+        const payload = response.data;
+        setRows(normalizeItems(payload.items));
+        setTotalCount(
+          Number(response.totalCount || 0) > 0
+            ? Number(response.totalCount)
+            : Number(payload.totalCount || 0),
+        );
+      } catch (error) {
+        addToast(
+          error instanceof Error ? error.message : "Không thể tải danh sách sinh viên.",
+          "error",
+        );
+        setRows([]);
+        setTotalCount(0);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     void loadRows();
-  }, [loadRows]);
+  }, [addToast, page, pageSize, refreshTick]);
 
   const pageCount = useMemo(
     () => Math.max(1, Math.ceil(totalCount / Math.max(1, pageSize))),
     [pageSize, totalCount],
   );
 
+  const rowsView = useMemo<DashboardRowView[]>(() => {
+    return rows
+      .map((item) => {
+        const status = mapApiStatusToDisplay(item.topic?.status);
+        const progress = calcProgress(item.currentMilestone, templates.length);
+        return { ...item, __status: status, __progress: progress };
+      })
+      .filter((item) => {
+        const q = searchKeyword.toLowerCase();
+        const matchSearch =
+          !q ||
+          item.student?.fullName?.toLowerCase().includes(q) ||
+          item.student?.studentCode?.toLowerCase().includes(q) ||
+          item.topic?.title?.toLowerCase().includes(q) ||
+          item.topic?.topicCode?.toLowerCase().includes(q);
+        const matchStatus =
+          statusFilter === "all" || item.__status === statusFilter;
+        return matchSearch && matchStatus;
+      });
+  }, [rows, searchKeyword, statusFilter, templates.length]);
+
+  const openDetail = async (row: DashboardRowView) => {
+    const studentCode = String(row.student?.studentCode || "").trim();
+    if (!studentCode) {
+      addToast("Không xác định được mã sinh viên để tải chi tiết.", "error");
+      return;
+    }
+
+    setDetailLoading(true);
+    setDetailTab("info");
+    setDetailModal({ isOpen: true, row });
+
+    try {
+      const query = new URLSearchParams();
+      query.append("Page", "0");
+      query.append("PageSize", "10");
+      query.append("StudentCode", studentCode);
+
+      const response = await fetchData<ApiResponse<DashboardDataPayload>>(
+        `/reports/student/dashboard/get-list?${query.toString()}`,
+        { method: "GET" },
+      );
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.message || "Không thể tải chi tiết sinh viên.");
+      }
+
+      const payload = response.data;
+      const firstItem = normalizeItems(payload.items)[0];
+      if (firstItem) {
+        setDetailModal({ isOpen: true, row: { ...firstItem, __status: row.__status, __progress: row.__progress } });
+      }
+    } catch (error) {
+      addToast(
+        error instanceof Error ? error.message : "Không thể tải chi tiết sinh viên.",
+        "error",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setDetailModal({ isOpen: false });
+  };
+
   const openCreate = async () => {
     try {
-      const { data } = await requestApiData<RecordData>(
+      const { data } = await requestApiData<Record<string, unknown>>(
         "/StudentProfiles/get-create",
         { method: "GET" },
         "Không thể tải mẫu tạo mới.",
@@ -262,63 +405,43 @@ const StudentProfilesManagement: React.FC = () => {
     } catch {
       setFormValues(toFormRecord({}));
     }
-    setSelectedRow(null);
+    setEditingCode("");
     setActiveModal("create");
   };
 
-  const openEdit = async (row: RecordData) => {
-    const code = String(row.studentCode ?? "").trim();
+  const openEdit = async (row: DashboardRowView) => {
+    const code = String(row.student?.studentCode || "").trim();
     if (!code) {
-      addToast("Không xác định được studentCode để cập nhật.", "error");
+      addToast("Không xác định được mã sinh viên để cập nhật.", "error");
       return;
     }
     try {
-      const { data } = await requestApiData<RecordData>(
+      const { data } = await requestApiData<Record<string, unknown>>(
         `/StudentProfiles/get-update/${encodeURIComponent(code)}`,
         { method: "GET" },
         "Không thể tải dữ liệu cập nhật.",
       );
-      setFormValues(toFormRecord(data || row));
-      setSelectedRow(row);
+      setFormValues(toFormRecord(data || {}));
+      setEditingCode(code);
       setActiveModal("edit");
     } catch (error) {
       addToast(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải dữ liệu cập nhật.",
+        error instanceof Error ? error.message : "Không thể tải dữ liệu cập nhật.",
         "error",
       );
     }
   };
 
-  const openDetail = async (row: RecordData) => {
-    const code = String(row.studentCode ?? "").trim();
+  const handleDelete = async (row: DashboardRowView) => {
+    const code = String(row.student?.studentCode || "").trim();
     if (!code) {
-      setSelectedRow(row);
-      setActiveModal("detail");
+      addToast("Không xác định được mã sinh viên để xóa.", "error");
       return;
     }
 
-    try {
-      const { data } = await requestApiData<RecordData>(
-        `/StudentProfiles/get-detail/${encodeURIComponent(code)}`,
-        { method: "GET" },
-        "Không thể tải chi tiết sinh viên.",
-      );
-      setSelectedRow(data);
-    } catch {
-      setSelectedRow(row);
-    }
-    setActiveModal("detail");
-  };
-
-  const handleDelete = async (row: RecordData) => {
-    const code = String(row.studentCode ?? "").trim();
-    if (!code) {
-      addToast("Không xác định được studentCode để xóa.", "error");
+    if (!window.confirm("Bạn chắc chắn muốn xóa bản ghi này?")) {
       return;
     }
-    if (!window.confirm("Bạn chắc chắn muốn xóa bản ghi này?")) return;
 
     try {
       await requestApiData<unknown>(
@@ -327,7 +450,7 @@ const StudentProfilesManagement: React.FC = () => {
         "Không thể xóa bản ghi.",
       );
       addToast("Xóa dữ liệu thành công.", "success");
-      await loadRows();
+      setRefreshTick((prev) => prev + 1);
     } catch (error) {
       addToast(
         error instanceof Error ? error.message : "Không thể xóa bản ghi.",
@@ -338,23 +461,21 @@ const StudentProfilesManagement: React.FC = () => {
 
   const handleSubmit = async () => {
     const payload = toPayload(formValues);
-    const required = fields.find((field) => {
+    const requiredField = profileFields.find((field) => {
       if (!field.required) return false;
       const value = payload[field.name];
-      return (
-        value === null || value === undefined || String(value).trim() === ""
-      );
+      return !value || String(value).trim() === "";
     });
 
-    if (required) {
-      addToast(`Trường ${required.label} là bắt buộc.`, "warning");
+    if (requiredField) {
+      addToast(`Trường ${requiredField.label} là bắt buộc.`, "warning");
       return;
     }
 
     setIsSubmitting(true);
     try {
       if (activeModal === "create") {
-        await requestApiData<RecordData>(
+        await requestApiData<unknown>(
           "/StudentProfiles/create",
           { method: "POST", body: payload },
           "Không thể tạo bản ghi.",
@@ -362,10 +483,9 @@ const StudentProfilesManagement: React.FC = () => {
         addToast("Tạo mới thành công.", "success");
       }
 
-      if (activeModal === "edit" && selectedRow) {
-        const code = String(selectedRow.studentCode ?? "").trim();
-        await requestApiData<RecordData>(
-          `/StudentProfiles/update/${encodeURIComponent(code)}`,
+      if (activeModal === "edit") {
+        await requestApiData<unknown>(
+          `/StudentProfiles/update/${encodeURIComponent(editingCode)}`,
           { method: "PUT", body: payload },
           "Không thể cập nhật bản ghi.",
         );
@@ -373,7 +493,7 @@ const StudentProfilesManagement: React.FC = () => {
       }
 
       setActiveModal(null);
-      await loadRows();
+      setRefreshTick((prev) => prev + 1);
     } catch (error) {
       addToast(
         error instanceof Error ? error.message : "Không thể lưu dữ liệu.",
@@ -384,262 +504,188 @@ const StudentProfilesManagement: React.FC = () => {
     }
   };
 
-  const resetFilters = () => {
-    setSearchInput("");
-    setSearchKeyword("");
-    setAdvancedFilters(
-      filterFields.reduce<Record<string, string>>((acc, field) => {
-        acc[field.name] = "";
-        return acc;
-      }, {}),
-    );
-    setPage(1);
-  };
+  const detailStudent = detailModal.row;
+  const detailTopicTags = detailStudent?.topicTags ?? [];
+  const detailSupervisorTags = detailStudent?.supervisorTags ?? [];
+  const detailMilestones = useMemo(() => {
+    const codes = ["MS_REG", "MS_PROG1", "MS_PROG2", "MS_FULL", "MS_DEF"];
+    const currentCode = detailStudent?.currentMilestone?.milestoneTemplateCode || "";
+    const currentOrdinal = Number(detailStudent?.currentMilestone?.ordinal || 0);
+    return codes.map((code, index) => {
+      const ordinal = index + 1;
+      const isCompleted = currentOrdinal > ordinal;
+      const isCurrent = code === currentCode;
+      return {
+        code,
+        label: getMilestoneLabel(code),
+        ordinal,
+        isCompleted,
+        isCurrent,
+      };
+    });
+  }, [detailStudent?.currentMilestone?.milestoneTemplateCode, detailStudent?.currentMilestone?.ordinal]);
 
   return (
-    <div className="admin-dashboard student-profiles-module">
-      <div className="dashboard-header">
-        <h1>Quản lý sinh viên</h1>
-        <p>
-          Dữ liệu chuẩn theo schema StudentProfiles (studentCode, classCode,
-          facultyCode, gpa, academicStanding...).
-        </p>
+    <div className="student-profiles-module">
+      <div className="spm-header">
+        <h1>
+          <Users size={30} color="#F37021" /> Danh sách sinh viên
+        </h1>
+        <p>Hiển thị theo dashboard báo cáo sinh viên và tiến độ đề tài.</p>
       </div>
 
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          padding: 16,
-          marginBottom: 20,
-          display: "grid",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 300px",
+      <div className="spm-toolbar">
+        <div className="spm-search-wrap">
+          <Search size={16} />
+          <input
+            value={searchInput}
+            onChange={(event) => {
+              setSearchInput(event.target.value);
             }}
-          >
-            <Search size={16} color="#64748b" />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Tìm kiếm nhanh..."
-              style={{
-                width: "100%",
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "9px 12px",
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedFilters((prev) => !prev)}
-              style={{
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
-            >
-              <Filter size={16} />{" "}
-              {showAdvancedFilters ? "Ẩn lọc" : "Lọc nâng cao"}
-            </button>
-            <ImportExportActions
-              moduleName="students"
-              moduleLabel="Quản lý sinh viên"
-              onImportSuccess={loadRows}
-            />
-            <button
-              type="button"
-              onClick={openCreate}
-              style={{
-                border: "none",
-                background: "#f37021",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "9px 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={16} /> Thêm mới
-            </button>
-          </div>
+            placeholder="Tìm kiếm sinh viên, đề tài, mã đề tài..."
+          />
         </div>
 
-        {showAdvancedFilters && (
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              padding: 12,
-              display: "grid",
-              gap: 10,
-              background: "#f8fafc",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-                gap: 10,
+        <div className="spm-actions-wrap">
+          <button type="button" className="spm-create-btn" onClick={openCreate}>
+            <Plus size={14} /> Thêm mới
+          </button>
+          <div className="spm-filter-wrap">
+            <Filter size={16} />
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
               }}
             >
-              {filterFields.map((field) => (
-                <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}
-                  >
-                    {field.label}
-                  </span>
-                  <input
-                    type={
-                      field.type === "number"
-                        ? "number"
-                        : field.type === "date"
-                          ? "date"
-                          : "text"
-                    }
-                    value={advancedFilters[field.name] ?? ""}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setAdvancedFilters((prev) => ({
-                        ...prev,
-                        [field.name]: next,
-                      }));
-                      setPage(1);
-                    }}
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                      background: "#fff",
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div
-              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-            >
-              <button
-                type="button"
-                onClick={resetFilters}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                }}
-              >
-                Xóa bộ lọc
-              </button>
-            </div>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="approved">Đã duyệt</option>
+              <option value="revision">Cần sửa đổi</option>
+              <option value="rejected">Từ chối</option>
+            </select>
           </div>
-        )}
+          <ImportExportActions
+            moduleName="students"
+            moduleLabel="Quản lý sinh viên"
+            onImportSuccess={() => {
+              setPage(1);
+              setRefreshTick((prev) => prev + 1);
+            }}
+          />
+        </div>
       </div>
 
-      <div className="recent-topics-section" style={{ overflowX: "auto" }}>
-        <table className="topics-table">
+      <div className="spm-table-wrap">
+        <table className="spm-table">
           <thead>
             <tr>
-              {columns.map((column) => (
-                <th key={column.key}>{column.label}</th>
-              ))}
-              <th style={{ textAlign: "center" }}>Thao tác</th>
+              <th>SINH VIÊN</th>
+              <th>LIÊN HỆ</th>
+              <th>ĐỀ TÀI</th>
+              <th>TRẠNG THÁI</th>
+              <th>TIẾN ĐỘ</th>
+              <th>NGÀY ĐĂNG KÝ</th>
+              <th>THAO TÁC</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length + 1}>Đang tải dữ liệu...</td>
+                <td colSpan={7}>Đang tải dữ liệu...</td>
               </tr>
-            ) : rows.length === 0 ? (
+            ) : rowsView.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1}>Không có dữ liệu.</td>
+                <td colSpan={7}>Không có dữ liệu.</td>
               </tr>
             ) : (
-              rows.map((row, index) => (
-                <tr key={`students-${index}-${String(row.studentCode ?? "")}`}>
-                  {columns.map((column) => (
-                    <td key={`${column.key}-${index}`}>
-                      {toDisplay(getColumnValue(row, column))}
-                    </td>
-                  ))}
+              rowsView.map((row) => (
+                <tr
+                  key={`${row.student.studentProfileID}-${row.topic.topicID}`}
+                  className="spm-row"
+                >
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: 8,
-                      }}
-                    >
+                    <div className="spm-student-cell">
+                      <div className="spm-avatar-wrap">
+                        {row.student.studentImage ? (
+                          <img
+                            src={getAvatarUrl(row.student.studentImage)}
+                            alt={row.student.fullName}
+                            className="spm-avatar"
+                          />
+                        ) : (
+                          <div className="spm-avatar-fallback">
+                            {row.student.fullName?.charAt(0) || "S"}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="spm-student-name">{row.student.fullName}</div>
+                        <div className="spm-student-code">{row.student.studentCode}</div>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td>
+                    <div className="spm-muted">{row.student.studentEmail || "--"}</div>
+                    <div className="spm-subtle">{row.student.phoneNumber || "--"}</div>
+                  </td>
+
+                  <td>
+                    <div className="spm-topic-title">{row.topic.title}</div>
+                    <div className="spm-subtle">{row.topic.topicCode}</div>
+                  </td>
+
+                  <td>
+                    <span className={`spm-status spm-status-${row.__status}`}>
+                      {row.__status === "approved" && <CheckCircle size={14} />}
+                      {row.__status === "pending" && <Clock size={14} />}
+                      {(row.__status === "revision" || row.__status === "rejected") && (
+                        <AlertCircle size={14} />
+                      )}
+                      {getStatusText(row.__status)}
+                    </span>
+                  </td>
+
+                  <td>
+                    <div className="spm-progress-cell">
+                      <div className="spm-progress-track">
+                        <div
+                          className="spm-progress-fill"
+                          style={{ width: `${row.__progress}%` }}
+                        />
+                      </div>
+                      <strong>{row.__progress}%</strong>
+                    </div>
+                  </td>
+
+                  <td>{formatDate(row.topic.createdAt)}</td>
+
+                  <td>
+                    <div className="spm-action-buttons">
                       <button
                         type="button"
+                        className="spm-detail-btn"
                         onClick={() => void openDetail(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
-                        title="Chi tiết"
                       >
                         <Eye size={14} />
                       </button>
                       <button
                         type="button"
+                        className="spm-edit-btn"
                         onClick={() => void openEdit(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
-                        title="Cập nhật"
                       >
                         <Edit size={14} />
+                    
                       </button>
                       <button
                         type="button"
+                        className="spm-delete-btn"
                         onClick={() => void handleDelete(row)}
-                        style={{
-                          border: "1px solid #fecaca",
-                          color: "#b91c1c",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
-                        title="Xóa"
                       >
-                        <Trash2 size={14} />
+                        <Trash size={14} />
+                   
                       </button>
                     </div>
                   </td>
@@ -648,272 +694,330 @@ const StudentProfilesManagement: React.FC = () => {
             )}
           </tbody>
         </table>
+      </div>
 
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Tổng bản ghi: <strong>{totalCount}</strong>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span style={{ color: "#64748b", fontSize: 13 }}>Page size</span>
-              <select
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
-                }}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
+      <div className="spm-paging">
+        <div>
+          Tổng bản ghi: <strong>{totalCount}</strong>
+        </div>
+        <div className="spm-paging-controls">
+          <label>
+            Page size
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
               }}
             >
-              Trước
-            </button>
-            <span style={{ minWidth: 94, textAlign: "center", fontSize: 13 }}>
-              Trang {page} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={page >= pageCount || isLoading}
-              onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Sau
-            </button>
-          </div>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            disabled={page <= 1 || isLoading}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          >
+            Trước
+          </button>
+          <span>
+            Trang {page} / {pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={page >= pageCount || isLoading}
+            onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
+          >
+            Sau
+          </button>
         </div>
       </div>
 
+      {detailModal.isOpen && detailModal.row && (
+        <div className="spm-modal-overlay" onClick={closeDetail}>
+          <div className="spm-modal spm-detail-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="spm-close" onClick={closeDetail}>
+              x
+            </button>
+
+            <div className="spm-detail-shell">
+              <div className="spm-detail-header">
+                <div className="spm-detail-header-left">
+                  {detailModal.row.student.studentImage ? (
+                    <img
+                      src={getAvatarUrl(detailModal.row.student.studentImage)}
+                      alt={detailModal.row.student.fullName}
+                      className="spm-avatar-lg"
+                    />
+                  ) : (
+                    <div className="spm-avatar-fallback spm-avatar-lg-fallback">
+                      {detailModal.row.student.fullName?.charAt(0) || "S"}
+                    </div>
+                  )}
+                  <div className="spm-detail-header-text">
+                    <h3>{detailModal.row.student.fullName}</h3>
+                    <p>
+                      {detailModal.row.student.studentCode} • {detailModal.row.student.userCode}
+                    </p>
+                    <div className="spm-detail-subline">
+                      <span className={`spm-status spm-status-${detailModal.row.__status}`}>
+                        {detailModal.row.student.status || getStatusText(detailModal.row.__status)}
+                      </span>
+                      <span className="spm-detail-gpa">GPA {detailModal.row.student.gpa ?? "--"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="spm-detail-header-actions">
+                  <button
+                    type="button"
+                    className="spm-edit-btn"
+                    onClick={() => void openEdit(detailModal.row as DashboardRowView)}
+                  >
+                    <Edit size={13} />
+                    Sửa
+                  </button>
+                  <button
+                    type="button"
+                    className="spm-detail-btn spm-topic-view-btn"
+                    onClick={() => setDetailTab("topic")}
+                  >
+                    Xem đề tài
+                  </button>
+                  <button type="button" className="spm-delete-btn" onClick={closeDetail}>
+                    Đóng
+                  </button>
+                </div>
+              </div>
+
+              <div className="spm-detail-tabs">
+                <button
+                  type="button"
+                  className={detailTab === "info" ? "is-active" : ""}
+                  onClick={() => setDetailTab("info")}
+                >
+                  <User size={14} />
+                  Thông tin
+                </button>
+                <button
+                  type="button"
+                  className={detailTab === "topic" ? "is-active" : ""}
+                  onClick={() => setDetailTab("topic")}
+                >
+                  <BookOpen size={14} />
+                  Đề tài
+                </button>
+                <button
+                  type="button"
+                  className={detailTab === "progress" ? "is-active" : ""}
+                  onClick={() => setDetailTab("progress")}
+                >
+                  <ChartColumnIncreasing size={14} />
+                  Tiến độ
+                </button>
+              </div>
+
+              <div className="spm-detail-body">
+                {detailLoading ? (
+                  <div className="spm-detail-loading">Đang tải chi tiết...</div>
+                ) : (
+                  <>
+                    {(detailTab === "info" || detailTab === "topic") && (
+                      <div className="spm-detail-columns">
+                        <div className="spm-detail-column">
+                          <div className="spm-detail-section">
+                            <h4>Thông tin cá nhân</h4>
+                            <div className="spm-detail-list">
+                              <div><span>Email</span><strong>{detailModal.row.student.studentEmail || "--"}</strong></div>
+                              <div><span>SĐT</span><strong>{detailModal.row.student.phoneNumber || "--"}</strong></div>
+                              <div><span>Giới tính</span><strong>{detailModal.row.student.gender || "--"}</strong></div>
+                              <div><span>Ngày sinh</span><strong>{formatDate(detailModal.row.student.dateOfBirth) || "--"}</strong></div>
+                              <div><span>Địa chỉ</span><strong>{detailModal.row.student.address || "--"}</strong></div>
+                            </div>
+                          </div>
+
+                          <div className="spm-detail-section">
+                            <h4>Học tập</h4>
+                            <div className="spm-detail-list">
+                              <div><span>Khoa</span><strong>{detailModal.row.student.departmentCode || "--"}</strong></div>
+                              <div><span>Lớp</span><strong>{detailModal.row.student.classCode || "--"}</strong></div>
+                              <div><span>Khóa</span><strong>{detailModal.row.student.enrollmentYear || "--"}</strong></div>
+                              <div><span>GPA</span><strong>{detailModal.row.student.gpa ?? "--"}</strong></div>
+                              <div><span>Academic Standing</span><strong>{detailModal.row.student.academicStanding || "--"}</strong></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="spm-detail-column">
+                          <div className="spm-detail-section spm-topic-hero">
+                            <h4>Đề tài</h4>
+                            <div className="spm-topic-panel">
+                              <strong>{detailModal.row.topic.title}</strong>
+                              <span>{detailModal.row.topic.topicCode}</span>
+                              <span className={`spm-status spm-status-${detailModal.row.__status}`}>
+                                {detailModal.row.topic.status}
+                              </span>
+                              {detailTopicTags.length > 0 && (
+                                <div className="spm-tag-wrap">
+                                  {detailTopicTags.map((tag) => (
+                                    <span key={tag.tagCode} className="spm-tag">
+                                      {tag.tagName}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="spm-detail-section">
+                            <h4>Giảng viên hướng dẫn</h4>
+                            <div className="spm-detail-list">
+                              <div><span>Họ tên</span><strong>{detailModal.row.supervisor?.fullName || "--"}</strong></div>
+                              <div><span>Học vị</span><strong>{detailModal.row.supervisor?.degree || "--"}</strong></div>
+                              <div><span>Email</span><strong>{detailModal.row.supervisor?.email || "--"}</strong></div>
+                              <div><span>SĐT</span><strong>{detailModal.row.supervisor?.phoneNumber || "--"}</strong></div>
+                              <div><span>Hướng dẫn</span><strong>{detailModal.row.supervisor ? `${detailModal.row.supervisor.currentGuidingCount} / ${detailModal.row.supervisor.guideQuota}` : "--"}</strong></div>
+                            </div>
+                            {detailSupervisorTags.length > 0 && (
+                              <div className="spm-tag-wrap">
+                                {detailSupervisorTags.map((tag) => (
+                                  <span key={tag.tagCode} className="spm-tag">
+                                    {tag.tagName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {detailTab === "progress" && (
+                      <div className="spm-progress-panel">
+                        <div className="spm-detail-section">
+                          <h4>Tiến độ</h4>
+                          <div className="spm-progress-hero">
+                            <div className="spm-progress-track spm-progress-track-lg">
+                              <div
+                                className="spm-progress-fill"
+                                style={{ width: `${detailModal.row.__progress}%` }}
+                              />
+                            </div>
+                            <strong>{detailModal.row.__progress}%</strong>
+                          </div>
+                          <div className="spm-progress-meta">
+                            <div><span>Mốc hiện tại</span><strong>{detailModal.row.currentMilestone?.milestoneTemplateCode || "--"}</strong></div>
+                            <div><span>Trạng thái</span><strong>{detailModal.row.currentMilestone?.state || "--"}</strong></div>
+                          </div>
+                        </div>
+
+                        <div className="spm-detail-section">
+                          <h4>Timeline</h4>
+                          <div className="spm-timeline">
+                            {detailMilestones.map((milestone) => (
+                              <div key={milestone.code} className={`spm-timeline-item ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}>
+                                <div className="spm-timeline-icon">
+                                  {milestone.isCompleted ? "✓" : milestone.isCurrent ? "⌛" : ""}
+                                </div>
+                                <div className="spm-timeline-body">
+                                  <strong>{milestone.code} - {milestone.label}</strong>
+                                  <span>{milestone.isCompleted ? "Đã xong" : milestone.isCurrent ? "Đang làm" : "Chưa làm"}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 80,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 860,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>
-                {activeModal === "create" && "Tạo hồ sơ sinh viên"}
-                {activeModal === "edit" && "Cập nhật hồ sơ sinh viên"}
-                {activeModal === "detail" && "Chi tiết hồ sơ sinh viên"}
-              </h3>
+        <div className="spm-modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="spm-modal spm-form-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="spm-close" onClick={() => setActiveModal(null)}>
+              x
+            </button>
+
+            <div className="spm-modal-header">
+              <div>
+                <h3>
+                  {activeModal === "create"
+                    ? "Tạo hồ sơ sinh viên"
+                    : "Cập nhật hồ sơ sinh viên"}
+                </h3>
+                <p>Nhập dữ liệu theo schema StudentProfiles.</p>
+              </div>
             </div>
 
-            {activeModal === "detail" ? (
-              <div
-                style={{
-                  padding: "24px",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                  gap: "16px",
-                  background: "#f8fafc",
-                }}
-              >
-                {Object.entries(selectedRow || {}).map(([key, value]) => {
-                  const strVal = toDisplay(value);
-                  const isLong = strVal.length > 60;
-                  return (
-                    <div
-                      key={key}
-                      style={{
-                        padding: "16px",
-                        background: "#fff",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                        gridColumn: isLong ? "1 / -1" : "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#64748b",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {key}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "15px",
-                          color: "#0f172a",
-                          lineHeight: "1.5",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {strVal || (
-                          <span
-                            style={{ color: "#94a3b8", fontStyle: "italic" }}
-                          >
-                            Trống
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: 16,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                  gap: 12,
-                }}
-              >
-                {fields.map((field) => {
-                  const value = formValues[field.name] ?? "";
-                  return (
-                    <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {field.label}
-                        {field.required ? " *" : ""}
-                      </span>
-                      {field.type === "textarea" ? (
-                        <textarea
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          rows={3}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                            resize: "vertical",
-                          }}
-                        />
-                      ) : (
-                        <input
-                          type={
-                            field.type === "number"
-                              ? "number"
-                              : field.type === "date"
-                                ? "date"
-                                : "text"
-                          }
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                          }}
-                        />
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            )}
+            <div className="spm-form-grid">
+              {profileFields.map((field) => {
+                const value = formValues[field.name] || "";
+                return (
+                  <label key={field.name} className="spm-form-field">
+                    <span>
+                      {field.label}
+                      {field.required ? " *" : ""}
+                    </span>
+                    {field.type === "textarea" ? (
+                      <textarea
+                        value={value}
+                        rows={3}
+                        onChange={(event) =>
+                          setFormValues((prev) => ({
+                            ...prev,
+                            [field.name]: event.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      <input
+                        type={
+                          field.type === "number"
+                            ? "number"
+                            : field.type === "date"
+                              ? "date"
+                              : "text"
+                        }
+                        value={value}
+                        onChange={(event) =>
+                          setFormValues((prev) => ({
+                            ...prev,
+                            [field.name]: event.target.value,
+                          }))
+                        }
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
 
-            <div
-              style={{
-                padding: 16,
-                borderTop: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
+            <div className="spm-form-actions">
               <button
                 type="button"
+                className="spm-cancel-btn"
                 onClick={() => setActiveModal(null)}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "9px 14px",
-                }}
                 disabled={isSubmitting}
               >
                 Đóng
               </button>
-              {activeModal !== "detail" && (
-                <button
-                  type="button"
-                  onClick={() => void handleSubmit()}
-                  disabled={isSubmitting}
-                  style={{
-                    border: "none",
-                    background: "#f37021",
-                    color: "#fff",
-                    borderRadius: 8,
-                    padding: "9px 14px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {isSubmitting ? "Đang lưu..." : "Lưu"}
-                </button>
-              )}
+              <button
+                type="button"
+                className="spm-save-btn"
+                onClick={() => void handleSubmit()}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Đang lưu..." : "Lưu"}
+              </button>
             </div>
           </div>
         </div>
