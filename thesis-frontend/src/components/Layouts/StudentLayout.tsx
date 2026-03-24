@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import StudentNav from "../SideNavs/StudentNav";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut, ChevronDown, User, Menu, X } from "lucide-react";
+import { LogOut, ChevronDown, User, Menu, X, KeyRound } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
@@ -11,6 +11,7 @@ import NotificationBell from "../notifications/NotificationBell";
 
 const StudentLayout: React.FC = () => {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [studentImage, setStudentImage] = useState<string | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -301,50 +302,20 @@ const StudentLayout: React.FC = () => {
               className="student-mobile-logo"
               style={{
                 display: "none",
-                height: "36px",
+                height: "48px",
                 width: "auto",
               }}
             />
 
-            <div
+            <img
+              src="/logo-ios.png"
+              alt="Đại học Đại Nam"
               style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, #f37021, #ff8c42)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 12px rgba(243, 112, 33, 0.2)",
+                height: "50px",
+                width: "auto",
+                objectFit: "contain",
               }}
-            >
-              <User size={20} color="#fff" />
-            </div>
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: "#1a2736",
-                  letterSpacing: "0.5px",
-                  lineHeight: "1.2",
-                }}
-              >
-                Sinh viên Đại học Đại Nam
-              </h2>
-              <p
-                style={{
-                  margin: "4px 0 0 0",
-                  fontSize: 12,
-                  color: "#64748b",
-                  fontWeight: 500,
-                  letterSpacing: "0.3px",
-                }}
-              >
-                Hệ thống Quản lý Đồ án Tốt nghiệp
-              </p>
-            </div>
+            />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -564,8 +535,7 @@ const StudentLayout: React.FC = () => {
                     <button
                       onClick={() => {
                         setShowDropdown(false);
-                        // Navigate to student profile page
-                        window.location.href = "/student/profile";
+                        navigate("/student/profile");
                       }}
                       style={{
                         display: "flex",
@@ -597,6 +567,43 @@ const StudentLayout: React.FC = () => {
                     >
                       <User size={18} color="#64748b" />
                       Thông tin sinh viên
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        navigate("/student/change-password");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        width: "100%",
+                        padding: "14px 18px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#374151",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(243, 112, 33, 0.08)";
+                        e.currentTarget.style.color = "#f37021";
+                        e.currentTarget.style.transform = "translateX(4px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "#374151";
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <KeyRound size={18} color="#64748b" />
+                      Đổi mật khẩu
                     </button>
 
                     <button

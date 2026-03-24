@@ -195,6 +195,8 @@ builder.Services.AddScoped<ISubmitStudentProgressReportCommand, SubmitStudentPro
 builder.Services.AddScoped<IReviewLecturerSubmissionCommand, ReviewLecturerSubmissionCommand>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<ILoginCommand, LoginCommand>();
+builder.Services.AddScoped<IResetPasswordCommand, ResetPasswordCommand>();
+builder.Services.AddScoped<IResetDefaultPasswordCommand, ResetDefaultPasswordCommand>();
 builder.Services.AddScoped<IGetUsersListQuery, GetUsersListQuery>();
 builder.Services.AddScoped<IGetUserDetailQuery, GetUserDetailQuery>();
 builder.Services.AddScoped<IGetUserCreateQuery, GetUserCreateQuery>();

@@ -41,7 +41,9 @@ namespace ThesisManagement.Api.DTOs.Reports.Query
         string? Degree,
         string? Email,
         string? PhoneNumber,
-        string? DepartmentCode);
+        string? DepartmentCode,
+        int? GuideQuota,
+        int? CurrentGuidingCount);
 
     public record ReportSubmissionFileDto(
         int FileID,

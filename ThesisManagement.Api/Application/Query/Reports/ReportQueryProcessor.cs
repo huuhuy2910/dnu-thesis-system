@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ThesisManagement.Api.Application.Common;
+using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.Reports.Query;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
@@ -16,10 +17,12 @@ namespace ThesisManagement.Api.Application.Query.Reports
     public class ReportQueryProcessor : IReportQueryProcessor
     {
         private readonly IUnitOfWork _uow;
+        private readonly ApplicationDbContext _db;
 
-        public ReportQueryProcessor(IUnitOfWork uow)
+        public ReportQueryProcessor(IUnitOfWork uow, ApplicationDbContext db)
         {
             _uow = uow;
+            _db = db;
         }
 
         public async Task<OperationResult<StudentDashboardDto>> GetStudentDashboardAsync(string userCode)
@@ -394,7 +397,15 @@ namespace ThesisManagement.Api.Application.Query.Reports
                 supervisor = await _uow.LecturerProfiles.Query().FirstOrDefaultAsync(x => x.LecturerProfileID == supervisorLecturerProfileId.Value);
             }
 
-            return supervisor == null ? null : MapSupervisor(supervisor);
+            if (supervisor == null)
+                return null;
+
+            var viewCount = await _db.LecturerDashboardView
+                .Where(x => x.LecturerProfileID == supervisor.LecturerProfileID)
+                .Select(x => (int?)x.CurrentGuidingCount)
+                .FirstOrDefaultAsync();
+
+            return MapSupervisor(supervisor, viewCount);
         }
 
         private static ReportTopicDto MapTopic(Topic topic)
@@ -410,7 +421,7 @@ namespace ThesisManagement.Api.Application.Query.Reports
                 topic.CreatedAt,
                 topic.LastUpdated);
 
-        private static ReportSupervisorDto MapSupervisor(LecturerProfile supervisor)
+        private static ReportSupervisorDto MapSupervisor(LecturerProfile supervisor, int? currentGuidingCountOverride = null)
             => new(
                 supervisor.LecturerProfileID,
                 supervisor.LecturerCode,
@@ -418,7 +429,9 @@ namespace ThesisManagement.Api.Application.Query.Reports
                 supervisor.Degree,
                 supervisor.Email,
                 supervisor.PhoneNumber,
-                supervisor.DepartmentCode);
+            supervisor.DepartmentCode,
+            supervisor.GuideQuota,
+            currentGuidingCountOverride ?? supervisor.CurrentGuidingCount);
 
         private static ReportStudentDto MapStudent(StudentProfile student)
             => new(

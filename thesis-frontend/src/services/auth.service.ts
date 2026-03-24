@@ -13,6 +13,16 @@ export interface LoginResult {
   raw?: unknown; // raw data from API.data
 }
 
+export interface ResetPasswordRequest {
+  userCode: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResult {
+  userCode: string;
+  message: string;
+}
+
 function extractUserFromApiData(data: unknown): User | null {
   if (!data || typeof data !== "object") return null;
   const obj = data as Record<string, unknown>;
@@ -77,4 +87,16 @@ export function parseLoginResponse(resp: ApiResponse<unknown>): LoginResult {
   }
 
   return { user, raw };
+}
+
+export async function resetPassword(
+  payload: ResetPasswordRequest,
+): Promise<ApiResponse<ResetPasswordResult>> {
+  return await fetchData<ApiResponse<ResetPasswordResult>>(
+    "/Auth/reset-password",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
 }

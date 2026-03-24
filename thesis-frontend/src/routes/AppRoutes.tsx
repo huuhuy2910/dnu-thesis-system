@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import LoginPage from "../pages/auth/LoginPage";
+import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import Forbidden from "../pages/Forbidden";
 import StudentLayout from "../components/Layouts/StudentLayout";
 import LecturerLayout from "../components/Layouts/LecturerLayout";
@@ -67,6 +68,7 @@ const AppRoutes: React.FC = () => {
           <Route path="notifications" element={<Notifications />} />
           <Route path="defense-info" element={<StudentDefenseInfo />} />
           <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
           {/* thêm các route con của student ở đây */}
         </Route>
 
@@ -87,6 +89,7 @@ const AppRoutes: React.FC = () => {
           <Route path="topic-review" element={<LecturerTopicReviewPage />} />
           <Route path="workflow-audits" element={<TopicWorkflowAudits />} />
           <Route path="profile" element={<LecturerProfilePage />} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
           <Route path="notifications" element={<LecturerNotifications />} />
           {/* thêm các route con của lecturer ở đây */}
         </Route>

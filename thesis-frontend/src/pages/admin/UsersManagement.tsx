@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Eye,
+  KeyRound,
   Search,
   Trash2,
   UserPlus,
@@ -149,6 +150,7 @@ const UsersManagement: React.FC = () => {
   const canCreate = hasUserManagementPermission(role, "users:create");
   const canUpdateRole = hasUserManagementPermission(role, "users:update-role");
   const canDelete = hasUserManagementPermission(role, "users:delete");
+  const canResetDefaultPassword = role === "ADMIN";
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -501,6 +503,47 @@ const UsersManagement: React.FC = () => {
     }
   };
 
+  const resetDefaultPassword = async (row: UserRow) => {
+    if (!canResetDefaultPassword) return;
+
+    const userCode = String(row.userCode ?? "").trim();
+    if (!userCode) {
+      addToast("Không xác định được userCode.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bạn có chắc muốn reset mật khẩu mặc định cho ${userCode}? Mật khẩu mới sẽ bằng userCode.`,
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      const { data } = await requestApi<{
+        userCode: string;
+        defaultPassword?: string;
+        message?: string;
+      }>(
+        "/Auth/reset-password-default",
+        {
+          method: "POST",
+          body: { userCode },
+        },
+        "Không thể reset mật khẩu mặc định.",
+      );
+
+      addToast(
+        data?.message ||
+          `Đã đặt lại mật khẩu mặc định cho ${data?.userCode || userCode}.`,
+        "success",
+      );
+    } catch (error) {
+      handleApiError(error, "Không thể reset mật khẩu mặc định.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!canList) {
     return <Navigate to="/403" replace />;
   }
@@ -721,6 +764,22 @@ const UsersManagement: React.FC = () => {
                             }}
                           >
                             <Trash2 size={14} />
+                          </button>
+                        )}
+                        {canResetDefaultPassword && (
+                          <button
+                            type="button"
+                            onClick={() => void resetDefaultPassword(row)}
+                            title="Reset mật khẩu mặc định"
+                            style={{
+                              border: "1px solid #fdba74",
+                              background: "#fff",
+                              color: "#c2410c",
+                              borderRadius: 8,
+                              padding: 6,
+                            }}
+                          >
+                            <KeyRound size={14} />
                           </button>
                         )}
                       </div>

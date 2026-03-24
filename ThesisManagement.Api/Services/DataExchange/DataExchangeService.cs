@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 using ThesisManagement.Api.DTOs.DataExchange;
 using ThesisManagement.Api.Models;
@@ -11,11 +12,13 @@ namespace ThesisManagement.Api.Services.DataExchange
     {
         private readonly IUnitOfWork _uow;
         private readonly ICodeGenerator _codeGenerator;
+        private readonly IAuthService _authService;
 
-        public DataExchangeService(IUnitOfWork uow, ICodeGenerator codeGenerator)
+        public DataExchangeService(IUnitOfWork uow, ICodeGenerator codeGenerator, IAuthService authService)
         {
             _uow = uow;
             _codeGenerator = codeGenerator;
+            _authService = authService;
             ExcelPackage.License.SetNonCommercialPersonal("ThesisManagement.Api");
         }
 
@@ -119,9 +122,10 @@ namespace ThesisManagement.Api.Services.DataExchange
         private async Task<UpsertAction> UpsertStudentAsync(Dictionary<string, string> row)
         {
             var studentCode = Get(row, "studentCode");
-            var userCode = Required(row, "userCode");
+            var effectiveStudentCode = string.IsNullOrWhiteSpace(studentCode) ? _codeGenerator.Generate("STU") : studentCode!.Trim();
+            var effectiveUserCode = effectiveStudentCode;
 
-            var user = await _uow.Users.GetByCodeAsync(userCode) ?? throw new InvalidOperationException($"User '{userCode}' not found");
+            var user = await EnsureImportUserAsync(effectiveUserCode, effectiveStudentCode, "Student");
             var departmentCode = Get(row, "departmentCode");
             var department = !string.IsNullOrWhiteSpace(departmentCode)
                 ? await _uow.Departments.GetByCodeAsync(departmentCode)
@@ -137,7 +141,7 @@ namespace ThesisManagement.Api.Services.DataExchange
             {
                 entity = new StudentProfile
                 {
-                    StudentCode = string.IsNullOrWhiteSpace(studentCode) ? _codeGenerator.Generate("STU") : studentCode,
+                    StudentCode = effectiveStudentCode,
                     UserCode = user.UserCode,
                     UserID = user.UserID,
                     DepartmentCode = department?.DepartmentCode,
@@ -187,9 +191,10 @@ namespace ThesisManagement.Api.Services.DataExchange
         private async Task<UpsertAction> UpsertLecturerAsync(Dictionary<string, string> row)
         {
             var lecturerCode = Get(row, "lecturerCode");
-            var userCode = Required(row, "userCode");
+            var effectiveLecturerCode = string.IsNullOrWhiteSpace(lecturerCode) ? _codeGenerator.Generate("LEC") : lecturerCode!.Trim();
+            var effectiveUserCode = effectiveLecturerCode;
 
-            var user = await _uow.Users.GetByCodeAsync(userCode) ?? throw new InvalidOperationException($"User '{userCode}' not found");
+            var user = await EnsureImportUserAsync(effectiveUserCode, effectiveLecturerCode, "Lecturer");
             var departmentCode = Get(row, "departmentCode");
             var department = !string.IsNullOrWhiteSpace(departmentCode)
                 ? await _uow.Departments.GetByCodeAsync(departmentCode)
@@ -205,7 +210,7 @@ namespace ThesisManagement.Api.Services.DataExchange
             {
                 entity = new LecturerProfile
                 {
-                    LecturerCode = string.IsNullOrWhiteSpace(lecturerCode) ? _codeGenerator.Generate("LEC") : lecturerCode,
+                    LecturerCode = effectiveLecturerCode,
                     UserCode = user.UserCode,
                     UserID = user.UserID,
                     DepartmentCode = department?.DepartmentCode,
@@ -250,6 +255,42 @@ namespace ThesisManagement.Api.Services.DataExchange
             _uow.LecturerProfiles.Update(entity);
             await _uow.SaveChangesAsync();
             return UpsertAction.Updated;
+        }
+
+        private async Task<User> EnsureImportUserAsync(string userCode, string passwordSeed, string expectedRole)
+        {
+            if (string.IsNullOrWhiteSpace(userCode))
+                throw new InvalidOperationException("UserCode is required");
+
+            var normalizedCode = userCode.Trim();
+            var user = await _uow.Users.Query()
+                .FirstOrDefaultAsync(x => x.UserCode == normalizedCode);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    UserCode = normalizedCode,
+                    PasswordHash = _authService.HashPassword(passwordSeed),
+                    Role = expectedRole,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                await _uow.Users.AddAsync(user);
+                await _uow.SaveChangesAsync();
+                return user;
+            }
+
+            if (!string.Equals(user.Role, expectedRole, StringComparison.OrdinalIgnoreCase))
+            {
+                user.Role = expectedRole;
+                user.LastUpdated = DateTime.UtcNow;
+                _uow.Users.Update(user);
+                await _uow.SaveChangesAsync();
+            }
+
+            return user;
         }
 
         private async Task<UpsertAction> UpsertDepartmentAsync(Dictionary<string, string> row)

@@ -55,6 +55,7 @@ namespace ThesisManagement.Api.Data
         public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
         public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
         public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
+        public DbSet<LecturerDashboardView> LecturerDashboardView => Set<LecturerDashboardView>();
         
         // System Activity Logs
         public DbSet<SystemActivityLog> SystemActivityLogs => Set<SystemActivityLog>();
@@ -748,6 +749,24 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => new { x.OutboxStatus, x.CreatedAt }).HasDatabaseName("IX_NOTIF_OUTBOX_STATUS_CREATED_AT");
             });
 
+            modelBuilder.Entity<LecturerDashboardView>(b =>
+            {
+                b.HasNoKey();
+                b.ToView("V_LECTURER_DASHBOARD");
+
+                b.Property(x => x.LecturerProfileID).HasColumnName("LECTURERPROFILEID");
+                b.Property(x => x.LecturerCode).HasColumnName("LECTURERCODE");
+                b.Property(x => x.FullName).HasColumnName("FULLNAME");
+                b.Property(x => x.DepartmentCode).HasColumnName("DEPARTMENTCODE");
+                b.Property(x => x.Degree).HasColumnName("DEGREE");
+                b.Property(x => x.GuideQuota).HasColumnName("GUIDEQUOTA");
+                b.Property(x => x.DefenseQuota).HasColumnName("DEFENSEQUOTA");
+                b.Property(x => x.Email).HasColumnName("EMAIL");
+                b.Property(x => x.PhoneNumber).HasColumnName("PHONENUMBER");
+                b.Property(x => x.ProfileImage).HasColumnName("PROFILEIMAGE");
+                b.Property(x => x.CurrentGuidingCount).HasColumnName("CURRENTGUIDINGCOUNT");
+            });
+
             // TopicWorkflowAudit
             modelBuilder.Entity<TopicWorkflowAudit>(b =>
             {
@@ -847,7 +866,8 @@ namespace ThesisManagement.Api.Data
                     || string.Equals(normalizedTableName, "NOTIFICATIONS", StringComparison.Ordinal)
                     || string.Equals(normalizedTableName, "NOTIFICATION_RECIPIENTS", StringComparison.Ordinal)
                     || string.Equals(normalizedTableName, "NOTIFICATION_PREFERENCES", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "NOTIFICATION_OUTBOX", StringComparison.Ordinal))
+                    || string.Equals(normalizedTableName, "NOTIFICATION_OUTBOX", StringComparison.Ordinal)
+                    || string.Equals(normalizedTableName, "V_LECTURER_DASHBOARD", StringComparison.Ordinal))
                 {
                     continue;
                 }
