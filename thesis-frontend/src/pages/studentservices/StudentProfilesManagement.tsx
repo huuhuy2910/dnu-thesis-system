@@ -147,7 +147,9 @@ function toFormRecord(data: Record<string, unknown>): Record<string, string> {
   }, {});
 }
 
-function toPayload(formValues: Record<string, string>): Record<string, unknown> {
+function toPayload(
+  formValues: Record<string, string>,
+): Record<string, unknown> {
   return profileFields.reduce<Record<string, unknown>>((acc, field) => {
     const raw = (formValues[field.name] ?? "").trim();
     if (!raw) {
@@ -298,7 +300,9 @@ const StudentProfilesManagement: React.FC = () => {
         );
 
         if (!response?.success || !response.data) {
-          throw new Error(response?.message || "Không thể tải danh sách sinh viên.");
+          throw new Error(
+            response?.message || "Không thể tải danh sách sinh viên.",
+          );
         }
 
         const payload = response.data;
@@ -310,7 +314,9 @@ const StudentProfilesManagement: React.FC = () => {
         );
       } catch (error) {
         addToast(
-          error instanceof Error ? error.message : "Không thể tải danh sách sinh viên.",
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách sinh viên.",
           "error",
         );
         setRows([]);
@@ -372,17 +378,28 @@ const StudentProfilesManagement: React.FC = () => {
       );
 
       if (!response?.success || !response.data) {
-        throw new Error(response?.message || "Không thể tải chi tiết sinh viên.");
+        throw new Error(
+          response?.message || "Không thể tải chi tiết sinh viên.",
+        );
       }
 
       const payload = response.data;
       const firstItem = normalizeItems(payload.items)[0];
       if (firstItem) {
-        setDetailModal({ isOpen: true, row: { ...firstItem, __status: row.__status, __progress: row.__progress } });
+        setDetailModal({
+          isOpen: true,
+          row: {
+            ...firstItem,
+            __status: row.__status,
+            __progress: row.__progress,
+          },
+        });
       }
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải chi tiết sinh viên.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải chi tiết sinh viên.",
         "error",
       );
     } finally {
@@ -426,7 +443,9 @@ const StudentProfilesManagement: React.FC = () => {
       setActiveModal("edit");
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải dữ liệu cập nhật.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải dữ liệu cập nhật.",
         "error",
       );
     }
@@ -509,8 +528,11 @@ const StudentProfilesManagement: React.FC = () => {
   const detailSupervisorTags = detailStudent?.supervisorTags ?? [];
   const detailMilestones = useMemo(() => {
     const codes = ["MS_REG", "MS_PROG1", "MS_PROG2", "MS_FULL", "MS_DEF"];
-    const currentCode = detailStudent?.currentMilestone?.milestoneTemplateCode || "";
-    const currentOrdinal = Number(detailStudent?.currentMilestone?.ordinal || 0);
+    const currentCode =
+      detailStudent?.currentMilestone?.milestoneTemplateCode || "";
+    const currentOrdinal = Number(
+      detailStudent?.currentMilestone?.ordinal || 0,
+    );
     return codes.map((code, index) => {
       const ordinal = index + 1;
       const isCompleted = currentOrdinal > ordinal;
@@ -523,7 +545,10 @@ const StudentProfilesManagement: React.FC = () => {
         isCurrent,
       };
     });
-  }, [detailStudent?.currentMilestone?.milestoneTemplateCode, detailStudent?.currentMilestone?.ordinal]);
+  }, [
+    detailStudent?.currentMilestone?.milestoneTemplateCode,
+    detailStudent?.currentMilestone?.ordinal,
+  ]);
 
   return (
     <div className="student-profiles-module">
@@ -621,15 +646,23 @@ const StudentProfilesManagement: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <div className="spm-student-name">{row.student.fullName}</div>
-                        <div className="spm-student-code">{row.student.studentCode}</div>
+                        <div className="spm-student-name">
+                          {row.student.fullName}
+                        </div>
+                        <div className="spm-student-code">
+                          {row.student.studentCode}
+                        </div>
                       </div>
                     </div>
                   </td>
 
                   <td>
-                    <div className="spm-muted">{row.student.studentEmail || "--"}</div>
-                    <div className="spm-subtle">{row.student.phoneNumber || "--"}</div>
+                    <div className="spm-muted">
+                      {row.student.studentEmail || "--"}
+                    </div>
+                    <div className="spm-subtle">
+                      {row.student.phoneNumber || "--"}
+                    </div>
                   </td>
 
                   <td>
@@ -641,7 +674,8 @@ const StudentProfilesManagement: React.FC = () => {
                     <span className={`spm-status spm-status-${row.__status}`}>
                       {row.__status === "approved" && <CheckCircle size={14} />}
                       {row.__status === "pending" && <Clock size={14} />}
-                      {(row.__status === "revision" || row.__status === "rejected") && (
+                      {(row.__status === "revision" ||
+                        row.__status === "rejected") && (
                         <AlertCircle size={14} />
                       )}
                       {getStatusText(row.__status)}
@@ -677,7 +711,6 @@ const StudentProfilesManagement: React.FC = () => {
                         onClick={() => void openEdit(row)}
                       >
                         <Edit size={14} />
-                    
                       </button>
                       <button
                         type="button"
@@ -685,7 +718,6 @@ const StudentProfilesManagement: React.FC = () => {
                         onClick={() => void handleDelete(row)}
                       >
                         <Trash size={14} />
-                   
                       </button>
                     </div>
                   </td>
@@ -738,7 +770,10 @@ const StudentProfilesManagement: React.FC = () => {
 
       {detailModal.isOpen && detailModal.row && (
         <div className="spm-modal-overlay" onClick={closeDetail}>
-          <div className="spm-modal spm-detail-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="spm-modal spm-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button className="spm-close" onClick={closeDetail}>
               x
             </button>
@@ -760,13 +795,19 @@ const StudentProfilesManagement: React.FC = () => {
                   <div className="spm-detail-header-text">
                     <h3>{detailModal.row.student.fullName}</h3>
                     <p>
-                      {detailModal.row.student.studentCode} • {detailModal.row.student.userCode}
+                      {detailModal.row.student.studentCode} •{" "}
+                      {detailModal.row.student.userCode}
                     </p>
                     <div className="spm-detail-subline">
-                      <span className={`spm-status spm-status-${detailModal.row.__status}`}>
-                        {detailModal.row.student.status || getStatusText(detailModal.row.__status)}
+                      <span
+                        className={`spm-status spm-status-${detailModal.row.__status}`}
+                      >
+                        {detailModal.row.student.status ||
+                          getStatusText(detailModal.row.__status)}
                       </span>
-                      <span className="spm-detail-gpa">GPA {detailModal.row.student.gpa ?? "--"}</span>
+                      <span className="spm-detail-gpa">
+                        GPA {detailModal.row.student.gpa ?? "--"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -775,7 +816,9 @@ const StudentProfilesManagement: React.FC = () => {
                   <button
                     type="button"
                     className="spm-edit-btn"
-                    onClick={() => void openEdit(detailModal.row as DashboardRowView)}
+                    onClick={() =>
+                      void openEdit(detailModal.row as DashboardRowView)
+                    }
                   >
                     <Edit size={13} />
                     Sửa
@@ -787,7 +830,11 @@ const StudentProfilesManagement: React.FC = () => {
                   >
                     Xem đề tài
                   </button>
-                  <button type="button" className="spm-delete-btn" onClick={closeDetail}>
+                  <button
+                    type="button"
+                    className="spm-delete-btn"
+                    onClick={closeDetail}
+                  >
                     Đóng
                   </button>
                 </div>
@@ -831,22 +878,77 @@ const StudentProfilesManagement: React.FC = () => {
                           <div className="spm-detail-section">
                             <h4>Thông tin cá nhân</h4>
                             <div className="spm-detail-list">
-                              <div><span>Email</span><strong>{detailModal.row.student.studentEmail || "--"}</strong></div>
-                              <div><span>SĐT</span><strong>{detailModal.row.student.phoneNumber || "--"}</strong></div>
-                              <div><span>Giới tính</span><strong>{detailModal.row.student.gender || "--"}</strong></div>
-                              <div><span>Ngày sinh</span><strong>{formatDate(detailModal.row.student.dateOfBirth) || "--"}</strong></div>
-                              <div><span>Địa chỉ</span><strong>{detailModal.row.student.address || "--"}</strong></div>
+                              <div>
+                                <span>Email</span>
+                                <strong>
+                                  {detailModal.row.student.studentEmail || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>SĐT</span>
+                                <strong>
+                                  {detailModal.row.student.phoneNumber || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Giới tính</span>
+                                <strong>
+                                  {detailModal.row.student.gender || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Ngày sinh</span>
+                                <strong>
+                                  {formatDate(
+                                    detailModal.row.student.dateOfBirth,
+                                  ) || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Địa chỉ</span>
+                                <strong>
+                                  {detailModal.row.student.address || "--"}
+                                </strong>
+                              </div>
                             </div>
                           </div>
 
                           <div className="spm-detail-section">
                             <h4>Học tập</h4>
                             <div className="spm-detail-list">
-                              <div><span>Khoa</span><strong>{detailModal.row.student.departmentCode || "--"}</strong></div>
-                              <div><span>Lớp</span><strong>{detailModal.row.student.classCode || "--"}</strong></div>
-                              <div><span>Khóa</span><strong>{detailModal.row.student.enrollmentYear || "--"}</strong></div>
-                              <div><span>GPA</span><strong>{detailModal.row.student.gpa ?? "--"}</strong></div>
-                              <div><span>Academic Standing</span><strong>{detailModal.row.student.academicStanding || "--"}</strong></div>
+                              <div>
+                                <span>Khoa</span>
+                                <strong>
+                                  {detailModal.row.student.departmentCode ||
+                                    "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Lớp</span>
+                                <strong>
+                                  {detailModal.row.student.classCode || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Khóa</span>
+                                <strong>
+                                  {detailModal.row.student.enrollmentYear ||
+                                    "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>GPA</span>
+                                <strong>
+                                  {detailModal.row.student.gpa ?? "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Academic Standing</span>
+                                <strong>
+                                  {detailModal.row.student.academicStanding ||
+                                    "--"}
+                                </strong>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -857,7 +959,9 @@ const StudentProfilesManagement: React.FC = () => {
                             <div className="spm-topic-panel">
                               <strong>{detailModal.row.topic.title}</strong>
                               <span>{detailModal.row.topic.topicCode}</span>
-                              <span className={`spm-status spm-status-${detailModal.row.__status}`}>
+                              <span
+                                className={`spm-status spm-status-${detailModal.row.__status}`}
+                              >
                                 {detailModal.row.topic.status}
                               </span>
                               {detailTopicTags.length > 0 && (
@@ -875,11 +979,39 @@ const StudentProfilesManagement: React.FC = () => {
                           <div className="spm-detail-section">
                             <h4>Giảng viên hướng dẫn</h4>
                             <div className="spm-detail-list">
-                              <div><span>Họ tên</span><strong>{detailModal.row.supervisor?.fullName || "--"}</strong></div>
-                              <div><span>Học vị</span><strong>{detailModal.row.supervisor?.degree || "--"}</strong></div>
-                              <div><span>Email</span><strong>{detailModal.row.supervisor?.email || "--"}</strong></div>
-                              <div><span>SĐT</span><strong>{detailModal.row.supervisor?.phoneNumber || "--"}</strong></div>
-                              <div><span>Hướng dẫn</span><strong>{detailModal.row.supervisor ? `${detailModal.row.supervisor.currentGuidingCount} / ${detailModal.row.supervisor.guideQuota}` : "--"}</strong></div>
+                              <div>
+                                <span>Họ tên</span>
+                                <strong>
+                                  {detailModal.row.supervisor?.fullName || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Học vị</span>
+                                <strong>
+                                  {detailModal.row.supervisor?.degree || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Email</span>
+                                <strong>
+                                  {detailModal.row.supervisor?.email || "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>SĐT</span>
+                                <strong>
+                                  {detailModal.row.supervisor?.phoneNumber ||
+                                    "--"}
+                                </strong>
+                              </div>
+                              <div>
+                                <span>Hướng dẫn</span>
+                                <strong>
+                                  {detailModal.row.supervisor
+                                    ? `${detailModal.row.supervisor.currentGuidingCount} / ${detailModal.row.supervisor.guideQuota}`
+                                    : "--"}
+                                </strong>
+                              </div>
                             </div>
                             {detailSupervisorTags.length > 0 && (
                               <div className="spm-tag-wrap">
@@ -903,14 +1035,28 @@ const StudentProfilesManagement: React.FC = () => {
                             <div className="spm-progress-track spm-progress-track-lg">
                               <div
                                 className="spm-progress-fill"
-                                style={{ width: `${detailModal.row.__progress}%` }}
+                                style={{
+                                  width: `${detailModal.row.__progress}%`,
+                                }}
                               />
                             </div>
                             <strong>{detailModal.row.__progress}%</strong>
                           </div>
                           <div className="spm-progress-meta">
-                            <div><span>Mốc hiện tại</span><strong>{detailModal.row.currentMilestone?.milestoneTemplateCode || "--"}</strong></div>
-                            <div><span>Trạng thái</span><strong>{detailModal.row.currentMilestone?.state || "--"}</strong></div>
+                            <div>
+                              <span>Mốc hiện tại</span>
+                              <strong>
+                                {detailModal.row.currentMilestone
+                                  ?.milestoneTemplateCode || "--"}
+                              </strong>
+                            </div>
+                            <div>
+                              <span>Trạng thái</span>
+                              <strong>
+                                {detailModal.row.currentMilestone?.state ||
+                                  "--"}
+                              </strong>
+                            </div>
                           </div>
                         </div>
 
@@ -918,13 +1064,28 @@ const StudentProfilesManagement: React.FC = () => {
                           <h4>Timeline</h4>
                           <div className="spm-timeline">
                             {detailMilestones.map((milestone) => (
-                              <div key={milestone.code} className={`spm-timeline-item ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}>
+                              <div
+                                key={milestone.code}
+                                className={`spm-timeline-item ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}
+                              >
                                 <div className="spm-timeline-icon">
-                                  {milestone.isCompleted ? "✓" : milestone.isCurrent ? "⌛" : ""}
+                                  {milestone.isCompleted
+                                    ? "✓"
+                                    : milestone.isCurrent
+                                      ? "⌛"
+                                      : ""}
                                 </div>
                                 <div className="spm-timeline-body">
-                                  <strong>{milestone.code} - {milestone.label}</strong>
-                                  <span>{milestone.isCompleted ? "Đã xong" : milestone.isCurrent ? "Đang làm" : "Chưa làm"}</span>
+                                  <strong>
+                                    {milestone.code} - {milestone.label}
+                                  </strong>
+                                  <span>
+                                    {milestone.isCompleted
+                                      ? "Đã xong"
+                                      : milestone.isCurrent
+                                        ? "Đang làm"
+                                        : "Chưa làm"}
+                                  </span>
                                 </div>
                               </div>
                             ))}
@@ -942,7 +1103,10 @@ const StudentProfilesManagement: React.FC = () => {
 
       {activeModal && (
         <div className="spm-modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="spm-modal spm-form-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="spm-modal spm-form-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button className="spm-close" onClick={() => setActiveModal(null)}>
               x
             </button>

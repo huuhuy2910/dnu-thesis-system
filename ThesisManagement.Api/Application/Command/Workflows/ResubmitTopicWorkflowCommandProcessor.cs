@@ -109,25 +109,56 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             }
 
             var isNewTopic = existingTopic == null || forceCreate;
+            var effectiveCatalogTopicId = request.CatalogTopicID.HasValue && request.CatalogTopicID.Value > 0
+                ? request.CatalogTopicID
+                : null;
+            var normalizedCatalogTopicCode = string.IsNullOrWhiteSpace(request.CatalogTopicCode)
+                ? null
+                : request.CatalogTopicCode.Trim().ToUpperInvariant();
+
+            if (!string.Equals(request.Type, "SELF", StringComparison.OrdinalIgnoreCase))
+            {
+                CatalogTopic? catalogById = null;
+                CatalogTopic? catalogByCode = null;
+
+                if (effectiveCatalogTopicId.HasValue)
+                {
+                    catalogById = await _uow.CatalogTopics.GetByIdAsync(effectiveCatalogTopicId.Value);
+                    if (catalogById == null)
+                        return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicID is invalid", 400);
+                }
+
+                if (!string.IsNullOrWhiteSpace(normalizedCatalogTopicCode))
+                {
+                    catalogByCode = await _uow.CatalogTopics.Query()
+                        .FirstOrDefaultAsync(x => x.CatalogTopicCode.ToUpper() == normalizedCatalogTopicCode);
+
+                    if (catalogByCode == null)
+                        return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicCode is invalid", 400);
+                }
+
+                if (catalogById != null && catalogByCode != null && catalogById.CatalogTopicID != catalogByCode.CatalogTopicID)
+                {
+                    return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicID and CatalogTopicCode do not match", 400);
+                }
+
+                var resolvedCatalogTopic = catalogById ?? catalogByCode;
+                if (resolvedCatalogTopic != null)
+                {
+                    effectiveCatalogTopicId = resolvedCatalogTopic.CatalogTopicID;
+                    normalizedCatalogTopicCode = resolvedCatalogTopic.CatalogTopicCode;
+                }
+            }
 
             var topic = isNewTopic ? new Topic() : existingTopic!;
 
             if (isNewTopic && !string.Equals(request.Type, "SELF", StringComparison.OrdinalIgnoreCase))
             {
-                var catalogCode = request.CatalogTopicCode?.Trim();
-                if (!string.IsNullOrWhiteSpace(catalogCode))
+                if (!string.IsNullOrWhiteSpace(normalizedCatalogTopicCode))
                 {
                     var catalogCodeUsed = await _uow.Topics.Query()
-                        .AnyAsync(x => x.CatalogTopicCode == catalogCode);
+                        .CountAsync(x => x.CatalogTopicCode == normalizedCatalogTopicCode) > 0;
                     if (catalogCodeUsed)
-                        return OperationResult<TopicWorkflowResultDto>.Failed("Catalog topic already has a registered topic. Please use resubmit for the existing topic.", 409);
-                }
-
-                if (request.CatalogTopicID.HasValue)
-                {
-                    var catalogIdUsed = await _uow.Topics.Query()
-                        .AnyAsync(x => x.CatalogTopicID == request.CatalogTopicID.Value);
-                    if (catalogIdUsed)
                         return OperationResult<TopicWorkflowResultDto>.Failed("Catalog topic already has a registered topic. Please use resubmit for the existing topic.", 409);
                 }
             }
@@ -162,8 +193,8 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                 }
                 else
                 {
-                    topic.CatalogTopicID = request.CatalogTopicID;
-                    topic.CatalogTopicCode = request.CatalogTopicCode;
+                    topic.CatalogTopicID = effectiveCatalogTopicId;
+                    topic.CatalogTopicCode = normalizedCatalogTopicCode;
                 }
 
                 topic.Status = "Đang chờ";
