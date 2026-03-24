@@ -353,6 +353,25 @@ namespace ThesisManagement.Api.Services.DataExchange
             var lecturerCode = Get(row, "lecturerCode");
             var effectiveLecturerCode = string.IsNullOrWhiteSpace(lecturerCode) ? _codeGenerator.Generate("LEC") : lecturerCode!.Trim();
             var effectiveUserCode = effectiveLecturerCode;
+            var hasTagCodesColumn = row.ContainsKey("tagCodes");
+            var rawTagCodes = row.TryGetValue("tagCodes", out var rawValue) ? rawValue : string.Empty;
+            var incomingTagCodes = ParseCodeList(rawTagCodes)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Business rule: if any tagCode does not exist, reject the row.
+            // This avoids FE calling many APIs and keeps import behavior consistent.
+            var existingTagMap = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tagCode in incomingTagCodes)
+            {
+                var tag = await _uow.Tags.GetByCodeAsync(tagCode);
+                if (tag == null)
+                {
+                    throw new InvalidOperationException($"tagCode '{tagCode}' does not exist");
+                }
+
+                existingTagMap[tagCode] = tag;
+            }
 
             var user = await EnsureImportUserAsync(effectiveUserCode, effectiveLecturerCode, "Lecturer");
             var departmentCode = Get(row, "departmentCode");
@@ -392,6 +411,11 @@ namespace ThesisManagement.Api.Services.DataExchange
 
                 await _uow.LecturerProfiles.AddAsync(entity);
                 await _uow.SaveChangesAsync();
+                if (hasTagCodesColumn)
+                {
+                    await SyncLecturerTagsAsync(entity.LecturerProfileID, entity.LecturerCode, incomingTagCodes, existingTagMap, Get(row, "assignedByUserCode"));
+                }
+
                 return UpsertAction.Created;
             }
 
@@ -414,7 +438,85 @@ namespace ThesisManagement.Api.Services.DataExchange
 
             _uow.LecturerProfiles.Update(entity);
             await _uow.SaveChangesAsync();
+
+            if (hasTagCodesColumn)
+            {
+                await SyncLecturerTagsAsync(entity.LecturerProfileID, entity.LecturerCode, incomingTagCodes, existingTagMap, Get(row, "assignedByUserCode"));
+            }
+
             return UpsertAction.Updated;
+        }
+
+        private async Task SyncLecturerTagsAsync(
+            int lecturerProfileId,
+            string lecturerCode,
+            IReadOnlyList<string> incomingTagCodes,
+            IReadOnlyDictionary<string, Tag> existingTagMap,
+            string? assignedByUserCode)
+        {
+            var tagIds = new HashSet<int>();
+            foreach (var tagCode in incomingTagCodes)
+            {
+                if (!existingTagMap.TryGetValue(tagCode, out var tag))
+                    throw new InvalidOperationException($"tagCode '{tagCode}' does not exist");
+
+                tagIds.Add(tag.TagID);
+            }
+
+            int? assignedByUserId = null;
+            string? normalizedAssignedByUserCode = null;
+            if (!string.IsNullOrWhiteSpace(assignedByUserCode))
+            {
+                normalizedAssignedByUserCode = assignedByUserCode.Trim();
+                var assignedByUser = await _uow.Users.GetByCodeAsync(normalizedAssignedByUserCode);
+                if (assignedByUser == null)
+                {
+                    throw new InvalidOperationException($"assignedByUserCode '{normalizedAssignedByUserCode}' does not exist");
+                }
+
+                assignedByUserId = assignedByUser.UserID;
+            }
+
+            var existingLinks = _uow.LecturerTags.Query()
+                .Where(x => x.LecturerProfileID == lecturerProfileId)
+                .ToList();
+
+            foreach (var link in existingLinks)
+            {
+                if (!tagIds.Contains(link.TagID))
+                {
+                    _uow.LecturerTags.Remove(link);
+                }
+            }
+
+            foreach (var tagId in tagIds)
+            {
+                var existing = existingLinks.FirstOrDefault(x => x.TagID == tagId);
+                if (existing != null)
+                {
+                    existing.LecturerCode = lecturerCode;
+                    existing.TagCode = existingTagMap.Values.First(x => x.TagID == tagId).TagCode;
+                    existing.AssignedByUserID = assignedByUserId;
+                    existing.AssignedByUserCode = normalizedAssignedByUserCode;
+                    existing.AssignedAt = DateTime.UtcNow;
+                    _uow.LecturerTags.Update(existing);
+                    continue;
+                }
+
+                var tagCode = existingTagMap.Values.First(x => x.TagID == tagId).TagCode;
+                await _uow.LecturerTags.AddAsync(new LecturerTag
+                {
+                    LecturerProfileID = lecturerProfileId,
+                    LecturerCode = lecturerCode,
+                    TagID = tagId,
+                    TagCode = tagCode,
+                    AssignedAt = DateTime.UtcNow,
+                    AssignedByUserID = assignedByUserId,
+                    AssignedByUserCode = normalizedAssignedByUserCode
+                });
+            }
+
+            await _uow.SaveChangesAsync();
         }
 
         private async Task<User> EnsureImportUserAsync(string userCode, string passwordSeed, string expectedRole)
@@ -600,6 +702,20 @@ namespace ThesisManagement.Api.Services.DataExchange
                 .OrderBy(x => x.LecturerCode)
                 .ToList();
 
+            var lecturerTags = _uow.LecturerTags.Query().ToList();
+            var tags = _uow.Tags.Query().ToList();
+
+            var tagCodeById = tags.ToDictionary(x => x.TagID, x => x.TagCode);
+            var tagCodesByLecturerProfileId = lecturerTags
+                .GroupBy(x => x.LecturerProfileID)
+                .ToDictionary(
+                    x => x.Key,
+                    x => string.Join(",", x
+                        .Select(link => tagCodeById.TryGetValue(link.TagID, out var code) ? code : null)
+                        .Where(code => !string.IsNullOrWhiteSpace(code))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)));
+
             return entities.Select(x => new Dictionary<string, string>
                 {
                     ["lecturerCode"] = x.LecturerCode,
@@ -615,7 +731,10 @@ namespace ThesisManagement.Api.Services.DataExchange
                     ["gender"] = x.Gender ?? string.Empty,
                     ["dateOfBirth"] = x.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty,
                     ["address"] = x.Address ?? string.Empty,
-                    ["notes"] = x.Notes ?? string.Empty
+                    ["notes"] = x.Notes ?? string.Empty,
+                    ["tagCodes"] = tagCodesByLecturerProfileId.TryGetValue(x.LecturerProfileID, out var tagCodes)
+                        ? tagCodes
+                        : string.Empty
                 })
                 .ToList();
         }

@@ -14,12 +14,14 @@ interface ImportErrorRow {
   [key: string]: unknown;
 }
 
+type ImportErrorItem = ImportErrorRow | string;
+
 interface ImportResult {
   totalRows: number;
   createdCount: number;
   updatedCount: number;
   failedCount: number;
-  errors: ImportErrorRow[];
+  errors: ImportErrorItem[];
 }
 
 const ALLOWED_EXTENSIONS: Record<DataExchangeFormat, string[]> = {
@@ -142,13 +144,49 @@ function normalizeImportResult(
   payload: ApiResponse<Record<string, unknown>>,
 ): ImportResult {
   const data = (payload.data ?? {}) as Record<string, unknown>;
+  const rawErrors = Array.isArray(data.errors)
+    ? (data.errors as unknown[])
+    : [];
+
+  const errors: ImportErrorItem[] = rawErrors
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+      if (item && typeof item === "object") {
+        return item as ImportErrorRow;
+      }
+      return null;
+    })
+    .filter((item): item is ImportErrorItem => item !== null);
+
   return {
     totalRows: Number(data.totalRows ?? 0),
     createdCount: Number(data.createdCount ?? 0),
     updatedCount: Number(data.updatedCount ?? 0),
     failedCount: Number(data.failedCount ?? 0),
-    errors: Array.isArray(data.errors) ? (data.errors as ImportErrorRow[]) : [],
+    errors,
   };
+}
+
+function renderImportErrorLine(item: ImportErrorItem, index: number): string {
+  if (typeof item === "string") {
+    return item;
+  }
+
+  const row =
+    typeof item.row === "number" && Number.isFinite(item.row)
+      ? `Dòng ${item.row}`
+      : `Lỗi ${index + 1}`;
+  const field =
+    typeof item.field === "string" && item.field.trim()
+      ? ` - ${item.field}`
+      : "";
+  const message =
+    typeof item.message === "string" && item.message.trim()
+      ? item.message
+      : "Lỗi dữ liệu";
+  return `${row}${field}: ${message}`;
 }
 
 const ImportExportActions: React.FC<ImportExportActionsProps> = ({
@@ -374,6 +412,35 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
                 />
               </label>
 
+              {moduleName === "lecturers" && (
+                <div
+                  style={{
+                    border: "1px solid #dbeafe",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#eff6ff",
+                    color: "#1e3a8a",
+                    display: "grid",
+                    gap: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>
+                    Import giảng viên đã tự động đồng bộ tags theo cột tagCodes.
+                  </div>
+                  <div>
+                    FE chỉ upload file qua DataExchange, không cần gọi thêm
+                    LecturerTags/create theo từng dòng.
+                  </div>
+                  <div>
+                    Cột template hỗ trợ: lecturerCode, departmentCode, fullName,
+                    degree, email, phoneNumber, guideQuota, defenseQuota,
+                    currentGuidingCount, gender, dateOfBirth, address, notes,
+                    tagCodes, assignedByUserCode.
+                  </div>
+                </div>
+              )}
+
               {importResult && (
                 <div
                   style={{
@@ -427,11 +494,14 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
                         >
                           {importResult.errors.map((item, index) => (
                             <div
-                              key={`${index}-${item.row ?? "na"}`}
+                              key={`${index}-${
+                                typeof item === "string"
+                                  ? item.slice(0, 24)
+                                  : item.row ?? "na"
+                              }`}
                               style={{ fontSize: 13, marginBottom: 8 }}
                             >
-                              Dòng {item.row ?? "?"} - {item.field ?? "field"}:{" "}
-                              {item.message ?? "Lỗi dữ liệu"}
+                              {renderImportErrorLine(item, index)}
                             </div>
                           ))}
                         </div>

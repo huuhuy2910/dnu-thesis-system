@@ -3,7 +3,6 @@ import /* useNavigate */ "react-router-dom";
 import { fetchData, FetchDataError } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import type { ApiResponse } from "../../types/api";
-import type { CatalogTopic } from "../../types/catalog-topic";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import type { Department } from "../../types/department";
 import type { StudentProfile } from "../../types/studentProfile";
@@ -11,7 +10,6 @@ import type { Topic, TopicFormData } from "../../types/topic";
 import type {
   Tag,
   LecturerTag,
-  CatalogTopicTag,
   TopicTag,
 } from "../../types/tag";
 import {
@@ -33,6 +31,23 @@ import {
 } from "../../types/workflow-topic";
 
 const WORKFLOW_BASE = "/workflows/topics";
+
+type CatalogTopicWithTags = {
+  catalogTopicID: number;
+  catalogTopicCode: string;
+  title: string;
+  summary: string;
+  departmentCode: string;
+  assignedStatus: string;
+  assignedAt: string | null;
+  createdAt: string;
+  lastUpdated: string;
+  tags: Array<{
+    tagID: number;
+    tagCode: string;
+    tagName: string;
+  }>;
+};
 
 function ensureWorkflowSuccess<T>(
   envelope: ApiResponse<T>,
@@ -105,6 +120,34 @@ async function rollbackWorkflowMyTestDataApi(
   ).data;
 }
 
+async function getCatalogTopicsWithTagsApi(input?: {
+  assignedStatus?: string;
+  catalogTopicCode?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<CatalogTopicWithTags[]> {
+  const params = new URLSearchParams();
+  params.append("Page", String(input?.page ?? 0));
+  params.append("PageSize", String(input?.pageSize ?? 200));
+
+  if (input?.assignedStatus) {
+    params.append("AssignedStatus", input.assignedStatus);
+  }
+  if (input?.catalogTopicCode) {
+    params.append("CatalogTopicCode", input.catalogTopicCode);
+  }
+
+  const envelope = await fetchData<ApiResponse<CatalogTopicWithTags[]>>(
+    `/CatalogTopics/get-list-with-tags?${params.toString()}`,
+    { method: "GET" },
+  );
+
+  return ensureWorkflowSuccess(
+    envelope,
+    "Không thể tải danh sách đề tài có sẵn kèm tags.",
+  ).data;
+}
+
 const TopicRegistration: React.FC = () => {
   const auth = useAuth();
   // navigate removed; we now show a success modal instead of navigating
@@ -112,7 +155,7 @@ const TopicRegistration: React.FC = () => {
   const [registrationType, setRegistrationType] = useState<"catalog" | "self">(
     "catalog",
   );
-  const [catalogTopics, setCatalogTopics] = useState<CatalogTopic[]>([]);
+  const [catalogTopics, setCatalogTopics] = useState<CatalogTopicWithTags[]>([]);
   const [lecturers, setLecturers] = useState<LecturerProfile[]>([]);
   const [filteredLecturers, setFilteredLecturers] = useState<LecturerProfile[]>(
     [],
@@ -162,13 +205,17 @@ const TopicRegistration: React.FC = () => {
       setLoading(true);
       const [catalogRes, lecturerRes, departmentRes, tagRes] =
         await Promise.all([
-          fetchData("/CatalogTopics/get-list?AssignedStatus=Ch%C6%B0a%20giao"),
+          getCatalogTopicsWithTagsApi({
+            assignedStatus: "Chưa giao",
+            page: 0,
+            pageSize: 200,
+          }),
           fetchData("/LecturerProfiles/get-list"),
           fetchData("/Departments/get-list"),
           fetchData("/Tags/list"),
         ]);
 
-      setCatalogTopics((catalogRes as ApiResponse<CatalogTopic[]>)?.data || []);
+      setCatalogTopics(catalogRes || []);
       setLecturers((lecturerRes as ApiResponse<LecturerProfile[]>)?.data || []);
 
       // Departments list — prefer the logged-in student's department as the default
@@ -407,47 +454,64 @@ const TopicRegistration: React.FC = () => {
 
       // Load tag info based on topic type
       if (topicData.type === "CATALOG" && topicData.catalogTopicID) {
-        // For catalog topics, load tag from catalog topic
-        const selectedTopic = catalogTopics.find(
+        // For catalog topics, use tags embedded in get-list-with-tags response
+        let selectedTopic = catalogTopics.find(
           (t) => t.catalogTopicID === topicData.catalogTopicID,
         );
+
+        if (!selectedTopic && topicData.catalogTopicCode) {
+          const catalogByCode = await getCatalogTopicsWithTagsApi({
+            catalogTopicCode: topicData.catalogTopicCode,
+            page: 0,
+            pageSize: 20,
+          });
+          selectedTopic = catalogByCode[0];
+        }
+
         if (selectedTopic) {
           try {
-            const catalogTopicTagsRes = await fetchData(
-              `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`,
-            );
-            const catalogTopicTags =
-              (catalogTopicTagsRes as ApiResponse<CatalogTopicTag[]>)?.data ||
-              [];
+            const embeddedTags = Array.isArray(selectedTopic.tags)
+              ? selectedTopic.tags
+              : [];
+            const uniqueTagCodes = [
+              ...new Set(
+                embeddedTags
+                  .map((item) => item.tagCode)
+                  .filter(
+                    (code) => typeof code === "string" && code.trim().length > 0,
+                  ),
+              ),
+            ];
 
-            if (catalogTopicTags.length > 0) {
-              const tagCode = catalogTopicTags[0].tagCode;
-              const tagRes = await fetchData(`/Tags/list?TagCode=${tagCode}`);
-              const tagData = (tagRes as ApiResponse<Tag[]>)?.data || [];
+            if (uniqueTagCodes.length > 0) {
+              const selectedFromMaster = tags.filter((tag) =>
+                uniqueTagCodes.includes(tag.tagCode),
+              );
+              const resolvedTags =
+                selectedFromMaster.length > 0
+                  ? selectedFromMaster
+                  : embeddedTags.map((item) => ({
+                      tagID: item.tagID,
+                      tagCode: item.tagCode,
+                      tagName: item.tagName,
+                      description: "",
+                      createdAt: "",
+                    }));
 
-              if (tagData.length > 0) {
-                const tagInfo = tagData[0];
-                setSelectedTagInfo(tagInfo);
+              setSelectedTagInfo(resolvedTags[0] || null);
 
-                // Get lecturers for this tag
-                const lecturerTagsRes = await fetchData(
-                  `/LecturerTags/list?TagCode=${tagCode}`,
-                );
-                const lecturerTags =
-                  (lecturerTagsRes as ApiResponse<LecturerTag[]>)?.data || [];
-
-                const tagLecturerCodes = lecturerTags.map(
-                  (lt) => lt.lecturerCode,
-                );
-                const availableLecturers = lecturers.filter((l) =>
-                  tagLecturerCodes.includes(l.lecturerCode),
-                );
-
-                setFilteredLecturers(availableLecturers);
-              }
+              const tagCodesQuery = uniqueTagCodes
+                .map((code) => `TagCodes=${encodeURIComponent(code)}`)
+                .join("&");
+              const lecturersRes = await fetchData(
+                `/LecturerProfiles/get-list?${tagCodesQuery}`,
+              );
+              const availableLecturers =
+                (lecturersRes as ApiResponse<LecturerProfile[]>)?.data || [];
+              setFilteredLecturers(availableLecturers);
             }
           } catch (error) {
-            console.error("Error loading catalog topic tag:", error);
+            console.error("Error loading catalog topic with tags:", error);
           }
         }
       } else if (topicData.type === "SELF" && detail.tagCodes.length > 0) {
@@ -679,21 +743,19 @@ const TopicRegistration: React.FC = () => {
     if (!selectedTopic) return;
 
     try {
-      // Step 1: Get catalog topic tags
-      const catalogTopicTagsRes = await fetchData(
-        `/CatalogTopicTags/list?CatalogTopicCode=${selectedTopic.catalogTopicCode}`,
-      );
-      const catalogTopicTags =
-        (catalogTopicTagsRes as ApiResponse<CatalogTopicTag[]>)?.data || [];
+      // Use embedded tags from get-list-with-tags instead of per-topic API calls
+      const embeddedTags = Array.isArray(selectedTopic.tags)
+        ? selectedTopic.tags
+        : [];
 
-      if (catalogTopicTags.length === 0) {
+      if (embeddedTags.length === 0) {
         setError("Đề tài này chưa có thông tin thẻ");
         return;
       }
 
       const uniqueTagCodes = [
         ...new Set(
-          catalogTopicTags
+          embeddedTags
             .map((item) => item.tagCode)
             .filter(
               (code) => typeof code === "string" && code.trim().length > 0,
@@ -701,13 +763,19 @@ const TopicRegistration: React.FC = () => {
         ),
       ];
 
-      const tagRequests = uniqueTagCodes.map((tagCode) =>
-        fetchData(`/Tags/list?TagCode=${encodeURIComponent(tagCode)}`),
+      const selectedFromMaster = tags.filter((tag) =>
+        uniqueTagCodes.includes(tag.tagCode),
       );
-      const tagResponses = await Promise.all(tagRequests);
-      const resolvedTags = tagResponses.flatMap(
-        (response) => (response as ApiResponse<Tag[]>)?.data || [],
-      );
+      const resolvedTags =
+        selectedFromMaster.length > 0
+          ? selectedFromMaster
+          : embeddedTags.map((item) => ({
+              tagID: item.tagID,
+              tagCode: item.tagCode,
+              tagName: item.tagName,
+              description: "",
+              createdAt: "",
+            }));
 
       if (resolvedTags.length === 0) {
         setError("Không tìm thấy thông tin thẻ");
