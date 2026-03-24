@@ -36,6 +36,8 @@ import StudentProfilesManagement from "../pages/studentservices/StudentProfilesM
 import LecturerProfilesManagement from "../pages/studentservices/LecturerProfilesManagement";
 import DepartmentsManagement from "../pages/studentservices/DepartmentsManagement";
 import TopicsManagement from "../pages/studentservices/TopicsManagement";
+import TagsManagement from "../pages/studentservices/TagsManagement";
+import CatalogTopicsWarehousePage from "../pages/studentservices/CatalogTopicsWarehousePage";
 import AcademicDataManagementPage from "../pages/studentservices/AcademicDataManagementPage";
 import TopicWorkflowAudits from "../pages/admin/TopicWorkflowAudits";
 /**
@@ -109,6 +111,11 @@ const AppRoutes: React.FC = () => {
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
           <Route path="departments" element={<DepartmentsManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
+          <Route path="tags" element={<TagsManagement />} />
+          <Route
+            path="catalogtopics"
+            element={<CatalogTopicsWarehousePage />}
+          />
           <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="committees" element={<CommitteeManagement />} />
           <Route
@@ -136,6 +143,11 @@ const AppRoutes: React.FC = () => {
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
           <Route path="departments" element={<DepartmentsManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
+          <Route path="tags" element={<TagsManagement />} />
+          <Route
+            path="catalogtopics"
+            element={<CatalogTopicsWarehousePage />}
+          />
         </Route>
 
         {/* fallback: nếu không match => điều hướng về /login */}

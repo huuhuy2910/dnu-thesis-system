@@ -31,6 +31,20 @@ const managementModules = [
     path: "/topics",
     keyFields: ["topicCode", "title", "proposerUserCode", "status"],
   },
+  {
+    title: "Quản lý tags",
+    description:
+      "Quản trị danh mục tag theo tagCode, tagName, description và import dữ liệu.",
+    path: "/tags",
+    keyFields: ["tagCode", "tagName", "description"],
+  },
+  {
+    title: "Kho đề tài có sẵn",
+    description:
+      "Import CatalogTopics theo file mẫu và đồng bộ CatalogTopicTags qua cột tagCodes.",
+    path: "/catalogtopics",
+    keyFields: ["catalogTopicCode", "title", "departmentCode", "tagCodes"],
+  },
 ];
 
 const AcademicDataManagementPage: React.FC = () => {

@@ -12,6 +12,7 @@ namespace ThesisManagement.Api.Controllers
     public class CatalogTopicsController : BaseApiController
     {
         private readonly IGetCatalogTopicsListQuery _getCatalogTopicsListQuery;
+        private readonly IGetCatalogTopicsWithTagsListQuery _getCatalogTopicsWithTagsListQuery;
         private readonly IGetCatalogTopicDetailQuery _getCatalogTopicDetailQuery;
         private readonly IGetCatalogTopicCreateQuery _getCatalogTopicCreateQuery;
         private readonly IGetCatalogTopicUpdateQuery _getCatalogTopicUpdateQuery;
@@ -24,6 +25,7 @@ namespace ThesisManagement.Api.Controllers
             ICodeGenerator codeGen,
             IMapper mapper,
             IGetCatalogTopicsListQuery getCatalogTopicsListQuery,
+            IGetCatalogTopicsWithTagsListQuery getCatalogTopicsWithTagsListQuery,
             IGetCatalogTopicDetailQuery getCatalogTopicDetailQuery,
             IGetCatalogTopicCreateQuery getCatalogTopicCreateQuery,
             IGetCatalogTopicUpdateQuery getCatalogTopicUpdateQuery,
@@ -32,6 +34,7 @@ namespace ThesisManagement.Api.Controllers
             IDeleteCatalogTopicCommand deleteCatalogTopicCommand) : base(uow, codeGen, mapper)
         {
             _getCatalogTopicsListQuery = getCatalogTopicsListQuery;
+            _getCatalogTopicsWithTagsListQuery = getCatalogTopicsWithTagsListQuery;
             _getCatalogTopicDetailQuery = getCatalogTopicDetailQuery;
             _getCatalogTopicCreateQuery = getCatalogTopicCreateQuery;
             _getCatalogTopicUpdateQuery = getCatalogTopicUpdateQuery;
@@ -45,6 +48,13 @@ namespace ThesisManagement.Api.Controllers
         {
             var result = await _getCatalogTopicsListQuery.ExecuteAsync(filter);
             return Ok(ApiResponse<IEnumerable<CatalogTopicReadDto>>.SuccessResponse(result.Items, result.TotalCount));
+        }
+
+        [HttpGet("get-list-with-tags")]
+        public async Task<IActionResult> GetListWithTags([FromQuery] CatalogTopicWithTagsFilter filter)
+        {
+            var result = await _getCatalogTopicsWithTagsListQuery.ExecuteAsync(filter);
+            return Ok(ApiResponse<IEnumerable<CatalogTopicWithTagsReadDto>>.SuccessResponse(result.Items, result.TotalCount));
         }
 
         [HttpGet("get-detail/{code}")]

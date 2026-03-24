@@ -225,6 +225,7 @@ builder.Services.AddScoped<IGetTagByCodeQuery, GetTagByCodeQuery>();
 builder.Services.AddScoped<IGetTagDetailQuery, GetTagDetailQuery>();
 builder.Services.AddScoped<ISearchTagsQuery, SearchTagsQuery>();
 builder.Services.AddScoped<ICreateTagCommand, CreateTagCommand>();
+builder.Services.AddScoped<IImportTagsCommand, ImportTagsCommand>();
 builder.Services.AddScoped<IUpdateTagCommand, UpdateTagCommand>();
 builder.Services.AddScoped<IDeleteTagCommand, DeleteTagCommand>();
 builder.Services.AddScoped<IGetMilestoneTemplatesListQuery, GetMilestoneTemplatesListQuery>();
@@ -235,6 +236,7 @@ builder.Services.AddScoped<ICreateMilestoneTemplateCommand, CreateMilestoneTempl
 builder.Services.AddScoped<IUpdateMilestoneTemplateCommand, UpdateMilestoneTemplateCommand>();
 builder.Services.AddScoped<IDeleteMilestoneTemplateCommand, DeleteMilestoneTemplateCommand>();
 builder.Services.AddScoped<IGetCatalogTopicsListQuery, GetCatalogTopicsListQuery>();
+builder.Services.AddScoped<IGetCatalogTopicsWithTagsListQuery, GetCatalogTopicsWithTagsListQuery>();
 builder.Services.AddScoped<IGetCatalogTopicDetailQuery, GetCatalogTopicDetailQuery>();
 builder.Services.AddScoped<IGetCatalogTopicCreateQuery, GetCatalogTopicCreateQuery>();
 builder.Services.AddScoped<IGetCatalogTopicUpdateQuery, GetCatalogTopicUpdateQuery>();

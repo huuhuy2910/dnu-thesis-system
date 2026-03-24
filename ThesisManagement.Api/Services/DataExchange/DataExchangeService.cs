@@ -74,7 +74,9 @@ namespace ThesisManagement.Api.Services.DataExchange
                 "students" => ExportStudentRows(),
                 "lecturers" => ExportLecturerRows(),
                 "departments" => ExportDepartmentRows(),
+                "catalogtopics" => ExportCatalogTopicRows(),
                 "topics" => ExportTopicRows(),
+                "tags" => ExportTagRows(),
                 _ => throw new InvalidOperationException("Unsupported module")
             };
 
@@ -114,9 +116,167 @@ namespace ThesisManagement.Api.Services.DataExchange
                 "students" => await UpsertStudentAsync(row),
                 "lecturers" => await UpsertLecturerAsync(row),
                 "departments" => await UpsertDepartmentAsync(row),
+                "catalogtopics" => await UpsertCatalogTopicAsync(row),
                 "topics" => await UpsertTopicAsync(row),
+                "tags" => await UpsertTagAsync(row),
                 _ => UpsertAction.Failed
             };
+        }
+
+        private async Task<UpsertAction> UpsertCatalogTopicAsync(Dictionary<string, string> row)
+        {
+            var catalogTopicCode = Get(row, "catalogTopicCode");
+            var title = Required(row, "title");
+            var hasTagCodesColumn = row.ContainsKey("tagCodes");
+            var rawTagCodes = row.TryGetValue("tagCodes", out var rawValue) ? rawValue : string.Empty;
+            var incomingTagCodes = ParseCodeList(rawTagCodes)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Business rule: if any tagCode does not exist, reject the whole row
+            // and do not write to both CatalogTopics and CatalogTopicTags.
+            var existingTagMap = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tagCode in incomingTagCodes)
+            {
+                var tag = await _uow.Tags.GetByCodeAsync(tagCode);
+                if (tag == null)
+                {
+                    throw new InvalidOperationException($"tagCode '{tagCode}' does not exist");
+                }
+
+                existingTagMap[tagCode] = tag;
+            }
+
+            CatalogTopic? entity = null;
+            if (!string.IsNullOrWhiteSpace(catalogTopicCode))
+            {
+                entity = await _uow.CatalogTopics.GetByCodeAsync(catalogTopicCode);
+            }
+
+            var departmentCode = Get(row, "departmentCode");
+            var department = !string.IsNullOrWhiteSpace(departmentCode)
+                ? await _uow.Departments.GetByCodeAsync(departmentCode)
+                : null;
+
+            var action = UpsertAction.Updated;
+
+            if (entity == null)
+            {
+                entity = new CatalogTopic
+                {
+                    CatalogTopicCode = string.IsNullOrWhiteSpace(catalogTopicCode)
+                        ? _codeGenerator.Generate("CT")
+                        : catalogTopicCode,
+                    Title = title,
+                    Summary = Get(row, "summary"),
+                    DepartmentCode = department?.DepartmentCode,
+                    DepartmentID = department?.DepartmentID,
+                    AssignedStatus = Get(row, "assignedStatus"),
+                    AssignedAt = ParseDate(Get(row, "assignedAt")),
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                await _uow.CatalogTopics.AddAsync(entity);
+                await _uow.SaveChangesAsync();
+                action = UpsertAction.Created;
+            }
+            else
+            {
+                entity.Title = title;
+                entity.Summary = Get(row, "summary") ?? entity.Summary;
+                entity.DepartmentCode = department?.DepartmentCode;
+                entity.DepartmentID = department?.DepartmentID;
+                entity.AssignedStatus = Get(row, "assignedStatus") ?? entity.AssignedStatus;
+                entity.AssignedAt = ParseDate(Get(row, "assignedAt")) ?? entity.AssignedAt;
+                entity.LastUpdated = DateTime.UtcNow;
+
+                _uow.CatalogTopics.Update(entity);
+                await _uow.SaveChangesAsync();
+            }
+
+            if (hasTagCodesColumn)
+            {
+                await SyncCatalogTopicTagsAsync(entity.CatalogTopicID, incomingTagCodes, existingTagMap);
+            }
+
+            return action;
+        }
+
+        private async Task SyncCatalogTopicTagsAsync(
+            int catalogTopicId,
+            IReadOnlyList<string> incomingTagCodes,
+            IReadOnlyDictionary<string, Tag> existingTagMap)
+        {
+            var tagIds = new HashSet<int>();
+            foreach (var tagCode in incomingTagCodes)
+            {
+                if (!existingTagMap.TryGetValue(tagCode, out var tag))
+                    throw new InvalidOperationException($"tagCode '{tagCode}' does not exist");
+                tagIds.Add(tag.TagID);
+            }
+
+            var existingLinks = _uow.CatalogTopicTags.Query()
+                .Where(x => x.CatalogTopicID == catalogTopicId)
+                .ToList();
+
+            foreach (var link in existingLinks)
+            {
+                if (!tagIds.Contains(link.TagID))
+                {
+                    _uow.CatalogTopicTags.Remove(link);
+                }
+            }
+
+            foreach (var tagId in tagIds)
+            {
+                var exists = existingLinks.Any(x => x.TagID == tagId);
+                if (exists)
+                    continue;
+
+                await _uow.CatalogTopicTags.AddAsync(new CatalogTopicTag
+                {
+                    CatalogTopicID = catalogTopicId,
+                    TagID = tagId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _uow.SaveChangesAsync();
+        }
+
+        private async Task<UpsertAction> UpsertTagAsync(Dictionary<string, string> row)
+        {
+            var tagCode = Get(row, "tagCode");
+            var tagName = Required(row, "tagName");
+
+            Tag? entity = null;
+            if (!string.IsNullOrWhiteSpace(tagCode))
+            {
+                entity = await _uow.Tags.GetByCodeAsync(tagCode);
+            }
+
+            if (entity == null)
+            {
+                entity = new Tag
+                {
+                    TagCode = string.IsNullOrWhiteSpace(tagCode) ? _codeGenerator.Generate("TAG") : tagCode,
+                    TagName = tagName,
+                    Description = Get(row, "description"),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _uow.Tags.AddAsync(entity);
+                await _uow.SaveChangesAsync();
+                return UpsertAction.Created;
+            }
+
+            entity.TagName = tagName;
+            entity.Description = Get(row, "description") ?? entity.Description;
+
+            _uow.Tags.Update(entity);
+            await _uow.SaveChangesAsync();
+            return UpsertAction.Updated;
         }
 
         private async Task<UpsertAction> UpsertStudentAsync(Dictionary<string, string> row)
@@ -475,6 +635,41 @@ namespace ThesisManagement.Api.Services.DataExchange
                 .ToList();
         }
 
+        private List<Dictionary<string, string>> ExportCatalogTopicRows()
+        {
+            var entities = _uow.CatalogTopics.Query()
+                .OrderBy(x => x.CatalogTopicCode)
+                .ToList();
+
+            var links = _uow.CatalogTopicTags.Query().ToList();
+            var tags = _uow.Tags.Query().ToList();
+
+            var tagCodeById = tags.ToDictionary(x => x.TagID, x => x.TagCode);
+            var tagCodesByCatalogTopicId = links
+                .GroupBy(x => x.CatalogTopicID)
+                .ToDictionary(
+                    x => x.Key,
+                    x => string.Join(",", x
+                        .Select(link => tagCodeById.TryGetValue(link.TagID, out var code) ? code : null)
+                        .Where(code => !string.IsNullOrWhiteSpace(code))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)));
+
+            return entities.Select(x => new Dictionary<string, string>
+                {
+                    ["catalogTopicCode"] = x.CatalogTopicCode,
+                    ["title"] = x.Title,
+                    ["summary"] = x.Summary ?? string.Empty,
+                    ["departmentCode"] = x.DepartmentCode ?? string.Empty,
+                    ["assignedStatus"] = x.AssignedStatus ?? string.Empty,
+                    ["assignedAt"] = x.AssignedAt?.ToString("yyyy-MM-dd") ?? string.Empty,
+                    ["tagCodes"] = tagCodesByCatalogTopicId.TryGetValue(x.CatalogTopicID, out var tagCodes)
+                        ? tagCodes
+                        : string.Empty
+                })
+                .ToList();
+        }
+
         private List<Dictionary<string, string>> ExportTopicRows()
         {
             var entities = _uow.Topics.Query()
@@ -506,6 +701,21 @@ namespace ThesisManagement.Api.Services.DataExchange
                 .ToList();
         }
 
+        private List<Dictionary<string, string>> ExportTagRows()
+        {
+            var entities = _uow.Tags.Query()
+                .OrderBy(x => x.TagCode)
+                .ToList();
+
+            return entities.Select(x => new Dictionary<string, string>
+                {
+                    ["tagCode"] = x.TagCode,
+                    ["tagName"] = x.TagName,
+                    ["description"] = x.Description ?? string.Empty
+                })
+                .ToList();
+        }
+
         private static string NormalizeModule(string module)
         {
             var normalized = (module ?? string.Empty).Trim().ToLowerInvariant();
@@ -514,8 +724,10 @@ namespace ThesisManagement.Api.Services.DataExchange
                 "students" or "studentprofiles" => "students",
                 "lecturers" or "lecturerprofiles" => "lecturers",
                 "departments" => "departments",
+                "catalogtopics" or "catalogtopic" => "catalogtopics",
                 "topics" => "topics",
-                _ => throw new InvalidOperationException("Unsupported module. Allowed modules: students, lecturers, departments, topics")
+                "tags" => "tags",
+                _ => throw new InvalidOperationException("Unsupported module. Allowed modules: students, lecturers, departments, catalogtopics, topics, tags")
             };
         }
 
@@ -707,6 +919,18 @@ namespace ThesisManagement.Api.Services.DataExchange
             var safe = value ?? string.Empty;
             var escaped = safe.Replace("\"", "\"\"");
             return $"\"{escaped}\"";
+        }
+
+        private static List<string> ParseCodeList(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return new List<string>();
+
+            return value
+                .Split(new[] { ',', ';', '|', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
         }
 
         private static List<string> ParseCsvLine(string line)
