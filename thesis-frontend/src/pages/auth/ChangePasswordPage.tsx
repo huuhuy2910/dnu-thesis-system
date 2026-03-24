@@ -19,7 +19,8 @@ const ChangePasswordPage: React.FC = () => {
 
   const userCode = auth.user?.userCode ?? "";
   const roleUpper = String(auth.user?.role || "").toUpperCase();
-  const backPath = roleUpper === "LECTURER" ? "/lecturer/profile" : "/student/profile";
+  const backPath =
+    roleUpper === "LECTURER" ? "/lecturer/profile" : "/student/profile";
 
   const validationMessage = useMemo(() => {
     if (!newPassword) return null;
@@ -79,7 +80,9 @@ const ChangePasswordPage: React.FC = () => {
       }
 
       const message =
-        response.data?.message || response.message || "Đổi mật khẩu thành công.";
+        response.data?.message ||
+        response.message ||
+        "Đổi mật khẩu thành công.";
       setSuccessMessage(message);
       addToast(message, "success");
       setNewPassword("");
@@ -128,7 +131,14 @@ const ChangePasswordPage: React.FC = () => {
         }}
       >
         <div>
-          <h1 style={{ margin: 0, color: "#1f2937", fontSize: 28, fontWeight: 700 }}>
+          <h1
+            style={{
+              margin: 0,
+              color: "#1f2937",
+              fontSize: 28,
+              fontWeight: 700,
+            }}
+          >
             Đổi mật khẩu
           </h1>
           <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 14 }}>
@@ -168,7 +178,8 @@ const ChangePasswordPage: React.FC = () => {
         <div
           style={{
             padding: "16px 20px",
-            background: "linear-gradient(90deg, rgba(243,112,33,0.1), rgba(243,112,33,0.03))",
+            background:
+              "linear-gradient(90deg, rgba(243,112,33,0.1), rgba(243,112,33,0.03))",
             borderBottom: "1px solid #f3f4f6",
             display: "flex",
             alignItems: "center",
@@ -184,7 +195,15 @@ const ChangePasswordPage: React.FC = () => {
         <form onSubmit={handleSubmit} style={{ padding: 20 }}>
           <div style={{ display: "grid", gap: 16 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  color: "#374151",
+                }}
+              >
                 UserCode
               </label>
               <input
@@ -203,7 +222,15 @@ const ChangePasswordPage: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  color: "#374151",
+                }}
+              >
                 Mật khẩu mới
               </label>
               <div style={{ position: "relative" }}>
@@ -235,7 +262,15 @@ const ChangePasswordPage: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  color: "#374151",
+                }}
+              >
                 Xác nhận mật khẩu mới
               </label>
               <input
@@ -255,9 +290,19 @@ const ChangePasswordPage: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ marginTop: 14, fontSize: 13, color: "#6b7280", lineHeight: 1.7 }}>
+          <div
+            style={{
+              marginTop: 14,
+              fontSize: 13,
+              color: "#6b7280",
+              lineHeight: 1.7,
+            }}
+          >
             <div>- Mật khẩu tối thiểu 8 ký tự.</div>
-            <div>- Mật khẩu mới không được trùng UserCode (không phân biệt hoa thường).</div>
+            <div>
+              - Mật khẩu mới không được trùng UserCode (không phân biệt hoa
+              thường).
+            </div>
           </div>
 
           {validationMessage && (
@@ -308,10 +353,21 @@ const ChangePasswordPage: React.FC = () => {
             </div>
           )}
 
-          <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+          <div
+            style={{
+              marginTop: 20,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
             <button
               type="submit"
-              disabled={submitting || !newPassword || !confirmPassword || Boolean(validationMessage)}
+              disabled={
+                submitting ||
+                !newPassword ||
+                !confirmPassword ||
+                Boolean(validationMessage)
+              }
               style={{
                 border: "none",
                 borderRadius: 10,
@@ -321,17 +377,28 @@ const ChangePasswordPage: React.FC = () => {
                 gap: 8,
                 fontWeight: 700,
                 cursor:
-                  submitting || !newPassword || !confirmPassword || Boolean(validationMessage)
+                  submitting ||
+                  !newPassword ||
+                  !confirmPassword ||
+                  Boolean(validationMessage)
                     ? "not-allowed"
                     : "pointer",
                 background:
-                  submitting || !newPassword || !confirmPassword || Boolean(validationMessage)
+                  submitting ||
+                  !newPassword ||
+                  !confirmPassword ||
+                  Boolean(validationMessage)
                     ? "#d1d5db"
                     : "linear-gradient(135deg, #f37021, #ff8c42)",
                 color: "#fff",
               }}
             >
-              {submitting ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> : null}
+              {submitting ? (
+                <Loader2
+                  size={16}
+                  style={{ animation: "spin 1s linear infinite" }}
+                />
+              ) : null}
               {submitting ? "Đang xử lý..." : "Đổi mật khẩu"}
             </button>
           </div>

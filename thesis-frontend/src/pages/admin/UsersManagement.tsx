@@ -26,6 +26,8 @@ interface LinkedProfileState {
   data: LinkedProfile;
 }
 
+type LinkedProfileEntry = [string, LinkedProfileState];
+
 type UserCreatePayload = {
   userCode: string;
   password: string;
@@ -278,7 +280,7 @@ const UsersManagement: React.FC = () => {
 
     let cancelled = false;
     const loadLinkedProfiles = async () => {
-      const entries = await Promise.all(
+      const entries: Array<LinkedProfileEntry | null> = await Promise.all(
         rows.map(async (row) => {
           const userCode = String(row.userCode ?? "").trim();
           const roleName = String(row.role ?? "")
@@ -293,7 +295,7 @@ const UsersManagement: React.FC = () => {
                 return [
                   userCode,
                   { profileType: "student" as const, data: profile },
-                ];
+                ] as LinkedProfileEntry;
               }
             }
 
@@ -303,7 +305,7 @@ const UsersManagement: React.FC = () => {
                 return [
                   userCode,
                   { profileType: "lecturer" as const, data: profile },
-                ];
+                ] as LinkedProfileEntry;
               }
             }
           } catch {

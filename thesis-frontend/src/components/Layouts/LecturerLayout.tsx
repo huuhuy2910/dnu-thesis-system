@@ -2,7 +2,15 @@ import React, { useEffect, useState } from "react";
 import LecturerNav from "../SideNavs/LecturerNav";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut, ChevronDown, User, Clock, Menu, X, KeyRound } from "lucide-react";
+import {
+  LogOut,
+  ChevronDown,
+  User,
+  Clock,
+  Menu,
+  X,
+  KeyRound,
+} from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
