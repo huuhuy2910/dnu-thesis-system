@@ -1105,7 +1105,10 @@
   border: 2px solid #d1d9e6;
   position: relative;
   z-index: 1;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease,
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
     color 0.2s ease;
 }
 

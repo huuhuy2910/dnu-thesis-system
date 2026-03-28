@@ -503,11 +503,15 @@ const StudentProfilesManagement: React.FC = () => {
           },
         });
 
-        const resolvedUserCode = String(firstItem.student?.userCode || userCode).trim();
+        const resolvedUserCode = String(
+          firstItem.student?.userCode || userCode,
+        ).trim();
         if (resolvedUserCode) {
           setHistoryLoading(true);
           try {
-            const historyRes = await fetchData<ApiResponse<ProgressHistoryPayload>>(
+            const historyRes = await fetchData<
+              ApiResponse<ProgressHistoryPayload>
+            >(
               `/reports/student/progress-history?userCode=${encodeURIComponent(
                 resolvedUserCode,
               )}&page=1&pageSize=10`,
@@ -515,8 +519,16 @@ const StudentProfilesManagement: React.FC = () => {
             );
 
             if (historyRes?.success && historyRes.data) {
-              setHistoryItems(Array.isArray(historyRes.data.items) ? historyRes.data.items : []);
-              setHistoryTotalCount(Number(historyRes.totalCount || historyRes.data.totalCount || 0));
+              setHistoryItems(
+                Array.isArray(historyRes.data.items)
+                  ? historyRes.data.items
+                  : [],
+              );
+              setHistoryTotalCount(
+                Number(
+                  historyRes.totalCount || historyRes.data.totalCount || 0,
+                ),
+              );
             }
           } catch {
             setHistoryItems([]);
@@ -835,7 +847,9 @@ const StudentProfilesManagement: React.FC = () => {
                   </td>
 
                   <td>
-                    <div className="spm-table-topic-title">{row.topic.title}</div>
+                    <div className="spm-table-topic-title">
+                      {row.topic.title}
+                    </div>
                     <div className="spm-subtle">{row.topic.topicCode}</div>
                   </td>
 
@@ -1063,18 +1077,23 @@ const StudentProfilesManagement: React.FC = () => {
                               </div>
                               <div>
                                 <span>Giới tính</span>
-                                <strong>{detailModal.row.student.gender || "--"}</strong>
+                                <strong>
+                                  {detailModal.row.student.gender || "--"}
+                                </strong>
                               </div>
                               <div>
                                 <span>Ngày sinh</span>
                                 <strong>
-                                  {formatDate(detailModal.row.student.dateOfBirth) ||
-                                    "--"}
+                                  {formatDate(
+                                    detailModal.row.student.dateOfBirth,
+                                  ) || "--"}
                                 </strong>
                               </div>
                               <div>
                                 <span>Địa chỉ</span>
-                                <strong>{detailModal.row.student.address || "--"}</strong>
+                                <strong>
+                                  {detailModal.row.student.address || "--"}
+                                </strong>
                               </div>
                             </div>
                           </div>
@@ -1087,27 +1106,34 @@ const StudentProfilesManagement: React.FC = () => {
                               <div>
                                 <span>Khoa</span>
                                 <strong>
-                                  {detailModal.row.student.departmentCode || "--"}
+                                  {detailModal.row.student.departmentCode ||
+                                    "--"}
                                 </strong>
                               </div>
                               <div>
                                 <span>Lớp</span>
-                                <strong>{detailModal.row.student.classCode || "--"}</strong>
+                                <strong>
+                                  {detailModal.row.student.classCode || "--"}
+                                </strong>
                               </div>
                               <div>
                                 <span>Niên khóa</span>
                                 <strong>
-                                  {detailModal.row.student.enrollmentYear || "--"}
+                                  {detailModal.row.student.enrollmentYear ||
+                                    "--"}
                                 </strong>
                               </div>
                               <div>
                                 <span>GPA</span>
-                                <strong>{detailModal.row.student.gpa ?? "--"}</strong>
+                                <strong>
+                                  {detailModal.row.student.gpa ?? "--"}
+                                </strong>
                               </div>
                               <div>
                                 <span>Xếp loại</span>
                                 <strong>
-                                  {detailModal.row.student.academicStanding || "--"}
+                                  {detailModal.row.student.academicStanding ||
+                                    "--"}
                                 </strong>
                               </div>
                             </div>
@@ -1123,15 +1149,22 @@ const StudentProfilesManagement: React.FC = () => {
                           <div className="spm-detail-list spm-supervisor-list">
                             <div>
                               <span>Họ tên</span>
-                              <strong>{detailModal.row.supervisor?.fullName || "--"}</strong>
+                              <strong>
+                                {detailModal.row.supervisor?.fullName || "--"}
+                              </strong>
                             </div>
                             <div>
                               <span>Mã GV</span>
-                              <strong>{detailModal.row.supervisor?.lecturerCode || "--"}</strong>
+                              <strong>
+                                {detailModal.row.supervisor?.lecturerCode ||
+                                  "--"}
+                              </strong>
                             </div>
                             <div>
                               <span>Học vị</span>
-                              <strong>{detailModal.row.supervisor?.degree || "--"}</strong>
+                              <strong>
+                                {detailModal.row.supervisor?.degree || "--"}
+                              </strong>
                             </div>
                             <div>
                               <span>Hướng dẫn</span>
@@ -1143,8 +1176,13 @@ const StudentProfilesManagement: React.FC = () => {
                                       width: `${Math.min(
                                         100,
                                         Math.round(
-                                          ((detailModal.row.supervisor?.currentGuidingCount || 0) /
-                                            Math.max(1, detailModal.row.supervisor?.guideQuota || 1)) *
+                                          ((detailModal.row.supervisor
+                                            ?.currentGuidingCount || 0) /
+                                            Math.max(
+                                              1,
+                                              detailModal.row.supervisor
+                                                ?.guideQuota || 1,
+                                            )) *
                                             100,
                                         ),
                                       )}%`,
@@ -1163,14 +1201,19 @@ const StudentProfilesManagement: React.FC = () => {
 
                         <div className="spm-detail-section spm-info-card spm-supervisor-card">
                           <h4>Liên hệ & Chuyên ngành</h4>
-                            <div className="spm-detail-list spm-supervisor-list">
+                          <div className="spm-detail-list spm-supervisor-list">
                             <div>
                               <span>Email</span>
-                              <strong>{detailModal.row.supervisor?.email || "--"}</strong>
+                              <strong>
+                                {detailModal.row.supervisor?.email || "--"}
+                              </strong>
                             </div>
                             <div>
                               <span>SĐT</span>
-                              <strong>{detailModal.row.supervisor?.phoneNumber || "--"}</strong>
+                              <strong>
+                                {detailModal.row.supervisor?.phoneNumber ||
+                                  "--"}
+                              </strong>
                             </div>
                             <div className="spm-supervisor-specialty-row">
                               <span>Chuyên ngành</span>
@@ -1195,24 +1238,34 @@ const StudentProfilesManagement: React.FC = () => {
                       <div className="spm-progress-panel">
                         <div className="spm-detail-section spm-topic-hero">
                           <div className="spm-topic-panel">
-                            <strong className="spm-detail-topic-title">{detailModal.row.topic.title}</strong>
+                            <strong className="spm-detail-topic-title">
+                              {detailModal.row.topic.title}
+                            </strong>
 
                             <div className="spm-topic-layout">
                               <div className="spm-topic-layout-left">
                                 <div className="spm-topic-field">
-                                  <span className="spm-topic-field-label">Mã đề tài:</span>
-                                  <strong>{detailModal.row.topic.topicCode}</strong>
+                                  <span className="spm-topic-field-label">
+                                    Mã đề tài:
+                                  </span>
+                                  <strong>
+                                    {detailModal.row.topic.topicCode}
+                                  </strong>
                                 </div>
 
                                 <div className="spm-topic-field spm-topic-field-summary">
-                                  <span className="spm-topic-field-label">Mô tả:</span>
+                                  <span className="spm-topic-field-label">
+                                    Mô tả:
+                                  </span>
                                   <p>{detailModal.row.topic.summary || "--"}</p>
                                 </div>
                               </div>
 
                               <div className="spm-topic-layout-right">
                                 <div className="spm-topic-meta-row">
-                                  <span className="spm-topic-meta-label">Trạng thái:</span>
+                                  <span className="spm-topic-meta-label">
+                                    Trạng thái:
+                                  </span>
                                   <span
                                     className={`spm-status spm-status-${detailModal.row.__status}`}
                                   >
@@ -1221,17 +1274,24 @@ const StudentProfilesManagement: React.FC = () => {
                                 </div>
 
                                 <div className="spm-topic-meta-row">
-                                  <span className="spm-topic-meta-label">Tags:</span>
+                                  <span className="spm-topic-meta-label">
+                                    Tags:
+                                  </span>
                                   {detailTopicTags.length > 0 ? (
                                     <div className="spm-tag-wrap spm-tag-wrap-compact">
                                       {detailTopicTags.map((tag) => (
-                                        <span key={tag.tagCode} className="spm-tag">
+                                        <span
+                                          key={tag.tagCode}
+                                          className="spm-tag"
+                                        >
                                           {tag.tagName}
                                         </span>
                                       ))}
                                     </div>
                                   ) : (
-                                    <span className="spm-topic-meta-empty">--</span>
+                                    <span className="spm-topic-meta-empty">
+                                      --
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1247,11 +1307,13 @@ const StudentProfilesManagement: React.FC = () => {
                                 className={`spm-timeline-step ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}
                               >
                                 <div className="spm-timeline-node">
-                                  {milestone.isCompleted
-                                    ? <Check size={16} />
-                                    : milestone.isCurrent
-                                      ? <Clock3 size={15} />
-                                      : <Circle size={11} />}
+                                  {milestone.isCompleted ? (
+                                    <Check size={16} />
+                                  ) : milestone.isCurrent ? (
+                                    <Clock3 size={15} />
+                                  ) : (
+                                    <Circle size={11} />
+                                  )}
                                 </div>
                                 <div className="spm-timeline-step-body">
                                   <strong>
@@ -1265,7 +1327,8 @@ const StudentProfilesManagement: React.FC = () => {
                                         : "Chưa làm"}
                                   </span>
                                   <span className="spm-timeline-time">
-                                    Hoàn thành: {formatDateTime(milestone.completedAt)}
+                                    Hoàn thành:{" "}
+                                    {formatDateTime(milestone.completedAt)}
                                   </span>
                                 </div>
                               </div>
@@ -1280,9 +1343,13 @@ const StudentProfilesManagement: React.FC = () => {
                         <div className="spm-detail-section">
                           <h4>Lịch sử báo cáo</h4>
                           {historyLoading ? (
-                            <div className="spm-detail-loading">Đang tải lịch sử báo cáo...</div>
+                            <div className="spm-detail-loading">
+                              Đang tải lịch sử báo cáo...
+                            </div>
                           ) : historyItems.length === 0 ? (
-                            <div className="spm-history-empty">Chưa có báo cáo nào.</div>
+                            <div className="spm-history-empty">
+                              Chưa có báo cáo nào.
+                            </div>
                           ) : (
                             <div className="spm-history-list">
                               {historyItems.map((item) => {
@@ -1295,47 +1362,71 @@ const StudentProfilesManagement: React.FC = () => {
                                   >
                                     <header className="spm-history-head">
                                       <div>
-                                        <h5>{submission.reportTitle || submission.submissionCode}</h5>
+                                        <h5>
+                                          {submission.reportTitle ||
+                                            submission.submissionCode}
+                                        </h5>
                                         <p>
-                                          {submission.submissionCode} • {submission.milestoneCode}
+                                          {submission.submissionCode} •{" "}
+                                          {submission.milestoneCode}
                                         </p>
                                       </div>
                                       <span className="spm-history-badge">
-                                        {getLecturerStateLabel(submission.lecturerState)}
+                                        {getLecturerStateLabel(
+                                          submission.lecturerState,
+                                        )}
                                       </span>
                                     </header>
 
                                     <div className="spm-history-meta-grid">
                                       <div className="spm-history-meta-item">
                                         <span>Nộp lúc</span>
-                                        <strong>{formatDateTime(submission.submittedAt)}</strong>
+                                        <strong>
+                                          {formatDateTime(
+                                            submission.submittedAt,
+                                          )}
+                                        </strong>
                                       </div>
                                       <div className="spm-history-meta-item">
                                         <span>Cập nhật</span>
-                                        <strong>{formatDateTime(submission.lastUpdated)}</strong>
+                                        <strong>
+                                          {formatDateTime(
+                                            submission.lastUpdated,
+                                          )}
+                                        </strong>
                                       </div>
                                       <div className="spm-history-meta-item">
                                         <span>Lần nộp</span>
-                                        <strong>{submission.attemptNumber ?? "--"}</strong>
+                                        <strong>
+                                          {submission.attemptNumber ?? "--"}
+                                        </strong>
                                       </div>
                                       <div className="spm-history-meta-item">
                                         <span>Feedback</span>
-                                        <strong>{submission.feedbackLevel || "--"}</strong>
+                                        <strong>
+                                          {submission.feedbackLevel || "--"}
+                                        </strong>
                                       </div>
                                     </div>
 
                                     <div className="spm-history-content-grid">
                                       <div className="spm-history-block">
-                                        <span className="spm-history-block-label">Mô tả báo cáo</span>
+                                        <span className="spm-history-block-label">
+                                          Mô tả báo cáo
+                                        </span>
                                         <p className="spm-history-desc">
-                                          {submission.reportDescription || "Không có mô tả."}
+                                          {submission.reportDescription ||
+                                            "Không có mô tả."}
                                         </p>
                                       </div>
 
                                       <div className="spm-history-block">
-                                        <span className="spm-history-block-label">Nhận xét giảng viên</span>
+                                        <span className="spm-history-block-label">
+                                          Nhận xét giảng viên
+                                        </span>
                                         <p className="spm-history-comment">
-                                          {submission.lecturerComment || "Chưa có nhận xét."}
+                                          {submission.lecturerComment ||
+                                            "Chưa có nhận xét."}
                                         </p>
                                       </div>
                                     </div>
