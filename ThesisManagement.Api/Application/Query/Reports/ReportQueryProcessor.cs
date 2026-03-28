@@ -276,24 +276,11 @@ namespace ThesisManagement.Api.Application.Query.Reports
 
         private async Task<List<ReportTagDto>> GetTopicTagsAsync(Topic topic)
         {
-            List<string> tagCodes;
-
-            if (!string.IsNullOrWhiteSpace(topic.CatalogTopicCode))
-            {
-                tagCodes = await _uow.CatalogTopicTags.Query()
-                    .Where(x => x.CatalogTopicCode == topic.CatalogTopicCode && x.TagCode != null)
-                    .Select(x => x.TagCode!)
-                    .Distinct()
-                    .ToListAsync();
-            }
-            else
-            {
-                tagCodes = await _uow.TopicTags.Query()
-                    .Where(x => x.TopicCode == topic.TopicCode && x.TagCode != null)
-                    .Select(x => x.TagCode!)
-                    .Distinct()
-                    .ToListAsync();
-            }
+            var tagCodes = await _uow.TopicTags.Query()
+                .Where(x => x.TopicCode == topic.TopicCode && x.TagCode != null)
+                .Select(x => x.TagCode!)
+                .Distinct()
+                .ToListAsync();
 
             if (tagCodes.Count == 0)
                 return new List<ReportTagDto>();

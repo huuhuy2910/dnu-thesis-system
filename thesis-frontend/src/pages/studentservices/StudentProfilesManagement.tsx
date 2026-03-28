@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  Check,
   CheckCircle,
+  Circle,
   Clock,
+  Clock3,
   Edit,
   Filter,
   Plus,
@@ -11,7 +14,7 @@ import {
   Users,
   Eye,
   BookOpen,
-  ChartColumnIncreasing,
+  History,
   User,
 } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
@@ -60,6 +63,12 @@ type DashboardMilestone = {
   milestoneTemplateCode: string;
   ordinal?: number;
   state?: string;
+  startedAt?: string | null;
+  completedAt1?: string | null;
+  completedAt2?: string | null;
+  completedAt3?: string | null;
+  completedAt4?: string | null;
+  completedAt5?: string | null;
 };
 
 type DashboardSupervisor = {
@@ -95,6 +104,43 @@ type MilestoneTemplate = {
   milestoneTemplateID: number;
   milestoneTemplateCode: string;
   ordinal: number;
+};
+
+type ProgressHistoryFile = {
+  fileID: number;
+  fileURL: string;
+  fileName: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  uploadedAt?: string;
+};
+
+type ProgressHistorySubmission = {
+  submissionID: number;
+  submissionCode: string;
+  milestoneCode: string;
+  studentUserCode: string;
+  lecturerCode?: string;
+  submittedAt?: string;
+  attemptNumber?: number;
+  lecturerComment?: string;
+  lecturerState?: string;
+  feedbackLevel?: string;
+  reportTitle?: string;
+  reportDescription?: string;
+  lastUpdated?: string;
+  files?: ProgressHistoryFile[];
+};
+
+type ProgressHistoryItem = {
+  submission: ProgressHistorySubmission;
+};
+
+type ProgressHistoryPayload = {
+  items: ProgressHistoryItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
 };
 
 type RowStatus = "approved" | "pending" | "rejected" | "revision";
@@ -133,6 +179,55 @@ const profileFields: FieldDef[] = [
   { name: "address", label: "Địa chỉ" },
   { name: "notes", label: "Ghi chú", type: "textarea" },
 ];
+
+const editFieldSections: Array<{
+  title: string;
+  description: string;
+  fields: string[];
+}> = [
+  {
+    title: "Thông tin tài khoản",
+    description: "Thông tin định danh và tài khoản liên kết.",
+    fields: ["studentCode", "userCode", "status"],
+  },
+  {
+    title: "Thông tin cá nhân",
+    description: "Thông tin liên hệ, nhân thân của sinh viên.",
+    fields: [
+      "fullName",
+      "studentEmail",
+      "phoneNumber",
+      "gender",
+      "dateOfBirth",
+      "address",
+      "studentImage",
+    ],
+  },
+  {
+    title: "Thông tin học tập",
+    description: "Khoa, lớp, niên khóa và học lực.",
+    fields: [
+      "departmentCode",
+      "classCode",
+      "facultyCode",
+      "enrollmentYear",
+      "graduationYear",
+      "gpa",
+      "academicStanding",
+      "notes",
+    ],
+  },
+];
+
+function getFieldDefinition(name: string): FieldDef {
+  return (
+    profileFields.find((field) => field.name === name) ?? {
+      name,
+      label: name,
+      type: "text",
+    }
+  );
+}
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -202,6 +297,13 @@ function formatDate(value?: string): string {
   return date.toLocaleDateString("vi-VN");
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("vi-VN");
+}
+
 function calcProgress(
   currentMilestone: DashboardMilestone | null,
   totalTemplates: number,
@@ -238,9 +340,12 @@ const StudentProfilesManagement: React.FC = () => {
     row?: DashboardRowView;
   }>({ isOpen: false });
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailTab, setDetailTab] = useState<"info" | "topic" | "progress">(
-    "info",
-  );
+  const [detailTab, setDetailTab] = useState<
+    "info" | "supervisor" | "topic" | "history"
+  >("info");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyItems, setHistoryItems] = useState<ProgressHistoryItem[]>([]);
+  const [historyTotalCount, setHistoryTotalCount] = useState(0);
   const [activeModal, setActiveModal] = useState<"create" | "edit" | null>(
     null,
   );
@@ -357,6 +462,7 @@ const StudentProfilesManagement: React.FC = () => {
 
   const openDetail = async (row: DashboardRowView) => {
     const studentCode = String(row.student?.studentCode || "").trim();
+    const userCode = String(row.student?.userCode || "").trim();
     if (!studentCode) {
       addToast("Không xác định được mã sinh viên để tải chi tiết.", "error");
       return;
@@ -364,6 +470,8 @@ const StudentProfilesManagement: React.FC = () => {
 
     setDetailLoading(true);
     setDetailTab("info");
+    setHistoryItems([]);
+    setHistoryTotalCount(0);
     setDetailModal({ isOpen: true, row });
 
     try {
@@ -394,6 +502,29 @@ const StudentProfilesManagement: React.FC = () => {
             __progress: row.__progress,
           },
         });
+
+        const resolvedUserCode = String(firstItem.student?.userCode || userCode).trim();
+        if (resolvedUserCode) {
+          setHistoryLoading(true);
+          try {
+            const historyRes = await fetchData<ApiResponse<ProgressHistoryPayload>>(
+              `/reports/student/progress-history?userCode=${encodeURIComponent(
+                resolvedUserCode,
+              )}&page=1&pageSize=10`,
+              { method: "GET" },
+            );
+
+            if (historyRes?.success && historyRes.data) {
+              setHistoryItems(Array.isArray(historyRes.data.items) ? historyRes.data.items : []);
+              setHistoryTotalCount(Number(historyRes.totalCount || historyRes.data.totalCount || 0));
+            }
+          } catch {
+            setHistoryItems([]);
+            setHistoryTotalCount(0);
+          } finally {
+            setHistoryLoading(false);
+          }
+        }
       }
     } catch (error) {
       addToast(
@@ -527,28 +658,66 @@ const StudentProfilesManagement: React.FC = () => {
   const detailTopicTags = detailStudent?.topicTags ?? [];
   const detailSupervisorTags = detailStudent?.supervisorTags ?? [];
   const detailMilestones = useMemo(() => {
-    const codes = ["MS_REG", "MS_PROG1", "MS_PROG2", "MS_FULL", "MS_DEF"];
+    const fallbackCodes = [
+      "MS_REG",
+      "MS_PROG1",
+      "MS_PROG2",
+      "MS_FULL",
+      "MS_DEF",
+    ];
+    const templateCodes = [...templates]
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .slice(0, 5)
+      .map((item) => item.milestoneTemplateCode);
+    const codes = templateCodes.length === 5 ? templateCodes : fallbackCodes;
+
     const currentCode =
       detailStudent?.currentMilestone?.milestoneTemplateCode || "";
     const currentOrdinal = Number(
       detailStudent?.currentMilestone?.ordinal || 0,
     );
+    const completedAtValues = [
+      detailStudent?.currentMilestone?.completedAt1,
+      detailStudent?.currentMilestone?.completedAt2,
+      detailStudent?.currentMilestone?.completedAt3,
+      detailStudent?.currentMilestone?.completedAt4,
+      detailStudent?.currentMilestone?.completedAt5,
+    ];
+
     return codes.map((code, index) => {
       const ordinal = index + 1;
-      const isCompleted = currentOrdinal > ordinal;
-      const isCurrent = code === currentCode;
+      const completedAt = completedAtValues[index] || null;
+      const isCompleted = Boolean(completedAt && String(completedAt).trim());
+      const isCurrent =
+        code === currentCode || (!isCompleted && currentOrdinal === ordinal);
+
       return {
         code,
         label: getMilestoneLabel(code),
         ordinal,
         isCompleted,
         isCurrent,
+        completedAt,
       };
     });
   }, [
+    templates,
     detailStudent?.currentMilestone?.milestoneTemplateCode,
     detailStudent?.currentMilestone?.ordinal,
+    detailStudent?.currentMilestone?.completedAt1,
+    detailStudent?.currentMilestone?.completedAt2,
+    detailStudent?.currentMilestone?.completedAt3,
+    detailStudent?.currentMilestone?.completedAt4,
+    detailStudent?.currentMilestone?.completedAt5,
   ]);
+
+  const getLecturerStateLabel = (state?: string): string => {
+    const value = (state || "").toUpperCase();
+    if (value === "APPROVED") return "Đã duyệt";
+    if (value === "REJECTED") return "Từ chối";
+    if (value === "PENDING") return "Chờ duyệt";
+    return state || "--";
+  };
 
   return (
     <div className="student-profiles-module">
@@ -666,7 +835,7 @@ const StudentProfilesManagement: React.FC = () => {
                   </td>
 
                   <td>
-                    <div className="spm-topic-title">{row.topic.title}</div>
+                    <div className="spm-table-topic-title">{row.topic.title}</div>
                     <div className="spm-subtle">{row.topic.topicCode}</div>
                   </td>
 
@@ -816,19 +985,13 @@ const StudentProfilesManagement: React.FC = () => {
                   <button
                     type="button"
                     className="spm-edit-btn"
-                    onClick={() =>
-                      void openEdit(detailModal.row as DashboardRowView)
-                    }
+                    onClick={() => {
+                      void openEdit(detailModal.row as DashboardRowView);
+                      closeDetail();
+                    }}
                   >
                     <Edit size={13} />
                     Sửa
-                  </button>
-                  <button
-                    type="button"
-                    className="spm-detail-btn spm-topic-view-btn"
-                    onClick={() => setDetailTab("topic")}
-                  >
-                    Xem đề tài
                   </button>
                   <button
                     type="button"
@@ -851,6 +1014,14 @@ const StudentProfilesManagement: React.FC = () => {
                 </button>
                 <button
                   type="button"
+                  className={detailTab === "supervisor" ? "is-active" : ""}
+                  onClick={() => setDetailTab("supervisor")}
+                >
+                  <Users size={14} />
+                  Giảng viên
+                </button>
+                <button
+                  type="button"
                   className={detailTab === "topic" ? "is-active" : ""}
                   onClick={() => setDetailTab("topic")}
                 >
@@ -859,11 +1030,11 @@ const StudentProfilesManagement: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  className={detailTab === "progress" ? "is-active" : ""}
-                  onClick={() => setDetailTab("progress")}
+                  className={detailTab === "history" ? "is-active" : ""}
+                  onClick={() => setDetailTab("history")}
                 >
-                  <ChartColumnIncreasing size={14} />
-                  Tiến độ
+                  <History size={14} />
+                  Lịch sử báo cáo
                 </button>
               </div>
 
@@ -872,10 +1043,10 @@ const StudentProfilesManagement: React.FC = () => {
                   <div className="spm-detail-loading">Đang tải chi tiết...</div>
                 ) : (
                   <>
-                    {(detailTab === "info" || detailTab === "topic") && (
+                    {detailTab === "info" && (
                       <div className="spm-detail-columns">
                         <div className="spm-detail-column">
-                          <div className="spm-detail-section">
+                          <div className="spm-detail-section spm-info-card">
                             <h4>Thông tin cá nhân</h4>
                             <div className="spm-detail-list">
                               <div>
@@ -892,203 +1063,305 @@ const StudentProfilesManagement: React.FC = () => {
                               </div>
                               <div>
                                 <span>Giới tính</span>
-                                <strong>
-                                  {detailModal.row.student.gender || "--"}
-                                </strong>
+                                <strong>{detailModal.row.student.gender || "--"}</strong>
                               </div>
                               <div>
                                 <span>Ngày sinh</span>
                                 <strong>
-                                  {formatDate(
-                                    detailModal.row.student.dateOfBirth,
-                                  ) || "--"}
+                                  {formatDate(detailModal.row.student.dateOfBirth) ||
+                                    "--"}
                                 </strong>
                               </div>
                               <div>
                                 <span>Địa chỉ</span>
-                                <strong>
-                                  {detailModal.row.student.address || "--"}
-                                </strong>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="spm-detail-section">
-                            <h4>Học tập</h4>
-                            <div className="spm-detail-list">
-                              <div>
-                                <span>Khoa</span>
-                                <strong>
-                                  {detailModal.row.student.departmentCode ||
-                                    "--"}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Lớp</span>
-                                <strong>
-                                  {detailModal.row.student.classCode || "--"}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Khóa</span>
-                                <strong>
-                                  {detailModal.row.student.enrollmentYear ||
-                                    "--"}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>GPA</span>
-                                <strong>
-                                  {detailModal.row.student.gpa ?? "--"}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Academic Standing</span>
-                                <strong>
-                                  {detailModal.row.student.academicStanding ||
-                                    "--"}
-                                </strong>
+                                <strong>{detailModal.row.student.address || "--"}</strong>
                               </div>
                             </div>
                           </div>
                         </div>
 
                         <div className="spm-detail-column">
-                          <div className="spm-detail-section spm-topic-hero">
-                            <h4>Đề tài</h4>
-                            <div className="spm-topic-panel">
-                              <strong>{detailModal.row.topic.title}</strong>
-                              <span>{detailModal.row.topic.topicCode}</span>
-                              <span
-                                className={`spm-status spm-status-${detailModal.row.__status}`}
-                              >
-                                {detailModal.row.topic.status}
-                              </span>
-                              {detailTopicTags.length > 0 && (
-                                <div className="spm-tag-wrap">
-                                  {detailTopicTags.map((tag) => (
-                                    <span key={tag.tagCode} className="spm-tag">
-                                      {tag.tagName}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="spm-detail-section">
-                            <h4>Giảng viên hướng dẫn</h4>
+                          <div className="spm-detail-section spm-info-card">
+                            <h4>Học tập</h4>
                             <div className="spm-detail-list">
                               <div>
-                                <span>Họ tên</span>
+                                <span>Khoa</span>
                                 <strong>
-                                  {detailModal.row.supervisor?.fullName || "--"}
+                                  {detailModal.row.student.departmentCode || "--"}
                                 </strong>
                               </div>
                               <div>
-                                <span>Học vị</span>
+                                <span>Lớp</span>
+                                <strong>{detailModal.row.student.classCode || "--"}</strong>
+                              </div>
+                              <div>
+                                <span>Niên khóa</span>
                                 <strong>
-                                  {detailModal.row.supervisor?.degree || "--"}
+                                  {detailModal.row.student.enrollmentYear || "--"}
                                 </strong>
                               </div>
                               <div>
-                                <span>Email</span>
-                                <strong>
-                                  {detailModal.row.supervisor?.email || "--"}
-                                </strong>
+                                <span>GPA</span>
+                                <strong>{detailModal.row.student.gpa ?? "--"}</strong>
                               </div>
                               <div>
-                                <span>SĐT</span>
+                                <span>Xếp loại</span>
                                 <strong>
-                                  {detailModal.row.supervisor?.phoneNumber ||
-                                    "--"}
-                                </strong>
-                              </div>
-                              <div>
-                                <span>Hướng dẫn</span>
-                                <strong>
-                                  {detailModal.row.supervisor
-                                    ? `${detailModal.row.supervisor.currentGuidingCount} / ${detailModal.row.supervisor.guideQuota}`
-                                    : "--"}
+                                  {detailModal.row.student.academicStanding || "--"}
                                 </strong>
                               </div>
                             </div>
-                            {detailSupervisorTags.length > 0 && (
-                              <div className="spm-tag-wrap">
-                                {detailSupervisorTags.map((tag) => (
-                                  <span key={tag.tagCode} className="spm-tag">
-                                    {tag.tagName}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {detailTab === "progress" && (
-                      <div className="spm-progress-panel">
-                        <div className="spm-detail-section">
-                          <h4>Tiến độ</h4>
-                          <div className="spm-progress-hero">
-                            <div className="spm-progress-track spm-progress-track-lg">
-                              <div
-                                className="spm-progress-fill"
-                                style={{
-                                  width: `${detailModal.row.__progress}%`,
-                                }}
-                              />
+                    {detailTab === "supervisor" && (
+                      <div className="spm-supervisor-layout">
+                        <div className="spm-detail-section spm-info-card spm-supervisor-card">
+                          <h4>Giảng viên hướng dẫn</h4>
+                          <div className="spm-detail-list spm-supervisor-list">
+                            <div>
+                              <span>Họ tên</span>
+                              <strong>{detailModal.row.supervisor?.fullName || "--"}</strong>
                             </div>
-                            <strong>{detailModal.row.__progress}%</strong>
+                            <div>
+                              <span>Mã GV</span>
+                              <strong>{detailModal.row.supervisor?.lecturerCode || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Học vị</span>
+                              <strong>{detailModal.row.supervisor?.degree || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Hướng dẫn</span>
+                              <div className="spm-guide-quota">
+                                <div className="spm-progress-track spm-progress-track-lg">
+                                  <div
+                                    className="spm-progress-fill"
+                                    style={{
+                                      width: `${Math.min(
+                                        100,
+                                        Math.round(
+                                          ((detailModal.row.supervisor?.currentGuidingCount || 0) /
+                                            Math.max(1, detailModal.row.supervisor?.guideQuota || 1)) *
+                                            100,
+                                        ),
+                                      )}%`,
+                                    }}
+                                  />
+                                </div>
+                                <strong>
+                                  {detailModal.row.supervisor
+                                    ? `${detailModal.row.supervisor.currentGuidingCount || 0} / ${detailModal.row.supervisor.guideQuota || 0}`
+                                    : "--"}
+                                </strong>
+                              </div>
+                            </div>
                           </div>
-                          <div className="spm-progress-meta">
+                        </div>
+
+                        <div className="spm-detail-section spm-info-card spm-supervisor-card">
+                          <h4>Liên hệ & Chuyên ngành</h4>
+                            <div className="spm-detail-list spm-supervisor-list">
                             <div>
-                              <span>Mốc hiện tại</span>
-                              <strong>
-                                {detailModal.row.currentMilestone
-                                  ?.milestoneTemplateCode || "--"}
-                              </strong>
+                              <span>Email</span>
+                              <strong>{detailModal.row.supervisor?.email || "--"}</strong>
                             </div>
                             <div>
-                              <span>Trạng thái</span>
-                              <strong>
-                                {detailModal.row.currentMilestone?.state ||
-                                  "--"}
-                              </strong>
+                              <span>SĐT</span>
+                              <strong>{detailModal.row.supervisor?.phoneNumber || "--"}</strong>
+                            </div>
+                            <div className="spm-supervisor-specialty-row">
+                              <span>Chuyên ngành</span>
+                              {detailSupervisorTags.length > 0 ? (
+                                <div className="spm-tag-wrap spm-tag-wrap-compact spm-supervisor-tags">
+                                  {detailSupervisorTags.map((tag) => (
+                                    <span key={tag.tagCode} className="spm-tag">
+                                      {tag.tagName}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <strong>--</strong>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {detailTab === "topic" && (
+                      <div className="spm-progress-panel">
+                        <div className="spm-detail-section spm-topic-hero">
+                          <div className="spm-topic-panel">
+                            <strong className="spm-detail-topic-title">{detailModal.row.topic.title}</strong>
+
+                            <div className="spm-topic-layout">
+                              <div className="spm-topic-layout-left">
+                                <div className="spm-topic-field">
+                                  <span className="spm-topic-field-label">Mã đề tài:</span>
+                                  <strong>{detailModal.row.topic.topicCode}</strong>
+                                </div>
+
+                                <div className="spm-topic-field spm-topic-field-summary">
+                                  <span className="spm-topic-field-label">Mô tả:</span>
+                                  <p>{detailModal.row.topic.summary || "--"}</p>
+                                </div>
+                              </div>
+
+                              <div className="spm-topic-layout-right">
+                                <div className="spm-topic-meta-row">
+                                  <span className="spm-topic-meta-label">Trạng thái:</span>
+                                  <span
+                                    className={`spm-status spm-status-${detailModal.row.__status}`}
+                                  >
+                                    {detailModal.row.topic.status}
+                                  </span>
+                                </div>
+
+                                <div className="spm-topic-meta-row">
+                                  <span className="spm-topic-meta-label">Tags:</span>
+                                  {detailTopicTags.length > 0 ? (
+                                    <div className="spm-tag-wrap spm-tag-wrap-compact">
+                                      {detailTopicTags.map((tag) => (
+                                        <span key={tag.tagCode} className="spm-tag">
+                                          {tag.tagName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="spm-topic-meta-empty">--</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
 
                         <div className="spm-detail-section">
-                          <h4>Timeline</h4>
-                          <div className="spm-timeline">
+                          <div className="spm-timeline-horizontal">
                             {detailMilestones.map((milestone) => (
                               <div
                                 key={milestone.code}
-                                className={`spm-timeline-item ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}
+                                className={`spm-timeline-step ${milestone.isCurrent ? "is-current" : ""} ${milestone.isCompleted ? "is-completed" : ""}`}
                               >
-                                <div className="spm-timeline-icon">
+                                <div className="spm-timeline-node">
                                   {milestone.isCompleted
-                                    ? "✓"
+                                    ? <Check size={16} />
                                     : milestone.isCurrent
-                                      ? "⌛"
-                                      : ""}
+                                      ? <Clock3 size={15} />
+                                      : <Circle size={11} />}
                                 </div>
-                                <div className="spm-timeline-body">
+                                <div className="spm-timeline-step-body">
                                   <strong>
                                     {milestone.code} - {milestone.label}
                                   </strong>
-                                  <span>
+                                  <span className="spm-timeline-state">
                                     {milestone.isCompleted
                                       ? "Đã xong"
                                       : milestone.isCurrent
                                         ? "Đang làm"
                                         : "Chưa làm"}
                                   </span>
+                                  <span className="spm-timeline-time">
+                                    Hoàn thành: {formatDateTime(milestone.completedAt)}
+                                  </span>
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {detailTab === "history" && (
+                      <div className="spm-progress-panel">
+                        <div className="spm-detail-section">
+                          <h4>Lịch sử báo cáo</h4>
+                          {historyLoading ? (
+                            <div className="spm-detail-loading">Đang tải lịch sử báo cáo...</div>
+                          ) : historyItems.length === 0 ? (
+                            <div className="spm-history-empty">Chưa có báo cáo nào.</div>
+                          ) : (
+                            <div className="spm-history-list">
+                              {historyItems.map((item) => {
+                                const submission = item.submission;
+                                const files = submission.files ?? [];
+                                return (
+                                  <article
+                                    key={submission.submissionID}
+                                    className="spm-history-item"
+                                  >
+                                    <header className="spm-history-head">
+                                      <div>
+                                        <h5>{submission.reportTitle || submission.submissionCode}</h5>
+                                        <p>
+                                          {submission.submissionCode} • {submission.milestoneCode}
+                                        </p>
+                                      </div>
+                                      <span className="spm-history-badge">
+                                        {getLecturerStateLabel(submission.lecturerState)}
+                                      </span>
+                                    </header>
+
+                                    <div className="spm-history-meta-grid">
+                                      <div className="spm-history-meta-item">
+                                        <span>Nộp lúc</span>
+                                        <strong>{formatDateTime(submission.submittedAt)}</strong>
+                                      </div>
+                                      <div className="spm-history-meta-item">
+                                        <span>Cập nhật</span>
+                                        <strong>{formatDateTime(submission.lastUpdated)}</strong>
+                                      </div>
+                                      <div className="spm-history-meta-item">
+                                        <span>Lần nộp</span>
+                                        <strong>{submission.attemptNumber ?? "--"}</strong>
+                                      </div>
+                                      <div className="spm-history-meta-item">
+                                        <span>Feedback</span>
+                                        <strong>{submission.feedbackLevel || "--"}</strong>
+                                      </div>
+                                    </div>
+
+                                    <div className="spm-history-content-grid">
+                                      <div className="spm-history-block">
+                                        <span className="spm-history-block-label">Mô tả báo cáo</span>
+                                        <p className="spm-history-desc">
+                                          {submission.reportDescription || "Không có mô tả."}
+                                        </p>
+                                      </div>
+
+                                      <div className="spm-history-block">
+                                        <span className="spm-history-block-label">Nhận xét giảng viên</span>
+                                        <p className="spm-history-comment">
+                                          {submission.lecturerComment || "Chưa có nhận xét."}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {files.length > 0 && (
+                                      <div className="spm-history-files">
+                                        {files.map((file) => (
+                                          <a
+                                            key={file.fileID}
+                                            href={getAvatarUrl(file.fileURL)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            {file.fileName}
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div className="spm-history-footer">
+                            Tổng báo cáo: <strong>{historyTotalCount}</strong>
                           </div>
                         </div>
                       </div>
@@ -1122,47 +1395,59 @@ const StudentProfilesManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="spm-form-grid">
-              {profileFields.map((field) => {
-                const value = formValues[field.name] || "";
-                return (
-                  <label key={field.name} className="spm-form-field">
-                    <span>
-                      {field.label}
-                      {field.required ? " *" : ""}
-                    </span>
-                    {field.type === "textarea" ? (
-                      <textarea
-                        value={value}
-                        rows={3}
-                        onChange={(event) =>
-                          setFormValues((prev) => ({
-                            ...prev,
-                            [field.name]: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      <input
-                        type={
-                          field.type === "number"
-                            ? "number"
-                            : field.type === "date"
-                              ? "date"
-                              : "text"
-                        }
-                        value={value}
-                        onChange={(event) =>
-                          setFormValues((prev) => ({
-                            ...prev,
-                            [field.name]: event.target.value,
-                          }))
-                        }
-                      />
-                    )}
-                  </label>
-                );
-              })}
+            <div className="spm-edit-layout">
+              {editFieldSections.map((section) => (
+                <section key={section.title} className="spm-edit-section">
+                  <header className="spm-edit-section-header">
+                    <h4>{section.title}</h4>
+                    <p>{section.description}</p>
+                  </header>
+                  <div className="spm-form-grid">
+                    {section.fields.map((fieldName) => {
+                      const field = getFieldDefinition(fieldName);
+                      const value = formValues[field.name] || "";
+
+                      return (
+                        <label key={field.name} className="spm-form-field">
+                          <span>
+                            {field.label}
+                            {field.required ? " *" : ""}
+                          </span>
+                          {field.type === "textarea" ? (
+                            <textarea
+                              value={value}
+                              rows={3}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            />
+                          ) : (
+                            <input
+                              type={
+                                field.type === "number"
+                                  ? "number"
+                                  : field.type === "date"
+                                    ? "date"
+                                    : "text"
+                              }
+                              value={value}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
 
             <div className="spm-form-actions">
