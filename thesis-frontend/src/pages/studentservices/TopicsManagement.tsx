@@ -1,10 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Edit,
+  Eye,
+  Filter,
+  History,
+  Check,
+  Clock,
+  Plus,
+  Search,
+  Trash2,
+  User,
+  Users,
+} from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
-import "../admin/Dashboard.css";
 import "./TopicsManagement.css";
 
 type RecordData = Record<string, unknown>;
@@ -23,34 +36,239 @@ interface ColumnDef {
   aliases?: string[];
 }
 
+interface DetailCard {
+  label: string;
+  value: string;
+  wide?: boolean;
+}
+
+type TopicTag = {
+  tagCode: string;
+  tagName: string;
+};
+
+type DashboardStudent = {
+  studentProfileID: number;
+  studentCode: string;
+  userCode: string;
+  fullName: string;
+  studentEmail: string;
+  phoneNumber: string;
+  departmentCode: string;
+  classCode: string;
+  facultyCode: string;
+  studentImage?: string;
+  gpa?: number;
+  academicStanding?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  address?: string;
+  enrollmentYear?: number;
+  graduationYear?: number | null;
+  status?: string;
+  notes?: string | null;
+  createdAt?: string;
+  lastUpdated?: string;
+};
+
+type DashboardTopic = {
+  topicID: number;
+  topicCode: string;
+  title: string;
+  summary: string;
+  type: string;
+  status: string;
+  catalogTopicCode?: string;
+  supervisorLecturerCode?: string;
+  departmentCode?: string;
+  createdAt?: string;
+  lastUpdated?: string;
+};
+
+type DashboardSupervisor = {
+  lecturerProfileID: number;
+  lecturerCode: string;
+  userCode?: string;
+  fullName: string;
+  degree?: string;
+  email: string;
+  phoneNumber: string;
+  departmentCode?: string;
+  guideQuota?: number;
+  currentGuidingCount?: number;
+};
+
+type DashboardMilestone = {
+  milestoneID: number;
+  milestoneCode: string;
+  topicCode: string;
+  milestoneTemplateCode: string;
+  ordinal?: number;
+  deadline?: string | null;
+  state?: string;
+  startedAt?: string | null;
+  completedAt1?: string | null;
+  completedAt2?: string | null;
+  completedAt3?: string | null;
+  completedAt4?: string | null;
+  completedAt5?: string | null;
+};
+
+type DashboardItem = {
+  student: DashboardStudent;
+  topic: DashboardTopic;
+  topicTags: TopicTag[];
+  currentMilestone: DashboardMilestone | null;
+  supervisor: DashboardSupervisor | null;
+  supervisorTags?: TopicTag[];
+  canSubmit?: boolean;
+  blockReason?: string | null;
+};
+
+type DashboardDataPayload = {
+  items: DashboardItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+};
+
+type MilestoneTemplate = {
+  milestoneTemplateID: number;
+  milestoneTemplateCode: string;
+  name: string;
+  description?: string;
+  ordinal: number;
+  deadline?: string | null;
+  createdAt?: string;
+  lastUpdated?: string | null;
+};
+
+type ProgressHistoryFile = {
+  fileID: number;
+  fileURL: string;
+  fileName: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  uploadedAt?: string;
+  uploadedByUserCode?: string;
+};
+
+type ProgressHistorySubmission = {
+  submissionID: number;
+  submissionCode: string;
+  milestoneID?: number;
+  milestoneCode: string;
+  studentUserCode: string;
+  studentProfileCode?: string | null;
+  lecturerCode?: string;
+  submittedAt?: string;
+  attemptNumber?: number;
+  lecturerComment?: string;
+  lecturerState?: string;
+  feedbackLevel?: string;
+  reportTitle?: string;
+  reportDescription?: string;
+  lastUpdated?: string;
+  files?: ProgressHistoryFile[];
+};
+
+type ProgressHistoryItem = {
+  submission: ProgressHistorySubmission;
+};
+
+type ProgressHistoryPayload = {
+  items: ProgressHistoryItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+};
+
+interface DetailMilestoneView {
+  code: string;
+  label: string;
+  ordinal: number;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  completedAt: string | null;
+}
+
+const hiddenSystemFields: FieldDef[] = [
+  { name: "createdAt", label: "createdAt", type: "date" },
+  { name: "lastUpdated", label: "lastUpdated", type: "date" },
+];
+
 const fields: FieldDef[] = [
-  { name: "topicCode", label: "topicCode" },
-  { name: "title", label: "title", required: true },
-  { name: "summary", label: "summary", type: "textarea" },
-  { name: "type", label: "type" },
+  { name: "topicCode", label: "Mã đề tài", required: true },
+  { name: "title", label: "Tên đề tài", required: true },
+  { name: "summary", label: "Mô tả", type: "textarea" },
+  { name: "type", label: "Loại đề tài" },
+  { name: "status", label: "Trạng thái" },
+  { name: "departmentID", label: "departmentID", type: "number" },
+  { name: "departmentCode", label: "departmentCode" },
   { name: "proposerUserID", label: "proposerUserID", type: "number" },
   { name: "proposerUserCode", label: "proposerUserCode" },
-  {
-    name: "proposerStudentProfileID",
-    label: "proposerStudentProfileID",
-    type: "number",
-  },
+  { name: "proposerStudentProfileID", label: "proposerStudentProfileID", type: "number" },
   { name: "proposerStudentCode", label: "proposerStudentCode" },
   { name: "supervisorUserID", label: "supervisorUserID", type: "number" },
   { name: "supervisorUserCode", label: "supervisorUserCode" },
-  {
-    name: "supervisorLecturerProfileID",
-    label: "supervisorLecturerProfileID",
-    type: "number",
-  },
+  { name: "supervisorLecturerProfileID", label: "supervisorLecturerProfileID", type: "number" },
   { name: "supervisorLecturerCode", label: "supervisorLecturerCode" },
   { name: "catalogTopicID", label: "catalogTopicID", type: "number" },
   { name: "catalogTopicCode", label: "catalogTopicCode" },
-  { name: "departmentID", label: "departmentID", type: "number" },
-  { name: "departmentCode", label: "departmentCode" },
-  { name: "status", label: "status" },
   { name: "resubmitCount", label: "resubmitCount", type: "number" },
-  { name: "lecturerComment", label: "lecturerComment", type: "textarea" },
+  { name: "lecturerComment", label: "Phản hồi giảng viên", type: "textarea" },
+];
+
+const createFields = fields;
+const editFields = fields.filter((field) => field.name !== "topicCode");
+const updateFields = [...editFields, ...hiddenSystemFields];
+
+const editFieldSections: Array<{
+  title: string;
+  description: string;
+  fields: string[];
+}> = [
+  {
+    title: "Thông tin cơ bản",
+    description: "Mã, tên, loại và trạng thái của đề tài.",
+    fields: ["topicCode", "title", "type", "status"],
+  },
+  {
+    title: "Người đề xuất",
+    description: "Thông tin liên kết của sinh viên hoặc user đề xuất.",
+    fields: [
+      "proposerUserID",
+      "proposerUserCode",
+      "proposerStudentProfileID",
+      "proposerStudentCode",
+    ],
+  },
+  {
+    title: "Người hướng dẫn",
+    description: "Thông tin giảng viên hướng dẫn.",
+    fields: [
+      "supervisorUserID",
+      "supervisorUserCode",
+      "supervisorLecturerProfileID",
+      "supervisorLecturerCode",
+    ],
+  },
+  {
+    title: "Danh mục & khoa",
+    description: "Liên kết danh mục đề tài và đơn vị quản lý.",
+    fields: [
+      "catalogTopicID",
+      "catalogTopicCode",
+      "departmentID",
+      "departmentCode",
+      "resubmitCount",
+    ],
+  },
+  {
+    title: "Mô tả bổ sung",
+    description: "Nội dung mô tả và phản hồi của giảng viên.",
+    fields: ["summary", "lecturerComment"],
+  },
 ];
 
 const filterFields: FieldDef[] = [
@@ -66,21 +284,9 @@ const filterFields: FieldDef[] = [
 const columns: ColumnDef[] = [
   { key: "topicCode", label: "Mã đề tài", aliases: ["code"] },
   { key: "title", label: "Tên đề tài", aliases: ["topicTitle", "name"] },
-  {
-    key: "departmentCode",
-    label: "Khoa/Bộ môn",
-    aliases: ["departmentName", "department"],
-  },
-  {
-    key: "proposerUserCode",
-    label: "Người đề xuất",
-    aliases: ["proposerStudentCode", "proposerCode", "proposerName"],
-  },
-  {
-    key: "supervisorLecturerCode",
-    label: "GV hướng dẫn",
-    aliases: ["supervisorUserCode", "supervisorCode"],
-  },
+  { key: "departmentCode", label: "Khoa/Bộ môn", aliases: ["departmentName", "department"] },
+  { key: "proposerUserCode", label: "Người đề xuất", aliases: ["proposerStudentCode", "proposerCode", "proposerName"] },
+  { key: "supervisorLecturerCode", label: "GV hướng dẫn", aliases: ["supervisorUserCode", "supervisorCode"] },
   { key: "status", label: "Trạng thái", aliases: ["topicStatus", "isActive"] },
 ];
 
@@ -88,6 +294,20 @@ function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("vi-VN");
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("vi-VN");
 }
 
 function getColumnValue(row: RecordData, column: ColumnDef): unknown {
@@ -101,15 +321,15 @@ function getColumnValue(row: RecordData, column: ColumnDef): unknown {
   return "";
 }
 
-function toFormRecord(data: RecordData): Record<string, string> {
-  return fields.reduce<Record<string, string>>((acc, field) => {
+function toFormRecord(data: RecordData, schemaFields: FieldDef[] = fields): Record<string, string> {
+  return schemaFields.reduce<Record<string, string>>((acc, field) => {
     acc[field.name] = toDisplay(data[field.name]);
     return acc;
   }, {});
 }
 
-function toPayload(formValues: Record<string, string>): RecordData {
-  return fields.reduce<RecordData>((acc, field) => {
+function toPayload(formValues: Record<string, string>, schemaFields: FieldDef[] = fields): RecordData {
+  return schemaFields.reduce<RecordData>((acc, field) => {
     const raw = (formValues[field.name] ?? "").trim();
     if (!raw) {
       acc[field.name] = field.type === "number" ? null : "";
@@ -152,33 +372,134 @@ async function requestApiData<T>(
   };
 }
 
-function normalizeList(payload: unknown): {
-  items: RecordData[];
-  fallbackTotal: number;
-} {
+function normalizeList(payload: unknown): { items: RecordData[]; fallbackTotal: number } {
   if (Array.isArray(payload)) {
     return { items: payload as RecordData[], fallbackTotal: payload.length };
   }
   if (payload && typeof payload === "object") {
     const source = payload as Record<string, unknown>;
-    const nested = [
-      source.items,
-      source.records,
-      source.result,
-      source.data,
-      source.list,
-    ];
+    const nested = [source.items, source.records, source.result, source.data, source.list];
     const arr = nested.find((candidate) => Array.isArray(candidate));
     if (Array.isArray(arr)) {
       return {
         items: arr as RecordData[],
-        fallbackTotal: Number(
-          source.totalCount ?? source.total ?? source.count ?? arr.length,
-        ),
+        fallbackTotal: Number(source.totalCount ?? source.total ?? source.count ?? arr.length),
       };
     }
   }
   return { items: [], fallbackTotal: 0 };
+}
+
+function normalizeDashboardItems(payload: unknown): DashboardItem[] {
+  if (!payload || typeof payload !== "object") return [];
+  const source = payload as Record<string, unknown>;
+  const items = source.items;
+  return Array.isArray(items) ? (items as DashboardItem[]) : [];
+}
+
+function getTopicCode(row: RecordData): string {
+  return String(row.topicCode || row.code || "--");
+}
+
+function getTopicTitle(row: RecordData): string {
+  return String(row.title || row.topicTitle || row.name || "--");
+}
+
+function getTopicType(row: RecordData): string {
+  return String(row.type || row.topicType || "--");
+}
+
+function getTopicStatus(row: RecordData): string {
+  return String(row.status || row.topicStatus || "--");
+}
+
+function getTopicID(row: RecordData): string {
+  const topic = row.topic && typeof row.topic === "object" ? (row.topic as Record<string, unknown>) : null;
+  return String(row.topicID || row.topicId || row.id || topic?.topicID || "").trim();
+}
+
+function getTopicProposerName(item?: DashboardItem): string {
+  return String(item?.student?.fullName || "--");
+}
+
+function getTopicSupervisorName(item?: DashboardItem): string {
+  return String(item?.supervisor?.fullName || "--");
+}
+
+function getStatusTone(status?: string): string {
+  const value = String(status || "").toLowerCase();
+  if (value.includes("approved") || value.includes("đã duyệt")) return "approved";
+  if (value.includes("rejected") || value.includes("từ chối")) return "rejected";
+  if (value.includes("revision") || value.includes("cần sửa")) return "revision";
+  return "pending";
+}
+
+function buildFallbackDetailItem(row: RecordData): DashboardItem {
+  return {
+    student: {
+      studentProfileID: 0,
+      studentCode: String(row.studentCode || ""),
+      userCode: String(row.userCode || ""),
+      fullName: String(row.fullName || row.studentName || "--"),
+      studentEmail: String(row.studentEmail || ""),
+      phoneNumber: String(row.phoneNumber || ""),
+      departmentCode: String(row.departmentCode || ""),
+      classCode: String(row.classCode || ""),
+      facultyCode: String(row.facultyCode || ""),
+      studentImage: String(row.studentImage || ""),
+      gpa: row.gpa !== undefined ? Number(row.gpa) : undefined,
+      academicStanding: String(row.academicStanding || ""),
+      gender: String(row.gender || ""),
+      dateOfBirth: String(row.dateOfBirth || ""),
+      address: String(row.address || ""),
+      enrollmentYear: row.enrollmentYear !== undefined ? Number(row.enrollmentYear) : undefined,
+      graduationYear: row.graduationYear !== undefined ? Number(row.graduationYear) : null,
+      status: String(row.studentStatus || row.status || ""),
+      notes: String(row.notes || ""),
+      createdAt: String(row.studentCreatedAt || row.createdAt || ""),
+      lastUpdated: String(row.studentLastUpdated || row.lastUpdated || ""),
+    },
+    topic: {
+      topicID: Number(row.topicID || 0),
+      topicCode: String(row.topicCode || ""),
+      title: String(row.title || "--"),
+      summary: String(row.summary || "--"),
+      type: String(row.type || "--"),
+      status: String(row.status || "--"),
+      catalogTopicCode: String(row.catalogTopicCode || ""),
+      supervisorLecturerCode: String(row.supervisorLecturerCode || ""),
+      departmentCode: String(row.departmentCode || ""),
+      createdAt: String(row.createdAt || ""),
+      lastUpdated: String(row.lastUpdated || ""),
+    },
+    topicTags: [],
+    currentMilestone: null,
+    supervisor: {
+      lecturerProfileID: 0,
+      lecturerCode: String(row.supervisorLecturerCode || ""),
+      fullName: String(row.supervisorName || "--"),
+      degree: String(row.degree || ""),
+      email: String(row.supervisorEmail || ""),
+      phoneNumber: String(row.supervisorPhoneNumber || ""),
+      departmentCode: String(row.departmentCode || ""),
+      guideQuota: undefined,
+      currentGuidingCount: undefined,
+    },
+    supervisorTags: [],
+    canSubmit: false,
+    blockReason: null,
+  };
+}
+
+function getMilestoneLabel(code: string): string {
+  const map: Record<string, string> = {
+    MS_REG: "Đăng ký đề tài",
+    MS_PROG1: "Tiến độ 1",
+    MS_PROG2: "Tiến độ 2",
+    MS_FULL: "Nộp khóa luận hoàn chỉnh",
+    MS_DEF: "Bảo vệ khóa luận",
+  };
+  return map[code] || code;
 }
 
 const TopicsManagement: React.FC = () => {
@@ -186,17 +507,13 @@ const TopicsManagement: React.FC = () => {
   const [rows, setRows] = useState<RecordData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeModal, setActiveModal] = useState<
-    "detail" | "create" | "edit" | null
-  >(null);
+  const [activeModal, setActiveModal] = useState<"detail" | "create" | "edit" | null>(null);
   const [selectedRow, setSelectedRow] = useState<RecordData | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [searchInput, setSearchInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<
-    Record<string, string>
-  >(() =>
+  const [advancedFilters, setAdvancedFilters] = useState<Record<string, string>>(() =>
     filterFields.reduce<Record<string, string>>((acc, field) => {
       acc[field.name] = "";
       return acc;
@@ -205,6 +522,13 @@ const TopicsManagement: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [totalCount, setTotalCount] = useState(0);
+  const [templates, setTemplates] = useState<MilestoneTemplate[]>([]);
+  const [detailModal, setDetailModal] = useState<{ isOpen: boolean; item?: DashboardItem }>({ isOpen: false });
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTab, setDetailTab] = useState<"topic" | "student" | "supervisor" | "history">("topic");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyItems, setHistoryItems] = useState<ProgressHistoryItem[]>([]);
+  const [historyTotalCount, setHistoryTotalCount] = useState(0);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -214,13 +538,25 @@ const TopicsManagement: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await fetchData<ApiResponse<MilestoneTemplate[]>>(
+          "/MilestoneTemplates/get-list?Page=0&PageSize=10",
+          { method: "GET" },
+        );
+        if (!response?.success) return;
+        setTemplates(response.data || []);
+      } catch {
+        setTemplates([]);
+      }
+    };
+
+    void fetchTemplates();
+  }, []);
+
   const listQuery = useMemo(
-    () => ({
-      page,
-      pageSize,
-      search: searchKeyword,
-      ...advancedFilters,
-    }),
+    () => ({ page, pageSize, search: searchKeyword, ...advancedFilters }),
     [advancedFilters, page, pageSize, searchKeyword],
   );
 
@@ -237,12 +573,7 @@ const TopicsManagement: React.FC = () => {
       setRows(normalized.items);
       setTotalCount(apiTotal > 0 ? apiTotal : normalized.fallbackTotal);
     } catch (error) {
-      addToast(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải danh sách đề tài.",
-        "error",
-      );
+      addToast(error instanceof Error ? error.message : "Không thể tải danh sách đề tài.", "error");
       setRows([]);
       setTotalCount(0);
     } finally {
@@ -254,10 +585,7 @@ const TopicsManagement: React.FC = () => {
     void loadRows();
   }, [loadRows]);
 
-  const pageCount = useMemo(
-    () => Math.max(1, Math.ceil(totalCount / Math.max(1, pageSize))),
-    [pageSize, totalCount],
-  );
+  const pageCount = useMemo(() => Math.max(1, Math.ceil(totalCount / Math.max(1, pageSize))), [pageSize, totalCount]);
 
   const openCreate = async () => {
     try {
@@ -266,58 +594,109 @@ const TopicsManagement: React.FC = () => {
         { method: "GET" },
         "Không thể tải mẫu tạo mới.",
       );
-      setFormValues(toFormRecord(data || {}));
+      setFormValues(toFormRecord(data || {}, createFields));
     } catch {
-      setFormValues(toFormRecord({}));
+      setFormValues(toFormRecord({}, createFields));
     }
     setSelectedRow(null);
     setActiveModal("create");
   };
 
   const openEdit = async (row: RecordData) => {
-    const code = String(row.topicCode ?? "").trim();
-    if (!code) {
-      addToast("Không xác định được topicCode để cập nhật.", "error");
+    const topicID = getTopicID(row);
+    if (!topicID) {
+      addToast("Không xác định được topicID để cập nhật.", "error");
       return;
     }
+
     try {
       const { data } = await requestApiData<RecordData>(
-        `/Topics/get-update/${encodeURIComponent(code)}`,
+        `/Topics/get-update/${encodeURIComponent(topicID)}`,
         { method: "GET" },
         "Không thể tải dữ liệu cập nhật.",
       );
-      setFormValues(toFormRecord(data || row));
+      setFormValues(toFormRecord(data || row, updateFields));
       setSelectedRow(row);
       setActiveModal("edit");
     } catch (error) {
-      addToast(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải dữ liệu cập nhật.",
-        "error",
-      );
+      addToast(error instanceof Error ? error.message : "Không thể tải dữ liệu cập nhật.", "error");
     }
   };
+
+  const loadDetail = useCallback(async (topicCode: string) => {
+    if (!topicCode) return null;
+
+    try {
+      const query = new URLSearchParams();
+      query.append("TopicCode", topicCode);
+
+      const response = await fetchData<ApiResponse<DashboardDataPayload>>(
+        `/reports/student/dashboard/get-list?${query.toString()}`,
+        { method: "GET" },
+      );
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.message || "Không thể tải chi tiết đề tài.");
+      }
+
+      const items = normalizeDashboardItems(response.data);
+      const item = items[0];
+      if (!item) return null;
+
+      const userCode = String(item.student?.userCode || "").trim();
+      if (userCode) {
+        setHistoryLoading(true);
+        try {
+          const historyRes = await fetchData<ApiResponse<ProgressHistoryPayload>>(
+            `/reports/student/progress-history?userCode=${encodeURIComponent(userCode)}&page=1&pageSize=10`,
+            { method: "GET" },
+          );
+
+          if (historyRes?.success && historyRes.data) {
+            setHistoryItems(Array.isArray(historyRes.data.items) ? historyRes.data.items : []);
+            setHistoryTotalCount(Number(historyRes.totalCount || historyRes.data.totalCount || 0));
+          } else {
+            setHistoryItems([]);
+            setHistoryTotalCount(0);
+          }
+        } catch {
+          setHistoryItems([]);
+          setHistoryTotalCount(0);
+        } finally {
+          setHistoryLoading(false);
+        }
+      }
+
+      return item;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : "Không thể tải chi tiết đề tài.", "error");
+      return null;
+    }
+  }, [addToast]);
 
   const openDetail = async (row: RecordData) => {
     const code = String(row.topicCode ?? "").trim();
     if (!code) {
       setSelectedRow(row);
+      setDetailModal({ isOpen: false });
       setActiveModal("detail");
       return;
     }
 
-    try {
-      const { data } = await requestApiData<RecordData>(
-        `/Topics/get-detail/${encodeURIComponent(code)}`,
-        { method: "GET" },
-        "Không thể tải chi tiết đề tài.",
-      );
-      setSelectedRow(data);
-    } catch {
+    setDetailLoading(true);
+    setHistoryItems([]);
+    setHistoryTotalCount(0);
+    setDetailTab("topic");
+
+    const detailItem = await loadDetail(code);
+    if (detailItem) {
+      setDetailModal({ isOpen: true, item: detailItem });
+      setSelectedRow(detailItem.topic as RecordData);
+    } else {
+      setDetailModal({ isOpen: true, item: buildFallbackDetailItem(row) });
       setSelectedRow(row);
     }
-    setActiveModal("detail");
+    setDetailLoading(false);
   };
 
   const handleDelete = async (row: RecordData) => {
@@ -337,22 +716,19 @@ const TopicsManagement: React.FC = () => {
       addToast("Xóa dữ liệu thành công.", "success");
       await loadRows();
     } catch (error) {
-      addToast(
-        error instanceof Error ? error.message : "Không thể xóa bản ghi.",
-        "error",
-      );
+      addToast(error instanceof Error ? error.message : "Không thể xóa bản ghi.", "error");
     }
   };
 
   const handleSubmit = async () => {
-    const payload = toPayload(formValues);
-    const required = fields.find((field) => {
+    const schemaFields = activeModal === "edit" ? updateFields : createFields;
+    const payload = toPayload(formValues, schemaFields);
+    const required = schemaFields.find((field) => {
       if (!field.required) return false;
       const value = payload[field.name];
-      return (
-        value === null || value === undefined || String(value).trim() === ""
-      );
+      return value === null || value === undefined || String(value).trim() === "";
     });
+
     if (required) {
       addToast(`Trường ${required.label} là bắt buộc.`, "warning");
       return;
@@ -377,9 +753,13 @@ const TopicsManagement: React.FC = () => {
       }
 
       if (activeModal === "edit" && selectedRow) {
-        const code = String(selectedRow.topicCode ?? "").trim();
+        const topicID = getTopicID(selectedRow);
+        if (!topicID) {
+          addToast("Không xác định được topicID để cập nhật.", "error");
+          return;
+        }
         await requestApiData<RecordData>(
-          `/Topics/update/${encodeURIComponent(code)}`,
+          `/Topics/update/${encodeURIComponent(topicID)}`,
           { method: "PUT", body: payload },
           "Không thể cập nhật bản ghi.",
         );
@@ -389,10 +769,7 @@ const TopicsManagement: React.FC = () => {
       setActiveModal(null);
       await loadRows();
     } catch (error) {
-      addToast(
-        error instanceof Error ? error.message : "Không thể lưu dữ liệu.",
-        "error",
-      );
+      addToast(error instanceof Error ? error.message : "Không thể lưu dữ liệu.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -410,177 +787,137 @@ const TopicsManagement: React.FC = () => {
     setPage(1);
   };
 
+  const detailItem = detailModal.item;
+  const detailTopic = detailItem?.topic || ({} as DashboardTopic);
+  const detailStudent = detailItem?.student || ({} as DashboardStudent);
+  const detailSupervisor = detailItem?.supervisor || ({} as DashboardSupervisor);
+  const detailTopicTags = detailItem?.topicTags ?? [];
+  const detailSupervisorTags = detailItem?.supervisorTags ?? [];
+
+  const detailMilestones = useMemo<DetailMilestoneView[]>(() => {
+    const fallbackCodes = ["MS_REG", "MS_PROG1", "MS_PROG2", "MS_FULL", "MS_DEF"];
+    const templateCodes = [...templates]
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .slice(0, 5)
+      .map((item) => item.milestoneTemplateCode);
+    const codes = templateCodes.length === 5 ? templateCodes : fallbackCodes;
+
+    const currentCode = detailItem?.currentMilestone?.milestoneTemplateCode || "";
+    const currentOrdinal = Number(detailItem?.currentMilestone?.ordinal || 0);
+    const completedAtValues = [
+      detailItem?.currentMilestone?.completedAt1,
+      detailItem?.currentMilestone?.completedAt2,
+      detailItem?.currentMilestone?.completedAt3,
+      detailItem?.currentMilestone?.completedAt4,
+      detailItem?.currentMilestone?.completedAt5,
+    ];
+
+    return codes.map((code, index) => {
+      const ordinal = index + 1;
+      const completedAt = completedAtValues[index] || null;
+      const isCompleted = Boolean(completedAt && String(completedAt).trim());
+      const isCurrent = code === currentCode || (!isCompleted && currentOrdinal === ordinal);
+
+      return {
+        code,
+        label: getMilestoneLabel(code),
+        ordinal,
+        isCompleted,
+        isCurrent,
+        completedAt,
+      };
+    });
+  }, [
+    templates,
+    detailItem?.currentMilestone?.milestoneTemplateCode,
+    detailItem?.currentMilestone?.ordinal,
+    detailItem?.currentMilestone?.completedAt1,
+    detailItem?.currentMilestone?.completedAt2,
+    detailItem?.currentMilestone?.completedAt3,
+    detailItem?.currentMilestone?.completedAt4,
+    detailItem?.currentMilestone?.completedAt5,
+  ]);
+
+  const detailSummaryCards: DetailCard[] = [
+    { label: "Mã đề tài", value: getTopicCode(detailTopic) },
+    { label: "Tên đề tài", value: getTopicTitle(detailTopic) },
+    { label: "Loại đề tài", value: getTopicType(detailTopic) },
+    { label: "Trạng thái", value: getTopicStatus(detailTopic) },
+    { label: "Người đề xuất", value: getTopicProposerName(detailItem) },
+    { label: "GV hướng dẫn", value: getTopicSupervisorName(detailItem) },
+    { label: "createdAt", value: formatDateTime(detailTopic.createdAt) },
+    { label: "lastUpdated", value: formatDateTime(detailTopic.lastUpdated) },
+    { label: "Mô tả", value: String(detailTopic.summary || "--"), wide: true },
+  ];
+
+  const statusText = getTopicStatus(detailTopic);
+
   return (
-    <div className="admin-dashboard topics-module">
-      <div className="dashboard-header">
-        <h1>Quản lý đề tài</h1>
-        <p>
-          Dữ liệu chuẩn theo schema Topics (title, summary, proposerUserCode,
-          supervisorLecturerCode, status...).
-        </p>
+    <div className="topics-module">
+      <div className="topics-header">
+        <h1>
+          <BookOpen size={30} color="#F37021" /> Quản lý đề tài
+        </h1>
+        <p>Dữ liệu chuẩn theo schema Topics, hiển thị theo bố cục giống giao diện quản lý sinh viên.</p>
       </div>
 
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          padding: 16,
-          marginBottom: 20,
-          display: "grid",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 300px",
-            }}
+      <div className="topics-toolbar">
+        <div className="topics-search-wrap">
+          <Search size={16} />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Tìm kiếm nhanh..."
+          />
+        </div>
+
+        <div className="topics-actions-wrap">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className="topics-filter-btn"
           >
-            <Search size={16} color="#64748b" />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Tìm kiếm nhanh..."
-              style={{
-                width: "100%",
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "9px 12px",
-              }}
-            />
+            <Filter size={14} />
+            {showAdvancedFilters ? "Ẩn lọc" : "Lọc nâng cao"}
+          </button>
+          <ImportExportActions moduleName="topics" moduleLabel="Quản lý đề tài" onImportSuccess={loadRows} />
+          <button type="button" onClick={openCreate} className="topics-create-btn">
+            <Plus size={14} /> Thêm mới
+          </button>
+        </div>
+      </div>
+
+      {showAdvancedFilters && (
+        <div className="topics-filter-panel">
+          <div className="topics-filter-grid">
+            {filterFields.map((field) => (
+              <label key={field.name} className="topics-filter-field">
+                <span>{field.label}</span>
+                <input
+                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                  value={advancedFilters[field.name] ?? ""}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setAdvancedFilters((prev) => ({
+                      ...prev,
+                      [field.name]: next,
+                    }));
+                    setPage(1);
+                  }}
+                />
+              </label>
+            ))}
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedFilters((prev) => !prev)}
-              style={{
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
-            >
-              <Filter size={16} />{" "}
-              {showAdvancedFilters ? "Ẩn lọc" : "Lọc nâng cao"}
-            </button>
-            <ImportExportActions
-              moduleName="topics"
-              moduleLabel="Quản lý đề tài"
-              onImportSuccess={loadRows}
-            />
-            <button
-              type="button"
-              onClick={openCreate}
-              style={{
-                border: "none",
-                background: "#f37021",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "9px 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={16} /> Thêm mới
+          <div className="topics-filter-actions">
+            <button type="button" onClick={resetFilters} className="topics-reset-btn">
+              Xóa bộ lọc
             </button>
           </div>
         </div>
+      )}
 
-        {showAdvancedFilters && (
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              padding: 12,
-              display: "grid",
-              gap: 10,
-              background: "#f8fafc",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-                gap: 10,
-              }}
-            >
-              {filterFields.map((field) => (
-                <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}
-                  >
-                    {field.label}
-                  </span>
-                  <input
-                    type={
-                      field.type === "number"
-                        ? "number"
-                        : field.type === "date"
-                          ? "date"
-                          : "text"
-                    }
-                    value={advancedFilters[field.name] ?? ""}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setAdvancedFilters((prev) => ({
-                        ...prev,
-                        [field.name]: next,
-                      }));
-                      setPage(1);
-                    }}
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                      background: "#fff",
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div
-              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-            >
-              <button
-                type="button"
-                onClick={resetFilters}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                }}
-              >
-                Xóa bộ lọc
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="recent-topics-section" style={{ overflowX: "auto" }}>
+      <div className="topics-table-wrap">
         <table className="topics-table">
           <thead>
             <tr>
@@ -603,54 +940,20 @@ const TopicsManagement: React.FC = () => {
               rows.map((row, index) => (
                 <tr key={`topics-${index}-${String(row.topicCode ?? "")}`}>
                   {columns.map((column) => (
-                    <td key={`${column.key}-${index}`}>
-                      {toDisplay(getColumnValue(row, column))}
-                    </td>
+                    <td key={`${column.key}-${index}`}>{toDisplay(getColumnValue(row, column))}</td>
                   ))}
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => void openDetail(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
-                        title="Chi tiết"
-                      >
+                    <div className="topics-action-buttons">
+                      <button type="button" onClick={() => void openDetail(row)} className="topics-icon-btn" title="Chi tiết">
                         <Eye size={14} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => void openEdit(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
-                        title="Cập nhật"
-                      >
+                      <button type="button" onClick={() => void openEdit(row)} className="topics-icon-btn" title="Cập nhật">
                         <Edit size={14} />
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleDelete(row)}
-                        style={{
-                          border: "1px solid #fecaca",
-                          color: "#b91c1c",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
+                        className="topics-icon-btn topics-icon-btn-danger"
                         title="Xóa"
                       >
                         <Trash2 size={14} />
@@ -662,272 +965,494 @@ const TopicsManagement: React.FC = () => {
             )}
           </tbody>
         </table>
-
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Tổng bản ghi: <strong>{totalCount}</strong>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span style={{ color: "#64748b", fontSize: 13 }}>Page size</span>
-              <select
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
-                }}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Trước
-            </button>
-            <span style={{ minWidth: 94, textAlign: "center", fontSize: 13 }}>
-              Trang {page} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={page >= pageCount || isLoading}
-              onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Sau
-            </button>
-          </div>
-        </div>
       </div>
 
-      {activeModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 80,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 860,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>
-                {activeModal === "create" && "Tạo đề tài"}
-                {activeModal === "edit" && "Cập nhật đề tài"}
-                {activeModal === "detail" && "Chi tiết đề tài"}
-              </h3>
-            </div>
+      <TablePagination
+        totalCount={totalCount}
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        pageSizeOptions={[10, 20, 50, 100]}
+        totalLabel="Tổng bản ghi:"
+        pageSizeLabel="Số dòng/trang"
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+      />
 
-            {activeModal === "detail" ? (
-              <div
-                style={{
-                  padding: "24px",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                  gap: "16px",
-                  background: "#f8fafc",
-                }}
-              >
-                {Object.entries(selectedRow || {}).map(([key, value]) => {
-                  const strVal = toDisplay(value);
-                  const isLong = strVal.length > 60;
-                  return (
-                    <div
-                      key={key}
-                      style={{
-                        padding: "16px",
-                        background: "#fff",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                        gridColumn: isLong ? "1 / -1" : "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#64748b",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {key}
+      {detailModal.isOpen && (
+        <div className="topics-modal-overlay">
+          <div className="topics-modal topics-detail-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="topics-detail-shell">
+              <div className="topics-detail-header">
+                <div className="topics-detail-header-left">
+                  <div className="topics-avatar-fallback">
+                    <BookOpen size={22} />
+                  </div>
+                  <div className="topics-detail-header-text">
+                    <h3>{getTopicTitle(detailTopic)}</h3>
+                    <p>
+                      {getTopicCode(detailTopic)} • {statusText}
+                    </p>
+                    <div className="topics-detail-subline">
+                      <span className={`topics-status topics-status-${getStatusTone(statusText)}`}>
+                        {statusText}
                       </span>
-                      <span
-                        style={{
-                          fontSize: "15px",
-                          color: "#0f172a",
-                          lineHeight: "1.5",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {strVal || (
-                          <span
-                            style={{ color: "#94a3b8", fontStyle: "italic" }}
-                          >
-                            Trống
-                          </span>
-                        )}
-                      </span>
+                      <span className="topics-detail-meta">{getTopicType(detailTopic)}</span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: 16,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                  gap: 12,
-                }}
-              >
-                {fields.map((field) => {
-                  const value = formValues[field.name] ?? "";
-                  return (
-                    <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {field.label}
-                        {field.required ? " *" : ""}
-                      </span>
-                      {field.type === "textarea" ? (
-                        <textarea
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          rows={3}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                            resize: "vertical",
-                          }}
-                        />
-                      ) : (
-                        <input
-                          type={
-                            field.type === "number"
-                              ? "number"
-                              : field.type === "date"
-                                ? "date"
-                                : "text"
-                          }
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                          }}
-                        />
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                </div>
 
-            <div
-              style={{
-                padding: 16,
-                borderTop: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setActiveModal(null)}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "9px 14px",
-                }}
-                disabled={isSubmitting}
-              >
-                Đóng
-              </button>
-              {activeModal !== "detail" && (
+                <div className="topics-detail-header-actions">
+                  <button
+                    type="button"
+                    className="topics-edit-btn"
+                    onClick={() => {
+                      if (detailItem?.topic) {
+                        void openEdit(detailItem.topic);
+                        setDetailModal({ isOpen: false });
+                      }
+                    }}
+                  >
+                    <Edit size={13} />
+                    Sửa
+                  </button>
+                  <button type="button" className="topics-cancel-btn" onClick={() => setDetailModal({ isOpen: false })}>
+                    Đóng
+                  </button>
+                </div>
+              </div>
+
+              <div className="topics-detail-tabs">
                 <button
                   type="button"
+                  className={detailTab === "topic" ? "is-active" : ""}
+                  onClick={() => setDetailTab("topic")}
+                >
+                  <BookOpen size={14} />
+                  Thông tin đề tài
+                </button>
+                <button
+                  type="button"
+                  className={detailTab === "student" ? "is-active" : ""}
+                  onClick={() => setDetailTab("student")}
+                >
+                  <User size={14} />
+                  Thông tin sinh viên
+                </button>
+                <button
+                  type="button"
+                  className={detailTab === "supervisor" ? "is-active" : ""}
+                  onClick={() => setDetailTab("supervisor")}
+                >
+                  <Users size={14} />
+                  Thông tin giảng viên
+                </button>
+                <button
+                  type="button"
+                  className={detailTab === "history" ? "is-active" : ""}
+                  onClick={() => setDetailTab("history")}
+                >
+                  <History size={14} />
+                  Lịch sử báo cáo
+                </button>
+              </div>
+
+              <div className="topics-detail-body">
+                {detailLoading ? (
+                  <div className="topics-detail-loading">Đang tải chi tiết...</div>
+                ) : (
+                  <>
+                    {detailTab === "topic" && (
+                      <div className="topics-topic-layout">
+                        <section className="topics-info-card topics-detail-section topics-topic-panel">
+                          <div className="topics-topic-code-row">
+                            <div className="topics-topic-code-field">
+                              <span>Mã đề tài</span>
+                              <strong>{getTopicCode(detailTopic)}</strong>
+                            </div>
+                            <span className={`topics-status topics-status-${getStatusTone(statusText)}`}>
+                              {statusText}
+                            </span>
+                          </div>
+
+                          <div className="topics-detail-list topics-detail-list-topic">
+                            {detailSummaryCards.map((card) => (
+                              <div key={card.label} className={card.wide ? "topics-detail-row-wide" : ""}>
+                                <span>{card.label}</span>
+                                <strong>{card.value}</strong>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="topics-topic-inline-row">
+                            <div className="topics-topic-inline-field topics-topic-inline-lastupdated">
+                              <span>lastUpdated</span>
+                              <strong>{formatDateTime(detailTopic.lastUpdated)}</strong>
+                            </div>
+
+                            <div className="topics-topic-inline-tags">
+                              <span className="topics-topic-inline-label">Tag đề tài</span>
+                              <div className="topics-tag-wrap topics-tag-wrap-compact topics-tag-wrap-grid">
+                                {detailTopicTags.length === 0 ? (
+                                  <span className="topics-empty">Không có tag.</span>
+                                ) : (
+                                  detailTopicTags.map((tag) => (
+                                    <span key={tag.tagCode} className="topics-tag">
+                                      {tag.tagName}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                        </section>
+
+                        <section className="topics-info-card topics-detail-section topics-progress-card">
+                          <div className="topics-progress-panel">
+                            <div className="topics-timeline-horizontal">
+                              {detailMilestones.map((milestone) => (
+                                <div
+                                  key={milestone.code}
+                                  className={`topics-timeline-step ${milestone.isCompleted ? "is-completed" : ""} ${milestone.isCurrent ? "is-current" : ""}`}
+                                >
+                                  <div className="topics-timeline-node">
+                                    {milestone.isCurrent ? <Clock size={14} strokeWidth={3} /> : <Check size={14} strokeWidth={3} />}
+                                  </div>
+                                  <div className="topics-timeline-step-body">
+                                    <strong>{milestone.label}</strong>
+                                    <span className="topics-timeline-time">
+                                      {milestone.completedAt ? formatDateTime(milestone.completedAt) : "--"}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    )}
+
+                    {detailTab === "student" && (
+                      <div className="topics-student-layout">
+                        <section className="topics-info-card topics-supervisor-card topics-profile-card">
+                          <div className="topics-profile-card-head">
+                            <div className="topics-student-header">
+                              {detailStudent.studentImage ? (
+                                <img src={detailStudent.studentImage} alt={detailStudent.fullName} className="topics-avatar-lg" />
+                              ) : (
+                                <div className="topics-avatar-fallback topics-avatar-lg-fallback">
+                                  {detailStudent.fullName?.charAt(0) || "S"}
+                                </div>
+                              )}
+                              <div>
+                                <h3 className="topics-profile-name">{detailStudent.fullName || "--"}</h3>
+                                <p className="topics-profile-code">
+                                  {detailStudent.userCode || "--"} • {detailStudent.studentCode || "--"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="topics-detail-subline topics-profile-meta-row">
+                              <span className="topics-status topics-status-pending">{detailStudent.status || "--"}</span>
+                              <span className="topics-detail-meta">GPA {detailStudent.gpa ?? "--"}</span>
+                            </div>
+                          </div>
+
+                          <div className="topics-detail-list topics-detail-list-stacked topics-detail-list-profile">
+                            <div>
+                              <span>Department</span>
+                              <strong>{detailStudent.departmentCode || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Class</span>
+                              <strong>{detailStudent.classCode || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Faculty</span>
+                              <strong>{detailStudent.facultyCode || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Email</span>
+                              <strong>{detailStudent.studentEmail || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Phone</span>
+                              <strong>{detailStudent.phoneNumber || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Gender</span>
+                              <strong>{detailStudent.gender || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Ngày sinh</span>
+                              <strong>{formatDate(detailStudent.dateOfBirth)}</strong>
+                            </div>
+                            <div>
+                              <span>Địa chỉ</span>
+                              <strong>{detailStudent.address || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>CreatedAt</span>
+                              <strong>{formatDateTime(detailStudent.createdAt)}</strong>
+                            </div>
+                            <div>
+                              <span>LastUpdated</span>
+                              <strong>{formatDateTime(detailStudent.lastUpdated)}</strong>
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    )}
+
+                    {detailTab === "supervisor" && (
+                      <div className="topics-supervisor-layout">
+                        <section className="topics-info-card topics-supervisor-card topics-profile-card">
+                          <div className="topics-profile-card-head">
+                            <div className="topics-supervisor-header">
+                              <div className="topics-avatar-fallback topics-avatar-lg-fallback">
+                                {detailSupervisor.fullName?.charAt(0) || "G"}
+                              </div>
+                              <div>
+                                <h3 className="topics-profile-name">{detailSupervisor.fullName || "--"}</h3>
+                                <p className="topics-profile-code">
+                                  {detailSupervisor.userCode || detailSupervisor.lecturerCode || "--"} • {detailSupervisor.lecturerCode || "--"}
+                                </p>
+                                <div className="topics-detail-subline">
+                                  <span className="topics-status topics-status-approved">{detailSupervisor.degree || "--"}</span>
+                                  <span className="topics-detail-meta">
+                                    {detailSupervisor.currentGuidingCount ?? 0}/{detailSupervisor.guideQuota ?? 0}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="topics-detail-list topics-detail-list-stacked topics-detail-list-profile">
+                            <div>
+                              <span>Email</span>
+                              <strong>{detailSupervisor.email || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Phone</span>
+                              <strong>{detailSupervisor.phoneNumber || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Department</span>
+                              <strong>{detailSupervisor.departmentCode || "--"}</strong>
+                            </div>
+                            <div>
+                              <span>Guide quota</span>
+                              <strong>{detailSupervisor.guideQuota ?? "--"}</strong>
+                            </div>
+                          </div>
+
+                          <div className="topics-supervisor-stats-row">
+                            <div className="topics-supervisor-stat-field topics-supervisor-stat-inline">
+                              <span>Current guiding</span>
+                              <strong>{detailSupervisor.currentGuidingCount ?? "--"}</strong>
+                            </div>
+
+                            <div className="topics-supervisor-tags-field topics-supervisor-tags-inline">
+                              <span>Tags</span>
+                              <div className="topics-supervisor-tags-input">
+                                {detailSupervisorTags.length === 0 ? (
+                                  <span className="topics-empty">Không có tag.</span>
+                                ) : (
+                                  detailSupervisorTags.map((tag) => (
+                                    <span key={tag.tagCode} className="topics-tag">
+                                      {tag.tagName}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    )}
+
+                    {detailTab === "history" && (
+                      <div className="topics-progress-panel">
+                        {historyLoading ? (
+                          <div className="topics-history-empty">Đang tải lịch sử báo cáo...</div>
+                        ) : historyItems.length === 0 ? (
+                          <div className="topics-history-empty">Không có lịch sử báo cáo.</div>
+                        ) : (
+                          <div className="topics-history-list">
+                            {historyItems.map((item) => {
+                              const submission = item.submission;
+                              return (
+                                <article key={submission.submissionID} className="topics-history-item">
+                                  <div className="topics-history-head">
+                                    <div>
+                                      <h5>{submission.reportTitle || submission.submissionCode}</h5>
+                                      <p>{submission.milestoneCode} • {submission.studentProfileCode || submission.studentUserCode}</p>
+                                    </div>
+                                    <span className="topics-history-badge">
+                                      {submission.lecturerState || "--"}
+                                    </span>
+                                  </div>
+
+                                  <div className="topics-history-meta-grid">
+                                    <div className="topics-history-meta-item">
+                                      <span>Submitted at</span>
+                                      <strong>{formatDateTime(submission.submittedAt)}</strong>
+                                    </div>
+                                    <div className="topics-history-meta-item">
+                                      <span>Last updated</span>
+                                      <strong>{formatDateTime(submission.lastUpdated)}</strong>
+                                    </div>
+                                    <div className="topics-history-meta-item">
+                                      <span>Attempt</span>
+                                      <strong>{submission.attemptNumber ?? "--"}</strong>
+                                    </div>
+                                    <div className="topics-history-meta-item">
+                                      <span>Feedback level</span>
+                                      <strong>{submission.feedbackLevel || "--"}</strong>
+                                    </div>
+                                  </div>
+
+                                  <div className="topics-history-content-grid">
+                                    <div className="topics-history-block">
+                                      <span className="topics-history-block-label">Mô tả báo cáo</span>
+                                      <p className="topics-history-desc">{submission.reportDescription || "--"}</p>
+                                    </div>
+                                    <div className="topics-history-block">
+                                      <span className="topics-history-block-label">Phản hồi giảng viên</span>
+                                      <p className="topics-history-comment">{submission.lecturerComment || "--"}</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="topics-history-files">
+                                    {Array.isArray(submission.files) && submission.files.length > 0 ? (
+                                      submission.files.map((file) => (
+                                        <a key={file.fileID} href={file.fileURL} target="_blank" rel="noreferrer">
+                                          {file.fileName}
+                                        </a>
+                                      ))
+                                    ) : (
+                                      <span className="topics-history-empty">Không có tệp đính kèm.</span>
+                                    )}
+                                  </div>
+
+                                  <div className="topics-history-footer">
+                                    <strong>{historyTotalCount}</strong> bản ghi lịch sử
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal && (
+        <div className="topics-modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="topics-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="topics-modal-close" onClick={() => setActiveModal(null)}>
+              x
+            </button>
+
+            <div className="topics-form-shell">
+              <div className="topics-modal-header">
+                <h3>{activeModal === "create" ? "Tạo đề tài" : "Cập nhật đề tài"}</h3>
+                <p>
+                  {activeModal === "create"
+                    ? "Nhập đầy đủ thông tin cho đề tài mới."
+                    : "Chỉnh sửa thông tin đề tài theo bố cục giống giao diện quản lý sinh viên."}
+                </p>
+              </div>
+
+              <div className="topics-form-layout">
+                {editFieldSections.map((section) => {
+                  const availableFields = (activeModal === "create" ? createFields : editFields).filter((field) =>
+                    section.fields.includes(field.name),
+                  );
+
+                  if (availableFields.length === 0) return null;
+
+                  return (
+                    <section key={section.title} className="topics-form-section">
+                      <div className="topics-form-section-header">
+                        <h4>{section.title}</h4>
+                        <p>{section.description}</p>
+                      </div>
+
+                      <div className="topics-form-grid">
+                        {availableFields.map((field) => {
+                          const value = formValues[field.name] ?? "";
+                          const fullWidth = field.type === "textarea" || field.name === "summary" || field.name === "lecturerComment";
+                          return (
+                            <label
+                              key={field.name}
+                              className={`topics-form-field ${fullWidth ? "topics-form-field-full" : ""}`}
+                            >
+                              <span>
+                                {field.label}
+                                {field.required ? " *" : ""}
+                              </span>
+                              {field.type === "textarea" ? (
+                                <textarea
+                                  value={value}
+                                  onChange={(event) =>
+                                    setFormValues((prev) => ({
+                                      ...prev,
+                                      [field.name]: event.target.value,
+                                    }))
+                                  }
+                                  rows={4}
+                                />
+                              ) : (
+                                <input
+                                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                                  value={value}
+                                  onChange={(event) =>
+                                    setFormValues((prev) => ({
+                                      ...prev,
+                                      [field.name]: event.target.value,
+                                    }))
+                                  }
+                                />
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+
+              <div className="topics-form-actions">
+                <button
+                  type="button"
+                  className="topics-cancel-btn"
+                  onClick={() => setActiveModal(null)}
+                  disabled={isSubmitting}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  className="topics-save-btn"
                   onClick={() => void handleSubmit()}
                   disabled={isSubmitting}
-                  style={{
-                    border: "none",
-                    background: "#f37021",
-                    color: "#fff",
-                    borderRadius: 8,
-                    padding: "9px 14px",
-                    fontWeight: 600,
-                  }}
                 >
                   {isSubmitting ? "Đang lưu..." : "Lưu"}
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>

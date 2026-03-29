@@ -1166,35 +1166,36 @@ const StudentProfilesManagement: React.FC = () => {
                                 {detailModal.row.supervisor?.degree || "--"}
                               </strong>
                             </div>
-                            <div>
-                              <span>Hướng dẫn</span>
-                              <div className="spm-guide-quota">
-                                <div className="spm-progress-track spm-progress-track-lg">
-                                  <div
-                                    className="spm-progress-fill"
-                                    style={{
-                                      width: `${Math.min(
+                          </div>
+
+                          <div className="spm-guide-quota">
+                            <div className="spm-guide-quota-row">
+                              <span>Chỉ tiêu hướng dẫn</span>
+                              <strong>
+                                {detailModal.row.supervisor
+                                  ? `${detailModal.row.supervisor.currentGuidingCount || 0} / ${detailModal.row.supervisor.guideQuota || 0}`
+                                  : "--"}
+                              </strong>
+                            </div>
+                            <div className="spm-progress-track spm-progress-track-lg">
+                              <div
+                                className="spm-progress-fill"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    Math.round(
+                                      ((detailModal.row.supervisor
+                                        ?.currentGuidingCount || 0) /
+                                        Math.max(
+                                          1,
+                                          detailModal.row.supervisor
+                                            ?.guideQuota || 1,
+                                        )) *
                                         100,
-                                        Math.round(
-                                          ((detailModal.row.supervisor
-                                            ?.currentGuidingCount || 0) /
-                                            Math.max(
-                                              1,
-                                              detailModal.row.supervisor
-                                                ?.guideQuota || 1,
-                                            )) *
-                                            100,
-                                        ),
-                                      )}%`,
-                                    }}
-                                  />
-                                </div>
-                                <strong>
-                                  {detailModal.row.supervisor
-                                    ? `${detailModal.row.supervisor.currentGuidingCount || 0} / ${detailModal.row.supervisor.guideQuota || 0}`
-                                    : "--"}
-                                </strong>
-                              </div>
+                                    ),
+                                  )}%`,
+                                }}
+                              />
                             </div>
                           </div>
                         </div>

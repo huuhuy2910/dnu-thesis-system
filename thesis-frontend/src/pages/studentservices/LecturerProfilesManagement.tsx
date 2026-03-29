@@ -301,7 +301,13 @@ function getGuidingProgress(row: RecordData): {
   return {
     current: safeCurrent,
     quota: safeQuota,
-    ratio: safeQuota > 0 ? Math.max(0, Math.min(100, Math.round((safeCurrent / safeQuota) * 100))) : 0,
+    ratio:
+      safeQuota > 0
+        ? Math.max(
+            0,
+            Math.min(100, Math.round((safeCurrent / safeQuota) * 100)),
+          )
+        : 0,
   };
 }
 
@@ -529,10 +535,10 @@ const LecturerProfilesManagement: React.FC = () => {
         ...row,
         ...(data || {}),
       };
-      mergedRow.lecturerCode = mergedRow.lecturerCode || row.lecturerCode || code;
+      mergedRow.lecturerCode =
+        mergedRow.lecturerCode || row.lecturerCode || code;
       mergedRow.userCode = mergedRow.userCode || row.userCode || "";
-      mergedRow.dateOfBirth =
-        mergedRow.dateOfBirth || row.dateOfBirth || "";
+      mergedRow.dateOfBirth = mergedRow.dateOfBirth || row.dateOfBirth || "";
       setFormValues(toFormRecord(mergedRow));
       setSelectedRow(row);
       setActiveModal("edit");
@@ -578,7 +584,9 @@ const LecturerProfilesManagement: React.FC = () => {
       setSelectedRow(detailResponse.data || row);
       const dashboardItems = normalizeDashboardItems(dashboardResponse.data);
       setDetailItems(dashboardItems);
-      setDetailTotalCount(dashboardResponse.totalCount || dashboardItems.length);
+      setDetailTotalCount(
+        dashboardResponse.totalCount || dashboardItems.length,
+      );
     } catch {
       try {
         const { data } = await requestApiData<RecordData>(
@@ -598,7 +606,9 @@ const LecturerProfilesManagement: React.FC = () => {
         );
         const dashboardItems = normalizeDashboardItems(dashboardResponse.data);
         setDetailItems(dashboardItems);
-        setDetailTotalCount(dashboardResponse.totalCount || dashboardItems.length);
+        setDetailTotalCount(
+          dashboardResponse.totalCount || dashboardItems.length,
+        );
       } catch {
         setDetailItems([]);
         setDetailTotalCount(0);
@@ -694,7 +704,9 @@ const LecturerProfilesManagement: React.FC = () => {
   return (
     <div className="lecturer-profiles-module">
       <div className="dashboard-header">
-        <h1><Users size={30} color="#F37021" /> Quản lý giảng viên</h1>
+        <h1>
+          <Users size={30} color="#F37021" /> Quản lý giảng viên
+        </h1>
         <p>
           Dữ liệu chuẩn theo schema LecturerProfiles (email, guideQuota,
           defenseQuota, currentGuidingCount...).
@@ -904,8 +916,12 @@ const LecturerProfilesManagement: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <div className="lecturer-name">{getDisplayName(row)}</div>
-                        <div className="lecturer-code">{getDisplayCode(row)}</div>
+                        <div className="lecturer-name">
+                          {getDisplayName(row)}
+                        </div>
+                        <div className="lecturer-code">
+                          {getDisplayCode(row)}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -1054,14 +1070,18 @@ const LecturerProfilesManagement: React.FC = () => {
                       <h4>{detailLecturerName}</h4>
                       <p>
                         {detailLecturerCode}
-                        {selectedRow?.degree ? ` • ${String(selectedRow.degree)}` : ""}
+                        {selectedRow?.degree
+                          ? ` • ${String(selectedRow.degree)}`
+                          : ""}
                       </p>
                       <div className="lecturer-detail-subline">
                         <span className="lecturer-detail-chip">
                           {detailDepartmentCode}
                         </span>
                         <span className="lecturer-detail-gpa">
-                          Hướng dẫn {String(selectedRow?.currentGuidingCount ?? "--")}/{String(selectedRow?.guideQuota ?? "--")}
+                          Hướng dẫn{" "}
+                          {String(selectedRow?.currentGuidingCount ?? "--")}/
+                          {String(selectedRow?.guideQuota ?? "--")}
                         </span>
                       </div>
                     </div>
@@ -1120,7 +1140,9 @@ const LecturerProfilesManagement: React.FC = () => {
 
                 <div className="lecturer-detail-body">
                   {detailLoading ? (
-                    <div className="lecturer-detail-loading">Đang tải chi tiết...</div>
+                    <div className="lecturer-detail-loading">
+                      Đang tải chi tiết...
+                    </div>
                   ) : (
                     <>
                       {detailTab === "info" && (
@@ -1131,27 +1153,41 @@ const LecturerProfilesManagement: React.FC = () => {
                               <div className="lecturer-detail-list">
                                 <div>
                                   <span>Mã giảng viên</span>
-                                  <strong>{String(selectedRow?.lecturerCode || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.lecturerCode || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Mã user</span>
-                                  <strong>{String(selectedRow?.userCode || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.userCode || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Khoa/Bộ môn</span>
-                                  <strong>{String(selectedRow?.departmentCode || "--")}</strong>
+                                  <strong>
+                                    {String(
+                                      selectedRow?.departmentCode || "--",
+                                    )}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Học vị</span>
-                                  <strong>{String(selectedRow?.degree || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.degree || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Email</span>
-                                  <strong>{String(selectedRow?.email || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.email || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>SĐT</span>
-                                  <strong>{String(selectedRow?.phoneNumber || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.phoneNumber || "--")}
+                                  </strong>
                                 </div>
                               </div>
 
@@ -1159,8 +1195,10 @@ const LecturerProfilesManagement: React.FC = () => {
                                 <div className="lecturer-guide-quota-row">
                                   <span>Chỉ tiêu hướng dẫn</span>
                                   <strong>
-                                    {String(selectedRow?.currentGuidingCount ?? 0)}/
-                                    {String(selectedRow?.guideQuota ?? "--")}
+                                    {String(
+                                      selectedRow?.currentGuidingCount ?? 0,
+                                    )}
+                                    /{String(selectedRow?.guideQuota ?? "--")}
                                   </strong>
                                 </div>
                                 <div className="lecturer-progress-track-lg">
@@ -1181,23 +1219,37 @@ const LecturerProfilesManagement: React.FC = () => {
                               <div className="lecturer-detail-list">
                                 <div>
                                   <span>Giới tính</span>
-                                  <strong>{String(selectedRow?.gender || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.gender || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Ngày sinh</span>
-                                  <strong>{formatDate(String(selectedRow?.dateOfBirth || ""))}</strong>
+                                  <strong>
+                                    {formatDate(
+                                      String(selectedRow?.dateOfBirth || ""),
+                                    )}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Địa chỉ</span>
-                                  <strong>{String(selectedRow?.address || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.address || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Ghi chú</span>
-                                  <strong>{String(selectedRow?.notes || "--")}</strong>
+                                  <strong>
+                                    {String(selectedRow?.notes || "--")}
+                                  </strong>
                                 </div>
                                 <div>
                                   <span>Ngày cập nhật</span>
-                                  <strong>{formatDateTime(String(selectedRow?.lastUpdated || ""))}</strong>
+                                  <strong>
+                                    {formatDateTime(
+                                      String(selectedRow?.lastUpdated || ""),
+                                    )}
+                                  </strong>
                                 </div>
                               </div>
                             </section>
@@ -1209,32 +1261,47 @@ const LecturerProfilesManagement: React.FC = () => {
                         <div className="lecturer-list-panel">
                           <div className="lecturer-list-header">
                             <h4>Danh sách sinh viên</h4>
-                            <span>{detailStudents.length} / {detailTotalCount}</span>
+                            <span>
+                              {detailStudents.length} / {detailTotalCount}
+                            </span>
                           </div>
                           {detailStudents.length === 0 ? (
-                            <div className="lecturer-empty-state">Không có sinh viên nào.</div>
+                            <div className="lecturer-empty-state">
+                              Không có sinh viên nào.
+                            </div>
                           ) : (
                             <div className="lecturer-item-list">
                               {detailStudents.map((item) => (
-                                <div key={getStudentCode(item)} className="lecturer-item-card">
+                                <div
+                                  key={getStudentCode(item)}
+                                  className="lecturer-item-card"
+                                >
                                   <div className="lecturer-item-head">
                                     <div className="lecturer-item-avatar-wrap">
                                       {item.student?.studentImage ? (
                                         <img
-                                          src={getAvatarUrl(String(item.student.studentImage))}
+                                          src={getAvatarUrl(
+                                            String(item.student.studentImage),
+                                          )}
                                           alt={getStudentName(item)}
                                           className="lecturer-item-avatar"
                                         />
                                       ) : (
                                         <div className="lecturer-item-avatar lecturer-item-avatar-fallback">
-                                          {getStudentName(item).trim().charAt(0).toUpperCase()}
+                                          {getStudentName(item)
+                                            .trim()
+                                            .charAt(0)
+                                            .toUpperCase()}
                                         </div>
                                       )}
                                     </div>
 
                                     <div className="lecturer-item-head-text">
                                       <h5>{getStudentName(item)}</h5>
-                                      <p>{getStudentCode(item)} • {String(item.student?.userCode || "--")}</p>
+                                      <p>
+                                        {getStudentCode(item)} •{" "}
+                                        {String(item.student?.userCode || "--")}
+                                      </p>
                                     </div>
 
                                     <span className="lecturer-status lecturer-status-approved">
@@ -1245,21 +1312,35 @@ const LecturerProfilesManagement: React.FC = () => {
                                   <div className="lecturer-item-meta-grid">
                                     <div className="lecturer-item-meta">
                                       <span>Lớp</span>
-                                      <strong>{String(item.student?.classCode || "--")}</strong>
+                                      <strong>
+                                        {String(
+                                          item.student?.classCode || "--",
+                                        )}
+                                      </strong>
                                     </div>
                                     <div className="lecturer-item-meta">
                                       <span>Khoa</span>
-                                      <strong>{String(item.student?.departmentCode || "--")}</strong>
+                                      <strong>
+                                        {String(
+                                          item.student?.departmentCode || "--",
+                                        )}
+                                      </strong>
                                     </div>
                                     <div className="lecturer-item-meta">
                                       <span>GPA</span>
-                                      <strong>{String(item.student?.gpa ?? "--")}</strong>
+                                      <strong>
+                                        {String(item.student?.gpa ?? "--")}
+                                      </strong>
                                     </div>
                                     <div className="lecturer-item-meta">
                                       <span>Tiến độ</span>
                                       <strong>
-                                        {item.currentMilestone?.milestoneTemplateCode
-                                          ? getMilestoneLabel(item.currentMilestone.milestoneTemplateCode)
+                                        {item.currentMilestone
+                                          ?.milestoneTemplateCode
+                                          ? getMilestoneLabel(
+                                              item.currentMilestone
+                                                .milestoneTemplateCode,
+                                            )
                                           : "--"}
                                       </strong>
                                     </div>
@@ -1280,16 +1361,26 @@ const LecturerProfilesManagement: React.FC = () => {
                         <div className="lecturer-list-panel">
                           <div className="lecturer-list-header">
                             <h4>Danh sách đề tài</h4>
-                            <span>{detailTopics.length} / {detailTotalCount}</span>
+                            <span>
+                              {detailTopics.length} / {detailTotalCount}
+                            </span>
                           </div>
                           {detailTopics.length === 0 ? (
-                            <div className="lecturer-empty-state">Không có đề tài nào.</div>
+                            <div className="lecturer-empty-state">
+                              Không có đề tài nào.
+                            </div>
                           ) : (
                             <div className="lecturer-item-list">
                               {detailTopics.map((item) => {
-                                const progress = calcProgress(item.currentMilestone, 5);
+                                const progress = calcProgress(
+                                  item.currentMilestone,
+                                  5,
+                                );
                                 return (
-                                  <div key={getTopicCode(item)} className="lecturer-item-card">
+                                  <div
+                                    key={getTopicCode(item)}
+                                    className="lecturer-item-card"
+                                  >
                                     <div className="lecturer-topic-head">
                                       <div>
                                         <h5>{getTopicTitle(item)}</h5>
@@ -1302,23 +1393,35 @@ const LecturerProfilesManagement: React.FC = () => {
 
                                     <div className="lecturer-topic-summary">
                                       <span>Mô tả</span>
-                                      <p>{String(item.topic?.summary || "--")}</p>
+                                      <p>
+                                        {String(item.topic?.summary || "--")}
+                                      </p>
                                     </div>
 
                                     <div className="lecturer-topic-meta-grid">
                                       <div className="lecturer-item-meta">
                                         <span>Loại</span>
-                                        <strong>{getTopicTypeLabel(item.topic?.type)}</strong>
+                                        <strong>
+                                          {getTopicTypeLabel(item.topic?.type)}
+                                        </strong>
                                       </div>
                                       <div className="lecturer-item-meta">
                                         <span>Ngày tạo</span>
-                                        <strong>{formatDateTime(item.topic?.createdAt)}</strong>
+                                        <strong>
+                                          {formatDateTime(
+                                            item.topic?.createdAt,
+                                          )}
+                                        </strong>
                                       </div>
                                       <div className="lecturer-item-meta">
                                         <span>Milestone</span>
                                         <strong>
-                                          {item.currentMilestone?.milestoneTemplateCode
-                                            ? getMilestoneLabel(item.currentMilestone.milestoneTemplateCode)
+                                          {item.currentMilestone
+                                            ?.milestoneTemplateCode
+                                            ? getMilestoneLabel(
+                                                item.currentMilestone
+                                                  .milestoneTemplateCode,
+                                              )
                                             : "--"}
                                         </strong>
                                       </div>
@@ -1330,7 +1433,10 @@ const LecturerProfilesManagement: React.FC = () => {
 
                                     <div className="lecturer-topic-tags">
                                       {(item.topicTags || []).map((tag) => (
-                                        <span key={tag.tagCode} className="lecturer-tag">
+                                        <span
+                                          key={tag.tagCode}
+                                          className="lecturer-tag"
+                                        >
                                           {tag.tagName}
                                         </span>
                                       ))}
@@ -1349,7 +1455,10 @@ const LecturerProfilesManagement: React.FC = () => {
             ) : (
               <div className="lecturer-edit-layout">
                 {editFieldSections.map((section) => (
-                  <section key={section.title} className="lecturer-edit-section">
+                  <section
+                    key={section.title}
+                    className="lecturer-edit-section"
+                  >
                     <header className="lecturer-edit-section-header">
                       <h4>{section.title}</h4>
                       <p>{section.description}</p>
@@ -1363,7 +1472,11 @@ const LecturerProfilesManagement: React.FC = () => {
                         return (
                           <label
                             key={field.name}
-                            className={isTextarea ? "lecturer-form-field lecturer-form-field-full" : "lecturer-form-field"}
+                            className={
+                              isTextarea
+                                ? "lecturer-form-field lecturer-form-field-full"
+                                : "lecturer-form-field"
+                            }
                           >
                             <span>
                               {field.label}
