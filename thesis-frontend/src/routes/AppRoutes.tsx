@@ -107,6 +107,7 @@ const AppRoutes: React.FC = () => {
         >
           <Route index element={<AcademicDataManagementPage />} />
           <Route path="users" element={<UsersManagement />} />
+
           <Route path="students" element={<StudentProfilesManagement />} />
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
           <Route path="departments" element={<DepartmentsManagement />} />

@@ -35,6 +35,15 @@ namespace ThesisManagement.Api.Controllers
             return null;
         }
 
+        protected int CurrentUserId
+        {
+            get
+            {
+                var claim = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                return int.TryParse(claim, out var id) ? id : 0;
+            }
+        }
+
         protected string? GetRequestUserCode()
         {
             if (User?.Identity != null && User.Identity.IsAuthenticated)

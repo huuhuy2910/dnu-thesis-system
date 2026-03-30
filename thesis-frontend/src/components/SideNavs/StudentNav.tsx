@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import {
+  GraduationCap,
   Home,
   BookOpen,
   LineChart,
@@ -41,8 +42,8 @@ const StudentNav: React.FC<StudentNavProps> = ({ onNavigate }) => {
     // Quick access to student's defense info
     {
       path: "/student/defense-info",
-      label: "Thông tin bảo vệ",
-      icon: <Calendar size={18} />,
+      label: "Bảo vệ & kết quả",
+      icon: <GraduationCap size={18} />,
     },
     {
       path: "/student/notifications",

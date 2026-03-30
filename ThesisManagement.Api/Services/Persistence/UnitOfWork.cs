@@ -1,4 +1,5 @@
 using ThesisManagement.Api.Data;
+using Microsoft.EntityFrameworkCore.Storage;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Repositories;
 
@@ -31,6 +32,16 @@ namespace ThesisManagement.Api.Services
             CommitteeSessions = new GenericRepository<CommitteeSession>(_db);
             DefenseAssignments = new GenericRepository<DefenseAssignment>(_db);
             DefenseScores = new GenericRepository<DefenseScore>(_db);
+            DefenseTerms = new GenericRepository<DefenseTerm>(_db);
+            SyncAuditLogs = new GenericRepository<SyncAuditLog>(_db);
+            LecturerBusyTimes = new GenericRepository<LecturerBusyTime>(_db);
+            DefenseGroups = new GenericRepository<DefenseGroup>(_db);
+            ExportFiles = new GenericRepository<ExportFile>(_db);
+            EvaluationReviews = new GenericRepository<EvaluationReview>(_db);
+            DefenseMinutes = new GenericRepository<DefenseMinute>(_db);
+            DefenseResults = new GenericRepository<DefenseResult>(_db);
+            DefenseRevisions = new GenericRepository<DefenseRevision>(_db);
+            DefenseDocuments = new GenericRepository<DefenseDocument>(_db);
             CommitteeTags = new GenericRepository<CommitteeTag>(_db);
             Tags = new GenericRepository<Tag>(_db);
             CatalogTopicTags = new GenericRepository<CatalogTopicTag>(_db);
@@ -66,6 +77,16 @@ namespace ThesisManagement.Api.Services
     public IGenericRepository<CommitteeSession> CommitteeSessions { get; }
         public IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         public IGenericRepository<DefenseScore> DefenseScores { get; }
+        public IGenericRepository<DefenseTerm> DefenseTerms { get; }
+        public IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
+        public IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
+        public IGenericRepository<DefenseGroup> DefenseGroups { get; }
+        public IGenericRepository<ExportFile> ExportFiles { get; }
+        public IGenericRepository<EvaluationReview> EvaluationReviews { get; }
+        public IGenericRepository<DefenseMinute> DefenseMinutes { get; }
+        public IGenericRepository<DefenseResult> DefenseResults { get; }
+        public IGenericRepository<DefenseRevision> DefenseRevisions { get; }
+        public IGenericRepository<DefenseDocument> DefenseDocuments { get; }
         public IGenericRepository<CommitteeTag> CommitteeTags { get; }
         public IGenericRepository<Tag> Tags { get; }
         public IGenericRepository<CatalogTopicTag> CatalogTopicTags { get; }
@@ -78,6 +99,11 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<NotificationRecipient> NotificationRecipients { get; }
         public IGenericRepository<NotificationPreference> NotificationPreferences { get; }
         public IGenericRepository<NotificationOutbox> NotificationOutbox { get; }
+
+        public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            return await _db.Database.BeginTransactionAsync(cancellationToken);
+        }
 
         public async Task<int> SaveChangesAsync()
         {

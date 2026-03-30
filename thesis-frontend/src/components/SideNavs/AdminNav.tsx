@@ -1,16 +1,17 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import {
+  CalendarCog,
   Home,
   Users,
   ClipboardList,
   BookOpen,
   FileCog,
-  ShieldCheck,
   Bell,
   Activity,
   GraduationCap,
   Building2,
+  ShieldCheck,
 } from "lucide-react";
 import "./SideNav.css";
 import "./AdminNav.css";
@@ -76,7 +77,10 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
 
   const adminOnlyItems = [
     {
-      path: `${basePath}/topic-review`,
+      path: "/admin/committees",
+      label: "Điều phối đợt bảo vệ",
+      icon: <CalendarCog size={18} />,    },
+    {      path: `${basePath}/topic-review`,
       label: "Duyệt đề tài",
       icon: <BookOpen size={18} />,
     },

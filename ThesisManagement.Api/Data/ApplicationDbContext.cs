@@ -33,6 +33,16 @@ namespace ThesisManagement.Api.Data
         public DbSet<CommitteeSession> CommitteeSessions => Set<CommitteeSession>();
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
+        public DbSet<DefenseTerm> DefenseTerms => Set<DefenseTerm>();
+        public DbSet<SyncAuditLog> SyncAuditLogs => Set<SyncAuditLog>();
+        public DbSet<LecturerBusyTime> LecturerBusyTimes => Set<LecturerBusyTime>();
+        public DbSet<DefenseGroup> DefenseGroups => Set<DefenseGroup>();
+        public DbSet<ExportFile> ExportFiles => Set<ExportFile>();
+        public DbSet<EvaluationReview> EvaluationReviews => Set<EvaluationReview>();
+        public DbSet<DefenseMinute> DefenseMinutes => Set<DefenseMinute>();
+        public DbSet<DefenseResult> DefenseResults => Set<DefenseResult>();
+        public DbSet<DefenseRevision> DefenseRevisions => Set<DefenseRevision>();
+        public DbSet<DefenseDocument> DefenseDocuments => Set<DefenseDocument>();
         public DbSet<CommitteeTag> CommitteeTags => Set<CommitteeTag>();
         
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
@@ -493,11 +503,16 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Session)
                     .HasConversion(sessionConverter)
                     .HasMaxLength(20);
+                b.Property(x => x.Shift)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                b.Property(x => x.OrderIndex);
                 // Oracle provider maps TimeSpan to INTERVAL DAY TO SECOND
                 b.Property(x => x.StartTime);
                 b.Property(x => x.EndTime);
                 b.Property(x => x.AssignedBy).HasMaxLength(40);
                 b.Property(x => x.AssignedAt);
+                b.Property(x => x.Status).HasMaxLength(30);
             });
 
             // DefenseScores
@@ -516,9 +531,178 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.AssignmentCode).HasMaxLength(60);
                 b.Property(x => x.MemberLecturerCode).HasMaxLength(30);
                 b.Property(x => x.MemberLecturerUserCode).HasMaxLength(40);
+                b.Property(x => x.Role).HasMaxLength(20);
                 b.Property(x => x.Score).HasColumnType("NUMBER(4,2)");
+                b.Property(x => x.IsSubmitted).HasConversion<int>().HasDefaultValue(0);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // DefenseTerms
+            modelBuilder.Entity<DefenseTerm>(b =>
+            {
+                b.ToTable("DEFENSETERMS");
+                b.HasKey(x => x.DefenseTermId);
+                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+                b.Property(x => x.StartDate);
+                b.Property(x => x.ConfigJson);
+                b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Draft");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // SyncAuditLogs
+            modelBuilder.Entity<SyncAuditLog>(b =>
+            {
+                b.ToTable("SYNCAUDITLOGS");
+                b.HasKey(x => x.SyncAuditLogId);
+                b.Property(x => x.Action).HasMaxLength(150).IsRequired();
+                b.Property(x => x.Result).HasMaxLength(50).IsRequired();
+                b.Property(x => x.Records).HasMaxLength(50).IsRequired();
+                b.Property(x => x.Timestamp).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // LecturerBusyTimes
+            modelBuilder.Entity<LecturerBusyTime>(b =>
+            {
+                b.ToTable("LECTURERBUSYTIMES");
+                b.HasKey(x => x.LecturerBusyTimeId);
+                b.Property(x => x.Slot).HasMaxLength(20).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.LecturerProfile)
+                    .WithMany()
+                    .HasForeignKey(x => x.LecturerProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => new { x.LecturerProfileId, x.Slot }).IsUnique();
+            });
+
+            // DefenseGroups
+            modelBuilder.Entity<DefenseGroup>(b =>
+            {
+                b.ToTable("DEFENSEGROUPS");
+                b.HasKey(x => x.DefenseGroupId);
+                b.Property(x => x.TermId).IsRequired();
+                b.Property(x => x.SlotId).HasMaxLength(80).IsRequired();
+                b.Property(x => x.StudentCodesJson).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasIndex(x => new { x.TermId, x.SlotId });
+            });
+
+            // ExportFiles
+            modelBuilder.Entity<ExportFile>(b =>
+            {
+                b.ToTable("EXPORTFILES");
+                b.HasKey(x => x.ExportFileId);
+                b.Property(x => x.FileCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.FileCode).IsUnique();
+                b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Running");
+                b.Property(x => x.FileUrl).HasMaxLength(500);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // EvaluationReviews
+            modelBuilder.Entity<EvaluationReview>(b =>
+            {
+                b.ToTable("EVALUATION_REVIEWS");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("REVIEWID");
+                b.Property(x => x.AssignmentId).HasColumnName("ASSIGNMENTID");
+                b.Property(x => x.LecturerId).HasColumnName("LECTURERPROFILEID");
+                b.Property(x => x.ReviewType)
+                    .HasColumnName("REVIEWTYPE")
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .IsRequired();
+                b.Property(x => x.Criteria1Text).HasColumnName("CRITERIA_1_TEXT");
+                b.Property(x => x.Criteria2Text).HasColumnName("CRITERIA_2_TEXT");
+                b.Property(x => x.Criteria3Text).HasColumnName("CRITERIA_3_TEXT");
+                b.Property(x => x.Criteria4Text).HasColumnName("CRITERIA_4_TEXT");
+                b.Property(x => x.Limitations).HasColumnName("LIMITATIONS");
+                b.Property(x => x.Suggestions).HasColumnName("SUGGESTIONS");
+                b.Property(x => x.NumericScore).HasColumnName("NUMERICSCORE").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.TextScore).HasColumnName("TEXTSCORE").HasMaxLength(100);
+                b.Property(x => x.IsApproved).HasColumnName("IS_APPROVED").HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATEDAT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasColumnName("LASTUPDATED").HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.Lecturer).WithMany().HasForeignKey(x => x.LecturerId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // DefenseMinutes
+            modelBuilder.Entity<DefenseMinute>(b =>
+            {
+                b.ToTable("DEFENSE_MINUTES");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("MINUTEID");
+                b.Property(x => x.AssignmentId).HasColumnName("ASSIGNMENTID");
+                b.Property(x => x.SecretaryId).HasColumnName("SECRETARY_ID");
+                b.Property(x => x.SummaryContent).HasColumnName("SUMMARYCONTENT");
+                b.Property(x => x.ReviewerComments).HasColumnName("REVIEWERCOMMENTS");
+                b.Property(x => x.QnaDetails).HasColumnName("QNA_DETAILS");
+                b.Property(x => x.Strengths).HasColumnName("STRENGTHS");
+                b.Property(x => x.Weaknesses).HasColumnName("WEAKNESSES");
+                b.Property(x => x.Recommendations).HasColumnName("RECOMMENDATIONS");
+                b.Property(x => x.CreatedAt).HasColumnName("CREATEDAT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasColumnName("LASTUPDATED").HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasIndex(x => x.AssignmentId).IsUnique();
+                b.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.Secretary).WithMany().HasForeignKey(x => x.SecretaryId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // DefenseResults
+            modelBuilder.Entity<DefenseResult>(b =>
+            {
+                b.ToTable("DEFENSE_RESULTS");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("RESULTID");
+                b.Property(x => x.AssignmentId).HasColumnName("ASSIGNMENTID");
+                b.Property(x => x.ScoreGvhd).HasColumnName("SCORE_GVHD").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.ScoreCt).HasColumnName("SCORE_CT").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.ScoreUvtk).HasColumnName("SCORE_UVTK").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.ScoreUvpb).HasColumnName("SCORE_UVPB").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.FinalScoreNumeric).HasColumnName("FINALSCORE_NUMERIC").HasColumnType("NUMBER(5,2)");
+                b.Property(x => x.FinalScoreText).HasColumnName("FINALSCORE_TEXT").HasMaxLength(100);
+                b.Property(x => x.IsLocked).HasColumnName("ISLOCKED").HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATEDAT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasColumnName("LASTUPDATED").HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasIndex(x => x.AssignmentId).IsUnique();
+                b.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // DefenseRevisions
+            modelBuilder.Entity<DefenseRevision>(b =>
+            {
+                b.ToTable("DEFENSE_REVISIONS");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("REVISIONID");
+                b.Property(x => x.AssignmentId).HasColumnName("ASSIGNMENTID");
+                b.Property(x => x.RevisedContent).HasColumnName("REVISEDCONTENT");
+                b.Property(x => x.RevisionFileUrl).HasColumnName("REVISIONFILEURL").HasMaxLength(500);
+                b.Property(x => x.IsGvhdApproved).HasColumnName("IS_GVHD_APPROVED").HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.IsUvtkApproved).HasColumnName("IS_UVTK_APPROVED").HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.IsCtApproved).HasColumnName("IS_CT_APPROVED").HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.FinalStatus)
+                    .HasColumnName("FINALSTATUS")
+                    .HasConversion<string>()
+                    .HasMaxLength(50)
+                    .HasDefaultValue(RevisionFinalStatus.Pending);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATEDAT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasColumnName("LASTUPDATED").HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasIndex(x => x.AssignmentId).IsUnique();
+                b.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // DefenseDocuments
+            modelBuilder.Entity<DefenseDocument>(b =>
+            {
+                b.ToTable("DEFENSE_DOCUMENTS");
+                b.HasKey(x => x.DocumentId);
+                b.Property(x => x.DocumentId).HasColumnName("DOCUMENTID");
+                b.Property(x => x.AssignmentId).HasColumnName("ASSIGNMENTID");
+                b.Property(x => x.DocumentType).HasColumnName("DOCUMENTTYPE").HasMaxLength(50).IsRequired();
+                b.Property(x => x.FileUrl).HasColumnName("FILEURL").HasMaxLength(500).IsRequired();
+                b.Property(x => x.GeneratedAt).HasColumnName("GENERATEDAT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
             });
 
             // Specialties - DELETED
@@ -837,6 +1021,15 @@ namespace ThesisManagement.Api.Data
 
         private static void ApplyOracleIdentifierNamingRules(ModelBuilder modelBuilder)
         {
+            var preserveExplicitMappingTables = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "EVALUATION_REVIEWS",
+                "DEFENSE_MINUTES",
+                "DEFENSE_RESULTS",
+                "DEFENSE_REVISIONS",
+                "DEFENSE_DOCUMENTS"
+            };
+
             var keepPascalCaseColumns = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
             {
                 ["MILESTONETEMPLATES"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" },
@@ -861,13 +1054,9 @@ namespace ThesisManagement.Api.Data
 
                 entityType.SetTableName(normalizedTableName);
 
-                // Keep explicit snake_case mappings for tables that already define exact column names.
-                if (string.Equals(normalizedTableName, "TOPIC_WORKFLOW_AUDITS", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "NOTIFICATIONS", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "NOTIFICATION_RECIPIENTS", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "NOTIFICATION_PREFERENCES", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "NOTIFICATION_OUTBOX", StringComparison.Ordinal)
-                    || string.Equals(normalizedTableName, "V_LECTURER_DASHBOARD", StringComparison.Ordinal))
+                if (preserveExplicitMappingTables.Contains(normalizedTableName))
+                // Keep explicit snake_case mappings for audit table.
+                if (string.Equals(normalizedTableName, "TOPIC_WORKFLOW_AUDITS", StringComparison.Ordinal))
                 {
                     continue;
                 }

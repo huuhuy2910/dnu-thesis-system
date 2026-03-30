@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import {
+  Gavel,
   Home,
   Users,
   CalendarCheck,
@@ -47,8 +48,8 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
     // Committees view for lecturer
     {
       path: "/lecturer/committees",
-      label: "Hội đồng của tôi",
-      icon: <Users size={18} />,
+      label: "Ca bảo vệ & chấm điểm",
+      icon: <Gavel size={18} />,
     },
     {
       path: "/lecturer/notifications",
