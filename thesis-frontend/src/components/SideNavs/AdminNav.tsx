@@ -61,6 +61,16 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
       label: "Quản lý đề tài",
       icon: <ClipboardList size={18} />,
     },
+    {
+      path: `${basePath}/tags`,
+      label: "Quản lý tags",
+      icon: <BookOpen size={18} />,
+    },
+    {
+      path: `${basePath}/catalogtopics`,
+      label: "Kho đề tài có sẵn",
+      icon: <ClipboardList size={18} />,
+    },
   ];
 
   const roleCanSeeUsers = hasUserManagementPermission(role, "users:list");

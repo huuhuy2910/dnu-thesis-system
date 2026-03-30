@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import LoginPage from "../pages/auth/LoginPage";
+import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import Forbidden from "../pages/Forbidden";
 import StudentLayout from "../components/Layouts/StudentLayout";
 import LecturerLayout from "../components/Layouts/LecturerLayout";
@@ -35,6 +36,8 @@ import StudentProfilesManagement from "../pages/studentservices/StudentProfilesM
 import LecturerProfilesManagement from "../pages/studentservices/LecturerProfilesManagement";
 import DepartmentsManagement from "../pages/studentservices/DepartmentsManagement";
 import TopicsManagement from "../pages/studentservices/TopicsManagement";
+import TagsManagement from "../pages/studentservices/TagsManagement";
+import CatalogTopicsWarehousePage from "../pages/studentservices/CatalogTopicsWarehousePage";
 import AcademicDataManagementPage from "../pages/studentservices/AcademicDataManagementPage";
 import TopicWorkflowAudits from "../pages/admin/TopicWorkflowAudits";
 /**
@@ -67,6 +70,7 @@ const AppRoutes: React.FC = () => {
           <Route path="notifications" element={<Notifications />} />
           <Route path="defense-info" element={<StudentDefenseInfo />} />
           <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
           {/* thêm các route con của student ở đây */}
         </Route>
 
@@ -87,6 +91,7 @@ const AppRoutes: React.FC = () => {
           <Route path="topic-review" element={<LecturerTopicReviewPage />} />
           <Route path="workflow-audits" element={<TopicWorkflowAudits />} />
           <Route path="profile" element={<LecturerProfilePage />} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
           <Route path="notifications" element={<LecturerNotifications />} />
           {/* thêm các route con của lecturer ở đây */}
         </Route>
@@ -107,6 +112,11 @@ const AppRoutes: React.FC = () => {
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
           <Route path="departments" element={<DepartmentsManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
+          <Route path="tags" element={<TagsManagement />} />
+          <Route
+            path="catalogtopics"
+            element={<CatalogTopicsWarehousePage />}
+          />
           <Route path="topic-review" element={<LecturerTopicReview />} />
           <Route path="committees" element={<CommitteeManagement />} />
           <Route
@@ -134,6 +144,11 @@ const AppRoutes: React.FC = () => {
           <Route path="lecturers" element={<LecturerProfilesManagement />} />
           <Route path="departments" element={<DepartmentsManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
+          <Route path="tags" element={<TagsManagement />} />
+          <Route
+            path="catalogtopics"
+            element={<CatalogTopicsWarehousePage />}
+          />
         </Route>
 
         {/* fallback: nếu không match => điều hướng về /login */}

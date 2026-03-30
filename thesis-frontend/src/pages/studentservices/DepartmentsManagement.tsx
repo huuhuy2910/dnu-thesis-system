@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
-import "../admin/Dashboard.css";
 import "./DepartmentsManagement.css";
 
 type RecordData = Record<string, unknown>;
@@ -23,11 +23,35 @@ interface ColumnDef {
   aliases?: string[];
 }
 
+type LecturerProfile = {
+  lecturerProfileID: number;
+  lecturerCode: string;
+  userCode: string;
+  departmentCode: string;
+  degree?: string;
+  guideQuota?: number;
+  defenseQuota?: number;
+  currentGuidingCount?: number;
+  gender?: string;
+  dateOfBirth?: string;
+  email?: string;
+  phoneNumber?: string;
+  profileImage?: string | null;
+  address?: string;
+  notes?: string | null;
+  fullName: string;
+  createdAt?: string;
+  lastUpdated?: string;
+};
+
 const fields: FieldDef[] = [
   { name: "departmentCode", label: "departmentCode", required: true },
   { name: "name", label: "name", required: true },
   { name: "description", label: "description", type: "textarea" },
 ];
+
+const createFields = fields;
+const editFields = fields.filter((field) => field.name !== "departmentCode");
 
 const filterFields: FieldDef[] = [
   { name: "departmentCode", label: "Mã khoa/bộ môn" },
@@ -57,15 +81,21 @@ function getColumnValue(row: RecordData, column: ColumnDef): unknown {
   return "";
 }
 
-function toFormRecord(data: RecordData): Record<string, string> {
-  return fields.reduce<Record<string, string>>((acc, field) => {
+function toFormRecord(
+  data: RecordData,
+  schemaFields: FieldDef[] = fields,
+): Record<string, string> {
+  return schemaFields.reduce<Record<string, string>>((acc, field) => {
     acc[field.name] = toDisplay(data[field.name]);
     return acc;
   }, {});
 }
 
-function toPayload(formValues: Record<string, string>): RecordData {
-  return fields.reduce<RecordData>((acc, field) => {
+function toPayload(
+  formValues: Record<string, string>,
+  schemaFields: FieldDef[] = fields,
+): RecordData {
+  return schemaFields.reduce<RecordData>((acc, field) => {
     const raw = (formValues[field.name] ?? "").trim();
     if (!raw) {
       acc[field.name] = field.type === "number" ? null : "";
@@ -137,6 +167,39 @@ function normalizeList(payload: unknown): {
   return { items: [], fallbackTotal: 0 };
 }
 
+function getDepartmentToken(row: RecordData): string {
+  const token =
+    row.departmentID ?? row.departmentId ?? row.departmentCode ?? row.code;
+  return String(token ?? "").trim();
+}
+
+function getDepartmentCode(row: RecordData): string {
+  return String(row.departmentCode || row.code || "--");
+}
+
+function getDepartmentName(row: RecordData): string {
+  return String(row.name || row.departmentName || row.title || "--");
+}
+
+function getDepartmentDescription(row: RecordData): string {
+  return String(row.description || row.departmentDescription || "--");
+}
+
+function getLecturerDisplayName(lecturer: LecturerProfile): string {
+  return lecturer.fullName || "--";
+}
+
+function getLecturerCode(lecturer: LecturerProfile): string {
+  return lecturer.lecturerCode || lecturer.userCode || "--";
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("vi-VN");
+}
+
 const DepartmentsManagement: React.FC = () => {
   const { addToast } = useToast();
   const [rows, setRows] = useState<RecordData[]>([]);
@@ -150,6 +213,9 @@ const DepartmentsManagement: React.FC = () => {
   const [searchInput, setSearchInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [detailTab, setDetailTab] = useState<"info" | "lecturers">("info");
+  const [lecturers, setLecturers] = useState<LecturerProfile[]>([]);
+  const [lecturersLoading, setLecturersLoading] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<
     Record<string, string>
   >(() =>
@@ -222,27 +288,28 @@ const DepartmentsManagement: React.FC = () => {
         { method: "GET" },
         "Không thể tải mẫu tạo mới.",
       );
-      setFormValues(toFormRecord(data || {}));
+      setFormValues(toFormRecord(data || {}, createFields));
     } catch {
-      setFormValues(toFormRecord({}));
+      setFormValues(toFormRecord({}, createFields));
     }
     setSelectedRow(null);
     setActiveModal("create");
   };
 
   const openEdit = async (row: RecordData) => {
-    const code = String(row.departmentCode ?? "").trim();
-    if (!code) {
-      addToast("Không xác định được departmentCode để cập nhật.", "error");
+    const token = getDepartmentToken(row);
+    if (!token) {
+      addToast("Không xác định được phòng ban để cập nhật.", "error");
       return;
     }
     try {
       const { data } = await requestApiData<RecordData>(
-        `/Departments/get-update/${encodeURIComponent(code)}`,
+        `/Departments/get-update/${encodeURIComponent(token)}`,
         { method: "GET" },
         "Không thể tải dữ liệu cập nhật.",
       );
-      setFormValues(toFormRecord(data || row));
+      const mergedRow = { ...row, ...(data || {}) };
+      setFormValues(toFormRecord(mergedRow, editFields));
       setSelectedRow(row);
       setActiveModal("edit");
     } catch (error) {
@@ -256,16 +323,17 @@ const DepartmentsManagement: React.FC = () => {
   };
 
   const openDetail = async (row: RecordData) => {
-    const code = String(row.departmentCode ?? "").trim();
-    if (!code) {
+    const token = getDepartmentToken(row);
+    if (!token) {
       setSelectedRow(row);
+      setDetailTab("info");
       setActiveModal("detail");
       return;
     }
 
     try {
       const { data } = await requestApiData<RecordData>(
-        `/Departments/get-detail/${encodeURIComponent(code)}`,
+        `/Departments/get-detail/${encodeURIComponent(token)}`,
         { method: "GET" },
         "Không thể tải chi tiết khoa/bộ môn.",
       );
@@ -273,20 +341,60 @@ const DepartmentsManagement: React.FC = () => {
     } catch {
       setSelectedRow(row);
     }
+    setDetailTab("info");
+    setLecturers([]);
     setActiveModal("detail");
   };
 
+  useEffect(() => {
+    const loadLecturers = async () => {
+      if (activeModal !== "detail" || detailTab !== "lecturers") return;
+
+      const departmentCode = getDepartmentCode(selectedRow || {});
+      if (!departmentCode || departmentCode === "--") {
+        setLecturers([]);
+        return;
+      }
+
+      setLecturersLoading(true);
+      try {
+        const { data } = await requestApiData<unknown>(
+          `/LecturerProfiles/get-list?DepartmentCode=${encodeURIComponent(departmentCode)}&Page=0&PageSize=10`,
+          { method: "GET" },
+          "Không thể tải danh sách giảng viên.",
+        );
+        const normalized = normalizeList(data);
+        setLecturers(normalized.items as LecturerProfile[]);
+      } catch (error) {
+        addToast(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách giảng viên.",
+          "error",
+        );
+        setLecturers([]);
+      } finally {
+        setLecturersLoading(false);
+      }
+    };
+
+    void loadLecturers();
+  }, [activeModal, addToast, detailTab, selectedRow]);
+
   const handleDelete = async (row: RecordData) => {
-    const code = String(row.departmentCode ?? "").trim();
-    if (!code) {
-      addToast("Không xác định được departmentCode để xóa.", "error");
+    const token = getDepartmentToken(row);
+    if (!token) {
+      addToast(
+        "Không xác định được departmentID/departmentCode để xóa.",
+        "error",
+      );
       return;
     }
     if (!window.confirm("Bạn chắc chắn muốn xóa bản ghi này?")) return;
 
     try {
       await requestApiData<unknown>(
-        `/Departments/delete/${encodeURIComponent(code)}`,
+        `/Departments/delete/${encodeURIComponent(token)}`,
         { method: "DELETE" },
         "Không thể xóa bản ghi.",
       );
@@ -301,14 +409,16 @@ const DepartmentsManagement: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const payload = toPayload(formValues);
-    const required = fields.find((field) => {
+    const schemaFields = activeModal === "edit" ? editFields : createFields;
+    const payload = toPayload(formValues, schemaFields);
+    const required = schemaFields.find((field) => {
       if (!field.required) return false;
       const value = payload[field.name];
       return (
         value === null || value === undefined || String(value).trim() === ""
       );
     });
+
     if (required) {
       addToast(`Trường ${required.label} là bắt buộc.`, "warning");
       return;
@@ -326,9 +436,9 @@ const DepartmentsManagement: React.FC = () => {
       }
 
       if (activeModal === "edit" && selectedRow) {
-        const code = String(selectedRow.departmentCode ?? "").trim();
+        const token = getDepartmentToken(selectedRow);
         await requestApiData<RecordData>(
-          `/Departments/update/${encodeURIComponent(code)}`,
+          `/Departments/update/${encodeURIComponent(token)}`,
           { method: "PUT", body: payload },
           "Không thể cập nhật bản ghi.",
         );
@@ -360,8 +470,8 @@ const DepartmentsManagement: React.FC = () => {
   };
 
   return (
-    <div className="admin-dashboard departments-module">
-      <div className="dashboard-header">
+    <div className="departments-module">
+      <div className="departments-header">
         <h1>Quản lý khoa/bộ môn</h1>
         <p>
           Dữ liệu chuẩn theo schema Departments (departmentCode, name,
@@ -369,168 +479,82 @@ const DepartmentsManagement: React.FC = () => {
         </p>
       </div>
 
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          padding: 16,
-          marginBottom: 20,
-          display: "grid",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 300px",
-            }}
+      <div className="departments-toolbar">
+        <div className="departments-search-wrap">
+          <Search size={16} />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Tìm kiếm nhanh..."
+          />
+        </div>
+
+        <div className="departments-actions-wrap">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className="departments-filter-btn"
           >
-            <Search size={16} color="#64748b" />
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Tìm kiếm nhanh..."
-              style={{
-                width: "100%",
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "9px 12px",
-              }}
-            />
+            <Filter size={14} />
+            {showAdvancedFilters ? "Ẩn lọc" : "Lọc nâng cao"}
+          </button>
+          <ImportExportActions
+            moduleName="departments"
+            moduleLabel="Quản lý khoa/bộ môn"
+            onImportSuccess={loadRows}
+          />
+          <button
+            type="button"
+            onClick={openCreate}
+            className="departments-create-btn"
+          >
+            <Plus size={14} /> Thêm mới
+          </button>
+        </div>
+      </div>
+
+      {showAdvancedFilters && (
+        <div className="departments-filter-panel">
+          <div className="departments-filter-grid">
+            {filterFields.map((field) => (
+              <label key={field.name} className="departments-filter-field">
+                <span>{field.label}</span>
+                <input
+                  type={
+                    field.type === "number"
+                      ? "number"
+                      : field.type === "date"
+                        ? "date"
+                        : "text"
+                  }
+                  value={advancedFilters[field.name] ?? ""}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setAdvancedFilters((prev) => ({
+                      ...prev,
+                      [field.name]: next,
+                    }));
+                    setPage(1);
+                  }}
+                />
+              </label>
+            ))}
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="departments-filter-actions">
             <button
               type="button"
-              onClick={() => setShowAdvancedFilters((prev) => !prev)}
-              style={{
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
+              onClick={resetFilters}
+              className="departments-reset-btn"
             >
-              <Filter size={16} />{" "}
-              {showAdvancedFilters ? "Ẩn lọc" : "Lọc nâng cao"}
-            </button>
-            <ImportExportActions
-              moduleName="departments"
-              moduleLabel="Quản lý khoa/bộ môn"
-              onImportSuccess={loadRows}
-            />
-            <button
-              type="button"
-              onClick={openCreate}
-              style={{
-                border: "none",
-                background: "#f37021",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "9px 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={16} /> Thêm mới
+              Xóa bộ lọc
             </button>
           </div>
         </div>
+      )}
 
-        {showAdvancedFilters && (
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              padding: 12,
-              display: "grid",
-              gap: 10,
-              background: "#f8fafc",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-                gap: 10,
-              }}
-            >
-              {filterFields.map((field) => (
-                <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}
-                  >
-                    {field.label}
-                  </span>
-                  <input
-                    type={
-                      field.type === "number"
-                        ? "number"
-                        : field.type === "date"
-                          ? "date"
-                          : "text"
-                    }
-                    value={advancedFilters[field.name] ?? ""}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setAdvancedFilters((prev) => ({
-                        ...prev,
-                        [field.name]: next,
-                      }));
-                      setPage(1);
-                    }}
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                      background: "#fff",
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div
-              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-            >
-              <button
-                type="button"
-                onClick={resetFilters}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                }}
-              >
-                Xóa bộ lọc
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="recent-topics-section" style={{ overflowX: "auto" }}>
-        <table className="topics-table">
+      <div className="departments-table-wrap">
+        <table className="departments-table">
           <thead>
             <tr>
               {columns.map((column) => (
@@ -551,7 +575,7 @@ const DepartmentsManagement: React.FC = () => {
             ) : (
               rows.map((row, index) => (
                 <tr
-                  key={`departments-${index}-${String(row.departmentCode ?? "")}`}
+                  key={`departments-${index}-${getDepartmentToken(row) || String(row.departmentCode ?? "")}`}
                 >
                   {columns.map((column) => (
                     <td key={`${column.key}-${index}`}>
@@ -559,22 +583,11 @@ const DepartmentsManagement: React.FC = () => {
                     </td>
                   ))}
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: 8,
-                      }}
-                    >
+                    <div className="departments-action-buttons">
                       <button
                         type="button"
                         onClick={() => void openDetail(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
+                        className="departments-icon-btn"
                         title="Chi tiết"
                       >
                         <Eye size={14} />
@@ -582,12 +595,7 @@ const DepartmentsManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void openEdit(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
+                        className="departments-icon-btn"
                         title="Cập nhật"
                       >
                         <Edit size={14} />
@@ -595,13 +603,7 @@ const DepartmentsManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void handleDelete(row)}
-                        style={{
-                          border: "1px solid #fecaca",
-                          color: "#b91c1c",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
+                        className="departments-icon-btn departments-icon-btn-danger"
                         title="Xóa"
                       >
                         <Trash2 size={14} />
@@ -613,273 +615,303 @@ const DepartmentsManagement: React.FC = () => {
             )}
           </tbody>
         </table>
-
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Tổng bản ghi: <strong>{totalCount}</strong>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span style={{ color: "#64748b", fontSize: 13 }}>Page size</span>
-              <select
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
-                }}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Trước
-            </button>
-            <span style={{ minWidth: 94, textAlign: "center", fontSize: 13 }}>
-              Trang {page} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={page >= pageCount || isLoading}
-              onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Sau
-            </button>
-          </div>
-        </div>
       </div>
 
+      <TablePagination
+        totalCount={totalCount}
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        pageSizeOptions={[10, 20, 50, 100]}
+        totalLabel="Tổng bản ghi:"
+        pageSizeLabel="Số dòng/trang"
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+      />
+
       {activeModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 80,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 860,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>
-                {activeModal === "create" && "Tạo khoa/bộ môn"}
-                {activeModal === "edit" && "Cập nhật khoa/bộ môn"}
-                {activeModal === "detail" && "Chi tiết khoa/bộ môn"}
-              </h3>
-            </div>
-
-            {activeModal === "detail" ? (
-              <div
-                style={{
-                  padding: "24px",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                  gap: "16px",
-                  background: "#f8fafc",
-                }}
-              >
-                {Object.entries(selectedRow || {}).map(([key, value]) => {
-                  const strVal = toDisplay(value);
-                  const isLong = strVal.length > 60;
-                  return (
-                    <div
-                      key={key}
-                      style={{
-                        padding: "16px",
-                        background: "#fff",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                        gridColumn: isLong ? "1 / -1" : "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#64748b",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {key}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "15px",
-                          color: "#0f172a",
-                          lineHeight: "1.5",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {strVal || (
-                          <span
-                            style={{ color: "#94a3b8", fontStyle: "italic" }}
-                          >
-                            Trống
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: 16,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                  gap: 12,
-                }}
-              >
-                {fields.map((field) => {
-                  const value = formValues[field.name] ?? "";
-                  return (
-                    <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {field.label}
-                        {field.required ? " *" : ""}
-                      </span>
-                      {field.type === "textarea" ? (
-                        <textarea
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          rows={3}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                            resize: "vertical",
-                          }}
-                        />
-                      ) : (
-                        <input
-                          type={
-                            field.type === "number"
-                              ? "number"
-                              : field.type === "date"
-                                ? "date"
-                                : "text"
-                          }
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                          }}
-                        />
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-
-            <div
-              style={{
-                padding: 16,
-                borderTop: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
+        <div className="departments-modal-overlay">
+          <div className="departments-modal">
+            {activeModal !== "detail" && (
               <button
                 type="button"
+                className="departments-modal-close"
                 onClick={() => setActiveModal(null)}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "9px 14px",
-                }}
-                disabled={isSubmitting}
               >
-                Đóng
+                x
               </button>
-              {activeModal !== "detail" && (
-                <button
-                  type="button"
-                  onClick={() => void handleSubmit()}
-                  disabled={isSubmitting}
-                  style={{
-                    border: "none",
-                    background: "#f37021",
-                    color: "#fff",
-                    borderRadius: 8,
-                    padding: "9px 14px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {isSubmitting ? "Đang lưu..." : "Lưu"}
-                </button>
-              )}
-            </div>
+            )}
+
+            {activeModal === "detail" ? (
+              <div className="departments-detail-shell">
+                <div className="departments-detail-header">
+                  <div className="departments-detail-title">
+                    <span className="departments-badge">Phòng ban</span>
+                    <h3>{getDepartmentName(selectedRow || {})}</h3>
+                  </div>
+
+                  <div className="departments-detail-actions">
+                    <button
+                      type="button"
+                      className="departments-secondary-btn"
+                      onClick={() => {
+                        if (selectedRow) {
+                          void openEdit(selectedRow);
+                          setActiveModal(null);
+                        }
+                      }}
+                    >
+                      <Edit size={13} />
+                      Sửa
+                    </button>
+                    <button
+                      type="button"
+                      className="departments-secondary-btn departments-secondary-btn-danger"
+                      onClick={() => setActiveModal(null)}
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+
+                <div className="departments-detail-tabs">
+                  <button
+                    type="button"
+                    className={detailTab === "info" ? "is-active" : ""}
+                    onClick={() => setDetailTab("info")}
+                  >
+                    Thông tin khoa
+                  </button>
+                  <button
+                    type="button"
+                    className={detailTab === "lecturers" ? "is-active" : ""}
+                    onClick={() => setDetailTab("lecturers")}
+                  >
+                    Danh sách giảng viên
+                  </button>
+                </div>
+
+                {detailTab === "info" ? (
+                  <div className="departments-detail-grid">
+                    <div className="departments-detail-card">
+                      <span className="departments-detail-label">
+                        Mã phòng ban
+                      </span>
+                      <strong>{getDepartmentCode(selectedRow || {})}</strong>
+                    </div>
+                    <div className="departments-detail-card">
+                      <span className="departments-detail-label">
+                        Tên phòng ban
+                      </span>
+                      <strong>{getDepartmentName(selectedRow || {})}</strong>
+                    </div>
+                    <div className="departments-detail-card">
+                      <span className="departments-detail-label">
+                        createdAt
+                      </span>
+                      <strong>
+                        {formatDateTime(
+                          selectedRow?.createdAt as string | undefined,
+                        )}
+                      </strong>
+                    </div>
+                    <div className="departments-detail-card">
+                      <span className="departments-detail-label">
+                        lastUpdated
+                      </span>
+                      <strong>
+                        {formatDateTime(
+                          selectedRow?.lastUpdated as string | undefined,
+                        )}
+                      </strong>
+                    </div>
+                    <div className="departments-detail-card departments-detail-card-wide">
+                      <span className="departments-detail-label">Mô tả</span>
+                      <p>{getDepartmentDescription(selectedRow || {})}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="departments-lecturers-panel">
+                    {lecturersLoading ? (
+                      <div className="departments-lecturers-empty">
+                        Đang tải danh sách giảng viên...
+                      </div>
+                    ) : lecturers.length === 0 ? (
+                      <div className="departments-lecturers-empty">
+                        Không có giảng viên thuộc khoa này.
+                      </div>
+                    ) : (
+                      <div className="departments-lecturers-table-wrap">
+                        <table className="departments-lecturers-table">
+                          <thead>
+                            <tr>
+                              <th>GIẢNG VIÊN</th>
+                              <th>LIÊN HỆ</th>
+                              <th>HỌC VỊ</th>
+                              <th>BẢO VỆ</th>
+                              <th>ĐANG HƯỚNG DẪN</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lecturers.map((lecturer) => (
+                              <tr key={lecturer.lecturerProfileID}>
+                                <td>
+                                  <div className="departments-lecturer-table-name">
+                                    <div className="departments-lecturer-table-avatar">
+                                      {lecturer.profileImage ? (
+                                        <img
+                                          src={lecturer.profileImage}
+                                          alt={lecturer.fullName}
+                                        />
+                                      ) : (
+                                        <span>
+                                          {getLecturerDisplayName(
+                                            lecturer,
+                                          ).charAt(0) || "L"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <strong>
+                                        {getLecturerDisplayName(lecturer)}
+                                      </strong>
+                                      <div className="departments-lecturer-table-code">
+                                        {getLecturerCode(lecturer)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="departments-lecturer-contact-cell">
+                                    <span>{lecturer.email || "--"}</span>
+                                    <span>{lecturer.phoneNumber || "--"}</span>
+                                  </div>
+                                </td>
+                                <td>{lecturer.degree || "--"}</td>
+                                <td>{lecturer.defenseQuota ?? "--"}</td>
+                                <td>
+                                  <div className="departments-lecturer-progress-cell">
+                                    <div className="departments-lecturer-progress-track">
+                                      <div
+                                        className="departments-lecturer-progress-fill"
+                                        style={{
+                                          width: `${Math.min(
+                                            100,
+                                            Math.round(
+                                              ((lecturer.currentGuidingCount ??
+                                                0) /
+                                                Math.max(
+                                                  lecturer.guideQuota ?? 1,
+                                                  1,
+                                                )) *
+                                                100,
+                                            ),
+                                          )}%`,
+                                        }}
+                                      />
+                                    </div>
+                                    <strong>
+                                      {lecturer.currentGuidingCount ?? 0}/
+                                      {lecturer.guideQuota ?? "--"}
+                                    </strong>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="departments-form-shell">
+                <div className="departments-modal-header">
+                  <h3>
+                    {activeModal === "create"
+                      ? "Tạo khoa/bộ môn"
+                      : "Cập nhật khoa/bộ môn"}
+                  </h3>
+                  <p>
+                    {activeModal === "create"
+                      ? "Nhập thông tin phòng ban mới theo schema Departments."
+                      : "Chỉnh sửa tên và mô tả phòng ban."}
+                  </p>
+                </div>
+
+                <div className="departments-form-grid">
+                  {(activeModal === "create" ? createFields : editFields).map(
+                    (field) => {
+                      const value = formValues[field.name] ?? "";
+                      return (
+                        <label
+                          key={field.name}
+                          className={`departments-form-field ${field.type === "textarea" ? "departments-form-field-full" : ""}`}
+                        >
+                          <span>
+                            {field.label}
+                            {field.required ? " *" : ""}
+                          </span>
+                          {field.type === "textarea" ? (
+                            <textarea
+                              value={value}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                              rows={4}
+                            />
+                          ) : (
+                            <input
+                              type={
+                                field.type === "number"
+                                  ? "number"
+                                  : field.type === "date"
+                                    ? "date"
+                                    : "text"
+                              }
+                              value={value}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            />
+                          )}
+                        </label>
+                      );
+                    },
+                  )}
+                </div>
+
+                <div className="departments-form-actions">
+                  <button
+                    type="button"
+                    className="departments-cancel-btn"
+                    onClick={() => setActiveModal(null)}
+                    disabled={isSubmitting}
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    className="departments-save-btn"
+                    onClick={() => void handleSubmit()}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Đang lưu..." : "Lưu"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

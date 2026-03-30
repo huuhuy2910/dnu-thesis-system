@@ -50,6 +50,10 @@ namespace ThesisManagement.Api.Services
             LecturerTags = new GenericRepository<LecturerTag>(_db);
             SystemActivityLogs = new GenericRepository<SystemActivityLog>(_db);
             TopicWorkflowAudits = new GenericRepository<TopicWorkflowAudit>(_db);
+            Notifications = new GenericRepository<Notification>(_db);
+            NotificationRecipients = new GenericRepository<NotificationRecipient>(_db);
+            NotificationPreferences = new GenericRepository<NotificationPreference>(_db);
+            NotificationOutbox = new GenericRepository<NotificationOutbox>(_db);
         }
 
         public IGenericRepository<Department> Departments { get; }
@@ -91,6 +95,10 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<LecturerTag> LecturerTags { get; }
         public IGenericRepository<SystemActivityLog> SystemActivityLogs { get; }
         public IGenericRepository<TopicWorkflowAudit> TopicWorkflowAudits { get; }
+        public IGenericRepository<Notification> Notifications { get; }
+        public IGenericRepository<NotificationRecipient> NotificationRecipients { get; }
+        public IGenericRepository<NotificationPreference> NotificationPreferences { get; }
+        public IGenericRepository<NotificationOutbox> NotificationOutbox { get; }
 
         public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {

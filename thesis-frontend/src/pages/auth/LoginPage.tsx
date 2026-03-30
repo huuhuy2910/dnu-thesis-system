@@ -12,9 +12,14 @@ import {
   clearAuthSession,
   consumeSessionExpiredMessage,
   getRoleClaimFromAccessToken,
+  setLecturerCode,
   setAuthSession,
+  setStudentCode,
 } from "../../services/auth-session.service";
-import { normalizeRole } from "../../utils/role";
+import { normalizeRole, ROLE_LECTURER, ROLE_STUDENT } from "../../utils/role";
+import { fetchData } from "../../api/fetchData";
+import type { StudentProfile } from "../../types/studentProfile";
+import type { LecturerProfile } from "../../types/lecturer-profile";
 
 type LoginApiResponse = ApiResponse<unknown> & {
   userCode?: string;
@@ -23,6 +28,48 @@ type LoginApiResponse = ApiResponse<unknown> & {
   tokenType?: string;
   expiresAt?: string;
 };
+
+async function cacheRoleProfileCode(
+  role: string,
+  userCode: string,
+): Promise<void> {
+  const normalizedRole = normalizeRole(role);
+  const normalizedUserCode = userCode.trim();
+  if (!normalizedUserCode) return;
+
+  try {
+    if (normalizedRole === ROLE_STUDENT) {
+      const studentProfileResponse = await fetchData<
+        ApiResponse<StudentProfile[]>
+      >(
+        `/StudentProfiles/get-list?UserCode=${encodeURIComponent(normalizedUserCode)}`,
+      );
+      const studentCode =
+        studentProfileResponse.data?.[0]?.studentCode?.trim() || null;
+      setStudentCode(studentCode);
+      setLecturerCode(null);
+      return;
+    }
+
+    if (normalizedRole === ROLE_LECTURER) {
+      const lecturerProfileResponse = await fetchData<
+        ApiResponse<LecturerProfile[]>
+      >(
+        `/LecturerProfiles/get-list?UserCode=${encodeURIComponent(normalizedUserCode)}`,
+      );
+      const lecturerCode =
+        lecturerProfileResponse.data?.[0]?.lecturerCode?.trim() || null;
+      setLecturerCode(lecturerCode);
+      setStudentCode(null);
+      return;
+    }
+
+    setStudentCode(null);
+    setLecturerCode(null);
+  } catch (profileError) {
+    console.warn("Failed to cache role profile code after login", profileError);
+  }
+}
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState("");
@@ -104,6 +151,9 @@ const LoginPage: React.FC = () => {
           normalizeRole(getRoleClaimFromAccessToken(resp.accessToken)) ||
           normalizeRole(user.role);
         user.role = role;
+
+        await cacheRoleProfileCode(role, user.userCode || "");
+
         auth.login(user);
         const redirect = RolePaths[role] ?? "/";
         navigate(redirect);

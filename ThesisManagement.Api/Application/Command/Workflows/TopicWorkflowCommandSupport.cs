@@ -145,6 +145,18 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             foreach (var item in toRemove)
                 _uow.TopicTags.Remove(item);
 
+            // Keep TOPICTAGS bound to TopicCode only.
+            // Some Oracle trigger setups may react to non-null CatalogTopicCode and cause
+            // unintended writes/conflicts on TOPICS unique constraints.
+            foreach (var item in currentTopicTags)
+            {
+                if (!string.IsNullOrWhiteSpace(item.CatalogTopicCode))
+                {
+                    item.CatalogTopicCode = null;
+                    _uow.TopicTags.Update(item);
+                }
+            }
+
             var existingTagIds = currentTopicTags.Select(x => x.TagID).ToHashSet();
             var toAddTagIds = desiredTagIds.Where(x => !existingTagIds.Contains(x)).ToList();
 
@@ -160,7 +172,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                     await _uow.TopicTags.AddAsync(new TopicTag
                     {
                         TopicCode = topic.TopicCode,
-                        CatalogTopicCode = topic.CatalogTopicCode,
+                        CatalogTopicCode = null,
                         TagID = tag.TagID,
                         TagCode = tag.TagCode,
                         CreatedAt = DateTime.UtcNow
