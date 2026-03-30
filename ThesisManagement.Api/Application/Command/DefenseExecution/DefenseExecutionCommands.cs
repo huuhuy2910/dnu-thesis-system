@@ -17,32 +17,32 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
 
     public interface ISubmitLecturerIndependentScoreCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface IRequestReopenScoreCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface ILockLecturerSessionCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface IApproveRevisionByLecturerCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int revisionId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int revisionId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface IRejectRevisionByLecturerCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int revisionId, RejectRevisionRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int revisionId, RejectRevisionRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface ISubmitStudentRevisionCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(StudentRevisionSubmissionDto request, IFormFile file, string studentCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(StudentRevisionSubmissionDto request, string studentCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public class PublishDefensePeriodScoresCommand : IPublishDefensePeriodScoresCommand
@@ -65,47 +65,47 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public SubmitLecturerIndependentScoreCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.SubmitIndependentScoreAsync(committeeId, request, lecturerCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.SubmitIndependentScoreAsync(committeeId, request, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class RequestReopenScoreCommand : IRequestReopenScoreCommand
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public RequestReopenScoreCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.RequestReopenScoreAsync(committeeId, request, lecturerCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.RequestReopenScoreAsync(committeeId, request, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class LockLecturerSessionCommand : ILockLecturerSessionCommand
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public LockLecturerSessionCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.LockSessionAsync(committeeId, lecturerCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.LockSessionAsync(committeeId, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class ApproveRevisionByLecturerCommand : IApproveRevisionByLecturerCommand
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public ApproveRevisionByLecturerCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int revisionId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.ApproveRevisionAsync(revisionId, lecturerCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int revisionId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.ApproveRevisionAsync(revisionId, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class RejectRevisionByLecturerCommand : IRejectRevisionByLecturerCommand
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public RejectRevisionByLecturerCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int revisionId, RejectRevisionRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.RejectRevisionAsync(revisionId, request.Reason, lecturerCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int revisionId, RejectRevisionRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.RejectRevisionAsync(revisionId, request.Reason, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class SubmitStudentRevisionCommand : ISubmitStudentRevisionCommand
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public SubmitStudentRevisionCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(StudentRevisionSubmissionDto request, IFormFile file, string studentCode, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.SubmitStudentRevisionAsync(request, file, studentCode, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(StudentRevisionSubmissionDto request, string studentCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.SubmitStudentRevisionAsync(request, studentCode, actorUserId, idempotencyKey, cancellationToken);
     }
 }

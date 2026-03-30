@@ -6,7 +6,12 @@ using ThesisManagement.Api.Application.Command.ConversationMembers;
 using ThesisManagement.Api.Application.Command.Conversations;
 using ThesisManagement.Api.Application.Command.DefenseExecution;
 using ThesisManagement.Api.Application.Command.DefensePeriods;
+using ThesisManagement.Api.Application.Command.DefensePeriods.Services;
 using ThesisManagement.Api.Application.Command.DefenseSetup;
+using ThesisManagement.Api.Application.Common;
+using ThesisManagement.Api.Application.Common.Constraints;
+using ThesisManagement.Api.Application.Common.Heuristics;
+using ThesisManagement.Api.Application.Common.Resilience;
 using ThesisManagement.Api.Application.Command.Departments;
 using ThesisManagement.Api.Application.Command.LecturerProfiles;
 using ThesisManagement.Api.Application.Command.LecturerTags;
@@ -58,6 +63,7 @@ using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Services.Chat;
 using ThesisManagement.Api.Services.DataExchange;
 using ThesisManagement.Api.Mappings;
+using ThesisManagement.Api.Helpers;
 using AutoMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -71,6 +77,7 @@ builder.Services.AddControllers(options =>
 {
     // Thêm global filter để log activities
     options.Filters.Add<ThesisManagement.Api.Filters.ActivityLogFilter>();
+    options.Filters.Add<ThesisManagement.Api.Filters.ApiResponseSignalFilter>();
 });
 builder.Services.AddSignalR();
 
@@ -146,6 +153,14 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHealthChecks();
+
+builder.Services.Configure<DefenseAutoGenerateHeuristicOptions>(
+    builder.Configuration.GetSection("DefenseAutoGenerateHeuristic"));
+builder.Services.Configure<DefenseRevisionQuorumOptions>(
+    builder.Configuration.GetSection("DefenseRevisionQuorum"));
+builder.Services.Configure<DefenseResiliencePolicyOptions>(
+    builder.Configuration.GetSection("DefenseResiliencePolicy"));
 
 // EF Core
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -171,6 +186,16 @@ builder.Services.AddScoped<IDefensePeriodCommandProcessor, DefensePeriodCommandP
 builder.Services.AddScoped<IDefensePeriodQueryProcessor, DefensePeriodQueryProcessor>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IDataExchangeService, DataExchangeService>();
+builder.Services.AddScoped<ICommitteeConstraintService, CommitteeConstraintService>();
+builder.Services.AddScoped<ICommitteeConstraintRule, RoleRequirementRule>();
+builder.Services.AddScoped<ICommitteeConstraintRule, LecturerOverlapRule>();
+builder.Services.AddScoped<ICommitteeConstraintRule, UniqueStudentAssignmentRule>();
+builder.Services.AddScoped<ICommitteeConstraintRule, SupervisorConflictRule>();
+builder.Services.AddScoped<IDefenseCommitteeHeuristicService, DefenseCommitteeHeuristicService>();
+builder.Services.AddSingleton<IDefenseResiliencePolicy, DefenseResiliencePolicy>();
+builder.Services.AddScoped<IDefenseAuditTrailService, DefenseAuditTrailService>();
+builder.Services.AddScoped<IDefenseScoreWorkflowService, DefenseScoreWorkflowService>();
+builder.Services.AddScoped<IDefenseRevisionWorkflowService, DefenseRevisionWorkflowService>();
 builder.Services.AddScoped<ITopicWorkflowCommandSupport, TopicWorkflowCommandSupport>();
 builder.Services.AddScoped<IResubmitTopicWorkflowCommandProcessor, ResubmitTopicWorkflowCommandProcessor>();
 builder.Services.AddScoped<IDecideTopicWorkflowCommandProcessor, DecideTopicWorkflowCommandProcessor>();
@@ -366,7 +391,19 @@ builder.Services.AddScoped<IGenerateCouncilsCommand, GenerateCouncilsCommand>();
 builder.Services.AddScoped<ICreateCouncilCommand, CreateCouncilCommand>();
 builder.Services.AddScoped<IUpdateCouncilCommand, UpdateCouncilCommand>();
 builder.Services.AddScoped<IDeleteCouncilCommand, DeleteCouncilCommand>();
+builder.Services.AddScoped<IGenerateCouncilCodeCommand, GenerateCouncilCodeCommand>();
+builder.Services.AddScoped<ICreateCouncilStep1Command, CreateCouncilStep1Command>();
+builder.Services.AddScoped<IUpdateCouncilStep1Command, UpdateCouncilStep1Command>();
+builder.Services.AddScoped<ISaveCouncilMembersStepCommand, SaveCouncilMembersStepCommand>();
+builder.Services.AddScoped<ISaveCouncilTopicsStepCommand, SaveCouncilTopicsStepCommand>();
+builder.Services.AddScoped<IAddCouncilMemberItemCommand, AddCouncilMemberItemCommand>();
+builder.Services.AddScoped<IUpdateCouncilMemberItemCommand, UpdateCouncilMemberItemCommand>();
+builder.Services.AddScoped<IRemoveCouncilMemberItemCommand, RemoveCouncilMemberItemCommand>();
+builder.Services.AddScoped<IAddCouncilTopicItemCommand, AddCouncilTopicItemCommand>();
+builder.Services.AddScoped<IUpdateCouncilTopicItemCommand, UpdateCouncilTopicItemCommand>();
+builder.Services.AddScoped<IRemoveCouncilTopicItemCommand, RemoveCouncilTopicItemCommand>();
 builder.Services.AddScoped<IFinalizeDefensePeriodCommand, FinalizeDefensePeriodCommand>();
+builder.Services.AddScoped<IRollbackDefensePeriodCommand, RollbackDefensePeriodCommand>();
 builder.Services.AddScoped<IPublishDefensePeriodScoresCommand, PublishDefensePeriodScoresCommand>();
 builder.Services.AddScoped<ISaveLecturerMinuteCommand, SaveLecturerMinuteCommand>();
 builder.Services.AddScoped<ISubmitLecturerIndependentScoreCommand, SubmitLecturerIndependentScoreCommand>();
@@ -378,13 +415,20 @@ builder.Services.AddScoped<ISubmitStudentRevisionCommand, SubmitStudentRevisionC
 builder.Services.AddScoped<IGetDefensePeriodStudentsQuery, GetDefensePeriodStudentsQuery>();
 builder.Services.AddScoped<IGetDefensePeriodConfigQuery, GetDefensePeriodConfigQuery>();
 builder.Services.AddScoped<IGetDefensePeriodStateQuery, GetDefensePeriodStateQuery>();
+builder.Services.AddScoped<IGetRollbackAvailabilityQuery, GetRollbackAvailabilityQuery>();
 builder.Services.AddScoped<IGetDefenseSyncErrorsQuery, GetDefenseSyncErrorsQuery>();
 builder.Services.AddScoped<IExportDefenseSyncErrorsQuery, ExportDefenseSyncErrorsQuery>();
 builder.Services.AddScoped<IGetLecturerCapabilitiesQueryV2, GetLecturerCapabilitiesQueryV2>();
 builder.Services.AddScoped<IGetLecturerBusySlotsQuery, GetLecturerBusySlotsQuery>();
 builder.Services.AddScoped<IGetCouncilsQueryV2, GetCouncilsQueryV2>();
+builder.Services.AddScoped<IGetCouncilCalendarQuery, GetCouncilCalendarQuery>();
 builder.Services.AddScoped<IGetCouncilDetailQueryV2, GetCouncilDetailQueryV2>();
+builder.Services.AddScoped<IGetTopicTagsQueryV2, GetTopicTagsQueryV2>();
+builder.Services.AddScoped<IGetLecturerTagsQueryV2, GetLecturerTagsQueryV2>();
+builder.Services.AddScoped<IGetCommitteeTagsQueryV2, GetCommitteeTagsQueryV2>();
+builder.Services.AddScoped<IGetDefenseTagOverviewQueryV2, GetDefenseTagOverviewQueryV2>();
 builder.Services.AddScoped<IGetCouncilAuditHistoryQuery, GetCouncilAuditHistoryQuery>();
+builder.Services.AddScoped<IGetRevisionAuditTrailQuery, GetRevisionAuditTrailQuery>();
 builder.Services.AddScoped<IGetLecturerCommitteesQueryV2, GetLecturerCommitteesQueryV2>();
 builder.Services.AddScoped<IGetLecturerMinutesQuery, GetLecturerMinutesQuery>();
 builder.Services.AddScoped<IGetLecturerRevisionQueueQuery, GetLecturerRevisionQueueQuery>();
@@ -394,9 +438,13 @@ builder.Services.AddScoped<IGetStudentRevisionHistoryQuery, GetStudentRevisionHi
 builder.Services.AddScoped<IGetDefenseOverviewAnalyticsQuery, GetDefenseOverviewAnalyticsQuery>();
 builder.Services.AddScoped<IGetDefenseByCouncilAnalyticsQuery, GetDefenseByCouncilAnalyticsQuery>();
 builder.Services.AddScoped<IGetDefenseDistributionAnalyticsQuery, GetDefenseDistributionAnalyticsQuery>();
+builder.Services.AddScoped<IGetScoringMatrixQuery, GetScoringMatrixQuery>();
+builder.Services.AddScoped<IGetScoringProgressQuery, GetScoringProgressQuery>();
+builder.Services.AddScoped<IGetScoringAlertsQuery, GetScoringAlertsQuery>();
 builder.Services.AddScoped<IBuildDefenseReportQuery, BuildDefenseReportQuery>();
 builder.Services.AddScoped<IGetDefenseExportHistoryQuery, GetDefenseExportHistoryQuery>();
 builder.Services.AddScoped<IGetDefensePublishHistoryQuery, GetDefensePublishHistoryQuery>();
+builder.Services.AddSingleton<IApiRuntimeMetricsStore, ApiRuntimeMetricsStore>();
 
 // Filters
 builder.Services.AddScoped<ThesisManagement.Api.Filters.ActivityLogFilter>();
@@ -422,6 +470,7 @@ app.UseRouting();
 
 // Apply CORS early so it covers controller endpoints and static file responses
 app.UseCors("AllowAll");
+app.UseMiddleware<ApiObservabilityMiddleware>();
 
 app.UseAuthentication();
 
@@ -454,6 +503,7 @@ app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/healthz");
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHub<DefenseHub>("/hubs/defense");
 

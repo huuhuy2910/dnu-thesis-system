@@ -276,7 +276,9 @@ const UsersManagement: React.FC = () => {
 
     let cancelled = false;
     const loadLinkedProfiles = async () => {
-      const entries = await Promise.all(
+      type LinkedEntry = [string, LinkedProfileState] | null;
+
+      const entries: LinkedEntry[] = await Promise.all(
         rows.map(async (row) => {
           const userCode = String(row.userCode ?? "").trim();
           const roleName = String(row.role ?? "")
@@ -291,7 +293,7 @@ const UsersManagement: React.FC = () => {
                 return [
                   userCode,
                   { profileType: "student" as const, data: profile },
-                ];
+                ] as [string, LinkedProfileState];
               }
             }
 
@@ -301,7 +303,7 @@ const UsersManagement: React.FC = () => {
                 return [
                   userCode,
                   { profileType: "lecturer" as const, data: profile },
-                ];
+                ] as [string, LinkedProfileState];
               }
             }
           } catch {

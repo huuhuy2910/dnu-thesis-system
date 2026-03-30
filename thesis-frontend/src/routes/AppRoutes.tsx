@@ -19,6 +19,7 @@ import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
 import UsersManagement from "../pages/admin/UsersManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
+import AdminDashboard from "../pages/admin/Dashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
 import ScrollToTop from "../components/ScrollToTop";
 
@@ -37,6 +38,7 @@ import DepartmentsManagement from "../pages/studentservices/DepartmentsManagemen
 import TopicsManagement from "../pages/studentservices/TopicsManagement";
 import AcademicDataManagementPage from "../pages/studentservices/AcademicDataManagementPage";
 import TopicWorkflowAudits from "../pages/admin/TopicWorkflowAudits";
+import RouteErrorBoundary from "../components/RouteErrorBoundary";
 /**
  * AppRoutes chứa tất cả route của ứng dụng.
  * Nếu thêm route mới, chỉ edit file này.
@@ -100,7 +102,8 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         >
-          <Route index element={<AcademicDataManagementPage />} />
+          <Route index element={<AdminDashboard />} />
+          <Route path="academic-data" element={<AcademicDataManagementPage />} />
           <Route path="users" element={<UsersManagement />} />
 
           <Route path="students" element={<StudentProfilesManagement />} />
@@ -108,7 +111,14 @@ const AppRoutes: React.FC = () => {
           <Route path="departments" element={<DepartmentsManagement />} />
           <Route path="topics" element={<TopicsManagement />} />
           <Route path="topic-review" element={<LecturerTopicReview />} />
-          <Route path="committees" element={<CommitteeManagement />} />
+          <Route
+            path="committees"
+            element={
+              <RouteErrorBoundary pageTitle="Hội đồng bảo vệ">
+                <CommitteeManagement />
+              </RouteErrorBoundary>
+            }
+          />
           <Route
             path="defense-assignments"
             element={<Navigate to="/admin/committees" replace />}

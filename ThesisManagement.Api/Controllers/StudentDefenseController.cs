@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Application.Command.DefenseExecution;
 using ThesisManagement.Api.Application.Query.DefenseExecution;
 using ThesisManagement.Api.DTOs;
@@ -38,7 +39,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var studentCode = GetRequestUserCode() ?? string.Empty;
             var result = await _getDefenseInfoQuery.ExecuteAsync(studentCode, periodId);
-            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+            return FromResult(result);
         }
 
         [HttpGet("notifications")]
@@ -46,23 +47,23 @@ namespace ThesisManagement.Api.Controllers
         {
             var studentCode = GetRequestUserCode() ?? string.Empty;
             var result = await _getNotificationsQuery.ExecuteAsync(studentCode, periodId);
-            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+            return FromResult(result);
         }
 
         [HttpPost("revision-submissions")]
         [Consumes("multipart/form-data")]
-        public async Task<ActionResult<ApiResponse<bool>>> SubmitRevision(int periodId, [FromForm] StudentRevisionSubmissionDto request, [FromForm] IFormFile file)
+        public async Task<ActionResult<ApiResponse<bool>>> SubmitRevision(int periodId, [FromForm] StudentRevisionSubmissionDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
         {
             var validPeriodAssignment = await IsAssignmentInPeriodAsync(periodId, request.AssignmentId);
             if (!validPeriodAssignment)
             {
-                var fail = ApiResponse<bool>.Fail("Assignment không thuộc đợt bảo vệ.", 404);
-                return StatusCode(404, fail);
+                var fail = ApiResponse<bool>.Fail("Assignment không thuộc đợt bảo vệ.", 404, code: DefenseUcErrorCodes.Revision.AssignmentNotInPeriod);
+                return FromResult(fail);
             }
 
             var studentCode = GetRequestUserCode() ?? string.Empty;
-            var result = await _submitRevisionCommand.ExecuteAsync(request, file, studentCode, CurrentUserId);
-            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+            var result = await _submitRevisionCommand.ExecuteAsync(request, studentCode, CurrentUserId, idempotencyKey);
+            return FromResult(result);
         }
 
         [HttpGet("revision-submissions/history")]
@@ -70,7 +71,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var studentCode = GetRequestUserCode() ?? string.Empty;
             var result = await _revisionHistoryQuery.ExecuteAsync(studentCode, periodId);
-            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+            return FromResult(result);
         }
 
         private async Task<bool> IsAssignmentInPeriodAsync(int periodId, int assignmentId)

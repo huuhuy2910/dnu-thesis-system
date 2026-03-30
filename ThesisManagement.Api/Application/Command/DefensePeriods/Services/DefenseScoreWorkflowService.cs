@@ -1,0 +1,594 @@
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Common;
+using ThesisManagement.Api.Application.Common.Resilience;
+using ThesisManagement.Api.Data;
+using ThesisManagement.Api.DTOs.DefensePeriods;
+using ThesisManagement.Api.Hubs;
+using ThesisManagement.Api.Models;
+
+namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
+{
+    public interface IDefenseScoreWorkflowService
+    {
+        Task SubmitIndependentScoreAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task RequestReopenScoreAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task LockSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+    }
+
+    public sealed class DefenseScoreWorkflowService : IDefenseScoreWorkflowService
+    {
+        private const decimal ScoreVarianceThreshold = 2.0m;
+
+        private sealed class SubmittedScoreRow
+        {
+            public int ScoreID { get; set; }
+            public int AssignmentID { get; set; }
+            public string MemberLecturerCode { get; set; } = string.Empty;
+            public decimal Score { get; set; }
+            public string? Role { get; set; }
+            public DateTime? LastUpdated { get; set; }
+        }
+
+        private readonly ApplicationDbContext _db;
+        private readonly ThesisManagement.Api.Services.IUnitOfWork _uow;
+        private readonly IHubContext<ChatHub> _hub;
+        private readonly IDefenseAuditTrailService _auditTrail;
+        private readonly IDefenseResiliencePolicy _resiliencePolicy;
+
+        public DefenseScoreWorkflowService(
+            ApplicationDbContext db,
+            ThesisManagement.Api.Services.IUnitOfWork uow,
+            IHubContext<ChatHub> hub,
+            IDefenseAuditTrailService auditTrail,
+            IDefenseResiliencePolicy resiliencePolicy)
+        {
+            _db = db;
+            _uow = uow;
+            _hub = hub;
+            _auditTrail = auditTrail;
+            _resiliencePolicy = resiliencePolicy;
+        }
+
+        public async Task SubmitIndependentScoreAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
+        {
+            await using var tx = await _uow.BeginTransactionAsync(cancellationToken);
+
+            if (request.Score < 0m || request.Score > 10m)
+            {
+                throw new BusinessRuleException("Điểm phải nằm trong khoảng [0,10].", "UC3.2.INVALID_SCORE_RANGE");
+            }
+
+            var assignment = await _db.DefenseAssignments.AsNoTracking().FirstOrDefaultAsync(x => x.AssignmentID == request.AssignmentId && x.CommitteeID == committeeId, cancellationToken);
+            if (assignment == null)
+            {
+                throw new BusinessRuleException("Assignment không thuộc hội đồng.");
+            }
+
+            var member = await _db.CommitteeMembers.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CommitteeID == committeeId && x.MemberLecturerCode == lecturerCode, cancellationToken);
+            if (member == null)
+            {
+                throw new BusinessRuleException("Giảng viên không thuộc hội đồng.");
+            }
+
+            var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
+            if (result != null && result.IsLocked)
+            {
+                throw new BusinessRuleException("Phiên điểm đang bị khóa, cần mở khóa trước khi chỉnh sửa điểm.");
+            }
+
+            var beforeSnapshot = result == null ? null : new { result.IsLocked, result.LastUpdated };
+
+            var score = await _db.DefenseScores.FirstOrDefaultAsync(x => x.AssignmentID == request.AssignmentId && x.MemberLecturerCode == lecturerCode, cancellationToken);
+            var beforeScoreSnapshot = score == null
+                ? null
+                : new
+                {
+                    score.Score,
+                    score.Comment,
+                    score.IsSubmitted,
+                    score.LastUpdated
+                };
+            if (score == null)
+            {
+                score = new DefenseScore
+                {
+                    ScoreCode = $"SC{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+                    AssignmentID = request.AssignmentId,
+                    AssignmentCode = assignment.AssignmentCode,
+                    MemberLecturerProfileID = member.MemberLecturerProfileID,
+                    MemberLecturerCode = lecturerCode,
+                    MemberLecturerUserID = member.MemberUserID,
+                    MemberLecturerUserCode = member.MemberUserCode,
+                    Role = NormalizeRole(member.Role),
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.DefenseScores.AddAsync(score);
+            }
+            else if (score.IsSubmitted)
+            {
+                throw new BusinessRuleException("Biểu mẫu chấm điểm cá nhân đã khóa sau khi submit. Cần Chủ tịch mở lại để chỉnh sửa.");
+            }
+
+            score.Score = request.Score;
+            score.Comment = request.Comment;
+            score.IsSubmitted = true;
+            score.LastUpdated = DateTime.UtcNow;
+            if (score.ScoreID > 0)
+            {
+                _uow.DefenseScores.Update(score);
+            }
+
+            await _uow.SaveChangesAsync();
+
+            await RecalculateAggregateForAssignmentIfCompleteAsync(committeeId, request.AssignmentId, cancellationToken);
+
+            await _auditTrail.WriteAsync(
+                "SUBMIT_INDEPENDENT_SCORE",
+                "SUCCESS",
+                beforeScoreSnapshot,
+                new
+                {
+                    score.Score,
+                    score.Comment,
+                    score.IsSubmitted,
+                    score.LastUpdated,
+                    score.Role
+                },
+                new
+                {
+                    CommitteeId = committeeId,
+                    request.AssignmentId,
+                    LecturerCode = lecturerCode
+                },
+                actorUserId,
+                cancellationToken);
+
+            var trackedAssignment = await _db.DefenseAssignments.FirstOrDefaultAsync(x => x.AssignmentID == request.AssignmentId, cancellationToken);
+            if (trackedAssignment != null)
+            {
+                var assignmentStatus = DefenseWorkflowStateMachine.ParseAssignmentStatus(trackedAssignment.Status);
+                if (assignmentStatus == AssignmentStatus.Pending)
+                {
+                    trackedAssignment.Status = DefenseWorkflowStateMachine.ToValue(AssignmentStatus.Defending);
+                    trackedAssignment.LastUpdated = DateTime.UtcNow;
+                    _uow.DefenseAssignments.Update(trackedAssignment);
+                    await _uow.SaveChangesAsync();
+                }
+            }
+
+            var scores = await _db.DefenseScores.Where(x => x.AssignmentID == request.AssignmentId && x.IsSubmitted).Select(x => x.Score).ToListAsync(cancellationToken);
+            if (scores.Count >= 2)
+            {
+                var variance = scores.Max() - scores.Min();
+                if (variance > ScoreVarianceThreshold)
+                {
+                    result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
+                    if (result == null)
+                    {
+                        result = new DefenseResult
+                        {
+                            AssignmentId = request.AssignmentId,
+                            IsLocked = true,
+                            CreatedAt = DateTime.UtcNow,
+                            LastUpdated = DateTime.UtcNow
+                        };
+                        await _uow.DefenseResults.AddAsync(result);
+                    }
+                    else
+                    {
+                        result.IsLocked = true;
+                        result.LastUpdated = DateTime.UtcNow;
+                        _uow.DefenseResults.Update(result);
+                    }
+
+                    await _uow.SaveChangesAsync();
+                    await _auditTrail.WriteAsync(
+                        "SCORE_VARIANCE_WARNING",
+                        "WARNING",
+                        beforeSnapshot,
+                        new { result.IsLocked, result.LastUpdated },
+                        new { CommitteeId = committeeId, request.AssignmentId, Variance = variance, Threshold = ScoreVarianceThreshold },
+                        actorUserId,
+                        cancellationToken);
+
+                    await _resiliencePolicy.ExecuteAsync("DEFENSE_HUB_NOTIFY", async ct =>
+                    {
+                        await _hub.Clients.All.SendAsync("DefenseScoreVarianceAlert", new { CommitteeId = committeeId, AssignmentId = request.AssignmentId, Variance = variance }, ct);
+                    }, cancellationToken);
+                }
+            }
+
+            await tx.CommitAsync(cancellationToken);
+        }
+
+        public async Task RequestReopenScoreAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
+        {
+            await using var tx = await _uow.BeginTransactionAsync(cancellationToken);
+
+            var assignment = await _db.DefenseAssignments.AsNoTracking().FirstOrDefaultAsync(x => x.AssignmentID == request.AssignmentId && x.CommitteeID == committeeId, cancellationToken);
+            if (assignment == null)
+            {
+                throw new BusinessRuleException("Assignment không thuộc hội đồng.");
+            }
+
+            var member = await _db.CommitteeMembers.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CommitteeID == committeeId && x.MemberLecturerCode == lecturerCode, cancellationToken);
+            if (member == null)
+            {
+                throw new BusinessRuleException("Giảng viên không thuộc hội đồng.");
+            }
+
+            if (NormalizeRole(member.Role) != "CT")
+            {
+                throw new BusinessRuleException("Chỉ Chủ tịch hội đồng (CT) được yêu cầu mở lại biểu mẫu điểm.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new BusinessRuleException("Lý do mở lại điểm là bắt buộc.");
+            }
+
+            var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
+            var beforeSnapshot = result == null ? null : new { result.IsLocked, result.LastUpdated };
+            if (result == null)
+            {
+                result = new DefenseResult
+                {
+                    AssignmentId = request.AssignmentId,
+                    IsLocked = false,
+                    FinalScoreNumeric = null,
+                    FinalScoreText = null,
+                    ScoreGvhd = null,
+                    ScoreCt = null,
+                    ScoreUvtk = null,
+                    ScoreUvpb = null,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                };
+                await _uow.DefenseResults.AddAsync(result);
+            }
+            else
+            {
+                result.IsLocked = false;
+                result.FinalScoreNumeric = null;
+                result.FinalScoreText = null;
+                result.ScoreGvhd = null;
+                result.ScoreCt = null;
+                result.ScoreUvtk = null;
+                result.ScoreUvpb = null;
+                result.LastUpdated = DateTime.UtcNow;
+                _uow.DefenseResults.Update(result);
+            }
+
+            var assignmentScores = await _db.DefenseScores
+                .Where(x => x.AssignmentID == request.AssignmentId && x.IsSubmitted)
+                .ToListAsync(cancellationToken);
+            foreach (var assignmentScore in assignmentScores)
+            {
+                assignmentScore.IsSubmitted = false;
+                assignmentScore.LastUpdated = DateTime.UtcNow;
+                _uow.DefenseScores.Update(assignmentScore);
+            }
+
+            var trackedAssignment = await _db.DefenseAssignments.FirstOrDefaultAsync(x => x.AssignmentID == request.AssignmentId, cancellationToken);
+            if (trackedAssignment != null)
+            {
+                trackedAssignment.Status = DefenseWorkflowStateMachine.ToValue(AssignmentStatus.Defending);
+                trackedAssignment.LastUpdated = DateTime.UtcNow;
+                _uow.DefenseAssignments.Update(trackedAssignment);
+            }
+
+            await _uow.SaveChangesAsync();
+            await tx.CommitAsync(cancellationToken);
+
+            await _auditTrail.WriteAsync(
+                "REOPEN_SCORE_REQUEST",
+                "APPROVED",
+                beforeSnapshot,
+                new { result.IsLocked, result.LastUpdated },
+                new { CommitteeId = committeeId, request.AssignmentId, request.Reason, LecturerCode = lecturerCode },
+                actorUserId,
+                cancellationToken);
+
+            await _resiliencePolicy.ExecuteAsync("DEFENSE_HUB_NOTIFY", async ct =>
+            {
+                await _hub.Clients.All.SendAsync("DefenseScoreReopened", new { CommitteeId = committeeId, request.AssignmentId, request.Reason, LecturerCode = lecturerCode }, ct);
+            }, cancellationToken);
+        }
+
+        public async Task LockSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
+        {
+            await using var tx = await _uow.BeginTransactionAsync(cancellationToken);
+
+            var chair = await _db.CommitteeMembers.AsNoTracking().FirstOrDefaultAsync(x => x.CommitteeID == committeeId && x.MemberLecturerCode == lecturerCode && x.Role != null && x.Role.ToUpper().Contains("CT"), cancellationToken);
+            if (chair == null)
+            {
+                throw new BusinessRuleException("Chỉ Chủ tịch hội đồng (CT) được khóa ca bảo vệ.");
+            }
+
+            var assignmentIds = await _db.DefenseAssignments.AsNoTracking().Where(x => x.CommitteeID == committeeId).Select(x => x.AssignmentID).ToListAsync(cancellationToken);
+            var existingResults = await _db.DefenseResults.Where(x => assignmentIds.Contains(x.AssignmentId)).ToListAsync(cancellationToken);
+            var existingResultIds = existingResults.Select(x => x.AssignmentId).ToHashSet();
+            var now = DateTime.UtcNow;
+
+            var memberCodes = await _db.CommitteeMembers.AsNoTracking()
+                .Where(x => x.CommitteeID == committeeId && !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => x.MemberLecturerCode!)
+                .ToListAsync(cancellationToken);
+
+            var normalizedMemberCodes = memberCodes
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (normalizedMemberCodes.Count == 0)
+            {
+                throw new BusinessRuleException("Hội đồng chưa có thành viên để chốt điểm.", DefenseUcErrorCodes.Scoring.IncompleteAlert);
+            }
+
+            var rawSubmittedScores = await _db.DefenseScores.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentID) && x.IsSubmitted && !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => new SubmittedScoreRow
+                {
+                    ScoreID = x.ScoreID,
+                    AssignmentID = x.AssignmentID,
+                    MemberLecturerCode = x.MemberLecturerCode!,
+                    Score = x.Score,
+                    Role = x.Role,
+                    LastUpdated = x.LastUpdated
+                })
+                .ToListAsync(cancellationToken);
+
+            var submittedByAssignment = rawSubmittedScores
+                .GroupBy(x => x.AssignmentID)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(v => v.MemberLecturerCode!.Trim().ToUpperInvariant())
+                        .Select(v => v
+                            .OrderByDescending(o => o.LastUpdated ?? DateTime.MinValue)
+                            .ThenByDescending(o => o.ScoreID)
+                            .First())
+                        .ToList());
+
+            var beforeStatuses = existingResults.Select(x => new { x.AssignmentId, x.IsLocked }).ToList();
+            foreach (var assignmentId in assignmentIds)
+            {
+                submittedByAssignment.TryGetValue(assignmentId, out var submittedRows);
+                submittedRows ??= new List<SubmittedScoreRow>();
+
+                var submittedMemberCodes = submittedRows
+                    .Select(x => x.MemberLecturerCode.Trim().ToUpperInvariant())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                var missingMemberCodes = normalizedMemberCodes
+                    .Where(x => !submittedMemberCodes.Contains(x, StringComparer.Ordinal))
+                    .ToList();
+
+                if (missingMemberCodes.Count > 0)
+                {
+                    throw new BusinessRuleException(
+                        "Chưa đủ điểm của toàn bộ thành viên hội đồng để khóa ca.",
+                        DefenseUcErrorCodes.Scoring.IncompleteAlert,
+                        new
+                        {
+                            CommitteeId = committeeId,
+                            AssignmentId = assignmentId,
+                            MissingMemberCodes = missingMemberCodes
+                        });
+                }
+
+                var memberScores = submittedRows.Select(x => (decimal)x.Score).ToList();
+                var finalScore = Math.Round(memberScores.Average(), 1);
+
+                var scoreCt = submittedRows
+                    .Where(x => NormalizeRole((string?)x.Role) == "CT")
+                    .Select(x => (decimal?)x.Score)
+                    .FirstOrDefault();
+                var scoreTk = submittedRows
+                    .Where(x => NormalizeRole((string?)x.Role) == "TK")
+                    .Select(x => (decimal?)x.Score)
+                    .FirstOrDefault();
+                var scorePb = submittedRows
+                    .Where(x => NormalizeRole((string?)x.Role) == "PB")
+                    .Select(x => (decimal?)x.Score)
+                    .FirstOrDefault();
+                var scoreGvhd = submittedRows
+                    .Where(x => NormalizeRole((string?)x.Role) == "GVHD")
+                    .Select(x => (decimal?)x.Score)
+                    .FirstOrDefault();
+
+                if (!existingResultIds.Contains(assignmentId))
+                {
+                    await _uow.DefenseResults.AddAsync(new DefenseResult
+                    {
+                        AssignmentId = assignmentId,
+                        ScoreGvhd = scoreGvhd,
+                        ScoreCt = scoreCt,
+                        ScoreUvtk = scoreTk,
+                        ScoreUvpb = scorePb,
+                        FinalScoreNumeric = finalScore,
+                        FinalScoreText = ToGrade(finalScore),
+                        IsLocked = true,
+                        CreatedAt = now,
+                        LastUpdated = now
+                    });
+                    continue;
+                }
+
+                var result = existingResults.First(x => x.AssignmentId == assignmentId);
+                result.ScoreGvhd = scoreGvhd;
+                result.ScoreCt = scoreCt;
+                result.ScoreUvtk = scoreTk;
+                result.ScoreUvpb = scorePb;
+                result.FinalScoreNumeric = finalScore;
+                result.FinalScoreText = ToGrade(finalScore);
+                result.IsLocked = true;
+                result.LastUpdated = now;
+                _uow.DefenseResults.Update(result);
+            }
+
+            var committee = await _db.Committees.FirstOrDefaultAsync(x => x.CommitteeID == committeeId, cancellationToken);
+            if (committee != null)
+            {
+                var fromStatus = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
+                if (fromStatus == CommitteeStatus.Ready)
+                {
+                    DefenseWorkflowStateMachine.EnsureCommitteeTransition(fromStatus, CommitteeStatus.Ongoing, "UC3.5.INVALID_COMMITTEE_STATE");
+                    committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Ongoing);
+                }
+
+                var progressedFrom = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
+                if (progressedFrom == CommitteeStatus.Ongoing)
+                {
+                    DefenseWorkflowStateMachine.EnsureCommitteeTransition(progressedFrom, CommitteeStatus.Completed, "UC3.5.INVALID_COMMITTEE_STATE");
+                    committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Completed);
+                }
+
+                committee.LastUpdated = now;
+                _uow.Committees.Update(committee);
+            }
+
+            var committeeAssignments = await _db.DefenseAssignments.Where(x => x.CommitteeID == committeeId).ToListAsync(cancellationToken);
+            foreach (var assignment in committeeAssignments)
+            {
+                assignment.Status = DefenseWorkflowStateMachine.ToValue(AssignmentStatus.Graded);
+                assignment.LastUpdated = now;
+                _uow.DefenseAssignments.Update(assignment);
+            }
+
+            await _uow.SaveChangesAsync();
+            await tx.CommitAsync(cancellationToken);
+
+            await _auditTrail.WriteAsync(
+                "LOCK_SESSION",
+                "SUCCESS",
+                new { CommitteeId = committeeId, ResultStates = beforeStatuses },
+                new { CommitteeId = committeeId, LockedAll = true, CommitteeStatus = committee?.Status },
+                new { LecturerCode = lecturerCode },
+                actorUserId,
+                cancellationToken);
+        }
+
+        private static string NormalizeRole(string? role)
+        {
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                return string.Empty;
+            }
+
+            var upper = role.Trim().ToUpperInvariant();
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("THU") || upper == "TK") return "TK";
+            if (upper.Contains("PHAN") || upper == "PB") return "PB";
+            if (upper == "UV") return "UV";
+            if (upper.Contains("GVHD")) return "GVHD";
+            return upper;
+        }
+
+        private static string? ToGrade(decimal? score)
+        {
+            if (!score.HasValue)
+            {
+                return null;
+            }
+
+            var s = score.Value;
+            if (s >= 9m) return "A";
+            if (s >= 7m) return "B";
+            if (s >= 5.5m) return "C";
+            if (s >= 4m) return "D";
+            return "F";
+        }
+
+        private async Task RecalculateAggregateForAssignmentIfCompleteAsync(int committeeId, int assignmentId, CancellationToken cancellationToken)
+        {
+            var memberCodes = await _db.CommitteeMembers.AsNoTracking()
+                .Where(x => x.CommitteeID == committeeId && !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => x.MemberLecturerCode!)
+                .ToListAsync(cancellationToken);
+
+            var normalizedMemberCodes = memberCodes
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (normalizedMemberCodes.Count == 0)
+            {
+                return;
+            }
+
+            var submittedRows = await _db.DefenseScores.AsNoTracking()
+                .Where(x => x.AssignmentID == assignmentId && x.IsSubmitted && !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => new SubmittedScoreRow
+                {
+                    ScoreID = x.ScoreID,
+                    AssignmentID = x.AssignmentID,
+                    MemberLecturerCode = x.MemberLecturerCode!,
+                    Role = x.Role,
+                    Score = x.Score,
+                    LastUpdated = x.LastUpdated
+                })
+                .ToListAsync(cancellationToken);
+
+            var perMemberLatest = submittedRows
+                .GroupBy(x => x.MemberLecturerCode!.Trim().ToUpperInvariant())
+                .Select(g => g
+                    .OrderByDescending(v => v.LastUpdated ?? DateTime.MinValue)
+                    .ThenByDescending(v => v.ScoreID)
+                    .First())
+                .ToList();
+
+            var submittedMemberCodes = perMemberLatest
+                .Select(x => x.MemberLecturerCode!.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (normalizedMemberCodes.Any(x => !submittedMemberCodes.Contains(x, StringComparer.Ordinal)))
+            {
+                return;
+            }
+
+            var finalScore = Math.Round(perMemberLatest.Average(x => x.Score), 1);
+            var scoreCt = perMemberLatest.Where(x => NormalizeRole(x.Role) == "CT").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var scoreTk = perMemberLatest.Where(x => NormalizeRole(x.Role) == "TK").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var scorePb = perMemberLatest.Where(x => NormalizeRole(x.Role) == "PB").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var scoreGvhd = perMemberLatest.Where(x => NormalizeRole(x.Role) == "GVHD").Select(x => (decimal?)x.Score).FirstOrDefault();
+
+            var now = DateTime.UtcNow;
+            var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == assignmentId, cancellationToken);
+            if (result == null)
+            {
+                result = new DefenseResult
+                {
+                    AssignmentId = assignmentId,
+                    ScoreGvhd = scoreGvhd,
+                    ScoreCt = scoreCt,
+                    ScoreUvtk = scoreTk,
+                    ScoreUvpb = scorePb,
+                    FinalScoreNumeric = finalScore,
+                    FinalScoreText = ToGrade(finalScore),
+                    IsLocked = false,
+                    CreatedAt = now,
+                    LastUpdated = now
+                };
+                await _uow.DefenseResults.AddAsync(result);
+            }
+            else
+            {
+                result.ScoreGvhd = scoreGvhd;
+                result.ScoreCt = scoreCt;
+                result.ScoreUvtk = scoreTk;
+                result.ScoreUvpb = scorePb;
+                result.FinalScoreNumeric = finalScore;
+                result.FinalScoreText = ToGrade(finalScore);
+                result.LastUpdated = now;
+                _uow.DefenseResults.Update(result);
+            }
+
+            await _uow.SaveChangesAsync();
+        }
+    }
+}

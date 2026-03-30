@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.DefensePeriods;
@@ -19,12 +20,18 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         Task<ApiResponse<List<EligibleStudentDto>>> GetStudentsAsync(int periodId, bool eligibleOnly, CancellationToken cancellationToken = default);
         Task<ApiResponse<DefensePeriodConfigDto>> GetConfigAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<DefensePeriodStateDto>> GetStateAsync(int periodId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<RollbackAvailabilityDto>> GetRollbackAvailabilityAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<SyncErrorDetailDto>>> GetSyncErrorsAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> ExportSyncErrorsAsync(int periodId, string format, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<LecturerCapabilityDto>>> GetLecturerCapabilitiesAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<LecturerBusySlotsDto>>> GetLecturerBusySlotsAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<PagedResult<CouncilDraftDto>>> GetCouncilsAsync(int periodId, CouncilFilterDto filter, CancellationToken cancellationToken = default);
         Task<ApiResponse<CouncilDraftDto>> GetCouncilDetailAsync(int periodId, int councilId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<TopicTagUsageDto>>> GetTopicTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<LecturerTagUsageDto>>> GetLecturerTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<CommitteeTagUsageDto>>> GetCommitteeTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<DefensePeriodTagOverviewDto>> GetTagOverviewAsync(int periodId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<DefensePeriodCalendarDayDto>>> GetCouncilCalendarAsync(int periodId, DateTime? fromDate = null, DateTime? toDate = null, CancellationToken cancellationToken = default);
 
         Task<ApiResponse<object>> GetLecturerCommitteesAsync(string lecturerCode, int? periodId = null, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<LecturerCommitteeMinuteDto>>> GetLecturerMinutesAsync(int committeeId, int? periodId = null, CancellationToken cancellationToken = default);
@@ -37,10 +44,14 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         Task<ApiResponse<AnalyticsOverviewDto>> GetOverviewAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<CouncilAnalyticsDto>>> GetAnalyticsByCouncilAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<AnalyticsDistributionDto>> GetDistributionAsync(int periodId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<ScoringMatrixRowDto>>> GetScoringMatrixAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<ScoringProgressDto>>> GetScoringProgressAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<ScoringAlertDto>>> GetScoringAlertsAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
         Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> BuildReportAsync(int periodId, string reportType, string format, int? councilId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<ExportHistoryDto>>> GetExportHistoryAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<PublishHistoryDto>>> GetPublishHistoryAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<CouncilAuditHistoryDto>>> GetCouncilAuditHistoryAsync(int periodId, int? councilId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<RevisionAuditTrailDto>>> GetRevisionAuditTrailAsync(int periodId, int revisionId, CancellationToken cancellationToken = default);
     }
 
     internal sealed class DefensePeriodConfigSnapshot
@@ -81,6 +92,16 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             public string? Grade { get; set; }
         }
 
+        private sealed class CouncilCalendarProjection
+        {
+            public int CouncilId { get; set; }
+            public string CommitteeCode { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+            public string? Room { get; set; }
+            public DateTime DefenseDate { get; set; }
+            public string Status { get; set; } = string.Empty;
+        }
+
         private readonly ApplicationDbContext _db;
 
         public DefensePeriodQueryProcessor(ApplicationDbContext db)
@@ -91,13 +112,14 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         public async Task<ApiResponse<List<EligibleStudentDto>>> GetStudentsAsync(int periodId, bool eligibleOnly, CancellationToken cancellationToken = default)
         {
             var topics = await _db.Topics.AsNoTracking().OrderBy(t => t.TopicCode).ToListAsync(cancellationToken);
+            var eligibleTopicCodes = await LoadEligibleTopicCodesFromMilestonesAsync(topics, cancellationToken);
             var studentCodes = topics.Where(t => !string.IsNullOrWhiteSpace(t.ProposerStudentCode)).Select(t => t.ProposerStudentCode!).Distinct().ToList();
             var students = await _db.StudentProfiles.AsNoTracking().Where(s => studentCodes.Contains(s.StudentCode)).ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
             var topicTagMap = await LoadTopicTagMapAsync(topics.Select(x => x.TopicCode).ToList(), cancellationToken);
 
             var rows = topics.Select(t =>
             {
-                var isEligible = IsEligibleTopic(t.Status);
+                var isEligible = eligibleTopicCodes.Contains(t.TopicCode);
                 var valid = !string.IsNullOrWhiteSpace(t.ProposerStudentCode) && !string.IsNullOrWhiteSpace(t.SupervisorLecturerCode);
                 return new EligibleStudentDto
                 {
@@ -131,6 +153,8 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var config = await GetPeriodConfigAsync(periodId, cancellationToken);
             var dto = new DefensePeriodConfigDto
             {
+                StartDate = period.StartDate,
+                EndDate = period.EndDate,
                 Rooms = config.Rooms,
                 MorningStart = config.MorningStart,
                 AfternoonStart = config.AfternoonStart,
@@ -152,16 +176,146 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
 
             var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var readiness = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["module2"] = config.CouncilConfigConfirmed && config.LecturerCapabilitiesLocked,
+                ["canFinalize"] = config.CouncilIds.Count > 0 && !config.Finalized,
+                ["canPublish"] = config.Finalized && !config.ScoresPublished,
+                ["canRollbackPublish"] = config.ScoresPublished,
+                ["canRollbackFinalize"] = config.Finalized && !config.ScoresPublished
+            };
+
+            var allowedActions = new List<string>();
+            if (!config.LecturerCapabilitiesLocked)
+            {
+                allowedActions.Add("LOCK_LECTURER_CAPABILITIES");
+            }
+
+            if (!config.CouncilConfigConfirmed)
+            {
+                allowedActions.Add("CONFIRM_COUNCIL_CONFIG");
+            }
+
+            if (!config.Finalized)
+            {
+                allowedActions.Add("GENERATE_COUNCILS");
+                allowedActions.Add("UPDATE_COUNCILS");
+            }
+
+            if (readiness["canFinalize"])
+            {
+                allowedActions.Add("FINALIZE");
+            }
+
+            if (readiness["canPublish"])
+            {
+                allowedActions.Add("PUBLISH");
+            }
+
+            if (readiness["canRollbackPublish"])
+            {
+                allowedActions.Add("ROLLBACK_PUBLISH");
+            }
+
+            if (readiness["canRollbackFinalize"])
+            {
+                allowedActions.Add("ROLLBACK_FINALIZE");
+            }
+
+            var warnings = new List<string>();
+            if (!config.LecturerCapabilitiesLocked)
+            {
+                warnings.Add("UC2.READINESS.LECTURER_CAPABILITIES_UNLOCKED");
+            }
+
+            if (!config.CouncilConfigConfirmed)
+            {
+                warnings.Add("UC2.READINESS.COUNCIL_CONFIG_NOT_CONFIRMED");
+            }
+
+            if (config.CouncilIds.Count == 0)
+            {
+                warnings.Add("UC2.READINESS.NO_COUNCILS");
+            }
+
             var dto = new DefensePeriodStateDto
             {
+                StartDate = period.StartDate,
+                EndDate = period.EndDate,
                 LecturerCapabilitiesLocked = config.LecturerCapabilitiesLocked,
                 CouncilConfigConfirmed = config.CouncilConfigConfirmed,
                 Finalized = config.Finalized,
                 ScoresPublished = config.ScoresPublished,
-                CouncilCount = config.CouncilIds.Count
+                CouncilCount = config.CouncilIds.Count,
+                AllowedActions = allowedActions,
+                Readiness = readiness,
+                Warnings = warnings
             };
 
-            return ApiResponse<DefensePeriodStateDto>.SuccessResponse(dto);
+            return ApiResponse<DefensePeriodStateDto>.SuccessResponse(
+                dto,
+                allowedActions: allowedActions,
+                warnings: warnings
+                    .Select(code => new ApiWarning
+                    {
+                        Type = "soft",
+                        Code = code,
+                        Message = code
+                    })
+                    .ToList());
+        }
+
+        public async Task<ApiResponse<RollbackAvailabilityDto>> GetRollbackAvailabilityAsync(int periodId, CancellationToken cancellationToken = default)
+        {
+            var period = await _db.DefenseTerms.AsNoTracking().FirstOrDefaultAsync(x => x.DefenseTermId == periodId, cancellationToken);
+            if (period == null)
+            {
+                return ApiResponse<RollbackAvailabilityDto>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var canRollbackPublish = config.ScoresPublished;
+            var canRollbackFinalize = config.Finalized && !config.ScoresPublished;
+
+            var blockers = new List<string>();
+            if (!config.ScoresPublished)
+            {
+                blockers.Add("Chưa publish điểm nên không thể rollback publish.");
+            }
+
+            if (!config.Finalized)
+            {
+                blockers.Add("Đợt bảo vệ chưa finalize nên không thể rollback finalize.");
+            }
+            else if (config.ScoresPublished)
+            {
+                blockers.Add("Đang ở trạng thái đã publish. Cần rollback publish trước khi rollback finalize.");
+            }
+
+            var recommendedTarget = string.Empty;
+            if (config.ScoresPublished && config.Finalized)
+            {
+                recommendedTarget = "ALL";
+            }
+            else if (canRollbackPublish)
+            {
+                recommendedTarget = "PUBLISH";
+            }
+            else if (canRollbackFinalize)
+            {
+                recommendedTarget = "FINALIZE";
+            }
+
+            return ApiResponse<RollbackAvailabilityDto>.SuccessResponse(new RollbackAvailabilityDto
+            {
+                CurrentPeriodStatus = period.Status ?? string.Empty,
+                Finalized = config.Finalized,
+                ScoresPublished = config.ScoresPublished,
+                CanRollbackPublish = canRollbackPublish,
+                CanRollbackFinalize = canRollbackFinalize,
+                RecommendedTarget = recommendedTarget,
+                Blockers = blockers
+            });
         }
 
         public async Task<ApiResponse<List<SyncErrorDetailDto>>> GetSyncErrorsAsync(int periodId, CancellationToken cancellationToken = default)
@@ -310,6 +464,70 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             });
         }
 
+        public async Task<ApiResponse<List<DefensePeriodCalendarDayDto>>> GetCouncilCalendarAsync(int periodId, DateTime? fromDate = null, DateTime? toDate = null, CancellationToken cancellationToken = default)
+        {
+            var period = await _db.DefenseTerms.AsNoTracking().FirstOrDefaultAsync(x => x.DefenseTermId == periodId, cancellationToken);
+            if (period == null)
+            {
+                return ApiResponse<List<DefensePeriodCalendarDayDto>>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var rangeStart = (fromDate ?? period.StartDate).Date;
+            var rangeEnd = (toDate ?? period.EndDate ?? period.StartDate).Date;
+
+            if (rangeEnd < rangeStart)
+            {
+                return ApiResponse<List<DefensePeriodCalendarDayDto>>.Fail("fromDate phải nhỏ hơn hoặc bằng toDate.", 400);
+            }
+
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var rows = config.CouncilIds.Count == 0
+                ? new List<CouncilCalendarProjection>()
+                : await _db.Committees.AsNoTracking()
+                    .Where(c => config.CouncilIds.Contains(c.CommitteeID) && c.DefenseDate >= rangeStart && c.DefenseDate <= rangeEnd)
+                    .OrderBy(c => c.DefenseDate)
+                    .ThenBy(c => c.Room)
+                    .ThenBy(c => c.CommitteeCode)
+                    .Select(c => new CouncilCalendarProjection
+                    {
+                        CouncilId = c.CommitteeID,
+                        CommitteeCode = c.CommitteeCode ?? string.Empty,
+                        Name = c.Name ?? c.CommitteeCode ?? string.Empty,
+                        Room = c.Room,
+                        DefenseDate = c.DefenseDate ?? period.StartDate,
+                        Status = c.Status ?? string.Empty
+                    })
+                    .ToListAsync(cancellationToken);
+
+            var grouped = rows.GroupBy(x => x.DefenseDate.Date).ToDictionary(g => g.Key, g => g.ToList());
+            var days = new List<DefensePeriodCalendarDayDto>();
+
+            for (var date = rangeStart; date <= rangeEnd; date = date.AddDays(1))
+            {
+                grouped.TryGetValue(date, out var councils);
+                var items = councils == null
+                    ? new List<DefensePeriodCalendarCouncilItemDto>()
+                    : councils.Select(x => new DefensePeriodCalendarCouncilItemDto
+                    {
+                        CouncilId = x.CouncilId,
+                        CommitteeCode = x.CommitteeCode,
+                        Name = x.Name,
+                        Room = x.Room,
+                        DefenseDate = x.DefenseDate,
+                        Status = x.Status
+                    }).ToList();
+
+                days.Add(new DefensePeriodCalendarDayDto
+                {
+                    Date = date,
+                    CouncilCount = items.Count,
+                    Councils = items
+                });
+            }
+
+            return ApiResponse<List<DefensePeriodCalendarDayDto>>.SuccessResponse(days);
+        }
+
         public async Task<ApiResponse<CouncilDraftDto>> GetCouncilDetailAsync(int periodId, int councilId, CancellationToken cancellationToken = default)
         {
             var config = await GetPeriodConfigAsync(periodId, cancellationToken);
@@ -320,6 +538,177 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var detail = await BuildCouncilDtoAsync(periodId, councilId, cancellationToken);
             return ApiResponse<CouncilDraftDto>.SuccessResponse(detail);
+        }
+
+        public async Task<ApiResponse<List<TopicTagUsageDto>>> GetTopicTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default)
+        {
+            var scopedTopicCodes = await GetScopedTopicCodesAsync(periodId, cancellationToken);
+            var normalizedTagCode = string.IsNullOrWhiteSpace(tagCode) ? null : tagCode.Trim();
+
+            var query = _db.TopicTags.AsNoTracking()
+                .Where(x => x.TopicCode != null && scopedTopicCodes.Contains(x.TopicCode!))
+                .Join(_db.Tags.AsNoTracking(), tt => tt.TagID, tg => tg.TagID, (tt, tg) => new { tt, tg })
+                .Join(_db.Topics.AsNoTracking(), x => x.tt.TopicCode, t => t.TopicCode, (x, t) => new { x.tt, x.tg, t })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(normalizedTagCode))
+            {
+                query = query.Where(x => x.tg.TagCode == normalizedTagCode);
+            }
+
+            var rows = await query
+                .OrderBy(x => x.tt.TopicCode)
+                .ThenBy(x => x.tg.TagCode)
+                .Select(x => new TopicTagUsageDto
+                {
+                    TopicCode = x.tt.TopicCode ?? string.Empty,
+                    TopicTitle = x.t.Title,
+                    TagCode = x.tg.TagCode,
+                    TagName = x.tg.TagName,
+                    CreatedAt = x.tt.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return ApiResponse<List<TopicTagUsageDto>>.SuccessResponse(rows);
+        }
+
+        public async Task<ApiResponse<List<LecturerTagUsageDto>>> GetLecturerTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default)
+        {
+            var scopedLecturerCodes = await GetScopedLecturerCodesAsync(periodId, cancellationToken);
+            var normalizedTagCode = string.IsNullOrWhiteSpace(tagCode) ? null : tagCode.Trim();
+
+            var query = _db.LecturerTags.AsNoTracking()
+                .Where(x => x.LecturerCode != null && scopedLecturerCodes.Contains(x.LecturerCode!))
+                .Join(_db.Tags.AsNoTracking(), lt => lt.TagID, tg => tg.TagID, (lt, tg) => new { lt, tg })
+                .GroupJoin(
+                    _db.LecturerProfiles.AsNoTracking(),
+                    x => x.lt.LecturerCode,
+                    lp => lp.LecturerCode,
+                    (x, profile) => new { x.lt, x.tg, LecturerName = profile.Select(p => p.FullName).FirstOrDefault() })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(normalizedTagCode))
+            {
+                query = query.Where(x => x.tg.TagCode == normalizedTagCode);
+            }
+
+            var rows = await query
+                .OrderBy(x => x.lt.LecturerCode)
+                .ThenBy(x => x.tg.TagCode)
+                .Select(x => new LecturerTagUsageDto
+                {
+                    LecturerCode = x.lt.LecturerCode ?? string.Empty,
+                    LecturerName = string.IsNullOrWhiteSpace(x.LecturerName) ? (x.lt.LecturerCode ?? string.Empty) : x.LecturerName!,
+                    TagCode = x.tg.TagCode,
+                    TagName = x.tg.TagName,
+                    AssignedAt = x.lt.AssignedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return ApiResponse<List<LecturerTagUsageDto>>.SuccessResponse(rows);
+        }
+
+        public async Task<ApiResponse<List<CommitteeTagUsageDto>>> GetCommitteeTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default)
+        {
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var normalizedTagCode = string.IsNullOrWhiteSpace(tagCode) ? null : tagCode.Trim();
+
+            if (config.CouncilIds.Count == 0)
+            {
+                return ApiResponse<List<CommitteeTagUsageDto>>.SuccessResponse(new List<CommitteeTagUsageDto>());
+            }
+
+            var query = _db.CommitteeTags.AsNoTracking()
+                .Where(x => config.CouncilIds.Contains(x.CommitteeID))
+                .Join(_db.Tags.AsNoTracking(), ct => ct.TagID, tg => tg.TagID, (ct, tg) => new { ct, tg })
+                .Join(_db.Committees.AsNoTracking(), x => x.ct.CommitteeID, c => c.CommitteeID, (x, c) => new { x.ct, x.tg, c.CommitteeCode })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(normalizedTagCode))
+            {
+                query = query.Where(x => x.tg.TagCode == normalizedTagCode);
+            }
+
+            var rows = await query
+                .OrderBy(x => x.ct.CommitteeID)
+                .ThenBy(x => x.tg.TagCode)
+                .Select(x => new CommitteeTagUsageDto
+                {
+                    CommitteeId = x.ct.CommitteeID,
+                    CommitteeCode = x.CommitteeCode ?? x.ct.CommitteeCode,
+                    TagCode = x.tg.TagCode,
+                    TagName = x.tg.TagName,
+                    CreatedAt = x.ct.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return ApiResponse<List<CommitteeTagUsageDto>>.SuccessResponse(rows);
+        }
+
+        public async Task<ApiResponse<DefensePeriodTagOverviewDto>> GetTagOverviewAsync(int periodId, CancellationToken cancellationToken = default)
+        {
+            var topicTagRows = await GetTopicTagsAsync(periodId, null, cancellationToken);
+            var lecturerTagRows = await GetLecturerTagsAsync(periodId, null, cancellationToken);
+            var committeeTagRows = await GetCommitteeTagsAsync(periodId, null, cancellationToken);
+
+            if (!topicTagRows.Success)
+            {
+                return ApiResponse<DefensePeriodTagOverviewDto>.Fail(topicTagRows.Message ?? "Không thể truy xuất topic tags.", topicTagRows.HttpStatusCode);
+            }
+
+            if (!lecturerTagRows.Success)
+            {
+                return ApiResponse<DefensePeriodTagOverviewDto>.Fail(lecturerTagRows.Message ?? "Không thể truy xuất lecturer tags.", lecturerTagRows.HttpStatusCode);
+            }
+
+            if (!committeeTagRows.Success)
+            {
+                return ApiResponse<DefensePeriodTagOverviewDto>.Fail(committeeTagRows.Message ?? "Không thể truy xuất committee tags.", committeeTagRows.HttpStatusCode);
+            }
+
+            var topicData = topicTagRows.Data ?? new List<TopicTagUsageDto>();
+            var lecturerData = lecturerTagRows.Data ?? new List<LecturerTagUsageDto>();
+            var committeeData = committeeTagRows.Data ?? new List<CommitteeTagUsageDto>();
+
+            var topicMap = topicData.GroupBy(x => x.TagCode, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(v => v.TopicCode).Distinct(StringComparer.OrdinalIgnoreCase).Count(), StringComparer.OrdinalIgnoreCase);
+            var lecturerMap = lecturerData.GroupBy(x => x.TagCode, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(v => v.LecturerCode).Distinct(StringComparer.OrdinalIgnoreCase).Count(), StringComparer.OrdinalIgnoreCase);
+            var committeeMap = committeeData.GroupBy(x => x.TagCode, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(v => v.CommitteeId).Distinct().Count(), StringComparer.OrdinalIgnoreCase);
+
+            var allTagCodes = topicMap.Keys
+                .Concat(lecturerMap.Keys)
+                .Concat(committeeMap.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var tagNameMap = await _db.Tags.AsNoTracking()
+                .Where(x => allTagCodes.Contains(x.TagCode))
+                .ToDictionaryAsync(x => x.TagCode, x => x.TagName, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+            var summary = allTagCodes
+                .OrderBy(x => x)
+                .Select(code => new TagSummaryDto
+                {
+                    TagCode = code,
+                    TagName = tagNameMap.TryGetValue(code, out var name) ? name : code,
+                    TopicCount = topicMap.TryGetValue(code, out var topicCount) ? topicCount : 0,
+                    LecturerCount = lecturerMap.TryGetValue(code, out var lecturerCount) ? lecturerCount : 0,
+                    CommitteeCount = committeeMap.TryGetValue(code, out var committeeCount) ? committeeCount : 0
+                })
+                .ToList();
+
+            var dto = new DefensePeriodTagOverviewDto
+            {
+                DistinctTagCount = summary.Count,
+                TopicTagLinks = topicData.Count,
+                LecturerTagLinks = lecturerData.Count,
+                CommitteeTagLinks = committeeData.Count,
+                Tags = summary
+            };
+
+            return ApiResponse<DefensePeriodTagOverviewDto>.SuccessResponse(dto);
         }
 
         public async Task<ApiResponse<object>> GetLecturerCommitteesAsync(string lecturerCode, int? periodId = null, CancellationToken cancellationToken = default)
@@ -601,6 +990,201 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             return ApiResponse<AnalyticsDistributionDto>.SuccessResponse(distribution);
         }
 
+        public async Task<ApiResponse<List<ScoringMatrixRowDto>>> GetScoringMatrixAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+        {
+            var assignments = await GetScopedAssignmentsAsync(periodId, committeeId, cancellationToken);
+            if (assignments.Count == 0)
+            {
+                return ApiResponse<List<ScoringMatrixRowDto>>.SuccessResponse(new List<ScoringMatrixRowDto>());
+            }
+
+            var assignmentIds = assignments.Select(x => x.AssignmentID).ToList();
+            var committeeIds = assignments.Where(x => x.CommitteeID.HasValue).Select(x => x.CommitteeID!.Value).Distinct().ToList();
+            var topicCodes = assignments.Where(x => !string.IsNullOrWhiteSpace(x.TopicCode)).Select(x => x.TopicCode!).Distinct().ToList();
+
+            var committees = await _db.Committees.AsNoTracking()
+                .Where(x => committeeIds.Contains(x.CommitteeID))
+                .ToDictionaryAsync(x => x.CommitteeID, cancellationToken);
+
+            var topics = await _db.Topics.AsNoTracking()
+                .Where(x => topicCodes.Contains(x.TopicCode))
+                .ToDictionaryAsync(x => x.TopicCode, cancellationToken);
+
+            var studentCodes = topics.Values
+                .Where(x => !string.IsNullOrWhiteSpace(x.ProposerStudentCode))
+                .Select(x => x.ProposerStudentCode!)
+                .Distinct()
+                .ToList();
+
+            var students = await _db.StudentProfiles.AsNoTracking()
+                .Where(x => studentCodes.Contains(x.StudentCode))
+                .ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
+
+            var committeeMembers = await _db.CommitteeMembers.AsNoTracking()
+                .Where(x => x.CommitteeID.HasValue && committeeIds.Contains(x.CommitteeID.Value))
+                .Select(x => new { CommitteeId = x.CommitteeID!.Value, x.MemberLecturerCode })
+                .ToListAsync(cancellationToken);
+
+            var memberCountMap = committeeMembers
+                .GroupBy(x => x.CommitteeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(v => v.MemberLecturerCode).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+            var scoreRows = await _db.DefenseScores.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentID))
+                .Select(x => new { x.AssignmentID, x.Score, x.IsSubmitted })
+                .ToListAsync(cancellationToken);
+
+            var resultMap = await _db.DefenseResults.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentId))
+                .ToDictionaryAsync(x => x.AssignmentId, cancellationToken);
+
+            var scoreMap = scoreRows
+                .GroupBy(x => x.AssignmentID)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new
+                    {
+                        SubmittedCount = g.Count(v => v.IsSubmitted),
+                        SubmittedScores = g.Where(v => v.IsSubmitted).Select(v => v.Score).ToList()
+                    });
+
+            var rows = assignments
+                .OrderBy(x => x.CommitteeID)
+                .ThenBy(x => x.Session)
+                .ThenBy(x => x.OrderIndex)
+                .Select(assignment =>
+                {
+                    var cid = assignment.CommitteeID ?? 0;
+                    committees.TryGetValue(cid, out var committee);
+                    topics.TryGetValue(assignment.TopicCode ?? string.Empty, out var topic);
+
+                    var studentCode = topic?.ProposerStudentCode ?? string.Empty;
+                    var studentName = !string.IsNullOrWhiteSpace(studentCode) && students.TryGetValue(studentCode, out var name)
+                        ? name
+                        : studentCode;
+
+                    var requiredCount = memberCountMap.TryGetValue(cid, out var count) ? count : 0;
+                    scoreMap.TryGetValue(assignment.AssignmentID, out var scoreBucket);
+                    var submittedCount = scoreBucket?.SubmittedCount ?? 0;
+                    var submittedScores = scoreBucket?.SubmittedScores ?? new List<decimal>();
+                    decimal? variance = submittedScores.Count >= 2 ? submittedScores.Max() - submittedScores.Min() : null;
+
+                    resultMap.TryGetValue(assignment.AssignmentID, out var defenseResult);
+                    var isLocked = defenseResult?.IsLocked ?? false;
+
+                    var status = isLocked
+                        ? "LOCKED"
+                        : submittedCount >= requiredCount && requiredCount > 0
+                            ? "COMPLETED"
+                            : submittedCount > 0
+                                ? "IN_PROGRESS"
+                                : "PENDING";
+
+                    return new ScoringMatrixRowDto
+                    {
+                        CommitteeId = cid,
+                        CommitteeCode = committee?.CommitteeCode ?? string.Empty,
+                        Room = committee?.Room,
+                        AssignmentId = assignment.AssignmentID,
+                        AssignmentCode = assignment.AssignmentCode,
+                        TopicCode = topic?.TopicCode ?? assignment.TopicCode ?? string.Empty,
+                        TopicTitle = topic?.Title ?? string.Empty,
+                        StudentCode = studentCode,
+                        StudentName = studentName,
+                        SubmittedCount = submittedCount,
+                        RequiredCount = requiredCount,
+                        IsLocked = isLocked,
+                        FinalScore = defenseResult?.FinalScoreNumeric,
+                        FinalGrade = defenseResult?.FinalScoreText,
+                        Variance = variance,
+                        Status = status
+                    };
+                })
+                .ToList();
+
+            return ApiResponse<List<ScoringMatrixRowDto>>.SuccessResponse(rows);
+        }
+
+        public async Task<ApiResponse<List<ScoringProgressDto>>> GetScoringProgressAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+        {
+            var matrixResult = await GetScoringMatrixAsync(periodId, committeeId, cancellationToken);
+            if (!matrixResult.Success || matrixResult.Data == null)
+            {
+                return ApiResponse<List<ScoringProgressDto>>.Fail(matrixResult.Message ?? "Không thể lấy scoring matrix.", matrixResult.HttpStatusCode == 0 ? 400 : matrixResult.HttpStatusCode, matrixResult.Errors, matrixResult.Code);
+            }
+
+            var progress = matrixResult.Data
+                .GroupBy(x => new { x.CommitteeId, x.CommitteeCode })
+                .Select(g =>
+                {
+                    var total = g.Count();
+                    var completed = g.Count(x => x.Status == "COMPLETED" || x.Status == "LOCKED");
+                    return new ScoringProgressDto
+                    {
+                        CommitteeId = g.Key.CommitteeId,
+                        CommitteeCode = g.Key.CommitteeCode,
+                        TotalAssignments = total,
+                        CompletedAssignments = completed,
+                        ProgressPercent = total == 0 ? 0 : Math.Round((decimal)completed * 100m / total, 2)
+                    };
+                })
+                .OrderBy(x => x.CommitteeId)
+                .ToList();
+
+            return ApiResponse<List<ScoringProgressDto>>.SuccessResponse(progress);
+        }
+
+        public async Task<ApiResponse<List<ScoringAlertDto>>> GetScoringAlertsAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+        {
+            const decimal varianceThreshold = 2.0m;
+
+            var matrixResult = await GetScoringMatrixAsync(periodId, committeeId, cancellationToken);
+            if (!matrixResult.Success || matrixResult.Data == null)
+            {
+                return ApiResponse<List<ScoringAlertDto>>.Fail(matrixResult.Message ?? "Không thể lấy scoring matrix.", matrixResult.HttpStatusCode == 0 ? 400 : matrixResult.HttpStatusCode, matrixResult.Errors, matrixResult.Code);
+            }
+
+            var alerts = new List<ScoringAlertDto>();
+            foreach (var row in matrixResult.Data)
+            {
+                if (row.Variance.HasValue && row.Variance.Value > varianceThreshold)
+                {
+                    alerts.Add(new ScoringAlertDto
+                    {
+                        AlertCode = DefenseUcErrorCodes.Scoring.VarianceAlert,
+                        Type = "VARIANCE",
+                        CommitteeId = row.CommitteeId,
+                        CommitteeCode = row.CommitteeCode,
+                        AssignmentId = row.AssignmentId,
+                        AssignmentCode = row.AssignmentCode,
+                        Message = $"Chênh lệch điểm vượt ngưỡng cho assignment {row.AssignmentCode}.",
+                        Value = row.Variance,
+                        Threshold = varianceThreshold
+                    });
+                }
+
+                if (!row.IsLocked && row.RequiredCount > 0 && row.SubmittedCount < row.RequiredCount)
+                {
+                    alerts.Add(new ScoringAlertDto
+                    {
+                        AlertCode = DefenseUcErrorCodes.Scoring.IncompleteAlert,
+                        Type = "INCOMPLETE",
+                        CommitteeId = row.CommitteeId,
+                        CommitteeCode = row.CommitteeCode,
+                        AssignmentId = row.AssignmentId,
+                        AssignmentCode = row.AssignmentCode,
+                        Message = $"Assignment {row.AssignmentCode} chưa đủ điểm thành phần ({row.SubmittedCount}/{row.RequiredCount}).",
+                        Value = row.SubmittedCount,
+                        Threshold = row.RequiredCount
+                    });
+                }
+            }
+
+            return ApiResponse<List<ScoringAlertDto>>.SuccessResponse(alerts);
+        }
+
         public async Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> BuildReportAsync(int periodId, string reportType, string format, int? councilId, CancellationToken cancellationToken = default)
         {
             var rows = await GetScoreRowsAsync(periodId, cancellationToken);
@@ -725,6 +1309,31 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             return ApiResponse<List<CouncilAuditHistoryDto>>.SuccessResponse(rows);
         }
 
+        public async Task<ApiResponse<List<RevisionAuditTrailDto>>> GetRevisionAuditTrailAsync(int periodId, int revisionId, CancellationToken cancellationToken = default)
+        {
+            var periodPathToken = $"/defense-periods/{periodId}/";
+            var revisionToken = $"\"RevisionId\":{revisionId}";
+            var revisionTokenAlt = $"revisionId={revisionId}";
+
+            var rows = await _db.SyncAuditLogs.AsNoTracking()
+                .Where(x => x.Action.Contains("REVISION")
+                    && (x.Records.Contains(periodPathToken) || x.Records.Contains($"period={periodId}"))
+                    && (x.Records.Contains(revisionToken) || x.Records.Contains(revisionTokenAlt)))
+                .OrderByDescending(x => x.Timestamp)
+                .Take(300)
+                .Select(x => new RevisionAuditTrailDto
+                {
+                    SyncAuditLogId = x.SyncAuditLogId,
+                    Action = x.Action,
+                    Result = x.Result,
+                    Records = x.Records,
+                    Timestamp = x.Timestamp
+                })
+                .ToListAsync(cancellationToken);
+
+            return ApiResponse<List<RevisionAuditTrailDto>>.SuccessResponse(rows);
+        }
+
         private async Task<List<ScoreRowData>> GetScoreRowsAsync(int periodId, CancellationToken cancellationToken)
         {
             var config = await GetPeriodConfigAsync(periodId, cancellationToken);
@@ -749,6 +1358,30 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     Score = x.result != null ? x.result.FinalScoreNumeric : null,
                     Grade = x.result != null ? x.result.FinalScoreText : null
                 })
+                .ToListAsync(cancellationToken);
+        }
+
+        private async Task<List<DefenseAssignment>> GetScopedAssignmentsAsync(int periodId, int? committeeId, CancellationToken cancellationToken)
+        {
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            if (config.CouncilIds.Count == 0)
+            {
+                return new List<DefenseAssignment>();
+            }
+
+            var scopedIds = config.CouncilIds;
+            if (committeeId.HasValue)
+            {
+                if (!scopedIds.Contains(committeeId.Value))
+                {
+                    return new List<DefenseAssignment>();
+                }
+
+                scopedIds = new List<int> { committeeId.Value };
+            }
+
+            return await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => x.CommitteeID.HasValue && scopedIds.Contains(x.CommitteeID.Value))
                 .ToListAsync(cancellationToken);
         }
 
@@ -813,6 +1446,11 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             using var workbook = new XLWorkbook();
             var sheet = workbook.Worksheets.Add("Report");
             var normalizedType = (reportType ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (normalizedType == "form-1")
+            {
+                return BuildForm1TemplateXlsx(workbook, rows, councilId);
+            }
 
             if (normalizedType == "council-summary")
             {
@@ -886,6 +1524,139 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             sheet.RangeUsed()?.Style.Font.SetBold(false);
             sheet.Row(1).Style.Font.SetBold(true);
             sheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return stream.ToArray();
+        }
+
+        private static byte[] BuildForm1TemplateXlsx(XLWorkbook workbook, List<ScoreRowData> rows, int? councilId)
+        {
+            var sheet = workbook.Worksheet("Report");
+
+            sheet.Style.Font.FontName = "Times New Roman";
+            sheet.Style.Font.FontSize = 12;
+            sheet.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            sheet.Style.Alignment.WrapText = true;
+
+            sheet.PageSetup.PaperSize = XLPaperSize.A4Paper;
+            sheet.PageSetup.PageOrientation = XLPageOrientation.Portrait;
+            sheet.PageSetup.Margins.Top = 0.35;
+            sheet.PageSetup.Margins.Bottom = 0.35;
+            sheet.PageSetup.Margins.Left = 0.25;
+            sheet.PageSetup.Margins.Right = 0.25;
+            sheet.PageSetup.Scale = 100;
+            sheet.PageSetup.PagesWide = 1;
+            sheet.PageSetup.PagesTall = 0;
+            sheet.PageSetup.CenterHorizontally = true;
+
+            sheet.Column(1).Width = 6;
+            sheet.Column(2).Width = 14;
+            sheet.Column(3).Width = 24;
+            sheet.Column(4).Width = 44;
+            sheet.Column(5).Width = 10;
+            sheet.Column(6).Width = 10;
+            sheet.Column(7).Width = 11;
+            sheet.Column(8).Width = 18;
+
+            sheet.Range(1, 1, 1, 4).Merge().Value = "TRUONG DAI HOC DA NANG";
+            sheet.Range(2, 1, 2, 4).Merge().Value = "TRUONG DAI HOC BACH KHOA";
+            sheet.Range(1, 5, 1, 8).Merge().Value = "CONG HOA XA HOI CHU NGHIA VIET NAM";
+            sheet.Range(2, 5, 2, 8).Merge().Value = "Doc lap - Tu do - Hanh phuc";
+            sheet.Range(1, 1, 2, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sheet.Range(1, 1, 2, 8).Style.Font.SetBold(true);
+
+            sheet.Range(4, 1, 4, 8).Merge().Value = "BANG TONG HOP KET QUA BAO VE KHOA LUAN";
+            sheet.Range(4, 1, 4, 8).Style.Font.SetBold(true);
+            sheet.Range(4, 1, 4, 8).Style.Font.FontSize = 14;
+            sheet.Range(4, 1, 4, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            var councilText = councilId.HasValue ? councilId.Value.ToString(CultureInfo.InvariantCulture) : "Tat ca";
+            sheet.Range(6, 1, 6, 4).Merge().Value = $"Hoi dong: {councilText}";
+            sheet.Range(6, 5, 6, 8).Merge().Value = $"Ngay in: {DateTime.Now:dd/MM/yyyy HH:mm}";
+            sheet.Range(6, 1, 6, 8).Style.Font.SetBold(true);
+            sheet.Range(6, 1, 6, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            sheet.Range(6, 5, 6, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+            var headerRow = 8;
+            sheet.Cell(headerRow, 1).Value = "STT";
+            sheet.Cell(headerRow, 2).Value = "MSSV";
+            sheet.Cell(headerRow, 3).Value = "Ho va ten";
+            sheet.Cell(headerRow, 4).Value = "Ten de tai";
+            sheet.Cell(headerRow, 5).Value = "Buoi";
+            sheet.Cell(headerRow, 6).Value = "Diem";
+            sheet.Cell(headerRow, 7).Value = "Diem chu";
+            sheet.Cell(headerRow, 8).Value = "Ghi chu";
+
+            var ordered = rows.OrderBy(r => r.CouncilId).ThenBy(r => r.Session).ThenBy(r => r.StudentCode).ToList();
+            var startRow = headerRow + 1;
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var row = ordered[i];
+                var r = startRow + i;
+                sheet.Cell(r, 1).Value = i + 1;
+                sheet.Cell(r, 2).Value = row.StudentCode;
+                sheet.Cell(r, 3).Value = row.StudentName;
+                sheet.Cell(r, 4).Value = row.TopicTitle;
+                sheet.Cell(r, 5).Value = row.Session;
+                sheet.Cell(r, 6).Value = row.Score.HasValue ? row.Score.Value : string.Empty;
+                sheet.Cell(r, 7).Value = row.Grade ?? string.Empty;
+                sheet.Cell(r, 8).Value = string.Empty;
+            }
+
+            var lastDataRow = startRow + Math.Max(ordered.Count, 1) - 1;
+            var tableRange = sheet.Range(headerRow, 1, lastDataRow, 8);
+            tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            tableRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sheet.Range(startRow, 3, lastDataRow, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            sheet.Range(startRow, 8, lastDataRow, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            sheet.Row(headerRow).Style.Font.SetBold(true);
+            sheet.Row(headerRow).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            var summaryRow = lastDataRow + 2;
+            var numeric = rows.Where(r => r.Score.HasValue).Select(r => r.Score!.Value).ToList();
+            if (numeric.Count > 0)
+            {
+                sheet.Range(summaryRow, 1, summaryRow, 2).Merge().Value = "Diem cao nhat";
+                sheet.Cell(summaryRow, 3).Value = numeric.Max();
+                sheet.Range(summaryRow + 1, 1, summaryRow + 1, 2).Merge().Value = "Diem thap nhat";
+                sheet.Cell(summaryRow + 1, 3).Value = numeric.Min();
+                sheet.Range(summaryRow + 2, 1, summaryRow + 2, 2).Merge().Value = "Diem trung binh";
+                sheet.Cell(summaryRow + 2, 3).Value = Math.Round(numeric.Average(), 2);
+
+                sheet.Range(summaryRow, 1, summaryRow + 2, 3).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                sheet.Range(summaryRow, 1, summaryRow + 2, 3).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                sheet.Range(summaryRow, 1, summaryRow + 2, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            }
+
+            var signRow = summaryRow + 5;
+            sheet.Range(signRow, 1, signRow, 4).Merge().Value = "CHU TICH HOI DONG";
+            sheet.Range(signRow, 5, signRow, 8).Merge().Value = "THU KY";
+            sheet.Range(signRow, 1, signRow, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sheet.Range(signRow, 1, signRow, 8).Style.Font.SetBold(true);
+
+            sheet.Range(signRow + 1, 5, signRow + 1, 8).Merge().Value = $"Da Nang, ngay {DateTime.Now:dd} thang {DateTime.Now:MM} nam {DateTime.Now:yyyy}";
+            sheet.Range(signRow + 1, 5, signRow + 1, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sheet.Range(signRow + 1, 5, signRow + 1, 8).Style.Font.SetItalic(true);
+
+            sheet.Range(signRow + 5, 1, signRow + 5, 4).Merge().Value = "(Ky, ghi ro ho ten)";
+            sheet.Range(signRow + 5, 5, signRow + 5, 8).Merge().Value = "(Ky, ghi ro ho ten)";
+            sheet.Range(signRow + 5, 1, signRow + 5, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sheet.Range(signRow + 5, 1, signRow + 5, 8).Style.Font.SetItalic(true);
+
+            sheet.Row(headerRow).Height = 24;
+            for (var r = startRow; r <= lastDataRow; r++)
+            {
+                sheet.Row(r).Height = 22;
+            }
+
+            sheet.Range(1, 1, signRow + 5, 8).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            var usedRange = sheet.RangeUsed();
+            if (usedRange != null)
+            {
+                usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            }
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
@@ -1068,6 +1839,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         private async Task<List<SyncErrorDetailDto>> BuildSyncErrorRowsAsync(CancellationToken cancellationToken)
         {
             var topics = await _db.Topics.AsNoTracking().OrderBy(t => t.TopicCode).ToListAsync(cancellationToken);
+            var eligibleTopicCodes = await LoadEligibleTopicCodesFromMilestonesAsync(topics, cancellationToken);
             var rows = new List<SyncErrorDetailDto>();
 
             for (var i = 0; i < topics.Count; i++)
@@ -1086,7 +1858,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         StudentCode = studentCode,
                         SupervisorCode = supervisorCode,
                         Field = "StudentCode",
-                        ErrorCode = "UC1.1.MISSING_STUDENT_CODE",
+                        ErrorCode = DefenseUcErrorCodes.Sync.MissingStudentCode,
                         Message = "Thiếu StudentCode"
                     });
                 }
@@ -1100,12 +1872,12 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         StudentCode = studentCode,
                         SupervisorCode = supervisorCode,
                         Field = "SupervisorCode",
-                        ErrorCode = "UC1.1.MISSING_SUPERVISOR_CODE",
+                        ErrorCode = DefenseUcErrorCodes.Sync.MissingSupervisorCode,
                         Message = "Thiếu SupervisorCode"
                     });
                 }
 
-                if (!IsEligibleTopic(topic.Status))
+                if (!eligibleTopicCodes.Contains(topic.TopicCode))
                 {
                     rows.Add(new SyncErrorDetailDto
                     {
@@ -1113,14 +1885,68 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         TopicCode = topic.TopicCode,
                         StudentCode = studentCode,
                         SupervisorCode = supervisorCode,
-                        Field = "Status",
-                        ErrorCode = "UC1.1.INVALID_TOPIC_STATUS",
-                        Message = $"Trạng thái không hợp lệ: {topic.Status ?? "NULL"}"
+                        Field = "ProgressMilestone",
+                        ErrorCode = DefenseUcErrorCodes.Sync.InvalidTopicStatus,
+                        Message = "Topic chưa đạt milestone đủ điều kiện bảo vệ."
                     });
                 }
             }
 
             return rows;
+        }
+
+        private async Task<HashSet<string>> GetScopedTopicCodesAsync(int periodId, CancellationToken cancellationToken)
+        {
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            if (config.CouncilIds.Count == 0)
+            {
+                var allTopicCodes = await _db.Topics.AsNoTracking()
+                    .Where(x => !string.IsNullOrWhiteSpace(x.TopicCode))
+                    .Select(x => x.TopicCode)
+                    .ToListAsync(cancellationToken);
+
+                return allTopicCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var scopedTopicCodes = await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => x.CommitteeID.HasValue && config.CouncilIds.Contains(x.CommitteeID.Value) && x.TopicCode != null)
+                .Select(x => x.TopicCode!)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            return scopedTopicCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private async Task<HashSet<string>> GetScopedLecturerCodesAsync(int periodId, CancellationToken cancellationToken)
+        {
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            if (config.CouncilIds.Count == 0)
+            {
+                var allLecturerCodes = await _db.LecturerProfiles.AsNoTracking()
+                    .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                    .Select(x => x.LecturerCode)
+                    .ToListAsync(cancellationToken);
+
+                return allLecturerCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var committeeMemberCodes = await _db.CommitteeMembers.AsNoTracking()
+                .Where(x => x.CommitteeID.HasValue && config.CouncilIds.Contains(x.CommitteeID.Value) && x.MemberLecturerCode != null)
+                .Select(x => x.MemberLecturerCode!)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var scopedTopicCodes = await GetScopedTopicCodesAsync(periodId, cancellationToken);
+            var supervisorCodes = await _db.Topics.AsNoTracking()
+                .Where(x => scopedTopicCodes.Contains(x.TopicCode) && x.SupervisorLecturerCode != null)
+                .Select(x => x.SupervisorLecturerCode!)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            return committeeMemberCodes
+                .Concat(supervisorCodes)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         private async Task TrackExportAsync(int periodId, string fileName, string status, CancellationToken cancellationToken)
@@ -1176,12 +2002,70 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
         }
 
-        private static bool IsEligibleTopic(string? status)
+        private async Task<HashSet<string>> LoadEligibleTopicCodesFromMilestonesAsync(IEnumerable<Topic> topics, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(status)) return false;
-            return string.Equals(status, "Đủ điều kiện bảo vệ", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(status, "Eligible", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(status, "ELIGIBLE", StringComparison.OrdinalIgnoreCase);
+            var topicList = topics
+                .Where(t => !string.IsNullOrWhiteSpace(t.TopicCode))
+                .ToList();
+
+            if (topicList.Count == 0)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var topicIds = topicList.Select(t => t.TopicID).Distinct().ToList();
+            var latestMilestones = await _db.ProgressMilestones.AsNoTracking()
+                .Where(x => topicIds.Contains(x.TopicID))
+                .GroupBy(x => x.TopicID)
+                .Select(g => g
+                    .OrderByDescending(x => x.MilestoneID)
+                    .Select(x => new
+                    {
+                        x.TopicID,
+                        x.TopicCode,
+                        x.MilestoneTemplateCode,
+                        x.State
+                    })
+                    .First())
+                .ToListAsync(cancellationToken);
+
+            var eligibleTopicIds = latestMilestones
+                .Where(x => IsEligibleMilestone(x.MilestoneTemplateCode, x.State))
+                .Select(x => x.TopicID)
+                .ToHashSet();
+
+            var eligibleTopicCodes = topicList
+                .Where(t => eligibleTopicIds.Contains(t.TopicID))
+                .Select(t => t.TopicCode)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var milestone in latestMilestones)
+            {
+                if (!string.IsNullOrWhiteSpace(milestone.TopicCode) && IsEligibleMilestone(milestone.MilestoneTemplateCode, milestone.State))
+                {
+                    eligibleTopicCodes.Add(milestone.TopicCode);
+                }
+            }
+
+            return eligibleTopicCodes;
+        }
+
+        private static bool IsEligibleMilestone(string? milestoneTemplateCode, string? state)
+        {
+            if (string.Equals(milestoneTemplateCode, "MS_PROG1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return false;
+            }
+
+            return state.IndexOf("đủ điều kiện bảo vệ", StringComparison.OrdinalIgnoreCase) >= 0
+                || state.IndexOf("eligible", StringComparison.OrdinalIgnoreCase) >= 0
+                || state.IndexOf("đề tài đã duyệt", StringComparison.OrdinalIgnoreCase) >= 0
+                || state.IndexOf("approved", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
             private static string ToSessionCode(int? session)
@@ -1205,6 +2089,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var dto = new CouncilDraftDto
             {
                 Id = committee.CommitteeID,
+                CommitteeCode = committee.CommitteeCode,
+                Name = committee.Name ?? committee.CommitteeCode,
+                DefenseDate = committee.DefenseDate,
                 ConcurrencyToken = committee.LastUpdated.Ticks.ToString(CultureInfo.InvariantCulture),
                 Room = committee.Room ?? string.Empty,
                 SlotId = $"{committee.DefenseDate:yyyyMMdd}",
@@ -1218,6 +2105,33 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     LecturerName = lecturerNameMap.TryGetValue(m.MemberLecturerCode ?? string.Empty, out var name) ? name : (m.MemberLecturerCode ?? string.Empty)
                 }).ToList()
             };
+
+            foreach (var assignment in assignments)
+            {
+                var topic = topics.FirstOrDefault(t => t.TopicCode == assignment.TopicCode);
+                if (topic == null)
+                {
+                    continue;
+                }
+
+                var studentCode = topic.ProposerStudentCode ?? string.Empty;
+                dto.Assignments.Add(new CouncilAssignmentDto
+                {
+                    AssignmentId = assignment.AssignmentID,
+                    AssignmentCode = assignment.AssignmentCode,
+                    TopicCode = topic.TopicCode,
+                    TopicTitle = topic.Title,
+                    StudentCode = studentCode,
+                    StudentName = students.TryGetValue(studentCode, out var studentName) ? studentName : studentCode,
+                    Session = assignment.Session,
+                    SessionCode = ToSessionCode(assignment.Session),
+                    ScheduledAt = assignment.ScheduledAt,
+                    StartTime = assignment.StartTime?.ToString(@"hh\:mm"),
+                    EndTime = assignment.EndTime?.ToString(@"hh\:mm"),
+                    OrderIndex = assignment.OrderIndex,
+                    Status = assignment.Status ?? string.Empty
+                });
+            }
 
             foreach (var assignment in assignments.Where(x => x.Session == 1))
             {

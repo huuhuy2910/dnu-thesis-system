@@ -17,6 +17,8 @@ const ensureScheme = (value: string) => {
 const envBase = ensureScheme(envBaseRaw.trim());
 const normalizedBase = envBase.endsWith("/") ? envBase.slice(0, -1) : envBase;
 const apiBase = `${normalizedBase}/api`;
+const seenApiVersions = new Set<string>();
+const seenDeprecationWarnings = new Set<string>();
 
 // Helper function to get full avatar URL
 export function getAvatarUrl(path: string | null | undefined): string {
@@ -96,6 +98,33 @@ function mergeHeaders(
     new Headers(extra).forEach((value, key) => merged.set(key, value));
   }
   return merged;
+}
+
+function logApiResponseHeaders(path: string, response: Response): void {
+  const apiVersion = response.headers.get("X-API-Version");
+  if (apiVersion && !seenApiVersions.has(apiVersion)) {
+    seenApiVersions.add(apiVersion);
+    console.info(`[API] Active API version detected: ${apiVersion}`);
+  }
+
+  const deprecation = response.headers.get("Deprecation");
+  if (!deprecation) {
+    return;
+  }
+
+  const sunset = response.headers.get("Sunset") ?? "-";
+  const link = response.headers.get("Link") ?? "-";
+  const warning = response.headers.get("Warning") ?? "-";
+  const dedupeKey = `${path}|${deprecation}|${sunset}|${link}|${warning}`;
+
+  if (seenDeprecationWarnings.has(dedupeKey)) {
+    return;
+  }
+
+  seenDeprecationWarnings.add(dedupeKey);
+  console.warn(
+    `[API] Deprecated endpoint detected for ${path}. Deprecation=${deprecation}; Sunset=${sunset}; Link=${link}; Warning=${warning}`,
+  );
 }
 
 export async function fetchData<TResponse = unknown>(
@@ -194,6 +223,8 @@ export async function fetchData<TResponse = unknown>(
       signal.removeEventListener("abort", linkedAbort);
     }
   }
+
+  logApiResponseHeaders(path, response);
 
   const contentType = response.headers.get("content-type") ?? "";
   let parsed: unknown = null;

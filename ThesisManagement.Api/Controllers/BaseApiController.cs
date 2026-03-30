@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.Services;
 using System.Security.Claims;
 
@@ -54,6 +55,20 @@ namespace ThesisManagement.Api.Controllers
 
             if (Request.Query.ContainsKey("userCode")) return Request.Query["userCode"].ToString();
             return null;
+        }
+
+        protected ActionResult<ApiResponse<T>> FromResult<T>(ApiResponse<T> result)
+        {
+            result.TraceId ??= HttpContext.TraceIdentifier;
+            if (!Response.Headers.ContainsKey("X-API-Version"))
+            {
+                Response.Headers["X-API-Version"] = "2026-03";
+            }
+
+            var status = result.HttpStatusCode == 0
+                ? (result.Success ? 200 : 400)
+                : result.HttpStatusCode;
+            return StatusCode(status, result);
         }
     }
 }

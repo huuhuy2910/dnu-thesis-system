@@ -1,7 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import {
-  CalendarCog,
   Home,
   Users,
   ClipboardList,
@@ -66,10 +65,6 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
   const roleCanSeeUsers = hasUserManagementPermission(role, "users:list");
 
   const adminOnlyItems = [
-    {
-      path: "/admin/committees",
-      label: "Điều phối đợt bảo vệ",
-      icon: <CalendarCog size={18} />,    },
     {      path: `${basePath}/topic-review`,
       label: "Duyệt đề tài",
       icon: <BookOpen size={18} />,
@@ -101,7 +96,7 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
     },
   ];
 
-  const navItems = [
+  const rawNavItems = [
     ...commonItems,
     ...(roleCanSeeUsers
       ? [
@@ -115,11 +110,15 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
     ...(role === ROLE_ADMIN ? adminOnlyItems : []),
   ];
 
+  const navItems = Array.from(
+    new Map(rawNavItems.map((item) => [item.path, item])).values()
+  );
+
   return (
     <nav className="sidenav admin-theme">
       <ul>
         {navItems.map((item) => (
-          <li key={item.path}>
+          <li key={`${item.path}-${item.label}`}>
             <NavLink
               to={item.path}
               end
