@@ -168,7 +168,8 @@ function normalizeList(payload: unknown): {
 }
 
 function getDepartmentToken(row: RecordData): string {
-  const token = row.departmentID ?? row.departmentId ?? row.departmentCode ?? row.code;
+  const token =
+    row.departmentID ?? row.departmentId ?? row.departmentCode ?? row.code;
   return String(token ?? "").trim();
 }
 
@@ -204,7 +205,9 @@ const DepartmentsManagement: React.FC = () => {
   const [rows, setRows] = useState<RecordData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeModal, setActiveModal] = useState<"detail" | "create" | "edit" | null>(null);
+  const [activeModal, setActiveModal] = useState<
+    "detail" | "create" | "edit" | null
+  >(null);
   const [selectedRow, setSelectedRow] = useState<RecordData | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [searchInput, setSearchInput] = useState("");
@@ -213,7 +216,9 @@ const DepartmentsManagement: React.FC = () => {
   const [detailTab, setDetailTab] = useState<"info" | "lecturers">("info");
   const [lecturers, setLecturers] = useState<LecturerProfile[]>([]);
   const [lecturersLoading, setLecturersLoading] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<Record<string, string>>(() =>
+  const [advancedFilters, setAdvancedFilters] = useState<
+    Record<string, string>
+  >(() =>
     filterFields.reduce<Record<string, string>>((acc, field) => {
       acc[field.name] = "";
       return acc;
@@ -255,7 +260,9 @@ const DepartmentsManagement: React.FC = () => {
       setTotalCount(apiTotal > 0 ? apiTotal : normalized.fallbackTotal);
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải danh sách khoa/bộ môn.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải danh sách khoa/bộ môn.",
         "error",
       );
       setRows([]);
@@ -307,7 +314,9 @@ const DepartmentsManagement: React.FC = () => {
       setActiveModal("edit");
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải dữ liệu cập nhật.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải dữ liệu cập nhật.",
         "error",
       );
     }
@@ -358,7 +367,9 @@ const DepartmentsManagement: React.FC = () => {
         setLecturers(normalized.items as LecturerProfile[]);
       } catch (error) {
         addToast(
-          error instanceof Error ? error.message : "Không thể tải danh sách giảng viên.",
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách giảng viên.",
           "error",
         );
         setLecturers([]);
@@ -373,7 +384,10 @@ const DepartmentsManagement: React.FC = () => {
   const handleDelete = async (row: RecordData) => {
     const token = getDepartmentToken(row);
     if (!token) {
-      addToast("Không xác định được departmentID/departmentCode để xóa.", "error");
+      addToast(
+        "Không xác định được departmentID/departmentCode để xóa.",
+        "error",
+      );
       return;
     }
     if (!window.confirm("Bạn chắc chắn muốn xóa bản ghi này?")) return;
@@ -400,7 +414,9 @@ const DepartmentsManagement: React.FC = () => {
     const required = schemaFields.find((field) => {
       if (!field.required) return false;
       const value = payload[field.name];
-      return value === null || value === undefined || String(value).trim() === "";
+      return (
+        value === null || value === undefined || String(value).trim() === ""
+      );
     });
 
     if (required) {
@@ -457,7 +473,10 @@ const DepartmentsManagement: React.FC = () => {
     <div className="departments-module">
       <div className="departments-header">
         <h1>Quản lý khoa/bộ môn</h1>
-        <p>Dữ liệu chuẩn theo schema Departments (departmentCode, name, description).</p>
+        <p>
+          Dữ liệu chuẩn theo schema Departments (departmentCode, name,
+          description).
+        </p>
       </div>
 
       <div className="departments-toolbar">
@@ -484,7 +503,11 @@ const DepartmentsManagement: React.FC = () => {
             moduleLabel="Quản lý khoa/bộ môn"
             onImportSuccess={loadRows}
           />
-          <button type="button" onClick={openCreate} className="departments-create-btn">
+          <button
+            type="button"
+            onClick={openCreate}
+            className="departments-create-btn"
+          >
             <Plus size={14} /> Thêm mới
           </button>
         </div>
@@ -614,7 +637,11 @@ const DepartmentsManagement: React.FC = () => {
         <div className="departments-modal-overlay">
           <div className="departments-modal">
             {activeModal !== "detail" && (
-              <button type="button" className="departments-modal-close" onClick={() => setActiveModal(null)}>
+              <button
+                type="button"
+                className="departments-modal-close"
+                onClick={() => setActiveModal(null)}
+              >
                 x
               </button>
             )}
@@ -671,20 +698,36 @@ const DepartmentsManagement: React.FC = () => {
                 {detailTab === "info" ? (
                   <div className="departments-detail-grid">
                     <div className="departments-detail-card">
-                      <span className="departments-detail-label">Mã phòng ban</span>
+                      <span className="departments-detail-label">
+                        Mã phòng ban
+                      </span>
                       <strong>{getDepartmentCode(selectedRow || {})}</strong>
                     </div>
                     <div className="departments-detail-card">
-                      <span className="departments-detail-label">Tên phòng ban</span>
+                      <span className="departments-detail-label">
+                        Tên phòng ban
+                      </span>
                       <strong>{getDepartmentName(selectedRow || {})}</strong>
                     </div>
                     <div className="departments-detail-card">
-                      <span className="departments-detail-label">createdAt</span>
-                      <strong>{formatDateTime(selectedRow?.createdAt as string | undefined)}</strong>
+                      <span className="departments-detail-label">
+                        createdAt
+                      </span>
+                      <strong>
+                        {formatDateTime(
+                          selectedRow?.createdAt as string | undefined,
+                        )}
+                      </strong>
                     </div>
                     <div className="departments-detail-card">
-                      <span className="departments-detail-label">lastUpdated</span>
-                      <strong>{formatDateTime(selectedRow?.lastUpdated as string | undefined)}</strong>
+                      <span className="departments-detail-label">
+                        lastUpdated
+                      </span>
+                      <strong>
+                        {formatDateTime(
+                          selectedRow?.lastUpdated as string | undefined,
+                        )}
+                      </strong>
                     </div>
                     <div className="departments-detail-card departments-detail-card-wide">
                       <span className="departments-detail-label">Mô tả</span>
@@ -694,9 +737,13 @@ const DepartmentsManagement: React.FC = () => {
                 ) : (
                   <div className="departments-lecturers-panel">
                     {lecturersLoading ? (
-                      <div className="departments-lecturers-empty">Đang tải danh sách giảng viên...</div>
+                      <div className="departments-lecturers-empty">
+                        Đang tải danh sách giảng viên...
+                      </div>
                     ) : lecturers.length === 0 ? (
-                      <div className="departments-lecturers-empty">Không có giảng viên thuộc khoa này.</div>
+                      <div className="departments-lecturers-empty">
+                        Không có giảng viên thuộc khoa này.
+                      </div>
                     ) : (
                       <div className="departments-lecturers-table-wrap">
                         <table className="departments-lecturers-table">
@@ -716,13 +763,22 @@ const DepartmentsManagement: React.FC = () => {
                                   <div className="departments-lecturer-table-name">
                                     <div className="departments-lecturer-table-avatar">
                                       {lecturer.profileImage ? (
-                                        <img src={lecturer.profileImage} alt={lecturer.fullName} />
+                                        <img
+                                          src={lecturer.profileImage}
+                                          alt={lecturer.fullName}
+                                        />
                                       ) : (
-                                        <span>{getLecturerDisplayName(lecturer).charAt(0) || "L"}</span>
+                                        <span>
+                                          {getLecturerDisplayName(
+                                            lecturer,
+                                          ).charAt(0) || "L"}
+                                        </span>
                                       )}
                                     </div>
                                     <div>
-                                      <strong>{getLecturerDisplayName(lecturer)}</strong>
+                                      <strong>
+                                        {getLecturerDisplayName(lecturer)}
+                                      </strong>
                                       <div className="departments-lecturer-table-code">
                                         {getLecturerCode(lecturer)}
                                       </div>
@@ -746,8 +802,12 @@ const DepartmentsManagement: React.FC = () => {
                                           width: `${Math.min(
                                             100,
                                             Math.round(
-                                              ((lecturer.currentGuidingCount ?? 0) /
-                                                Math.max(lecturer.guideQuota ?? 1, 1)) *
+                                              ((lecturer.currentGuidingCount ??
+                                                0) /
+                                                Math.max(
+                                                  lecturer.guideQuota ?? 1,
+                                                  1,
+                                                )) *
                                                 100,
                                             ),
                                           )}%`,
@@ -755,7 +815,8 @@ const DepartmentsManagement: React.FC = () => {
                                       />
                                     </div>
                                     <strong>
-                                      {lecturer.currentGuidingCount ?? 0}/{lecturer.guideQuota ?? "--"}
+                                      {lecturer.currentGuidingCount ?? 0}/
+                                      {lecturer.guideQuota ?? "--"}
                                     </strong>
                                   </div>
                                 </td>
@@ -772,7 +833,9 @@ const DepartmentsManagement: React.FC = () => {
               <div className="departments-form-shell">
                 <div className="departments-modal-header">
                   <h3>
-                    {activeModal === "create" ? "Tạo khoa/bộ môn" : "Cập nhật khoa/bộ môn"}
+                    {activeModal === "create"
+                      ? "Tạo khoa/bộ môn"
+                      : "Cập nhật khoa/bộ môn"}
                   </h3>
                   <p>
                     {activeModal === "create"
@@ -782,43 +845,51 @@ const DepartmentsManagement: React.FC = () => {
                 </div>
 
                 <div className="departments-form-grid">
-                  {(activeModal === "create" ? createFields : editFields).map((field) => {
-                    const value = formValues[field.name] ?? "";
-                    return (
-                      <label
-                        key={field.name}
-                        className={`departments-form-field ${field.type === "textarea" ? "departments-form-field-full" : ""}`}
-                      >
-                        <span>
-                          {field.label}
-                          {field.required ? " *" : ""}
-                        </span>
-                        {field.type === "textarea" ? (
-                          <textarea
-                            value={value}
-                            onChange={(event) =>
-                              setFormValues((prev) => ({
-                                ...prev,
-                                [field.name]: event.target.value,
-                              }))
-                            }
-                            rows={4}
-                          />
-                        ) : (
-                          <input
-                            type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                            value={value}
-                            onChange={(event) =>
-                              setFormValues((prev) => ({
-                                ...prev,
-                                [field.name]: event.target.value,
-                              }))
-                            }
-                          />
-                        )}
-                      </label>
-                    );
-                  })}
+                  {(activeModal === "create" ? createFields : editFields).map(
+                    (field) => {
+                      const value = formValues[field.name] ?? "";
+                      return (
+                        <label
+                          key={field.name}
+                          className={`departments-form-field ${field.type === "textarea" ? "departments-form-field-full" : ""}`}
+                        >
+                          <span>
+                            {field.label}
+                            {field.required ? " *" : ""}
+                          </span>
+                          {field.type === "textarea" ? (
+                            <textarea
+                              value={value}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                              rows={4}
+                            />
+                          ) : (
+                            <input
+                              type={
+                                field.type === "number"
+                                  ? "number"
+                                  : field.type === "date"
+                                    ? "date"
+                                    : "text"
+                              }
+                              value={value}
+                              onChange={(event) =>
+                                setFormValues((prev) => ({
+                                  ...prev,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            />
+                          )}
+                        </label>
+                      );
+                    },
+                  )}
                 </div>
 
                 <div className="departments-form-actions">
