@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.LecturerProfiles.Command;
 using ThesisManagement.Api.Services;
 
@@ -29,10 +30,12 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
     public class GetLecturerProfileUpdateQuery : IGetLecturerProfileUpdateQuery
     {
         private readonly IUnitOfWork _uow;
+        private readonly ApplicationDbContext _db;
 
-        public GetLecturerProfileUpdateQuery(IUnitOfWork uow)
+        public GetLecturerProfileUpdateQuery(IUnitOfWork uow, ApplicationDbContext db)
         {
             _uow = uow;
+            _db = db;
         }
 
         public async Task<LecturerProfileUpdateDto?> ExecuteAsync(string code)
@@ -41,12 +44,17 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
             if (entity == null)
                 return null;
 
+            var viewCount = await _db.LecturerDashboardView
+                .Where(x => x.LecturerProfileID == entity.LecturerProfileID)
+                .Select(x => (int?)x.CurrentGuidingCount)
+                .FirstOrDefaultAsync();
+
             return new LecturerProfileUpdateDto(
                 entity.DepartmentCode,
                 entity.Degree,
                 entity.GuideQuota,
                 entity.DefenseQuota,
-                entity.CurrentGuidingCount,
+                viewCount ?? entity.CurrentGuidingCount,
                 entity.Gender,
                 entity.DateOfBirth,
                 entity.Email,

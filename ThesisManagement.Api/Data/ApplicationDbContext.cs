@@ -67,6 +67,11 @@ namespace ThesisManagement.Api.Data
         public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
         public DbSet<MessageReadReceipt> MessageReadReceipts => Set<MessageReadReceipt>();
         public DbSet<TopicWorkflowAudit> TopicWorkflowAudits => Set<TopicWorkflowAudit>();
+        public DbSet<Notification> Notifications => Set<Notification>();
+        public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
+        public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+        public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
+        public DbSet<LecturerDashboardView> LecturerDashboardView => Set<LecturerDashboardView>();
         
         // System Activity Logs
         public DbSet<SystemActivityLog> SystemActivityLogs => Set<SystemActivityLog>();
@@ -858,6 +863,151 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.UserCode);
                 b.HasIndex(x => x.PerformedAt);
                 b.HasIndex(x => x.Module);
+            });
+
+            // Notifications
+            modelBuilder.Entity<Notification>(b =>
+            {
+                b.ToTable("NOTIFICATIONS", tb =>
+                {
+                    tb.HasTrigger("TRG_NOTIFICATIONS_BI");
+                });
+
+                b.HasKey(x => x.NotificationID);
+
+                b.Property(x => x.NotificationID).HasColumnName("NOTIFICATION_ID");
+                b.Property(x => x.NotificationCode).HasColumnName("NOTIFICATION_CODE").HasMaxLength(60).IsRequired();
+                b.HasIndex(x => x.NotificationCode).HasDatabaseName("UQ_NOTIFICATIONS_CODE").IsUnique();
+                b.Property(x => x.NotifChannel).HasColumnName("NOTIF_CHANNEL").HasMaxLength(20).IsRequired();
+                b.Property(x => x.NotifCategory).HasColumnName("NOTIF_CATEGORY").HasMaxLength(40).IsRequired();
+                b.Property(x => x.NotifTitle).HasColumnName("NOTIF_TITLE").HasMaxLength(255).IsRequired();
+                b.Property(x => x.NotifBody).HasColumnName("NOTIF_BODY").IsRequired();
+                b.Property(x => x.NotifPriority).HasColumnName("NOTIF_PRIORITY").HasMaxLength(20).IsRequired();
+                b.Property(x => x.ActionType).HasColumnName("ACTION_TYPE").HasMaxLength(30);
+                b.Property(x => x.ActionUrl).HasColumnName("ACTION_URL").HasMaxLength(500);
+                b.Property(x => x.ImageUrl).HasColumnName("IMAGE_URL").HasMaxLength(500);
+                b.Property(x => x.RelatedEntityName).HasColumnName("RELATED_ENTITY_NAME").HasMaxLength(100);
+                b.Property(x => x.RelatedEntityCode).HasColumnName("RELATED_ENTITY_CODE").HasMaxLength(60);
+                b.Property(x => x.RelatedEntityID).HasColumnName("RELATED_ENTITY_ID");
+                b.Property(x => x.TriggeredByUserID).HasColumnName("TRIGGERED_BY_USER_ID");
+                b.Property(x => x.TriggeredByUserCode).HasColumnName("TRIGGERED_BY_USER_CODE").HasMaxLength(40);
+                b.Property(x => x.IsGlobal).HasColumnName("IS_GLOBAL").HasDefaultValue(0).IsRequired();
+                b.Property(x => x.ScheduleAt).HasColumnName("SCHEDULE_AT");
+                b.Property(x => x.ExpiresAt).HasColumnName("EXPIRES_AT");
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP").IsRequired();
+                b.Property(x => x.UpdatedAt).HasColumnName("UPDATED_AT");
+
+                b.HasIndex(x => new { x.NotifCategory, x.CreatedAt }).HasDatabaseName("IX_NOTIFICATIONS_CATEGORY_CREATED_AT");
+            });
+
+            modelBuilder.Entity<NotificationRecipient>(b =>
+            {
+                b.ToTable("NOTIFICATION_RECIPIENTS", tb =>
+                {
+                    tb.HasTrigger("TRG_NOTIF_RECIPIENTS_BI");
+                });
+
+                b.HasKey(x => x.RecipientID);
+
+                b.Property(x => x.RecipientID).HasColumnName("RECIPIENT_ID");
+                b.Property(x => x.NotificationID).HasColumnName("NOTIFICATION_ID").IsRequired();
+                b.Property(x => x.TargetUserID).HasColumnName("TARGET_USER_ID").IsRequired();
+                b.Property(x => x.TargetUserCode).HasColumnName("TARGET_USER_CODE").HasMaxLength(40).IsRequired();
+                b.Property(x => x.DeliveryState).HasColumnName("DELIVERY_STATE").HasMaxLength(20).HasDefaultValue("PENDING").IsRequired();
+                b.Property(x => x.IsRead).HasColumnName("IS_READ").HasDefaultValue(0).IsRequired();
+                b.Property(x => x.ReadAt).HasColumnName("READ_AT");
+                b.Property(x => x.SeenAt).HasColumnName("SEEN_AT");
+                b.Property(x => x.DismissedAt).HasColumnName("DISMISSED_AT");
+                b.Property(x => x.DeliveredAt).HasColumnName("DELIVERED_AT");
+                b.Property(x => x.ErrorMessage).HasColumnName("ERROR_MESSAGE").HasMaxLength(1000);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP").IsRequired();
+                b.Property(x => x.UpdatedAt).HasColumnName("UPDATED_AT");
+
+                b.HasOne(x => x.Notification)
+                    .WithMany(x => x.Recipients)
+                    .HasForeignKey(x => x.NotificationID)
+                    .HasConstraintName("FK_NOTIF_RECIPIENTS_NOTIFICATION")
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.TargetUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.TargetUserID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.NotificationID, x.TargetUserID }).HasDatabaseName("UQ_NOTIF_RECIPIENTS").IsUnique();
+                b.HasIndex(x => new { x.TargetUserID, x.IsRead, x.CreatedAt }).HasDatabaseName("IX_NOTIF_RECIPIENTS_USER_UNREAD");
+                b.HasIndex(x => new { x.TargetUserCode, x.IsRead, x.CreatedAt }).HasDatabaseName("IX_NOTIF_RECIPIENTS_USERCODE_UNREAD");
+                b.HasIndex(x => x.DeliveryState).HasDatabaseName("IX_NOTIF_RECIPIENTS_STATE");
+            });
+
+            modelBuilder.Entity<NotificationPreference>(b =>
+            {
+                b.ToTable("NOTIFICATION_PREFERENCES", tb =>
+                {
+                    tb.HasTrigger("TRG_NOTIF_PREF_BI");
+                });
+
+                b.HasKey(x => x.PreferenceID);
+
+                b.Property(x => x.PreferenceID).HasColumnName("PREFERENCE_ID");
+                b.Property(x => x.TargetUserID).HasColumnName("TARGET_USER_ID").IsRequired();
+                b.Property(x => x.TargetUserCode).HasColumnName("TARGET_USER_CODE").HasMaxLength(40).IsRequired();
+                b.Property(x => x.NotifCategory).HasColumnName("NOTIF_CATEGORY").HasMaxLength(40).IsRequired();
+                b.Property(x => x.InAppEnabled).HasColumnName("IN_APP_ENABLED").HasDefaultValue(1).IsRequired();
+                b.Property(x => x.EmailEnabled).HasColumnName("EMAIL_ENABLED").HasDefaultValue(0).IsRequired();
+                b.Property(x => x.PushEnabled).HasColumnName("PUSH_ENABLED").HasDefaultValue(0).IsRequired();
+                b.Property(x => x.DigestMode).HasColumnName("DIGEST_MODE").HasMaxLength(20).HasDefaultValue("IMMEDIATE").IsRequired();
+                b.Property(x => x.QuietFrom).HasColumnName("QUIET_FROM").HasMaxLength(5);
+                b.Property(x => x.QuietTo).HasColumnName("QUIET_TO").HasMaxLength(5);
+                b.Property(x => x.UpdatedAt).HasColumnName("UPDATED_AT");
+
+                b.HasOne(x => x.TargetUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.TargetUserID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.TargetUserID, x.NotifCategory }).HasDatabaseName("UQ_NOTIF_PREF_USER_CATEGORY").IsUnique();
+                b.HasIndex(x => x.TargetUserID).HasDatabaseName("IX_NOTIF_PREF_USER");
+            });
+
+            modelBuilder.Entity<NotificationOutbox>(b =>
+            {
+                b.ToTable("NOTIFICATION_OUTBOX", tb =>
+                {
+                    tb.HasTrigger("TRG_NOTIFICATION_OUTBOX_BI");
+                });
+
+                b.HasKey(x => x.OutboxID);
+
+                b.Property(x => x.OutboxID).HasColumnName("OUTBOX_ID");
+                b.Property(x => x.EventType).HasColumnName("EVENT_TYPE").HasMaxLength(50).IsRequired();
+                b.Property(x => x.PayloadJson).HasColumnName("PAYLOAD_JSON").IsRequired();
+                b.Property(x => x.OutboxStatus).HasColumnName("OUTBOX_STATUS").HasMaxLength(20).HasDefaultValue("PENDING").IsRequired();
+                b.Property(x => x.RetryCount).HasColumnName("RETRY_COUNT").HasDefaultValue(0).IsRequired();
+                b.Property(x => x.NextRetryAt).HasColumnName("NEXT_RETRY_AT");
+                b.Property(x => x.LastError).HasColumnName("LAST_ERROR").HasMaxLength(1000);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP").IsRequired();
+                b.Property(x => x.ProcessedAt).HasColumnName("PROCESSED_AT");
+
+                b.HasIndex(x => new { x.OutboxStatus, x.CreatedAt }).HasDatabaseName("IX_NOTIF_OUTBOX_STATUS_CREATED_AT");
+            });
+
+            modelBuilder.Entity<LecturerDashboardView>(b =>
+            {
+                b.HasNoKey();
+                b.ToView("V_LECTURER_DASHBOARD");
+
+                b.Property(x => x.LecturerProfileID).HasColumnName("LECTURERPROFILEID");
+                b.Property(x => x.LecturerCode).HasColumnName("LECTURERCODE");
+                b.Property(x => x.FullName).HasColumnName("FULLNAME");
+                b.Property(x => x.DepartmentCode).HasColumnName("DEPARTMENTCODE");
+                b.Property(x => x.Degree).HasColumnName("DEGREE");
+                b.Property(x => x.GuideQuota).HasColumnName("GUIDEQUOTA");
+                b.Property(x => x.DefenseQuota).HasColumnName("DEFENSEQUOTA");
+                b.Property(x => x.Email).HasColumnName("EMAIL");
+                b.Property(x => x.PhoneNumber).HasColumnName("PHONENUMBER");
+                b.Property(x => x.ProfileImage).HasColumnName("PROFILEIMAGE");
+                b.Property(x => x.CurrentGuidingCount).HasColumnName("CURRENTGUIDINGCOUNT");
             });
 
             // TopicWorkflowAudit

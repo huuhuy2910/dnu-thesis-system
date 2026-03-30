@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
 using ThesisManagement.Api.Helpers;
 using ThesisManagement.Api.Models;
@@ -16,11 +17,13 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
     {
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
+        private readonly ApplicationDbContext _db;
 
-        public GetLecturerProfilesListQuery(IUnitOfWork uow, IMapper mapper)
+        public GetLecturerProfilesListQuery(IUnitOfWork uow, IMapper mapper, ApplicationDbContext db)
         {
             _uow = uow;
             _mapper = mapper;
+            _db = db;
         }
 
         public async Task<(IEnumerable<LecturerProfileReadDto> Items, int TotalCount)> ExecuteAsync(LecturerProfileFilter filter)
@@ -112,7 +115,28 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
                 totalCount = result.TotalCount;
             }
 
-            return (items.Select(x => _mapper.Map<LecturerProfileReadDto>(x)), totalCount);
+            var itemList = items.ToList();
+            var pageLecturerIds = itemList.Select(x => x.LecturerProfileID).Distinct().ToList();
+
+            var countMap = pageLecturerIds.Count == 0
+                ? new Dictionary<int, int>()
+                : await _db.LecturerDashboardView
+                    .Where(x => pageLecturerIds.Contains(x.LecturerProfileID))
+                    .Select(x => new { x.LecturerProfileID, x.CurrentGuidingCount })
+                    .ToDictionaryAsync(x => x.LecturerProfileID, x => x.CurrentGuidingCount);
+
+            var mappedItems = itemList
+                .Select(x =>
+                {
+                    var dto = _mapper.Map<LecturerProfileReadDto>(x);
+                    var count = countMap.TryGetValue(x.LecturerProfileID, out var viewCount)
+                        ? viewCount
+                        : dto.CurrentGuidingCount;
+                    return dto with { CurrentGuidingCount = count };
+                })
+                .ToList();
+
+            return (mappedItems, totalCount);
         }
     }
 }

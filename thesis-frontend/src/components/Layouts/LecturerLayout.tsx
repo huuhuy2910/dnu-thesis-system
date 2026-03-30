@@ -2,11 +2,20 @@ import React, { useEffect, useState } from "react";
 import LecturerNav from "../SideNavs/LecturerNav";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut, ChevronDown, User, Clock, Menu, X } from "lucide-react";
+import {
+  LogOut,
+  ChevronDown,
+  User,
+  Clock,
+  Menu,
+  X,
+  KeyRound,
+} from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import ChatWidget from "../chat/ChatWidget.tsx";
+import NotificationBell from "../notifications/NotificationBell";
 
 const LecturerLayout: React.FC = () => {
   const auth = useAuth();
@@ -414,6 +423,8 @@ const LecturerLayout: React.FC = () => {
               </span>
             </div>
 
+            <NotificationBell theme="lecturer" />
+
             <ChatWidget theme="lecturer" />
 
             <div style={{ position: "relative" }} data-dropdown>
@@ -624,6 +635,41 @@ const LecturerLayout: React.FC = () => {
                     >
                       <User size={18} color="#6B7280" />
                       Thông tin giảng viên
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        navigate("/lecturer/change-password");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        width: "100%",
+                        padding: "14px 18px",
+                        background: "none",
+                        border: "none",
+                        borderRadius: "12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#e2e8f0",
+                        fontWeight: 500,
+                        transition: "all 0.3s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(243, 112, 33, 0.15)";
+                        e.currentTarget.style.color = "#f37021";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = "#e2e8f0";
+                      }}
+                    >
+                      <KeyRound size={18} color="#6B7280" />
+                      Đổi mật khẩu
                     </button>
 
                     <button

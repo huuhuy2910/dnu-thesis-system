@@ -7,6 +7,7 @@ using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.Topics.Query;
 using ThesisManagement.Api.DTOs.Workflows.Command;
 using ThesisManagement.Api.DTOs.Workflows.Query;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
 
@@ -26,6 +27,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
         private readonly ICurrentUserService _currentUserService;
         private readonly ITopicCodeGenerator _topicCodeGenerator;
         private readonly ITopicWorkflowCommandSupport _support;
+        private readonly INotificationEventPublisher _notificationEventPublisher;
 
         public ResubmitTopicWorkflowCommandProcessor(
             ApplicationDbContext db,
@@ -33,7 +35,8 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             IMapper mapper,
             ICurrentUserService currentUserService,
             ITopicCodeGenerator topicCodeGenerator,
-            ITopicWorkflowCommandSupport support)
+            ITopicWorkflowCommandSupport support,
+            INotificationEventPublisher notificationEventPublisher)
         {
             _db = db;
             _uow = uow;
@@ -41,6 +44,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             _currentUserService = currentUserService;
             _topicCodeGenerator = topicCodeGenerator;
             _support = support;
+            _notificationEventPublisher = notificationEventPublisher;
         }
 
         public Task<OperationResult<TopicWorkflowResultDto>> SubmitAsync(TopicResubmitWorkflowRequestDto request)
@@ -105,25 +109,56 @@ namespace ThesisManagement.Api.Application.Command.Workflows
             }
 
             var isNewTopic = existingTopic == null || forceCreate;
+            var effectiveCatalogTopicId = request.CatalogTopicID.HasValue && request.CatalogTopicID.Value > 0
+                ? request.CatalogTopicID
+                : null;
+            var normalizedCatalogTopicCode = string.IsNullOrWhiteSpace(request.CatalogTopicCode)
+                ? null
+                : request.CatalogTopicCode.Trim().ToUpperInvariant();
+
+            if (!string.Equals(request.Type, "SELF", StringComparison.OrdinalIgnoreCase))
+            {
+                CatalogTopic? catalogById = null;
+                CatalogTopic? catalogByCode = null;
+
+                if (effectiveCatalogTopicId.HasValue)
+                {
+                    catalogById = await _uow.CatalogTopics.GetByIdAsync(effectiveCatalogTopicId.Value);
+                    if (catalogById == null)
+                        return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicID is invalid", 400);
+                }
+
+                if (!string.IsNullOrWhiteSpace(normalizedCatalogTopicCode))
+                {
+                    catalogByCode = await _uow.CatalogTopics.Query()
+                        .FirstOrDefaultAsync(x => x.CatalogTopicCode.ToUpper() == normalizedCatalogTopicCode);
+
+                    if (catalogByCode == null)
+                        return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicCode is invalid", 400);
+                }
+
+                if (catalogById != null && catalogByCode != null && catalogById.CatalogTopicID != catalogByCode.CatalogTopicID)
+                {
+                    return OperationResult<TopicWorkflowResultDto>.Failed("CatalogTopicID and CatalogTopicCode do not match", 400);
+                }
+
+                var resolvedCatalogTopic = catalogById ?? catalogByCode;
+                if (resolvedCatalogTopic != null)
+                {
+                    effectiveCatalogTopicId = resolvedCatalogTopic.CatalogTopicID;
+                    normalizedCatalogTopicCode = resolvedCatalogTopic.CatalogTopicCode;
+                }
+            }
 
             var topic = isNewTopic ? new Topic() : existingTopic!;
 
             if (isNewTopic && !string.Equals(request.Type, "SELF", StringComparison.OrdinalIgnoreCase))
             {
-                var catalogCode = request.CatalogTopicCode?.Trim();
-                if (!string.IsNullOrWhiteSpace(catalogCode))
+                if (!string.IsNullOrWhiteSpace(normalizedCatalogTopicCode))
                 {
                     var catalogCodeUsed = await _uow.Topics.Query()
-                        .AnyAsync(x => x.CatalogTopicCode == catalogCode);
+                        .CountAsync(x => x.CatalogTopicCode == normalizedCatalogTopicCode) > 0;
                     if (catalogCodeUsed)
-                        return OperationResult<TopicWorkflowResultDto>.Failed("Catalog topic already has a registered topic. Please use resubmit for the existing topic.", 409);
-                }
-
-                if (request.CatalogTopicID.HasValue)
-                {
-                    var catalogIdUsed = await _uow.Topics.Query()
-                        .AnyAsync(x => x.CatalogTopicID == request.CatalogTopicID.Value);
-                    if (catalogIdUsed)
                         return OperationResult<TopicWorkflowResultDto>.Failed("Catalog topic already has a registered topic. Please use resubmit for the existing topic.", 409);
                 }
             }
@@ -158,8 +193,8 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                 }
                 else
                 {
-                    topic.CatalogTopicID = request.CatalogTopicID;
-                    topic.CatalogTopicCode = request.CatalogTopicCode;
+                    topic.CatalogTopicID = effectiveCatalogTopicId;
+                    topic.CatalogTopicCode = normalizedCatalogTopicCode;
                 }
 
                 topic.Status = "Đang chờ";
@@ -246,6 +281,28 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                     requestId: correlationId,
                     idempotencyKey: null,
                     reviewerUserCode: topic.SupervisorUserCode);
+
+                if (!string.IsNullOrWhiteSpace(topic.SupervisorUserCode)
+                    && !string.Equals(topic.SupervisorUserCode, actorUserCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    var title = isNewTopic ? "Có đề tài mới chờ duyệt" : "Có đề tài gửi duyệt lại";
+                    var body = isNewTopic
+                        ? $"Đề tài {topic.TopicCode} - {topic.Title} vừa được gửi để duyệt. Người gửi: {actorUserCode}. Vui lòng vào màn hình duyệt để xem chi tiết nội dung và xử lý."
+                        : $"Đề tài {topic.TopicCode} - {topic.Title} vừa được sinh viên gửi duyệt lại. Người gửi: {actorUserCode}. Vui lòng kiểm tra cập nhật mới và phản hồi sớm.";
+
+                    await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                        NotifCategory: "TOPIC_WORKFLOW",
+                        NotifTitle: title,
+                        NotifBody: body,
+                        NotifPriority: "NORMAL",
+                        ActionType: "OPEN_TOPIC",
+                        ActionUrl: $"/topics/workflow/{topic.TopicCode}",
+                        RelatedEntityName: "TOPIC",
+                        RelatedEntityCode: topic.TopicCode,
+                        RelatedEntityID: topic.TopicID,
+                        IsGlobal: false,
+                        TargetUserCodes: new List<string> { topic.SupervisorUserCode }));
+                }
 
                 return OperationResult<TopicWorkflowResultDto>.Succeeded(result, isNewTopic ? 201 : 200);
             }

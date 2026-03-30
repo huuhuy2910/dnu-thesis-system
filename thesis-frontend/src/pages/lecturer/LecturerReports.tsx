@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -13,16 +13,21 @@ import {
 import { fetchData } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../context/useToast";
-import { getAccessToken } from "../../services/auth-session.service";
+import {
+  getAccessToken,
+  getLecturerCode,
+  setLecturerCode,
+} from "../../services/auth-session.service";
 import type { ApiResponse } from "../../types/api";
-import type {
-  ProgressSubmission,
-  ApiResponseProgressSubmissions,
-} from "../../types/progressSubmission";
+import type { ProgressSubmission } from "../../types/progressSubmission";
 import type { SubmissionFile } from "../../types/submissionFile";
 import type { StudentProfile } from "../../types/studentProfile";
 import type { Topic } from "../../types/topic";
 import type { LecturerProfile } from "../../types/lecturer";
+import type {
+  LecturerSubmissionAggregateItem,
+  LecturerSubmissionAggregatePayload,
+} from "../../types/report-aggregate";
 
 // Helper function to format file size
 const formatBytes = (bytes: number): string => {
@@ -31,6 +36,129 @@ const formatBytes = (bytes: number): string => {
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
+
+const normalizeLecturerState = (state: string | null | undefined): string => {
+  const normalized = (state || "").toUpperCase();
+  if (!normalized) return "PENDING";
+  if (["APPROVED", "ACCEPTED"].includes(normalized)) return "APPROVED";
+  if (["REVISION_REQUIRED", "REVISION", "REJECTED"].includes(normalized)) {
+    return "REVISION_REQUIRED";
+  }
+  if (normalized === "PENDING") return "PENDING";
+  return normalized;
+};
+
+const mapAggregateSubmission = (
+  item: LecturerSubmissionAggregateItem,
+): ProgressSubmission => {
+  const submission = item.submission;
+  return {
+    submissionID: submission.submissionID,
+    submissionCode: submission.submissionCode,
+    milestoneID: submission.milestoneID,
+    milestoneCode: submission.milestoneCode,
+    studentUserID: 0,
+    studentUserCode: submission.studentUserCode,
+    studentProfileID: null,
+    studentProfileCode: submission.studentProfileCode,
+    lecturerProfileID: null,
+    lecturerCode: submission.lecturerCode,
+    submittedAt: submission.submittedAt,
+    attemptNumber: submission.attemptNumber,
+    lecturerComment: submission.lecturerComment,
+    lecturerState: normalizeLecturerState(submission.lecturerState),
+    feedbackLevel: submission.feedbackLevel,
+    reportTitle: submission.reportTitle,
+    reportDescription: submission.reportDescription,
+    lastUpdated: submission.lastUpdated,
+  };
+};
+
+const mapAggregateStudent = (
+  item: LecturerSubmissionAggregateItem,
+): StudentProfile | null => {
+  if (!item.student) return null;
+  return {
+    studentProfileID: item.student.studentProfileID,
+    studentCode: item.student.studentCode,
+    userCode: item.student.userCode,
+    departmentCode: item.student.departmentCode,
+    classCode: item.student.classCode,
+    facultyCode: "",
+    studentImage: "",
+    gpa: 0,
+    academicStanding: "",
+    gender: "",
+    dateOfBirth: "",
+    phoneNumber: item.student.phoneNumber,
+    studentEmail: item.student.studentEmail,
+    address: "",
+    enrollmentYear: 0,
+    status: "",
+    graduationYear: 0,
+    notes: "",
+    fullName: item.student.fullName,
+    createdAt: "",
+    lastUpdated: "",
+  };
+};
+
+const mapAggregateTopic = (
+  item: LecturerSubmissionAggregateItem,
+): Topic | null => {
+  if (!item.topic) return null;
+  return {
+    topicID: item.topic.topicID,
+    topicCode: item.topic.topicCode,
+    title: item.topic.title,
+    summary: item.topic.summary,
+    type: item.topic.type,
+    proposerUserID: 0,
+    proposerUserCode: item.submission.studentUserCode,
+    proposerStudentProfileID: 0,
+    proposerStudentCode: item.submission.studentProfileCode || "",
+    supervisorUserID: null,
+    supervisorUserCode: item.topic.supervisorLecturerCode,
+    supervisorLecturerProfileID: null,
+    supervisorLecturerCode: item.topic.supervisorLecturerCode,
+    catalogTopicID: null,
+    catalogTopicCode: item.topic.catalogTopicCode,
+    departmentID: null,
+    departmentCode: item.supervisor?.departmentCode || null,
+    status: item.topic.status,
+    resubmitCount: null,
+    createdAt: item.topic.createdAt,
+    lastUpdated: item.topic.lastUpdated,
+    tagID: null,
+    tagCode: null,
+  };
+};
+
+const mapAggregateSupervisor = (
+  item: LecturerSubmissionAggregateItem,
+): LecturerProfile | null => {
+  if (!item.supervisor) return null;
+  return {
+    lecturerProfileID: item.supervisor.lecturerProfileID,
+    lecturerCode: item.supervisor.lecturerCode,
+    userCode: "",
+    departmentCode: item.supervisor.departmentCode,
+    degree: item.supervisor.degree,
+    guideQuota: 0,
+    defenseQuota: 0,
+    currentGuidingCount: 0,
+    gender: "",
+    dateOfBirth: "",
+    email: item.supervisor.email,
+    phoneNumber: item.supervisor.phoneNumber,
+    profileImage: "",
+    address: "",
+    notes: "",
+    fullName: item.supervisor.fullName,
+    createdAt: "",
+    lastUpdated: null,
+  };
 };
 
 const LecturerReports: React.FC = () => {
@@ -58,35 +186,13 @@ const LecturerReports: React.FC = () => {
   const [lecturerComment, setLecturerComment] = useState("");
   const [lecturerState, setLecturerState] = useState("");
   const [feedbackLevel, setFeedbackLevel] = useState("");
-  const [lecturerProfile, setLecturerProfile] =
-    useState<LecturerProfile | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
-
-  // Use refs to track current state values without causing re-renders
-  const studentProfilesRef = useRef(studentProfiles);
-  const topicsRef = useRef(topics);
-  const supervisorLecturersRef = useRef(supervisorLecturers);
-  const submissionFilesRef = useRef(submissionFiles);
-
-  // Update refs when state changes
-  useEffect(() => {
-    studentProfilesRef.current = studentProfiles;
-  }, [studentProfiles]);
-
-  useEffect(() => {
-    topicsRef.current = topics;
-  }, [topics]);
-
-  useEffect(() => {
-    supervisorLecturersRef.current = supervisorLecturers;
-  }, [supervisorLecturers]);
-
-  useEffect(() => {
-    submissionFilesRef.current = submissionFiles;
-  }, [submissionFiles]);
+  const [activeLecturerCode, setActiveLecturerCode] = useState<string>(
+    () => getLecturerCode() || "",
+  );
 
   const getAbsoluteUrl = (url: string) => {
     if (/^https?:\/\//i.test(url)) return url;
@@ -100,209 +206,90 @@ const LecturerReports: React.FC = () => {
       : `${normalizedBase}/${url}`;
   };
 
-  const loadAdditionalData = useCallback(
-    async (
-      submissions: ProgressSubmission[],
-      currentStudentProfiles: { [key: string]: StudentProfile },
-      currentTopics: { [key: string]: Topic },
-      currentSupervisorLecturers: { [key: string]: LecturerProfile },
-      currentSubmissionFiles: { [key: string]: SubmissionFile[] },
-    ) => {
-      // Load all student profiles
-      const studentCodes = submissions
-        .map((s) => s.studentUserCode)
-        .filter((code) => code && !currentStudentProfiles[code]);
-
-      if (studentCodes.length > 0) {
-        const studentPromises = studentCodes.map(async (code) => {
-          try {
-            const response = await fetchData(
-              `/StudentProfiles/get-list?UserCode=${code}`,
-            );
-            const data = (response as ApiResponse<StudentProfile[]>).data || [];
-            return { code, profile: data[0] };
-          } catch (err) {
-            console.error("Error loading student profile:", err);
-            return null;
-          }
-        });
-
-        const studentResults = await Promise.all(studentPromises);
-        const newStudentProfiles: { [key: string]: StudentProfile } = {};
-        studentResults.forEach((result) => {
-          if (result && result.profile) {
-            newStudentProfiles[result.code] = result.profile;
-          }
-        });
-
-        if (Object.keys(newStudentProfiles).length > 0) {
-          setStudentProfiles((prev) => ({ ...prev, ...newStudentProfiles }));
-          // Update ref immediately
-          studentProfilesRef.current = {
-            ...studentProfilesRef.current,
-            ...newStudentProfiles,
-          };
-        }
+  useEffect(() => {
+    const resolveLecturerCode = async () => {
+      if (!auth.user?.userCode) {
+        setActiveLecturerCode("");
+        return;
       }
 
-      // Load all topics
-      const topicCodes = submissions
-        .map((s) => s.studentUserCode)
-        .filter((code) => code && !currentTopics[code]);
-
-      if (topicCodes.length > 0) {
-        const topicPromises = topicCodes.map(async (code) => {
-          try {
-            const response = await fetchData(
-              `/Topics/get-list?ProposerUserCode=${code}`,
-            );
-            const data = (response as ApiResponse<Topic[]>).data || [];
-            return { code, topic: data[0] };
-          } catch (err) {
-            console.error("Error loading topic:", err);
-            return null;
-          }
-        });
-
-        const topicResults = await Promise.all(topicPromises);
-        const newTopics: { [key: string]: Topic } = {};
-        topicResults.forEach((result) => {
-          if (result && result.topic) {
-            newTopics[result.code] = result.topic;
-          }
-        });
-
-        if (Object.keys(newTopics).length > 0) {
-          setTopics((prev) => ({ ...prev, ...newTopics }));
-          // Update ref immediately
-          topicsRef.current = { ...topicsRef.current, ...newTopics };
-        }
-
-        // Collect supervisor lecturer codes from topics (new + existing)
-        const supervisorCodesToFetch = new Set<string>();
-        submissions.forEach((s) => {
-          const topicFromNew = newTopics[s.studentUserCode];
-          const topic = topicFromNew || currentTopics[s.studentUserCode];
-          const supCode = topic?.supervisorLecturerCode || null;
-          if (supCode && !currentSupervisorLecturers[supCode])
-            supervisorCodesToFetch.add(supCode);
-        });
-
-        if (supervisorCodesToFetch.size > 0) {
-          const supPromises = Array.from(supervisorCodesToFetch).map(
-            async (code) => {
-              try {
-                const res = await fetchData(
-                  `/LecturerProfiles/get-detail/${code}`,
-                );
-                const data = (res as ApiResponse<LecturerProfile>)?.data;
-                return { code, profile: data };
-              } catch (err) {
-                console.error("Error loading supervisor lecturer:", err);
-                return null;
-              }
-            },
-          );
-
-          const supResults = await Promise.all(supPromises);
-          const newSupervisors: { [key: string]: LecturerProfile } = {};
-          supResults.forEach((r) => {
-            if (r && r.profile) newSupervisors[r.code] = r.profile;
-          });
-
-          if (Object.keys(newSupervisors).length > 0) {
-            setSupervisorLecturers((prev) => ({ ...prev, ...newSupervisors }));
-            // Update ref immediately
-            supervisorLecturersRef.current = {
-              ...supervisorLecturersRef.current,
-              ...newSupervisors,
-            };
-          }
-        }
+      const cachedLecturerCode = getLecturerCode();
+      if (cachedLecturerCode) {
+        setActiveLecturerCode(cachedLecturerCode);
+        return;
       }
 
-      // Load all submission files
-      const submissionCodes = submissions
-        .map((s) => s.submissionCode)
-        .filter((code) => !currentSubmissionFiles[code]);
-
-      if (submissionCodes.length > 0) {
-        const filePromises = submissionCodes.map(async (code) => {
-          try {
-            const response = await fetchData(
-              `/SubmissionFiles/get-list?SubmissionCode=${code}`,
-            );
-            const data = (response as ApiResponse<SubmissionFile[]>).data || [];
-            return { code, files: data };
-          } catch (err) {
-            console.error("Error loading submission files:", err);
-            return null;
-          }
-        });
-
-        const fileResults = await Promise.all(filePromises);
-        const newSubmissionFiles: { [key: string]: SubmissionFile[] } = {};
-        fileResults.forEach((result) => {
-          if (result && result.files) {
-            newSubmissionFiles[result.code] = result.files;
-          }
-        });
-
-        if (Object.keys(newSubmissionFiles).length > 0) {
-          setSubmissionFiles((prev) => ({ ...prev, ...newSubmissionFiles }));
-          // Update ref immediately
-          submissionFilesRef.current = {
-            ...submissionFilesRef.current,
-            ...newSubmissionFiles,
-          };
-        }
+      try {
+        const lecturerProfileResponse = (await fetchData(
+          `/LecturerProfiles/get-list?UserCode=${encodeURIComponent(auth.user.userCode)}`,
+        )) as ApiResponse<LecturerProfile[]>;
+        const lecturerCode =
+          lecturerProfileResponse.data?.[0]?.lecturerCode?.trim() || "";
+        setActiveLecturerCode(lecturerCode);
+        setLecturerCode(lecturerCode || null);
+      } catch (resolveError) {
+        console.error("Error resolving lecturerCode:", resolveError);
+        setActiveLecturerCode("");
       }
-    },
-    [], // No dependencies - use refs instead
-  );
+    };
 
-  const loadLecturerProfile = useCallback(async () => {
-    if (!auth.user?.userCode || lecturerProfile) return; // Don't load if already loaded
-
-    try {
-      const response = await fetchData(
-        `/LecturerPxrofiles/get-list?UserCode=${auth.user.userCode}`,
-      );
-      const data = (response as ApiResponse<LecturerProfile[]>).data || [];
-      if (data.length > 0) {
-        setLecturerProfile(data[0]);
-      }
-    } catch (err) {
-      console.error("Error loading lecturer profile:", err);
-    }
-  }, [auth.user?.userCode, lecturerProfile]);
+    void resolveLecturerCode();
+  }, [auth.user?.userCode]);
 
   const loadReports = useCallback(async () => {
-    if (!lecturerProfile?.lecturerCode) return;
+    const lecturerCode = activeLecturerCode;
+    if (!lecturerCode) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetchData(
-        `/ProgressSubmissions/get-list?LecturerCode=${lecturerProfile.lecturerCode}&Page=${currentPage}&PageSize=${pageSize}`,
-      );
-      const apiResponse = response as ApiResponseProgressSubmissions & {
-        totalCount?: number;
-      };
-      const data = apiResponse.data || [];
-      const total = apiResponse.totalCount || data.length;
+      const stateParam =
+        filterStatus === "all" || filterStatus === "reviewed"
+          ? ""
+          : `&state=${encodeURIComponent(
+              filterStatus === "approved"
+                ? "APPROVED"
+                : filterStatus === "rejected"
+                  ? "REVISION_REQUIRED"
+                  : "PENDING",
+            )}`;
+      const response = (await fetchData(
+        `/reports/lecturer/submissions?lecturerCode=${encodeURIComponent(lecturerCode)}&page=${currentPage}&pageSize=${pageSize}${stateParam}`,
+      )) as ApiResponse<LecturerSubmissionAggregatePayload>;
 
-      setReports(data);
-      setTotalCount(total);
+      if (!response.success || !response.data) {
+        throw new Error(response.message || "Không thể tải danh sách báo cáo");
+      }
 
-      // Load additional data using current ref values
-      await loadAdditionalData(
-        data,
-        studentProfilesRef.current,
-        topicsRef.current,
-        supervisorLecturersRef.current,
-        submissionFilesRef.current,
+      const items = response.data.items || [];
+      const submissions = items.map(mapAggregateSubmission);
+      const nextStudentProfiles: { [key: string]: StudentProfile } = {};
+      const nextTopics: { [key: string]: Topic } = {};
+      const nextSupervisors: { [key: string]: LecturerProfile } = {};
+      const nextSubmissionFiles: { [key: string]: SubmissionFile[] } = {};
+
+      items.forEach((item, index) => {
+        const studentKey = item.submission.studentUserCode;
+        const submission = submissions[index];
+        const student = mapAggregateStudent(item);
+        const topic = mapAggregateTopic(item);
+        const supervisor = mapAggregateSupervisor(item);
+
+        if (student) nextStudentProfiles[studentKey] = student;
+        if (topic) nextTopics[studentKey] = topic;
+        if (supervisor) nextSupervisors[supervisor.lecturerCode] = supervisor;
+        nextSubmissionFiles[submission.submissionCode] =
+          item.submission.files || [];
+      });
+
+      setReports(submissions);
+      setStudentProfiles(nextStudentProfiles);
+      setTopics(nextTopics);
+      setSupervisorLecturers(nextSupervisors);
+      setSubmissionFiles(nextSubmissionFiles);
+      setTotalCount(
+        response.data.totalCount || response.totalCount || submissions.length,
       );
     } catch (err) {
       setError("Không thể tải danh sách báo cáo");
@@ -310,46 +297,34 @@ const LecturerReports: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [
-    lecturerProfile?.lecturerCode,
-    currentPage,
-    pageSize,
-    loadAdditionalData,
-  ]);
-
-  // Load lecturer profile first, then reports
-  useEffect(() => {
-    loadLecturerProfile();
-  }, [loadLecturerProfile]);
+  }, [activeLecturerCode, filterStatus, currentPage, pageSize]);
 
   useEffect(() => {
-    if (lecturerProfile) {
+    if (activeLecturerCode) {
       loadReports();
     }
-  }, [lecturerProfile, loadReports]);
+  }, [activeLecturerCode, loadReports]);
 
   const filteredReports =
     filterStatus === "all"
       ? reports
       : reports.filter((report) => {
-          if (filterStatus === "pending") return !report.lecturerState;
-          if (filterStatus === "reviewed")
-            return report.lecturerState && report.lecturerState !== "Accepted";
-          if (filterStatus === "approved")
-            return report.lecturerState === "Accepted";
+          const normalized = normalizeLecturerState(report.lecturerState);
+          if (filterStatus === "pending") return normalized === "PENDING";
+          if (filterStatus === "reviewed") return normalized !== "PENDING";
+          if (filterStatus === "approved") return normalized === "APPROVED";
           if (filterStatus === "rejected")
-            return report.lecturerState === "Revision";
+            return normalized === "REVISION_REQUIRED";
           return true;
         });
 
   const getStatusIcon = (lecturerState: string | null) => {
-    if (!lecturerState) return <Clock size={16} color="#F59E0B" />;
-    switch (lecturerState) {
-      case "Accepted":
+    switch (normalizeLecturerState(lecturerState)) {
+      case "APPROVED":
         return <CheckCircle size={16} color="#22C55E" />;
-      case "Revision":
+      case "REVISION_REQUIRED":
         return <AlertCircle size={16} color="#EF4444" />;
-      case "Pending":
+      case "PENDING":
         return <Clock size={16} color="#F59E0B" />;
       default:
         return <Clock size={16} color="#6B7280" />;
@@ -357,27 +332,25 @@ const LecturerReports: React.FC = () => {
   };
 
   const getStatusText = (lecturerState: string | null) => {
-    if (!lecturerState) return "Chờ duyệt";
-    switch (lecturerState) {
-      case "Accepted":
+    switch (normalizeLecturerState(lecturerState)) {
+      case "APPROVED":
         return "Đã duyệt";
-      case "Revision":
+      case "REVISION_REQUIRED":
         return "Yêu cầu sửa đổi";
-      case "Pending":
-        return "Đang xem xét";
+      case "PENDING":
+        return "Đang chờ đánh giá";
       default:
         return "Không xác định";
     }
   };
 
   const getStatusColor = (lecturerState: string | null) => {
-    if (!lecturerState) return "#F59E0B";
-    switch (lecturerState) {
-      case "Accepted":
+    switch (normalizeLecturerState(lecturerState)) {
+      case "APPROVED":
         return "#22C55E";
-      case "Revision":
+      case "REVISION_REQUIRED":
         return "#EF4444";
-      case "Pending":
+      case "PENDING":
         return "#F59E0B";
       default:
         return "#6B7280";
@@ -394,17 +367,22 @@ const LecturerReports: React.FC = () => {
 
     try {
       setSubmitting(true);
-      await fetchData(
-        `/ProgressSubmissions/update/${selectedReportForComment.submissionID}`,
+      const normalizedState = normalizeLecturerState(lecturerState);
+      const reviewRes = (await fetchData(
+        `/reports/lecturer/submissions/${selectedReportForComment.submissionID}/review`,
         {
           method: "PUT",
           body: {
             lecturerComment,
-            lecturerState,
-            feedbackLevel,
+            lecturerState: normalizedState,
+            feedbackLevel: (feedbackLevel || "").toUpperCase() || null,
           },
         },
-      );
+      )) as ApiResponse<unknown>;
+
+      if (!reviewRes.success) {
+        throw new Error(reviewRes.message || "Không thể gửi nhận xét");
+      }
 
       // Reload reports to show updated data
       await loadReports();
@@ -581,7 +559,12 @@ const LecturerReports: React.FC = () => {
                   marginBottom: "4px",
                 }}
               >
-                {reports.filter((r) => !r.lecturerState).length}
+                {
+                  reports.filter(
+                    (r) =>
+                      normalizeLecturerState(r.lecturerState) === "PENDING",
+                  ).length
+                }
               </div>
               <div style={{ fontSize: "12px", color: "#666" }}>
                 Chờ nhận xét
@@ -610,7 +593,12 @@ const LecturerReports: React.FC = () => {
                   marginBottom: "4px",
                 }}
               >
-                {reports.filter((r) => r.lecturerState === "Accepted").length}
+                {
+                  reports.filter(
+                    (r) =>
+                      normalizeLecturerState(r.lecturerState) === "APPROVED",
+                  ).length
+                }
               </div>
               <div style={{ fontSize: "12px", color: "#666" }}>Đã duyệt</div>
             </div>
@@ -637,7 +625,13 @@ const LecturerReports: React.FC = () => {
                   marginBottom: "4px",
                 }}
               >
-                {reports.filter((r) => r.lecturerState === "Revision").length}
+                {
+                  reports.filter(
+                    (r) =>
+                      normalizeLecturerState(r.lecturerState) ===
+                      "REVISION_REQUIRED",
+                  ).length
+                }
               </div>
               <div style={{ fontSize: "12px", color: "#666" }}>
                 Yêu cầu sửa đổi
@@ -959,8 +953,8 @@ const LecturerReports: React.FC = () => {
                             >
                               <Eye size={12} />
                             </button>
-                            {!report.lecturerComment &&
-                            !report.lecturerState ? (
+                            {normalizeLecturerState(report.lecturerState) ===
+                            "PENDING" ? (
                               <button
                                 style={{
                                   padding: "6px 10px",
@@ -985,7 +979,7 @@ const LecturerReports: React.FC = () => {
                                 onClick={() =>
                                   setSelectedReportForComment(report)
                                 }
-                                title="Nhận xét"
+                                title="Đánh giá / chỉnh sửa"
                               >
                                 <MessageSquare size={12} />
                               </button>

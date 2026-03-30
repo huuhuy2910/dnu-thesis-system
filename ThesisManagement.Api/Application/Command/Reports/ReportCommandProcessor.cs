@@ -1,0 +1,287 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using ThesisManagement.Api.Application.Command.ProgressSubmissions;
+using ThesisManagement.Api.Application.Command.Notifications;
+using ThesisManagement.Api.Application.Common;
+using ThesisManagement.Api.Data;
+using ThesisManagement.Api.DTOs.ProgressSubmissions.Command;
+using ThesisManagement.Api.DTOs.Reports.Command;
+using ThesisManagement.Api.DTOs.Reports.Query;
+using ThesisManagement.Api.Models;
+using ThesisManagement.Api.Services;
+
+namespace ThesisManagement.Api.Application.Command.Reports
+{
+    public interface IReportCommandProcessor
+    {
+        Task<OperationResult<StudentProgressSubmitResultDto>> SubmitStudentProgressAsync(StudentProgressSubmitFormDto payload, IReadOnlyList<IFormFile> files);
+        Task<OperationResult<object>> ReviewLecturerSubmissionAsync(int submissionId, ProgressSubmissionUpdateDto dto);
+    }
+
+    public class ReportCommandProcessor : IReportCommandProcessor
+    {
+        private readonly IUnitOfWork _uow;
+        private readonly ApplicationDbContext _db;
+        private readonly IUpdateProgressSubmissionCommand _updateProgressSubmissionCommand;
+        private readonly INotificationEventPublisher _notificationEventPublisher;
+
+        public ReportCommandProcessor(
+            IUnitOfWork uow,
+            ApplicationDbContext db,
+            IUpdateProgressSubmissionCommand updateProgressSubmissionCommand,
+            INotificationEventPublisher notificationEventPublisher)
+        {
+            _uow = uow;
+            _db = db;
+            _updateProgressSubmissionCommand = updateProgressSubmissionCommand;
+            _notificationEventPublisher = notificationEventPublisher;
+        }
+
+        public async Task<OperationResult<StudentProgressSubmitResultDto>> SubmitStudentProgressAsync(StudentProgressSubmitFormDto payload, IReadOnlyList<IFormFile> files)
+        {
+            if (string.IsNullOrWhiteSpace(payload.TopicCode) || string.IsNullOrWhiteSpace(payload.MilestoneCode) || string.IsNullOrWhiteSpace(payload.StudentUserCode))
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("topicCode, milestoneCode, studentUserCode are required", 400);
+
+            var topic = await _uow.Topics.Query().FirstOrDefaultAsync(x => x.TopicCode == payload.TopicCode && x.ProposerUserCode == payload.StudentUserCode);
+            if (topic == null)
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Topic not found for this student", 404);
+
+            if (IsPendingTopic(topic.Status))
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Topic is pending approval", 409);
+
+            var latestSubmission = await _uow.ProgressSubmissions.Query()
+                .Where(x => x.StudentUserCode == payload.StudentUserCode)
+                .OrderByDescending(x => x.SubmittedAt)
+                .ThenByDescending(x => x.SubmissionID)
+                .FirstOrDefaultAsync();
+
+            if (latestSubmission != null && IsPendingLecturerState(latestSubmission.LecturerState))
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Latest submission is still pending review", 409);
+
+            var milestone = await _uow.ProgressMilestones.Query().FirstOrDefaultAsync(x => x.MilestoneCode == payload.MilestoneCode && x.TopicCode == payload.TopicCode);
+            if (milestone == null)
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Milestone not found", 404);
+
+            var studentUser = await _uow.Users.Query()
+                .Where(x => x.UserCode == payload.StudentUserCode)
+                .Select(x => new { x.UserID, x.UserCode })
+                .FirstOrDefaultAsync();
+
+            if (studentUser == null)
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Student user not found", 404);
+
+            var effectiveLecturerCode = string.IsNullOrWhiteSpace(payload.LecturerCode)
+                ? topic.SupervisorLecturerCode
+                : payload.LecturerCode;
+
+            LecturerProfile? lecturerProfile = null;
+            if (!string.IsNullOrWhiteSpace(effectiveLecturerCode))
+            {
+                lecturerProfile = await _uow.LecturerProfiles.Query()
+                    .FirstOrDefaultAsync(x => x.LecturerCode == effectiveLecturerCode);
+            }
+
+            if (lecturerProfile == null && topic.SupervisorLecturerProfileID.HasValue)
+            {
+                lecturerProfile = await _uow.LecturerProfiles.Query()
+                    .FirstOrDefaultAsync(x => x.LecturerProfileID == topic.SupervisorLecturerProfileID.Value);
+            }
+
+            if (lecturerProfile == null)
+                return OperationResult<StudentProgressSubmitResultDto>.Failed("Lecturer profile not found", 404);
+
+            var studentProfile = await _uow.StudentProfiles.Query().FirstOrDefaultAsync(x => x.UserCode == payload.StudentUserCode);
+
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var submission = new ProgressSubmission
+                {
+                    SubmissionCode = await GenerateSubmissionCodeAsync(),
+                    MilestoneID = milestone.MilestoneID,
+                    MilestoneCode = milestone.MilestoneCode,
+                    StudentUserCode = payload.StudentUserCode,
+                    StudentUserID = studentUser.UserID,
+                    StudentProfileCode = payload.StudentProfileCode ?? studentProfile?.StudentCode,
+                    StudentProfileID = studentProfile?.StudentProfileID,
+                    LecturerCode = lecturerProfile.LecturerCode,
+                    LecturerProfileID = lecturerProfile.LecturerProfileID,
+                    AttemptNumber = payload.AttemptNumber ?? 1,
+                    LecturerState = "PENDING",
+                    ReportTitle = payload.ReportTitle,
+                    ReportDescription = payload.ReportDescription,
+                    SubmittedAt = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                await _db.ProgressSubmissions.AddAsync(submission);
+                await _db.SaveChangesAsync();
+
+                var attachedFiles = new List<SubmissionFile>();
+                foreach (var file in files)
+                {
+                    if (file.Length <= 0) continue;
+
+                    var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                    if (!Directory.Exists(uploadsRoot))
+                        Directory.CreateDirectory(uploadsRoot);
+
+                    var originalFileName = Path.GetFileName(file.FileName);
+                    var uniqueName = $"{Guid.NewGuid():N}_{originalFileName}";
+                    var savePath = Path.Combine(uploadsRoot, uniqueName);
+
+                    await using (var stream = new FileStream(savePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    attachedFiles.Add(new SubmissionFile
+                    {
+                        SubmissionID = submission.SubmissionID,
+                        SubmissionCode = submission.SubmissionCode,
+                        FileURL = $"/uploads/{uniqueName}",
+                        FileName = originalFileName,
+                        FileSizeBytes = file.Length,
+                        MimeType = file.ContentType,
+                        UploadedAt = DateTime.UtcNow,
+                        UploadedByUserCode = payload.StudentUserCode,
+                        UploadedByUserID = null
+                    });
+                }
+
+                if (attachedFiles.Count > 0)
+                {
+                    await _db.SubmissionFiles.AddRangeAsync(attachedFiles);
+                    await _db.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                if (!string.IsNullOrWhiteSpace(lecturerProfile.UserCode))
+                {
+                    await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                        NotifCategory: "PROGRESS_SUBMISSION",
+                        NotifTitle: "Có báo cáo tiến độ mới",
+                        NotifBody: $"Sinh viên {payload.StudentUserCode} vừa nộp báo cáo {submission.SubmissionCode} cho mốc {submission.MilestoneCode}. "
+                            + $"Tiêu đề báo cáo: {(string.IsNullOrWhiteSpace(submission.ReportTitle) ? "(không có tiêu đề)" : submission.ReportTitle)}. "
+                            + "Vui lòng vào chi tiết để xem tệp đính kèm và thực hiện đánh giá.",
+                        NotifPriority: "NORMAL",
+                        ActionType: "OPEN_SUBMISSION",
+                        ActionUrl: $"/reports/submissions/{submission.SubmissionID}",
+                        RelatedEntityName: "PROGRESS_SUBMISSION",
+                        RelatedEntityCode: submission.SubmissionCode,
+                        RelatedEntityID: submission.SubmissionID,
+                        IsGlobal: false,
+                        TargetUserCodes: new List<string> { lecturerProfile.UserCode }));
+                }
+
+                var result = new StudentProgressSubmitResultDto(
+                    new ReportSubmissionDto(
+                        submission.SubmissionID,
+                        submission.SubmissionCode,
+                        submission.MilestoneID,
+                        submission.MilestoneCode,
+                        submission.StudentUserCode,
+                        submission.StudentProfileCode,
+                        submission.LecturerCode,
+                        submission.SubmittedAt,
+                        submission.AttemptNumber,
+                        submission.LecturerComment,
+                        submission.LecturerState,
+                        submission.FeedbackLevel,
+                        submission.ReportTitle,
+                        submission.ReportDescription,
+                        submission.LastUpdated,
+                        attachedFiles.Select(MapFile).ToList()),
+                    "Submit progress report successfully");
+
+                return OperationResult<StudentProgressSubmitResultDto>.Succeeded(result, 201);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return OperationResult<StudentProgressSubmitResultDto>.Failed($"Submit failed: {ex.Message}", 500);
+            }
+        }
+
+        public async Task<OperationResult<object>> ReviewLecturerSubmissionAsync(int submissionId, ProgressSubmissionUpdateDto dto)
+        {
+            var result = await _updateProgressSubmissionCommand.ExecuteAsync(submissionId, dto);
+            if (!result.Success)
+                return OperationResult<object>.Failed(result.ErrorMessage ?? "Request failed", result.StatusCode);
+
+            var reviewedSubmission = await _uow.ProgressSubmissions.GetByIdAsync(submissionId);
+            if (reviewedSubmission != null && !string.IsNullOrWhiteSpace(reviewedSubmission.StudentUserCode))
+            {
+                await _notificationEventPublisher.PublishAsync(new NotificationEventRequest(
+                    NotifCategory: "PROGRESS_REVIEW",
+                    NotifTitle: "Báo cáo tiến độ đã được đánh giá",
+                    NotifBody: $"Báo cáo {reviewedSubmission.SubmissionCode} đã được giảng viên cập nhật kết quả. "
+                        + $"Trạng thái: {(string.IsNullOrWhiteSpace(dto.LecturerState) ? reviewedSubmission.LecturerState : dto.LecturerState)}. "
+                        + (string.IsNullOrWhiteSpace(dto.LecturerComment)
+                            ? "Vui lòng mở chi tiết để xem phản hồi đầy đủ."
+                            : $"Nhận xét: {dto.LecturerComment}"),
+                    NotifPriority: "NORMAL",
+                    ActionType: "OPEN_SUBMISSION",
+                    ActionUrl: $"/reports/submissions/{submissionId}",
+                    RelatedEntityName: "PROGRESS_SUBMISSION",
+                    RelatedEntityCode: reviewedSubmission.SubmissionCode,
+                    RelatedEntityID: reviewedSubmission.SubmissionID,
+                    IsGlobal: false,
+                    TargetUserCodes: new List<string> { reviewedSubmission.StudentUserCode }));
+            }
+
+            return OperationResult<object>.Succeeded(result.Data);
+        }
+
+        private static bool IsPendingTopic(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+
+            var normalized = status.Trim().ToLowerInvariant();
+            return normalized.Contains("pending") || normalized.Contains("cho duyet") || normalized.Contains("chờ duyệt");
+        }
+
+        private static bool IsPendingLecturerState(string? lecturerState)
+        {
+            if (string.IsNullOrWhiteSpace(lecturerState))
+                return true;
+
+            var normalized = lecturerState.Trim().ToLowerInvariant();
+            return normalized is "pending" or "cho duyet" or "chờ duyệt" or "dang cho" or "đang chờ";
+        }
+
+        private static ReportSubmissionFileDto MapFile(SubmissionFile file)
+            => new(
+                file.FileID,
+                file.SubmissionCode,
+                file.FileURL,
+                file.FileName,
+                file.FileSizeBytes,
+                file.MimeType,
+                file.UploadedAt,
+                file.UploadedByUserCode);
+
+        private async Task<string> GenerateSubmissionCodeAsync()
+        {
+            var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
+            var prefix = $"SUBF{datePart}";
+            var existing = await _db.ProgressSubmissions
+                .Where(s => EF.Functions.Like(s.SubmissionCode, prefix + "%"))
+                .Select(s => s.SubmissionCode)
+                .ToListAsync();
+
+            var maxSuffix = 0;
+            foreach (var code in existing)
+            {
+                if (code.Length <= prefix.Length) continue;
+                var suffix = code.Substring(prefix.Length);
+                if (int.TryParse(suffix, out var number))
+                    maxSuffix = Math.Max(maxSuffix, number);
+            }
+
+            return $"{prefix}{(maxSuffix + 1):D3}";
+        }
+    }
+}

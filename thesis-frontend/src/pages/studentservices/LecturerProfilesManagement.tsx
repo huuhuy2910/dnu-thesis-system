@@ -1,10 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import {
+  BookOpen,
+  Edit,
+  Eye,
+  Filter,
+  Plus,
+  Search,
+  Trash2,
+  User,
+  Users,
+} from "lucide-react";
+import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
-import "../admin/Dashboard.css";
 import "./LecturerProfilesManagement.css";
 
 type RecordData = Record<string, unknown>;
@@ -17,11 +27,88 @@ interface FieldDef {
   required?: boolean;
 }
 
-interface ColumnDef {
-  key: string;
-  label: string;
-  aliases?: string[];
-}
+type LecturerDetailTab = "info" | "students" | "topics";
+
+type DashboardStudent = {
+  studentProfileID: number;
+  studentCode: string;
+  userCode: string;
+  fullName: string;
+  studentEmail: string;
+  phoneNumber: string;
+  departmentCode: string;
+  classCode: string;
+  facultyCode: string;
+  studentImage?: string;
+  gpa?: number;
+  academicStanding?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  address?: string;
+  enrollmentYear?: number;
+  graduationYear?: number | null;
+  status?: string;
+  notes?: string | null;
+  createdAt?: string;
+  lastUpdated?: string;
+};
+
+type DashboardTopic = {
+  topicID: number;
+  topicCode: string;
+  title: string;
+  summary: string;
+  type?: string;
+  status: string;
+  catalogTopicCode?: string | null;
+  supervisorLecturerCode?: string;
+  createdAt?: string;
+  lastUpdated?: string;
+};
+
+type DashboardTag = {
+  tagCode: string;
+  tagName: string;
+};
+
+type DashboardMilestone = {
+  milestoneID: number;
+  milestoneCode: string;
+  topicCode: string;
+  milestoneTemplateCode: string;
+  ordinal?: number;
+  deadline?: string | null;
+  state?: string;
+  startedAt?: string | null;
+  completedAt1?: string | null;
+  completedAt2?: string | null;
+  completedAt3?: string | null;
+  completedAt4?: string | null;
+  completedAt5?: string | null;
+};
+
+type DashboardSupervisor = {
+  lecturerProfileID: number;
+  lecturerCode: string;
+  fullName: string;
+  degree?: string;
+  email?: string;
+  phoneNumber?: string;
+  departmentCode?: string;
+  guideQuota?: number;
+  currentGuidingCount?: number;
+};
+
+type LecturerDashboardItem = {
+  student: DashboardStudent;
+  topic: DashboardTopic;
+  topicTags: DashboardTag[];
+  currentMilestone: DashboardMilestone | null;
+  supervisor: DashboardSupervisor | null;
+  supervisorTags?: DashboardTag[];
+  canSubmit?: boolean;
+  blockReason?: string | null;
+};
 
 const fields: FieldDef[] = [
   { name: "lecturerCode", label: "lecturerCode" },
@@ -50,26 +137,49 @@ const filterFields: FieldDef[] = [
   { name: "gender", label: "Giới tính" },
 ];
 
-const columns: ColumnDef[] = [
-  { key: "lecturerCode", label: "Mã GV", aliases: ["code"] },
-  { key: "fullName", label: "Họ tên", aliases: ["name", "lecturerName"] },
+const tableColumns = [
+  { key: "departmentCode", label: "KHOA" },
+  { key: "degree", label: "HỌC VỊ" },
+  { key: "defenseQuota", label: "BẢO VỆ" },
+  { key: "currentGuidingCount", label: "ĐANG HƯỚNG DẪN" },
+] as const;
+
+const editFieldSections: Array<{
+  title: string;
+  description: string;
+  fields: string[];
+}> = [
   {
-    key: "departmentCode",
-    label: "Khoa/Bộ môn",
-    aliases: ["departmentName", "department"],
+    title: "Thông tin tài khoản",
+    description: "Thông tin định danh và liên kết tài khoản.",
+    fields: ["lecturerCode", "userCode", "departmentCode"],
   },
-  { key: "email", label: "Email", aliases: ["lecturerEmail"] },
   {
-    key: "degree",
-    label: "Học vị",
-    aliases: ["academicDegree"],
+    title: "Thông tin liên hệ",
+    description: "Thông tin cơ bản và kênh liên lạc.",
+    fields: ["fullName", "email", "phoneNumber", "gender", "dateOfBirth"],
   },
   {
-    key: "currentGuidingCount",
-    label: "Đang hướng dẫn",
-    aliases: ["guidingCount"],
+    title: "Thông tin chuyên môn",
+    description: "Học vị và chỉ tiêu giảng dạy.",
+    fields: ["degree", "guideQuota", "defenseQuota", "currentGuidingCount"],
+  },
+  {
+    title: "Thông tin bổ sung",
+    description: "Ảnh đại diện, địa chỉ và ghi chú.",
+    fields: ["profileImage", "address", "notes"],
   },
 ];
+
+function getFieldDefinition(name: string): FieldDef {
+  return (
+    fields.find((field) => field.name === name) ?? {
+      name,
+      label: name,
+      type: "text",
+    }
+  );
+}
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -77,20 +187,23 @@ function toDisplay(value: unknown): string {
   return String(value);
 }
 
-function getColumnValue(row: RecordData, column: ColumnDef): unknown {
-  const keys = [column.key, ...(column.aliases ?? [])];
-  for (const key of keys) {
-    const value = row[key];
-    if (value === null || value === undefined) continue;
-    if (typeof value === "string" && value.trim() === "") continue;
-    return value;
-  }
-  return "";
+function formatDateForInput(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toISOString().slice(0, 10);
 }
 
 function toFormRecord(data: RecordData): Record<string, string> {
   return fields.reduce<Record<string, string>>((acc, field) => {
-    acc[field.name] = toDisplay(data[field.name]);
+    acc[field.name] =
+      field.type === "date"
+        ? formatDateForInput(data[field.name])
+        : toDisplay(data[field.name]);
     return acc;
   }, {});
 }
@@ -168,6 +281,117 @@ function normalizeList(payload: unknown): {
   return { items: [], fallbackTotal: 0 };
 }
 
+function getDisplayName(row: RecordData): string {
+  return String(row.fullName || row.lecturerName || row.name || "--");
+}
+
+function getDisplayCode(row: RecordData): string {
+  return String(row.lecturerCode || row.code || "--");
+}
+
+function getGuidingProgress(row: RecordData): {
+  current: number;
+  quota: number;
+  ratio: number;
+} {
+  const current = Number(row.currentGuidingCount ?? 0);
+  const quota = Number(row.guideQuota ?? 0);
+  const safeCurrent = Number.isFinite(current) ? current : 0;
+  const safeQuota = Number.isFinite(quota) ? quota : 0;
+  return {
+    current: safeCurrent,
+    quota: safeQuota,
+    ratio:
+      safeQuota > 0
+        ? Math.max(
+            0,
+            Math.min(100, Math.round((safeCurrent / safeQuota) * 100)),
+          )
+        : 0,
+  };
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("vi-VN");
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("vi-VN");
+}
+
+function getStatusText(status?: string): string {
+  const normalized = (status || "").toLowerCase();
+  if (normalized.includes("đã duyệt")) return "Đã duyệt";
+  if (normalized.includes("chờ")) return "Chờ duyệt";
+  if (normalized.includes("từ chối")) return "Từ chối";
+  if (normalized.includes("cần sửa")) return "Cần sửa đổi";
+  if (normalized.includes("đang thực hiện")) return "Đang thực hiện";
+  return status || "--";
+}
+
+function getMilestoneLabel(code: string): string {
+  const map: Record<string, string> = {
+    MS_REG: "Đăng ký đề tài",
+    MS_PROG1: "Tiến độ 1",
+    MS_PROG2: "Tiến độ 2",
+    MS_FULL: "Nộp full",
+    MS_DEF: "Bảo vệ",
+  };
+  return map[code] || code;
+}
+
+function calcProgress(
+  currentMilestone: DashboardMilestone | null,
+  totalMilestones = 5,
+): number {
+  if (!currentMilestone || !totalMilestones) return 0;
+  const ordinal = Number(currentMilestone.ordinal || 0);
+  if (!Number.isFinite(ordinal) || ordinal <= 1) return 0;
+  return Math.max(
+    0,
+    Math.min(100, Math.round(((ordinal - 1) / totalMilestones) * 100)),
+  );
+}
+
+function normalizeDashboardItems(payload: unknown): LecturerDashboardItem[] {
+  const normalized = normalizeList(payload);
+  return normalized.items.filter((item): item is LecturerDashboardItem => {
+    if (!item || typeof item !== "object") return false;
+    const source = item as Partial<LecturerDashboardItem>;
+    return Boolean(source.student && source.topic);
+  });
+}
+
+function getStudentName(item: LecturerDashboardItem): string {
+  return String(item.student?.fullName || item.student?.studentCode || "--");
+}
+
+function getStudentCode(item: LecturerDashboardItem): string {
+  return String(item.student?.studentCode || "--");
+}
+
+function getTopicTitle(item: LecturerDashboardItem): string {
+  return String(item.topic?.title || item.topic?.topicCode || "--");
+}
+
+function getTopicCode(item: LecturerDashboardItem): string {
+  return String(item.topic?.topicCode || "--");
+}
+
+function getTopicTypeLabel(type?: string): string {
+  if (!type) return "--";
+  const normalized = type.toUpperCase();
+  if (normalized === "CATALOG") return "Đề tài catalog";
+  if (normalized === "SELF") return "Đề tài tự chọn";
+  return type;
+}
+
 const LecturerProfilesManagement: React.FC = () => {
   const { addToast } = useToast();
   const [rows, setRows] = useState<RecordData[]>([]);
@@ -177,6 +401,10 @@ const LecturerProfilesManagement: React.FC = () => {
     "detail" | "create" | "edit" | null
   >(null);
   const [selectedRow, setSelectedRow] = useState<RecordData | null>(null);
+  const [detailTab, setDetailTab] = useState<LecturerDetailTab>("info");
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailItems, setDetailItems] = useState<LecturerDashboardItem[]>([]);
+  const [detailTotalCount, setDetailTotalCount] = useState(0);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [searchInput, setSearchInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -246,6 +474,36 @@ const LecturerProfilesManagement: React.FC = () => {
     [pageSize, totalCount],
   );
 
+  const detailLecturerName = String(
+    selectedRow?.fullName || selectedRow?.lecturerName || "--",
+  );
+  const detailLecturerCode = String(
+    selectedRow?.lecturerCode || selectedRow?.code || "--",
+  );
+  const detailDepartmentCode = String(
+    selectedRow?.departmentCode || selectedRow?.department || "--",
+  );
+  const detailStudents = useMemo(() => {
+    const seen = new Set<string>();
+    return detailItems.filter((item) => {
+      const key = getStudentCode(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [detailItems]);
+  const detailTopics = useMemo(() => {
+    const seen = new Set<string>();
+    return detailItems.filter((item) => {
+      const key = getTopicCode(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [detailItems]);
+
+  const lecturerTableColSpan = tableColumns.length + 3;
+
   const openCreate = async () => {
     try {
       const { data } = await requestApiData<RecordData>(
@@ -273,7 +531,15 @@ const LecturerProfilesManagement: React.FC = () => {
         { method: "GET" },
         "Không thể tải dữ liệu cập nhật.",
       );
-      setFormValues(toFormRecord(data || row));
+      const mergedRow = {
+        ...row,
+        ...(data || {}),
+      };
+      mergedRow.lecturerCode =
+        mergedRow.lecturerCode || row.lecturerCode || code;
+      mergedRow.userCode = mergedRow.userCode || row.userCode || "";
+      mergedRow.dateOfBirth = mergedRow.dateOfBirth || row.dateOfBirth || "";
+      setFormValues(toFormRecord(mergedRow));
       setSelectedRow(row);
       setActiveModal("edit");
     } catch (error) {
@@ -294,17 +560,62 @@ const LecturerProfilesManagement: React.FC = () => {
       return;
     }
 
-    try {
-      const { data } = await requestApiData<RecordData>(
-        `/LecturerProfiles/get-detail/${encodeURIComponent(code)}`,
-        { method: "GET" },
-        "Không thể tải chi tiết giảng viên.",
-      );
-      setSelectedRow(data);
-    } catch {
-      setSelectedRow(row);
-    }
+    setDetailTab("info");
+    setDetailLoading(true);
+    setDetailItems([]);
+    setDetailTotalCount(0);
+    setSelectedRow(row);
     setActiveModal("detail");
+
+    try {
+      const [detailResponse, dashboardResponse] = await Promise.all([
+        requestApiData<RecordData>(
+          `/LecturerProfiles/get-detail/${encodeURIComponent(code)}`,
+          { method: "GET" },
+          "Không thể tải chi tiết giảng viên.",
+        ),
+        requestApiData<unknown>(
+          `/reports/student/dashboard/get-list?Page=0&PageSize=10&SupervisorLecturerCode=${encodeURIComponent(code)}`,
+          { method: "GET" },
+          "Không thể tải danh sách sinh viên.",
+        ),
+      ]);
+
+      setSelectedRow(detailResponse.data || row);
+      const dashboardItems = normalizeDashboardItems(dashboardResponse.data);
+      setDetailItems(dashboardItems);
+      setDetailTotalCount(
+        dashboardResponse.totalCount || dashboardItems.length,
+      );
+    } catch {
+      try {
+        const { data } = await requestApiData<RecordData>(
+          `/LecturerProfiles/get-detail/${encodeURIComponent(code)}`,
+          { method: "GET" },
+          "Không thể tải chi tiết giảng viên.",
+        );
+        setSelectedRow(data);
+      } catch {
+        setSelectedRow(row);
+      }
+      try {
+        const dashboardResponse = await requestApiData<unknown>(
+          `/reports/student/dashboard/get-list?Page=0&PageSize=10&SupervisorLecturerCode=${encodeURIComponent(code)}`,
+          { method: "GET" },
+          "Không thể tải danh sách sinh viên.",
+        );
+        const dashboardItems = normalizeDashboardItems(dashboardResponse.data);
+        setDetailItems(dashboardItems);
+        setDetailTotalCount(
+          dashboardResponse.totalCount || dashboardItems.length,
+        );
+      } catch {
+        setDetailItems([]);
+        setDetailTotalCount(0);
+      }
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleDelete = async (row: RecordData) => {
@@ -391,9 +702,11 @@ const LecturerProfilesManagement: React.FC = () => {
   };
 
   return (
-    <div className="admin-dashboard lecturer-profiles-module">
+    <div className="lecturer-profiles-module">
       <div className="dashboard-header">
-        <h1>Quản lý giảng viên</h1>
+        <h1>
+          <Users size={30} color="#F37021" /> Quản lý giảng viên
+        </h1>
         <p>
           Dữ liệu chuẩn theo schema LecturerProfiles (email, guideQuota,
           defenseQuota, currentGuidingCount...).
@@ -560,79 +873,124 @@ const LecturerProfilesManagement: React.FC = () => {
         )}
       </div>
 
-      <div className="recent-topics-section" style={{ overflowX: "auto" }}>
-        <table className="topics-table">
+      <div className="lecturer-table-wrap">
+        <table className="lecturer-table">
           <thead>
             <tr>
-              {columns.map((column) => (
+              <th>GIẢNG VIÊN</th>
+              <th>LIÊN HỆ</th>
+              {tableColumns.map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
-              <th style={{ textAlign: "center" }}>Thao tác</th>
+              <th style={{ textAlign: "center" }}>THAO TÁC</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length + 1}>Đang tải dữ liệu...</td>
+                <td colSpan={lecturerTableColSpan}>Đang tải dữ liệu...</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1}>Không có dữ liệu.</td>
+                <td colSpan={lecturerTableColSpan}>Không có dữ liệu.</td>
               </tr>
             ) : (
               rows.map((row, index) => (
                 <tr
                   key={`lecturers-${index}-${String(row.lecturerCode ?? "")}`}
+                  className="lecturer-row"
                 >
-                  {columns.map((column) => (
-                    <td key={`${column.key}-${index}`}>
-                      {toDisplay(getColumnValue(row, column))}
-                    </td>
-                  ))}
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: 8,
-                      }}
-                    >
+                    <div className="lecturer-cell">
+                      <div className="lecturer-avatar-wrap">
+                        {row.profileImage ? (
+                          <img
+                            src={getAvatarUrl(String(row.profileImage))}
+                            alt={getDisplayName(row)}
+                            className="lecturer-avatar"
+                          />
+                        ) : (
+                          <div className="lecturer-avatar lecturer-avatar-fallback">
+                            {getDisplayName(row).trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="lecturer-name">
+                          {getDisplayName(row)}
+                        </div>
+                        <div className="lecturer-code">
+                          {getDisplayCode(row)}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="lecturer-contact-cell">
+                      <div className="lecturer-contact-email">
+                        {toDisplay(row.email) || "--"}
+                      </div>
+                      <div className="lecturer-contact-phone">
+                        {toDisplay(row.phoneNumber) || "--"}
+                      </div>
+                    </div>
+                  </td>
+                  {tableColumns.map((column) => {
+                    if (column.key === "currentGuidingCount") {
+                      const { current, quota, ratio } = getGuidingProgress(row);
+                      return (
+                        <td key={`${column.key}-${index}`}>
+                          <div className="lecturer-progress-cell">
+                            <div className="lecturer-progress-track">
+                              <div
+                                className="lecturer-progress-fill"
+                                style={{ width: `${ratio}%` }}
+                              />
+                            </div>
+                            <strong>
+                              {current}/{quota || "--"}
+                            </strong>
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td key={`${column.key}-${index}`}>
+                        <div
+                          className={
+                            column.key === "degree"
+                              ? "lecturer-table-degree"
+                              : "lecturer-muted"
+                          }
+                        >
+                          {toDisplay(row[column.key]) || "--"}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <div className="lecturer-action-buttons">
                       <button
                         type="button"
+                        className="lecturer-detail-btn"
                         onClick={() => void openDetail(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
                         title="Chi tiết"
                       >
                         <Eye size={14} />
                       </button>
                       <button
                         type="button"
+                        className="lecturer-edit-btn"
                         onClick={() => void openEdit(row)}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
                         title="Cập nhật"
                       >
                         <Edit size={14} />
                       </button>
                       <button
                         type="button"
+                        className="lecturer-delete-btn"
                         onClick={() => void handleDelete(row)}
-                        style={{
-                          border: "1px solid #fecaca",
-                          color: "#b91c1c",
-                          borderRadius: 8,
-                          padding: 6,
-                          background: "#fff",
-                        }}
                         title="Xóa"
                       >
                         <Trash2 size={14} />
@@ -644,77 +1002,20 @@ const LecturerProfilesManagement: React.FC = () => {
             )}
           </tbody>
         </table>
-
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Tổng bản ghi: <strong>{totalCount}</strong>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span style={{ color: "#64748b", fontSize: 13 }}>Page size</span>
-              <select
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
-                }}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Trước
-            </button>
-            <span style={{ minWidth: 94, textAlign: "center", fontSize: 13 }}>
-              Trang {page} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={page >= pageCount || isLoading}
-              onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "6px 10px",
-                background: "#fff",
-              }}
-            >
-              Sau
-            </button>
-          </div>
-        </div>
       </div>
+
+      <TablePagination
+        totalCount={totalCount}
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+      />
 
       {activeModal && (
         <div
@@ -740,177 +1041,505 @@ const LecturerProfilesManagement: React.FC = () => {
               border: "1px solid #e2e8f0",
             }}
           >
-            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>
-                {activeModal === "create" && "Tạo hồ sơ giảng viên"}
-                {activeModal === "edit" && "Cập nhật hồ sơ giảng viên"}
-                {activeModal === "detail" && "Chi tiết hồ sơ giảng viên"}
-              </h3>
-            </div>
-
-            {activeModal === "detail" ? (
-              <div
-                style={{
-                  padding: "24px",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                  gap: "16px",
-                  background: "#f8fafc",
-                }}
-              >
-                {Object.entries(selectedRow || {}).map(([key, value]) => {
-                  const strVal = toDisplay(value);
-                  const isLong = strVal.length > 60;
-                  return (
-                    <div
-                      key={key}
-                      style={{
-                        padding: "16px",
-                        background: "#fff",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                        gridColumn: isLong ? "1 / -1" : "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#64748b",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {key}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "15px",
-                          color: "#0f172a",
-                          lineHeight: "1.5",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {strVal || (
-                          <span
-                            style={{ color: "#94a3b8", fontStyle: "italic" }}
-                          >
-                            Trống
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: 16,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                  gap: 12,
-                }}
-              >
-                {fields.map((field) => {
-                  const value = formValues[field.name] ?? "";
-                  return (
-                    <label key={field.name} style={{ display: "grid", gap: 6 }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {field.label}
-                        {field.required ? " *" : ""}
-                      </span>
-                      {field.type === "textarea" ? (
-                        <textarea
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          rows={3}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                            resize: "vertical",
-                          }}
-                        />
-                      ) : (
-                        <input
-                          type={
-                            field.type === "number"
-                              ? "number"
-                              : field.type === "date"
-                                ? "date"
-                                : "text"
-                          }
-                          value={value}
-                          onChange={(event) =>
-                            setFormValues((prev) => ({
-                              ...prev,
-                              [field.name]: event.target.value,
-                            }))
-                          }
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: 10,
-                          }}
-                        />
-                      )}
-                    </label>
-                  );
-                })}
+            {activeModal !== "detail" && (
+              <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
+                <h3 style={{ margin: 0, color: "#0f172a" }}>
+                  {activeModal === "create" && "Tạo hồ sơ giảng viên"}
+                  {activeModal === "edit" && "Cập nhật hồ sơ giảng viên"}
+                </h3>
               </div>
             )}
 
-            <div
-              style={{
-                padding: 16,
-                borderTop: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setActiveModal(null)}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "9px 14px",
-                }}
-                disabled={isSubmitting}
-              >
-                Đóng
-              </button>
-              {activeModal !== "detail" && (
+            {activeModal === "detail" ? (
+              <div className="lecturer-detail-shell">
+                <div className="lecturer-detail-header">
+                  <div className="lecturer-detail-header-left">
+                    {selectedRow?.profileImage ? (
+                      <img
+                        src={getAvatarUrl(String(selectedRow.profileImage))}
+                        alt={detailLecturerName}
+                        className="lecturer-avatar-lg"
+                      />
+                    ) : (
+                      <div className="lecturer-avatar-lg lecturer-avatar-lg-fallback">
+                        {detailLecturerName.trim().charAt(0).toUpperCase()}
+                      </div>
+                    )}
+
+                    <div className="lecturer-detail-header-text">
+                      <h4>{detailLecturerName}</h4>
+                      <p>
+                        {detailLecturerCode}
+                        {selectedRow?.degree
+                          ? ` • ${String(selectedRow.degree)}`
+                          : ""}
+                      </p>
+                      <div className="lecturer-detail-subline">
+                        <span className="lecturer-detail-chip">
+                          {detailDepartmentCode}
+                        </span>
+                        <span className="lecturer-detail-gpa">
+                          Hướng dẫn{" "}
+                          {String(selectedRow?.currentGuidingCount ?? "--")}/
+                          {String(selectedRow?.guideQuota ?? "--")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lecturer-detail-header-actions">
+                    <button
+                      type="button"
+                      className="lecturer-edit-btn"
+                      onClick={() => {
+                        if (selectedRow) {
+                          void openEdit(selectedRow);
+                        }
+                        setActiveModal(null);
+                      }}
+                    >
+                      <Edit size={13} />
+                      Sửa
+                    </button>
+                    <button
+                      type="button"
+                      className="lecturer-delete-btn"
+                      onClick={() => setActiveModal(null)}
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lecturer-detail-tabs">
+                  <button
+                    type="button"
+                    className={detailTab === "info" ? "is-active" : ""}
+                    onClick={() => setDetailTab("info")}
+                  >
+                    <User size={14} />
+                    Thông tin
+                  </button>
+                  <button
+                    type="button"
+                    className={detailTab === "students" ? "is-active" : ""}
+                    onClick={() => setDetailTab("students")}
+                  >
+                    <Users size={14} />
+                    Sinh viên
+                  </button>
+                  <button
+                    type="button"
+                    className={detailTab === "topics" ? "is-active" : ""}
+                    onClick={() => setDetailTab("topics")}
+                  >
+                    <BookOpen size={14} />
+                    Đề tài
+                  </button>
+                </div>
+
+                <div className="lecturer-detail-body">
+                  {detailLoading ? (
+                    <div className="lecturer-detail-loading">
+                      Đang tải chi tiết...
+                    </div>
+                  ) : (
+                    <>
+                      {detailTab === "info" && (
+                        <div className="lecturer-detail-columns">
+                          <div className="lecturer-detail-column">
+                            <section className="lecturer-info-card">
+                              <h4>Thông tin cơ bản</h4>
+                              <div className="lecturer-detail-list">
+                                <div>
+                                  <span>Mã giảng viên</span>
+                                  <strong>
+                                    {String(selectedRow?.lecturerCode || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Mã user</span>
+                                  <strong>
+                                    {String(selectedRow?.userCode || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Khoa/Bộ môn</span>
+                                  <strong>
+                                    {String(
+                                      selectedRow?.departmentCode || "--",
+                                    )}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Học vị</span>
+                                  <strong>
+                                    {String(selectedRow?.degree || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Email</span>
+                                  <strong>
+                                    {String(selectedRow?.email || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>SĐT</span>
+                                  <strong>
+                                    {String(selectedRow?.phoneNumber || "--")}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <div className="lecturer-guide-quota">
+                                <div className="lecturer-guide-quota-row">
+                                  <span>Chỉ tiêu hướng dẫn</span>
+                                  <strong>
+                                    {String(
+                                      selectedRow?.currentGuidingCount ?? 0,
+                                    )}
+                                    /{String(selectedRow?.guideQuota ?? "--")}
+                                  </strong>
+                                </div>
+                                <div className="lecturer-progress-track-lg">
+                                  <div
+                                    className="lecturer-progress-fill"
+                                    style={{
+                                      width: `${getGuidingProgress(selectedRow || {}).ratio}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </section>
+                          </div>
+
+                          <div className="lecturer-detail-column">
+                            <section className="lecturer-info-card">
+                              <h4>Thông tin mở rộng</h4>
+                              <div className="lecturer-detail-list">
+                                <div>
+                                  <span>Giới tính</span>
+                                  <strong>
+                                    {String(selectedRow?.gender || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Ngày sinh</span>
+                                  <strong>
+                                    {formatDate(
+                                      String(selectedRow?.dateOfBirth || ""),
+                                    )}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Địa chỉ</span>
+                                  <strong>
+                                    {String(selectedRow?.address || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Ghi chú</span>
+                                  <strong>
+                                    {String(selectedRow?.notes || "--")}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Ngày cập nhật</span>
+                                  <strong>
+                                    {formatDateTime(
+                                      String(selectedRow?.lastUpdated || ""),
+                                    )}
+                                  </strong>
+                                </div>
+                              </div>
+                            </section>
+                          </div>
+                        </div>
+                      )}
+
+                      {detailTab === "students" && (
+                        <div className="lecturer-list-panel">
+                          <div className="lecturer-list-header">
+                            <h4>Danh sách sinh viên</h4>
+                            <span>
+                              {detailStudents.length} / {detailTotalCount}
+                            </span>
+                          </div>
+                          {detailStudents.length === 0 ? (
+                            <div className="lecturer-empty-state">
+                              Không có sinh viên nào.
+                            </div>
+                          ) : (
+                            <div className="lecturer-item-list">
+                              {detailStudents.map((item) => (
+                                <div
+                                  key={getStudentCode(item)}
+                                  className="lecturer-item-card"
+                                >
+                                  <div className="lecturer-item-head">
+                                    <div className="lecturer-item-avatar-wrap">
+                                      {item.student?.studentImage ? (
+                                        <img
+                                          src={getAvatarUrl(
+                                            String(item.student.studentImage),
+                                          )}
+                                          alt={getStudentName(item)}
+                                          className="lecturer-item-avatar"
+                                        />
+                                      ) : (
+                                        <div className="lecturer-item-avatar lecturer-item-avatar-fallback">
+                                          {getStudentName(item)
+                                            .trim()
+                                            .charAt(0)
+                                            .toUpperCase()}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="lecturer-item-head-text">
+                                      <h5>{getStudentName(item)}</h5>
+                                      <p>
+                                        {getStudentCode(item)} •{" "}
+                                        {String(item.student?.userCode || "--")}
+                                      </p>
+                                    </div>
+
+                                    <span className="lecturer-status lecturer-status-approved">
+                                      {getStatusText(item.topic?.status)}
+                                    </span>
+                                  </div>
+
+                                  <div className="lecturer-item-meta-grid">
+                                    <div className="lecturer-item-meta">
+                                      <span>Lớp</span>
+                                      <strong>
+                                        {String(
+                                          item.student?.classCode || "--",
+                                        )}
+                                      </strong>
+                                    </div>
+                                    <div className="lecturer-item-meta">
+                                      <span>Khoa</span>
+                                      <strong>
+                                        {String(
+                                          item.student?.departmentCode || "--",
+                                        )}
+                                      </strong>
+                                    </div>
+                                    <div className="lecturer-item-meta">
+                                      <span>GPA</span>
+                                      <strong>
+                                        {String(item.student?.gpa ?? "--")}
+                                      </strong>
+                                    </div>
+                                    <div className="lecturer-item-meta">
+                                      <span>Tiến độ</span>
+                                      <strong>
+                                        {item.currentMilestone
+                                          ?.milestoneTemplateCode
+                                          ? getMilestoneLabel(
+                                              item.currentMilestone
+                                                .milestoneTemplateCode,
+                                            )
+                                          : "--"}
+                                      </strong>
+                                    </div>
+                                  </div>
+
+                                  <div className="lecturer-item-topic">
+                                    <span>Đề tài</span>
+                                    <p>{getTopicTitle(item)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {detailTab === "topics" && (
+                        <div className="lecturer-list-panel">
+                          <div className="lecturer-list-header">
+                            <h4>Danh sách đề tài</h4>
+                            <span>
+                              {detailTopics.length} / {detailTotalCount}
+                            </span>
+                          </div>
+                          {detailTopics.length === 0 ? (
+                            <div className="lecturer-empty-state">
+                              Không có đề tài nào.
+                            </div>
+                          ) : (
+                            <div className="lecturer-item-list">
+                              {detailTopics.map((item) => {
+                                const progress = calcProgress(
+                                  item.currentMilestone,
+                                  5,
+                                );
+                                return (
+                                  <div
+                                    key={getTopicCode(item)}
+                                    className="lecturer-item-card"
+                                  >
+                                    <div className="lecturer-topic-head">
+                                      <div>
+                                        <h5>{getTopicTitle(item)}</h5>
+                                        <p>{getTopicCode(item)}</p>
+                                      </div>
+                                      <span className="lecturer-status lecturer-status-pending">
+                                        {getStatusText(item.topic?.status)}
+                                      </span>
+                                    </div>
+
+                                    <div className="lecturer-topic-summary">
+                                      <span>Mô tả</span>
+                                      <p>
+                                        {String(item.topic?.summary || "--")}
+                                      </p>
+                                    </div>
+
+                                    <div className="lecturer-topic-meta-grid">
+                                      <div className="lecturer-item-meta">
+                                        <span>Loại</span>
+                                        <strong>
+                                          {getTopicTypeLabel(item.topic?.type)}
+                                        </strong>
+                                      </div>
+                                      <div className="lecturer-item-meta">
+                                        <span>Ngày tạo</span>
+                                        <strong>
+                                          {formatDateTime(
+                                            item.topic?.createdAt,
+                                          )}
+                                        </strong>
+                                      </div>
+                                      <div className="lecturer-item-meta">
+                                        <span>Milestone</span>
+                                        <strong>
+                                          {item.currentMilestone
+                                            ?.milestoneTemplateCode
+                                            ? getMilestoneLabel(
+                                                item.currentMilestone
+                                                  .milestoneTemplateCode,
+                                              )
+                                            : "--"}
+                                        </strong>
+                                      </div>
+                                      <div className="lecturer-item-meta">
+                                        <span>Tiến độ</span>
+                                        <strong>{progress}%</strong>
+                                      </div>
+                                    </div>
+
+                                    <div className="lecturer-topic-tags">
+                                      {(item.topicTags || []).map((tag) => (
+                                        <span
+                                          key={tag.tagCode}
+                                          className="lecturer-tag"
+                                        >
+                                          {tag.tagName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="lecturer-edit-layout">
+                {editFieldSections.map((section) => (
+                  <section
+                    key={section.title}
+                    className="lecturer-edit-section"
+                  >
+                    <header className="lecturer-edit-section-header">
+                      <h4>{section.title}</h4>
+                      <p>{section.description}</p>
+                    </header>
+                    <div className="lecturer-form-grid">
+                      {section.fields.map((fieldName) => {
+                        const field = getFieldDefinition(fieldName);
+                        const value = formValues[field.name] ?? "";
+                        const isTextarea = field.type === "textarea";
+
+                        return (
+                          <label
+                            key={field.name}
+                            className={
+                              isTextarea
+                                ? "lecturer-form-field lecturer-form-field-full"
+                                : "lecturer-form-field"
+                            }
+                          >
+                            <span>
+                              {field.label}
+                              {field.required ? " *" : ""}
+                            </span>
+                            {isTextarea ? (
+                              <textarea
+                                value={value}
+                                onChange={(event) =>
+                                  setFormValues((prev) => ({
+                                    ...prev,
+                                    [field.name]: event.target.value,
+                                  }))
+                                }
+                                rows={4}
+                              />
+                            ) : (
+                              <input
+                                type={
+                                  field.type === "number"
+                                    ? "number"
+                                    : field.type === "date"
+                                      ? "date"
+                                      : "text"
+                                }
+                                value={value}
+                                onChange={(event) =>
+                                  setFormValues((prev) => ({
+                                    ...prev,
+                                    [field.name]: event.target.value,
+                                  }))
+                                }
+                              />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+
+            {activeModal !== "detail" && (
+              <div className="lecturer-form-actions">
                 <button
                   type="button"
+                  className="lecturer-cancel-btn"
+                  onClick={() => setActiveModal(null)}
+                  disabled={isSubmitting}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  className="lecturer-save-btn"
                   onClick={() => void handleSubmit()}
                   disabled={isSubmitting}
-                  style={{
-                    border: "none",
-                    background: "#f37021",
-                    color: "#fff",
-                    borderRadius: 8,
-                    padding: "9px 14px",
-                    fontWeight: 600,
-                  }}
                 >
                   {isSubmitting ? "Đang lưu..." : "Lưu"}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

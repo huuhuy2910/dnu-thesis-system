@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using ThesisManagement.Api.Application.Command.Tags;
 using ThesisManagement.Api.Application.Query.Tags;
+using ThesisManagement.Api.DTOs.DataExchange;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.Tags.Command;
 using ThesisManagement.Api.DTOs.Tags.Query;
@@ -17,6 +18,7 @@ namespace ThesisManagement.Api.Controllers
         private readonly IGetTagByCodeQuery _getTagByCodeQuery;
         private readonly ISearchTagsQuery _searchTagsQuery;
         private readonly ICreateTagCommand _createTagCommand;
+        private readonly IImportTagsCommand _importTagsCommand;
         private readonly IUpdateTagCommand _updateTagCommand;
         private readonly IDeleteTagCommand _deleteTagCommand;
 
@@ -30,6 +32,7 @@ namespace ThesisManagement.Api.Controllers
             IGetTagByCodeQuery getTagByCodeQuery,
             ISearchTagsQuery searchTagsQuery,
             ICreateTagCommand createTagCommand,
+            IImportTagsCommand importTagsCommand,
             IUpdateTagCommand updateTagCommand,
             IDeleteTagCommand deleteTagCommand) : base(uow, codeGen, mapper)
         {
@@ -39,6 +42,7 @@ namespace ThesisManagement.Api.Controllers
             _getTagByCodeQuery = getTagByCodeQuery;
             _searchTagsQuery = searchTagsQuery;
             _createTagCommand = createTagCommand;
+            _importTagsCommand = importTagsCommand;
             _updateTagCommand = updateTagCommand;
             _deleteTagCommand = deleteTagCommand;
         }
@@ -65,6 +69,20 @@ namespace ThesisManagement.Api.Controllers
                 return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
             return Ok(ApiResponse<TagReadDto>.SuccessResponse(result.Data));
+        }
+
+        [HttpPost("import")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Import([FromForm] DataImportRequestDto request)
+        {
+            if (request.File == null || request.File.Length == 0)
+                return BadRequest(ApiResponse<object>.Fail("File is required", 400));
+
+            var result = await _importTagsCommand.ExecuteAsync(request.File, request.Format);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
+
+            return Ok(ApiResponse<DataImportResultDto>.SuccessResponse(result.Data));
         }
 
         [HttpGet("get-update/{id}")]
