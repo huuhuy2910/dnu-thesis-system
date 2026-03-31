@@ -6,6 +6,9 @@ using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
 using ThesisManagement.Api.DTOs.CommitteeMembers.Query;
 using ThesisManagement.Api.DTOs.DefenseAssignments.Query;
+using ThesisManagement.Api.DTOs.DefenseTermLecturers.Query;
+using ThesisManagement.Api.DTOs.DefenseTermStudents.Query;
+using ThesisManagement.Api.DTOs.DefenseTerms.Query;
 using ThesisManagement.Api.DTOs.Departments.Query;
 using ThesisManagement.Api.DTOs.LecturerProfiles.Query;
 using ThesisManagement.Api.DTOs.LecturerTags.Query;
@@ -498,6 +501,88 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrEmpty(filter.Role))
                 query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<DefenseTerm> ApplyFilter(this IQueryable<DefenseTerm> query, DefenseTermFilter filter)
+        {
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                query = query.Where(x => x.Name.Contains(filter.Search) ||
+                                         (x.Status != null && x.Status.Contains(filter.Search)) ||
+                                         (x.ConfigJson != null && x.ConfigJson.Contains(filter.Search)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Name))
+                query = query.Where(x => x.Name.Contains(filter.Name));
+
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+                query = query.Where(x => x.Status == filter.Status);
+
+            if (filter.StartFromDate.HasValue)
+                query = query.Where(x => x.StartDate >= filter.StartFromDate.Value);
+
+            if (filter.StartToDate.HasValue)
+                query = query.Where(x => x.StartDate <= filter.StartToDate.Value);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<DefenseTermStudent> ApplyFilter(this IQueryable<DefenseTermStudent> query, DefenseTermStudentFilter filter)
+        {
+            if (filter.DefenseTermId.HasValue)
+                query = query.Where(x => x.DefenseTermId == filter.DefenseTermId.Value);
+
+            if (filter.StudentProfileID.HasValue)
+                query = query.Where(x => x.StudentProfileID == filter.StudentProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.StudentCode))
+                query = query.Where(x => x.StudentCode == filter.StudentCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.UserCode))
+                query = query.Where(x => x.UserCode == filter.UserCode);
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<DefenseTermLecturer> ApplyFilter(this IQueryable<DefenseTermLecturer> query, DefenseTermLecturerFilter filter)
+        {
+            if (filter.DefenseTermId.HasValue)
+                query = query.Where(x => x.DefenseTermId == filter.DefenseTermId.Value);
+
+            if (filter.LecturerProfileID.HasValue)
+                query = query.Where(x => x.LecturerProfileID == filter.LecturerProfileID.Value);
+
+            if (!string.IsNullOrWhiteSpace(filter.LecturerCode))
+                query = query.Where(x => x.LecturerCode == filter.LecturerCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.UserCode))
+                query = query.Where(x => x.UserCode == filter.UserCode);
+
+            if (!string.IsNullOrWhiteSpace(filter.Role))
+                query = query.Where(x => x.Role != null && x.Role.Contains(filter.Role));
+
+            if (filter.IsPrimary.HasValue)
+                query = query.Where(x => x.IsPrimary == filter.IsPrimary.Value);
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
