@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -279,10 +279,10 @@ const CommitteeManagement: React.FC = () => {
   } | null>(null);
   const [manualReadOnly, setManualReadOnly] = useState(false);
 
-  const notifyError = (message: string) => addToast(message, "error");
-  const notifySuccess = (message: string) => addToast(message, "success");
-  const notifyWarning = (message: string) => addToast(message, "warning");
-  const notifyInfo = (message: string) => addToast(message, "info");
+  const notifyError = useCallback((message: string) => addToast(message, "error"), [addToast]);
+  const notifySuccess = useCallback((message: string) => addToast(message, "success"), [addToast]);
+  const notifyWarning = useCallback((message: string) => addToast(message, "warning"), [addToast]);
+  const notifyInfo = useCallback((message: string) => addToast(message, "info"), [addToast]);
 
   const [varianceThreshold, setVarianceThreshold] = useState(1.5);
   const [currentVariance, setCurrentVariance] = useState(1.7);
@@ -318,12 +318,22 @@ const CommitteeManagement: React.FC = () => {
   const [exportJobs, setExportJobs] = useState<ExportJob[]>([]);
   const [publishBatches, setPublishBatches] = useState<PublishBatch[]>([]);
   const [scoreRows, setScoreRows] = useState<ScoreStatisticRow[]>([]);
+  const selectedRoomsRef = useRef(selectedRooms);
+  const autoStartDateRef = useRef(autoStartDate);
+
+  useEffect(() => {
+    selectedRoomsRef.current = selectedRooms;
+  }, [selectedRooms]);
+
+  useEffect(() => {
+    autoStartDateRef.current = autoStartDate;
+  }, [autoStartDate]);
 
   const defensePeriodId = "2026.1";
   const defensePeriodBase = `/v1/defense-periods/${encodeURIComponent(defensePeriodId)}`;
   const makeIdempotencyKey = (prefix: string) =>
     `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-  const adminApi = {
+  const adminApi = useMemo(() => ({
     sync: (idempotencyKey?: string) =>
       fetchData<ApiResponse<Record<string, unknown>>>(
         `${defensePeriodBase}/sync`,
@@ -674,8 +684,8 @@ const CommitteeManagement: React.FC = () => {
       `${defensePeriodBase}/reports/final-term?councilId=${encodeURIComponent(councilId)}&format=${format}`,
     syncErrorsExportUrl: (format: "xlsx" | "csv" | "json") =>
       `${defensePeriodBase}/sync/errors/export?format=${format}`,
-  };
-  const parseApiEnvelope = <T,>(
+  }), [defensePeriodBase]);
+  const parseApiEnvelope = useCallback(<T,>(
     response: ApiResponse<T> | null | undefined,
   ) => {
     if (!response) {
@@ -704,7 +714,7 @@ const CommitteeManagement: React.FC = () => {
       }
     }
     return { ok: Boolean(response.success), data: response.data ?? null };
-  };
+  }, [notifyInfo]);
 
   const [exportMinutes, setExportMinutes] = useState(true);
   const [exportScores, setExportScores] = useState(true);
@@ -948,10 +958,10 @@ const CommitteeManagement: React.FC = () => {
             concurrencyToken: item.concurrencyToken
               ? String(item.concurrencyToken)
               : undefined,
-            room: item.room ?? selectedRooms[0] ?? "",
+            room: item.room ?? selectedRoomsRef.current[0] ?? "",
             defenseDate: item.defenseDate
               ? String(item.defenseDate).slice(0, 10)
-              : autoStartDate,
+              : autoStartDateRef.current,
             session: "Sang",
             slotId: `${item.committeeCode ?? `HD-${index + 1}`}-FULLDAY`,
             councilTags: item.councilTags ?? [],
