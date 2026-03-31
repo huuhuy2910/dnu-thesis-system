@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ThesisManagement.Api.Models
 {
     public class DefenseTerm
@@ -9,5 +11,8 @@ namespace ThesisManagement.Api.Models
         public string Status { get; set; } = "Draft";
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdated { get; set; }
+
+        public ICollection<DefenseTermStudent>? DefenseTermStudents { get; set; }
+        public ICollection<DefenseTermLecturer>? DefenseTermLecturers { get; set; }
     }
 }

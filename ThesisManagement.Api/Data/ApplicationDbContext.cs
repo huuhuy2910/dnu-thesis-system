@@ -34,6 +34,8 @@ namespace ThesisManagement.Api.Data
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
         public DbSet<DefenseTerm> DefenseTerms => Set<DefenseTerm>();
+        public DbSet<DefenseTermStudent> DefenseTermStudents => Set<DefenseTermStudent>();
+        public DbSet<DefenseTermLecturer> DefenseTermLecturers => Set<DefenseTermLecturer>();
         public DbSet<SyncAuditLog> SyncAuditLogs => Set<SyncAuditLog>();
         public DbSet<LecturerBusyTime> LecturerBusyTimes => Set<LecturerBusyTime>();
         public DbSet<DefenseGroup> DefenseGroups => Set<DefenseGroup>();
@@ -541,7 +543,10 @@ namespace ThesisManagement.Api.Data
             // DefenseTerms
             modelBuilder.Entity<DefenseTerm>(b =>
             {
-                b.ToTable("DEFENSETERMS");
+                b.ToTable("DEFENSETERMS", tb =>
+                {
+                    tb.HasTrigger("TR_DEFENSETERMS_BI");
+                });
                 b.HasKey(x => x.DefenseTermId);
                 b.Property(x => x.Name).HasMaxLength(200).IsRequired();
                 b.Property(x => x.StartDate);
@@ -549,6 +554,92 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Draft");
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
+            // DefenseTermStudents
+            modelBuilder.Entity<DefenseTermStudent>(b =>
+            {
+                b.ToTable("DEFENSETERMSTUDENTS", tb =>
+                {
+                    tb.HasTrigger("TR_DEFENSETERMSTUDENTS_BI");
+                });
+                b.HasKey(x => x.DefenseTermStudentID);
+                b.Property(x => x.DefenseTermStudentID).HasDefaultValueSql("DEFENSETERMSTUDENTS_SEQ.NEXTVAL");
+                b.Property(x => x.StudentCode).HasMaxLength(30).IsRequired();
+                b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasOne(x => x.DefenseTerm)
+                    .WithMany(x => x.DefenseTermStudents)
+                    .HasForeignKey(x => x.DefenseTermId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.StudentProfile)
+                    .WithMany()
+                    .HasForeignKey(x => x.StudentProfileID)
+                    .HasPrincipalKey(x => x.StudentProfileID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne<StudentProfile>()
+                    .WithMany()
+                    .HasForeignKey(x => x.StudentCode)
+                    .HasPrincipalKey(x => x.StudentCode)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.StudentUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserCode)
+                    .HasPrincipalKey(x => x.UserCode)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.DefenseTermId, x.StudentProfileID }).IsUnique();
+                b.HasIndex(x => new { x.DefenseTermId, x.StudentCode }).IsUnique();
+                b.HasIndex(x => new { x.DefenseTermId, x.UserCode }).IsUnique();
+            });
+
+            // DefenseTermLecturers
+            modelBuilder.Entity<DefenseTermLecturer>(b =>
+            {
+                b.ToTable("DEFENSETERMLECTURERS", tb =>
+                {
+                    tb.HasTrigger("TR_DEFENSETERMLECTURERS_BI");
+                });
+                b.HasKey(x => x.DefenseTermLecturerID);
+                b.Property(x => x.DefenseTermLecturerID).HasDefaultValueSql("DEFENSETERMLECTURERS_SEQ.NEXTVAL");
+                b.Property(x => x.LecturerCode).HasMaxLength(30).IsRequired();
+                b.Property(x => x.UserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.Role).HasMaxLength(100);
+                b.Property(x => x.IsPrimary).HasConversion<int>().HasDefaultValue(0);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasOne(x => x.DefenseTerm)
+                    .WithMany(x => x.DefenseTermLecturers)
+                    .HasForeignKey(x => x.DefenseTermId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.LecturerProfile)
+                    .WithMany()
+                    .HasForeignKey(x => x.LecturerProfileID)
+                    .HasPrincipalKey(x => x.LecturerProfileID)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne<LecturerProfile>()
+                    .WithMany()
+                    .HasForeignKey(x => x.LecturerCode)
+                    .HasPrincipalKey(x => x.LecturerCode)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.LecturerUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserCode)
+                    .HasPrincipalKey(x => x.UserCode)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.DefenseTermId, x.LecturerProfileID }).IsUnique();
+                b.HasIndex(x => new { x.DefenseTermId, x.LecturerCode }).IsUnique();
+                b.HasIndex(x => new { x.DefenseTermId, x.UserCode }).IsUnique();
             });
 
             // SyncAuditLogs
