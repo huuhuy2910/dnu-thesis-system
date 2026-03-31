@@ -4,6 +4,7 @@ export interface Topic {
   title: string;
   summary: string;
   type: string;
+  defenseTermId?: number | null;
   proposerUserID: number;
   proposerUserCode: string;
   proposerStudentProfileID: number;

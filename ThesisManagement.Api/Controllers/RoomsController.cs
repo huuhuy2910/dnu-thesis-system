@@ -247,7 +247,7 @@ namespace ThesisManagement.Api.Controllers
 
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> Import([FromForm] IFormFile file, [FromQuery] bool upsert = true)
+        public async Task<IActionResult> Import(IFormFile file, [FromQuery] bool upsert = true)
         {
             if (file == null || file.Length == 0)
             {

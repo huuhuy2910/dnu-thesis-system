@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**;tests/**;tests/**/bin/**;tests/**/obj/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**\*" />
     <EmbeddedResource Remove="tests\**\*" />
     <None Remove="tests\**\*" />
   </ItemGroup>

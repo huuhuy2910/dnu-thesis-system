@@ -45,7 +45,8 @@ namespace ThesisManagement.Api.Mappings
                 .ForMember(dest => dest.CatalogTopicID, opt => opt.MapFrom(src => src.CatalogTopicID))
                 .ForMember(dest => dest.CatalogTopicCode, opt => opt.MapFrom(src => src.CatalogTopicCode))
                 .ForMember(dest => dest.DepartmentID, opt => opt.MapFrom(src => src.DepartmentID))
-                .ForMember(dest => dest.DepartmentCode, opt => opt.MapFrom(src => src.DepartmentCode));
+                .ForMember(dest => dest.DepartmentCode, opt => opt.MapFrom(src => src.DepartmentCode))
+                .ForMember(dest => dest.DefenseTermId, opt => opt.MapFrom(src => src.DefenseTermId));
             CreateMap<ProgressMilestone, ProgressMilestoneReadDto>()
                 .ForMember(dest => dest.CompletedAt1, opt => opt.MapFrom(src => src.CompletedAt1))
                 .ForMember(dest => dest.CompletedAt2, opt => opt.MapFrom(src => src.CompletedAt2))

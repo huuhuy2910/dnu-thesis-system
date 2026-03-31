@@ -20,13 +20,17 @@ import {
 } from "lucide-react";
 import {
   type WorkflowDetailResponse,
-  type WorkflowMutationResponse,
-  type WorkflowRollbackResponse,
+  type DefenseTermOption,
   type WorkflowResubmitRequest,
   type WorkflowTopic,
 } from "../../types/workflow-topic";
-
-const WORKFLOW_BASE = "/workflows/topics";
+import {
+  getDefenseTermList,
+  getTopicWorkflowDetail,
+  resubmitTopicWorkflow,
+  rollbackTopicWorkflowMyTestData,
+  submitTopicWorkflow,
+} from "../../services/topic-workflow.service";
 
 type CatalogTopicWithTags = {
   catalogTopicID: number;
@@ -65,55 +69,7 @@ function ensureWorkflowSuccess<T>(
 async function getWorkflowTopicDetailApi(
   topicId: number,
 ): Promise<WorkflowDetailResponse> {
-  const envelope = await fetchData<ApiResponse<WorkflowDetailResponse>>(
-    `${WORKFLOW_BASE}/detail/${topicId}`,
-    { method: "GET" },
-  );
-  return ensureWorkflowSuccess(
-    envelope,
-    "Không thể tải chi tiết workflow đề tài.",
-  ).data;
-}
-
-async function submitTopicApi(
-  payload: WorkflowResubmitRequest,
-): Promise<WorkflowMutationResponse> {
-  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
-    `${WORKFLOW_BASE}/submit`,
-    {
-      method: "POST",
-      body: payload,
-    },
-  );
-  return ensureWorkflowSuccess(envelope, "Không thể gửi đề tài lần đầu.").data;
-}
-
-async function resubmitWorkflowTopicApi(
-  payload: WorkflowResubmitRequest,
-): Promise<WorkflowMutationResponse> {
-  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
-    `${WORKFLOW_BASE}/resubmit`,
-    {
-      method: "POST",
-      body: payload,
-    },
-  );
-  return ensureWorkflowSuccess(envelope, "Không thể gửi đề tài theo workflow.")
-    .data;
-}
-
-async function rollbackWorkflowMyTestDataApi(
-  topicCode?: string,
-): Promise<WorkflowRollbackResponse> {
-  const query = topicCode ? `?topicCode=${encodeURIComponent(topicCode)}` : "";
-  const envelope = await fetchData<ApiResponse<WorkflowRollbackResponse>>(
-    `${WORKFLOW_BASE}/rollback-my-test-data${query}`,
-    { method: "DELETE" },
-  );
-  return ensureWorkflowSuccess(
-    envelope,
-    "Không thể rollback dữ liệu test workflow.",
-  ).data;
+  return getTopicWorkflowDetail(topicId);
 }
 
 async function getCatalogTopicsWithTagsApi(input?: {
@@ -162,6 +118,10 @@ const TopicRegistration: React.FC = () => {
     null,
   );
   const [tags, setTags] = useState<Tag[]>([]);
+  const [defenseTerms, setDefenseTerms] = useState<DefenseTermOption[]>([]);
+  const [selectedDefenseTermId, setSelectedDefenseTermId] = useState<
+    number | null
+  >(null);
   const [selectedTagInfo, setSelectedTagInfo] = useState<Tag | null>(null);
   const [selectedTagIDs, setSelectedTagIDs] = useState<number[]>([]);
   const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
@@ -201,7 +161,7 @@ const TopicRegistration: React.FC = () => {
   const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
-      const [catalogRes, lecturerRes, departmentRes, tagRes] =
+      const [catalogRes, lecturerRes, departmentRes, tagRes, defenseTermRes] =
         await Promise.all([
           getCatalogTopicsWithTagsApi({
             assignedStatus: "Chưa giao",
@@ -211,6 +171,7 @@ const TopicRegistration: React.FC = () => {
           fetchData("/LecturerProfiles/get-list"),
           fetchData("/Departments/get-list"),
           fetchData("/Tags/list"),
+          getDefenseTermList(),
         ]);
 
       setCatalogTopics(catalogRes || []);
@@ -257,6 +218,12 @@ const TopicRegistration: React.FC = () => {
       }
 
       setTags((tagRes as ApiResponse<Tag[]>)?.data || []);
+      setDefenseTerms(defenseTermRes || []);
+      setSelectedDefenseTermId((prev) =>
+        prev && defenseTermRes.some((term) => term.defenseTermId === prev)
+          ? prev
+          : null,
+      );
 
       // Fetch topic code template
       try {
@@ -340,6 +307,7 @@ const TopicRegistration: React.FC = () => {
     setSelectedTagInfo(null);
     setFilteredLecturers([]);
     setSelectedTagIDs([]);
+    setSelectedDefenseTermId(null);
     setWorkflowDetail(null);
     setIsEditing(false);
   };
@@ -351,6 +319,7 @@ const TopicRegistration: React.FC = () => {
       title: wfTopic.title,
       summary: wfTopic.summary,
       type: wfTopic.type,
+      defenseTermId: wfTopic.defenseTermId,
       proposerUserID: wfTopic.proposerUserID,
       proposerUserCode: wfTopic.proposerUserCode,
       proposerStudentProfileID: wfTopic.proposerStudentProfileID,
@@ -378,6 +347,7 @@ const TopicRegistration: React.FC = () => {
     async (topicId: number) => {
       const detail = await getWorkflowTopicDetailApi(topicId);
       setWorkflowDetail(detail);
+      setSelectedDefenseTermId(detail.topic.defenseTermId ?? null);
 
       const firstTagCode = detail.tagCodes[0] ?? null;
       setExistingTopic(toTopicModel(detail.topic, firstTagCode));
@@ -415,6 +385,7 @@ const TopicRegistration: React.FC = () => {
       try {
         const detail = await getWorkflowTopicDetailApi(existingTopic.topicID);
         setWorkflowDetail(detail);
+        setSelectedDefenseTermId(detail.topic.defenseTermId ?? null);
       } catch (err) {
         console.error("Error loading workflow detail:", err);
       }
@@ -432,6 +403,7 @@ const TopicRegistration: React.FC = () => {
 
       const detail = await getWorkflowTopicDetailApi(existingTopic.topicID);
       const topicData = detail.topic;
+      setSelectedDefenseTermId(topicData.defenseTermId ?? null);
 
       // Populate form with existing data
       setEditFormData({
@@ -818,6 +790,24 @@ const TopicRegistration: React.FC = () => {
     }
   };
 
+  const getWorkflowFriendlyError = (
+    err: unknown,
+    fallbackMessage: string,
+  ): string => {
+    const rawMessage =
+      err instanceof FetchDataError
+        ? `${err.message} ${JSON.stringify(err.data ?? "")}`
+        : err instanceof Error
+          ? err.message
+          : "";
+
+    if (/defense\s*term|dot\s*bao\s*ve|đợt\s*bảo\s*vệ/i.test(rawMessage)) {
+      return "Đợt bảo vệ đã chọn không hợp lệ hoặc không còn khả dụng. Vui lòng chọn lại đợt bảo vệ.";
+    }
+
+    return err instanceof Error ? err.message : fallbackMessage;
+  };
+
   // Handle form submission - only for creating new topics
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -877,6 +867,11 @@ const TopicRegistration: React.FC = () => {
         return;
       }
 
+      if (!selectedDefenseTermId) {
+        setError("Vui lòng chọn đợt bảo vệ trước khi gửi đề tài.");
+        return;
+      }
+
       const effectiveTagIds =
         selectedTagIDs.length > 0
           ? selectedTagIDs
@@ -892,6 +887,7 @@ const TopicRegistration: React.FC = () => {
         title: formData.title,
         summary: formData.summary,
         type: formData.type,
+        defenseTermId: selectedDefenseTermId,
         proposerUserID: auth.user?.userID || 0,
         proposerUserCode: auth.user?.userCode || "",
         proposerStudentProfileID,
@@ -913,17 +909,15 @@ const TopicRegistration: React.FC = () => {
 
       const workflowResult =
         submitPayload.topicID === null && !submitPayload.topicCode
-          ? await submitTopicApi(submitPayload)
-          : await resubmitWorkflowTopicApi(submitPayload);
+          ? await submitTopicWorkflow(submitPayload)
+          : await resubmitTopicWorkflow(submitPayload);
       await syncWorkflowTopicById(workflowResult.topic.topicID);
 
       setSuccess(workflowResult.message || "Đăng ký đề tài thành công!");
       setShowSuccessModal(true);
     } catch (error) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Có lỗi xảy ra khi xử lý đề tài",
+        getWorkflowFriendlyError(error, "Có lỗi xảy ra khi xử lý đề tài"),
       );
       console.error("Error submitting topic:", error);
     } finally {
@@ -945,6 +939,11 @@ const TopicRegistration: React.FC = () => {
 
       if (selectedTagIDs.length === 0) {
         setError("Vui lòng chọn ít nhất một Tag");
+        return;
+      }
+
+      if (!selectedDefenseTermId) {
+        setError("Vui lòng chọn đợt bảo vệ trước khi cập nhật đề tài.");
         return;
       }
 
@@ -986,6 +985,7 @@ const TopicRegistration: React.FC = () => {
         title: editFormData.title,
         summary: editFormData.summary,
         type: editFormData.type,
+        defenseTermId: selectedDefenseTermId,
         proposerUserID: existingTopic.proposerUserID,
         proposerUserCode: existingTopic.proposerUserCode,
         proposerStudentProfileID: existingTopic.proposerStudentProfileID,
@@ -1007,7 +1007,7 @@ const TopicRegistration: React.FC = () => {
         studentNote: "Em đã cập nhật theo góp ý",
       };
 
-      const workflowResult = await resubmitWorkflowTopicApi(resubmitPayload);
+      const workflowResult = await resubmitTopicWorkflow(resubmitPayload);
       await syncWorkflowTopicById(workflowResult.topic.topicID);
 
       setSuccess(workflowResult.message || "Cập nhật đề tài thành công!");
@@ -1015,9 +1015,7 @@ const TopicRegistration: React.FC = () => {
       setIsEditing(false);
     } catch (error) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Có lỗi xảy ra khi cập nhật đề tài",
+        getWorkflowFriendlyError(error, "Có lỗi xảy ra khi cập nhật đề tài"),
       );
       console.error("Error updating topic:", error);
     } finally {
@@ -1038,7 +1036,7 @@ const TopicRegistration: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const result = await rollbackWorkflowMyTestDataApi(
+      const result = await rollbackTopicWorkflowMyTestData(
         existingTopic.topicCode,
       );
       setSuccess(result.message || "Rollback theo topic thành công.");
@@ -1069,7 +1067,7 @@ const TopicRegistration: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const result = await rollbackWorkflowMyTestDataApi();
+      const result = await rollbackTopicWorkflowMyTestData();
       setSuccess(result.message || "Rollback toàn bộ dữ liệu test thành công.");
       setExistingTopic(null);
       setWorkflowDetail(null);
@@ -1356,6 +1354,63 @@ const TopicRegistration: React.FC = () => {
                 cursor: "not-allowed",
               }}
             />
+          </div>
+
+          {/* Defense Term */}
+          <div style={{ marginBottom: "24px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: "600",
+                color: "#333",
+                fontSize: "16px",
+              }}
+            >
+              <FileText
+                size={16}
+                style={{ marginRight: "8px", verticalAlign: "middle" }}
+              />
+              Đợt bảo vệ *
+            </label>
+            <select
+              value={selectedDefenseTermId ?? ""}
+              onChange={(e) =>
+                setSelectedDefenseTermId(
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
+              required
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                border: "2px solid #ddd",
+                borderRadius: "8px",
+                fontSize: "16px",
+                backgroundColor: "#fff",
+                transition: "border-color 0.3s ease",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#f37021")}
+              onBlur={(e) => (e.target.style.borderColor = "#ddd")}
+            >
+              <option value="">-- Chọn đợt bảo vệ --</option>
+              {defenseTerms.map((term) => (
+                <option key={term.defenseTermId} value={term.defenseTermId}>
+                  {term.defenseTermCode} - {term.defenseTermName}
+                </option>
+              ))}
+            </select>
+            {defenseTerms.length === 0 && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  fontSize: "12px",
+                  color: "#f44336",
+                }}
+              >
+                Hiện chưa có đợt bảo vệ khả dụng, vui lòng thử lại sau.
+              </div>
+            )}
           </div>
 
           {/* Tags */}
@@ -2768,6 +2823,63 @@ const TopicRegistration: React.FC = () => {
               cursor: "not-allowed",
             }}
           />
+        </div>
+
+        {/* Defense Term */}
+        <div style={{ marginBottom: "24px" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "8px",
+              fontWeight: "600",
+              color: "#333",
+              fontSize: "16px",
+            }}
+          >
+            <FileText
+              size={16}
+              style={{ marginRight: "8px", verticalAlign: "middle" }}
+            />
+            Đợt bảo vệ *
+          </label>
+          <select
+            value={selectedDefenseTermId ?? ""}
+            onChange={(e) =>
+              setSelectedDefenseTermId(
+                e.target.value ? Number(e.target.value) : null,
+              )
+            }
+            required
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              border: "2px solid #ddd",
+              borderRadius: "8px",
+              fontSize: "16px",
+              backgroundColor: "#fff",
+              transition: "border-color 0.3s ease",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#f37021")}
+            onBlur={(e) => (e.target.style.borderColor = "#ddd")}
+          >
+            <option value="">-- Chọn đợt bảo vệ --</option>
+            {defenseTerms.map((term) => (
+              <option key={term.defenseTermId} value={term.defenseTermId}>
+                {term.defenseTermCode} - {term.defenseTermName}
+              </option>
+            ))}
+          </select>
+          {defenseTerms.length === 0 && (
+            <div
+              style={{
+                marginTop: "8px",
+                fontSize: "12px",
+                color: "#f44336",
+              }}
+            >
+              Hiện chưa có đợt bảo vệ khả dụng, vui lòng thử lại sau.
+            </div>
+          )}
         </div>
 
         {/* Submit Button */}

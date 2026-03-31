@@ -20,6 +20,7 @@ namespace ThesisManagement.Api.DTOs.Topics.Query
         string? CatalogTopicCode,
         int? DepartmentID,
         string? DepartmentCode,
+        int? DefenseTermId,
         string Status,
         int? ResubmitCount,
         DateTime? CreatedAt,

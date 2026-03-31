@@ -1,59 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw, Eye } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
 import { useToast } from "../../context/useToast";
-import type { ApiResponse } from "../../types/api";
 import {
   type WorkflowAuditFilter,
   type WorkflowAuditItem,
 } from "../../types/workflow-topic";
+import { getTopicWorkflowAudits } from "../../services/topic-workflow.service";
 import "../admin/Dashboard.css";
-
-const WORKFLOW_BASE = "/workflows/topics";
-
-function ensureWorkflowSuccess<T>(
-  envelope: ApiResponse<T>,
-  fallbackMessage: string,
-): { data: T; totalCount: number } {
-  if (
-    !envelope.success ||
-    envelope.data === null ||
-    envelope.data === undefined
-  ) {
-    throw new Error(envelope.message || envelope.title || fallbackMessage);
-  }
-  return {
-    data: envelope.data,
-    totalCount: Number(envelope.totalCount || 0),
-  };
-}
-
-async function getWorkflowTopicAuditsApi(
-  filter: WorkflowAuditFilter,
-): Promise<{ items: WorkflowAuditItem[]; totalCount: number }> {
-  const params = new URLSearchParams();
-
-  Object.entries(filter).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") return;
-    params.append(key, String(value));
-  });
-
-  const query = params.toString();
-  const envelope = await fetchData<ApiResponse<WorkflowAuditItem[]>>(
-    `${WORKFLOW_BASE}/audits${query ? `?${query}` : ""}`,
-    { method: "GET" },
-  );
-
-  const { data, totalCount } = ensureWorkflowSuccess(
-    envelope,
-    "Không thể tải lịch sử workflow audit.",
-  );
-
-  return {
-    items: Array.isArray(data) ? data : [],
-    totalCount,
-  };
-}
 
 const TopicWorkflowAudits: React.FC = () => {
   const { addToast } = useToast();
@@ -97,7 +50,7 @@ const TopicWorkflowAudits: React.FC = () => {
         pageSize,
       };
 
-      const result = await getWorkflowTopicAuditsApi(filters);
+      const result = await getTopicWorkflowAudits(filters);
       setRows(result.items);
       setTotalCount(result.totalCount);
     } catch (error) {

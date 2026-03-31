@@ -38,6 +38,13 @@ namespace ThesisManagement.Api.Application.Command.Topics
                 ? await _topicCodeGenerator.GenerateAsync()
                 : dto.TopicCode;
 
+            if (dto.DefenseTermId.HasValue)
+            {
+                var defenseTerm = await _uow.DefenseTerms.GetByIdAsync(dto.DefenseTermId.Value);
+                if (defenseTerm == null)
+                    return OperationResult<TopicReadDto>.Failed($"DefenseTerm ID '{dto.DefenseTermId.Value}' không tồn tại", 400);
+            }
+
             var entity = new Topic
             {
                 TopicCode = code,
@@ -56,6 +63,7 @@ namespace ThesisManagement.Api.Application.Command.Topics
                 CatalogTopicCode = dto.CatalogTopicCode,
                 DepartmentID = dto.DepartmentID,
                 DepartmentCode = dto.DepartmentCode,
+                DefenseTermId = dto.DefenseTermId,
                 Status = string.IsNullOrWhiteSpace(dto.Status) ? "DRAFT" : dto.Status,
                 ResubmitCount = dto.ResubmitCount ?? 0,
                 CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt,

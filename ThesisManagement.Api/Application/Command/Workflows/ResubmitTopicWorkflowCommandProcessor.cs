@@ -150,6 +150,22 @@ namespace ThesisManagement.Api.Application.Command.Workflows
                 }
             }
 
+            if (request.DefenseTermId.HasValue)
+            {
+                if (request.DefenseTermId.Value <= 0)
+                {
+                    request = request with { DefenseTermId = null };
+                }
+                else
+                {
+                    var defenseTerm = await _uow.DefenseTerms.GetByIdAsync(request.DefenseTermId.Value);
+                    if (defenseTerm == null)
+                    {
+                        return OperationResult<TopicWorkflowResultDto>.Failed($"DefenseTerm ID '{request.DefenseTermId.Value}' không tồn tại", 400);
+                    }
+                }
+            }
+
             var topic = isNewTopic ? new Topic() : existingTopic!;
 
             if (isNewTopic && !string.Equals(request.Type, "SELF", StringComparison.OrdinalIgnoreCase))
@@ -185,6 +201,7 @@ namespace ThesisManagement.Api.Application.Command.Workflows
 
                 topic.DepartmentID = request.DepartmentID;
                 topic.DepartmentCode = request.DepartmentCode;
+                topic.DefenseTermId = request.DefenseTermId;
 
                 if (string.Equals(topic.Type, "SELF", StringComparison.OrdinalIgnoreCase))
                 {
