@@ -714,7 +714,7 @@ const CommitteeManagement: React.FC = () => {
       }
     }
     return { ok: Boolean(response.success), data: response.data ?? null };
-  }, [notifyInfo]);
+  }, [notifyError, notifyInfo, notifyWarning]);
 
   const [exportMinutes, setExportMinutes] = useState(true);
   const [exportScores, setExportScores] = useState(true);
@@ -1010,7 +1010,7 @@ const CommitteeManagement: React.FC = () => {
     };
 
     void hydrateFromBackend();
-  }, [defensePeriodId]);
+  }, [adminApi, defensePeriodId, notifyWarning, parseApiEnvelope]);
 
   const activeStageIndex = useMemo(
     () =>
