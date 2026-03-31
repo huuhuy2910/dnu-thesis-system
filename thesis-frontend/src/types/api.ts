@@ -1,3 +1,9 @@
+export interface ApiWarning {
+  type: string;
+  code: string;
+  message: string;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   code: string | number | null;
@@ -9,4 +15,9 @@ export interface ApiResponse<T = unknown> {
   isRedirect: boolean;
   redirectUrl: string | null;
   errors: Record<string, string[]> | null;
+  warnings?: ApiWarning[];
+  traceId?: string;
+  idempotencyReplay?: boolean;
+  concurrencyToken?: string | null;
+  allowedActions?: string[];
 }

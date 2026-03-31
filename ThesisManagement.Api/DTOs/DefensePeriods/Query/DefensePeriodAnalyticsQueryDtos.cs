@@ -33,4 +33,46 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public int Fair { get; set; }
         public int Weak { get; set; }
     }
+
+    public class ScoringMatrixRowDto
+    {
+        public int CommitteeId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public string? Room { get; set; }
+        public int AssignmentId { get; set; }
+        public string AssignmentCode { get; set; } = string.Empty;
+        public string TopicCode { get; set; } = string.Empty;
+        public string TopicTitle { get; set; } = string.Empty;
+        public string StudentCode { get; set; } = string.Empty;
+        public string StudentName { get; set; } = string.Empty;
+        public int SubmittedCount { get; set; }
+        public int RequiredCount { get; set; }
+        public bool IsLocked { get; set; }
+        public decimal? FinalScore { get; set; }
+        public string? FinalGrade { get; set; }
+        public decimal? Variance { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class ScoringProgressDto
+    {
+        public int CommitteeId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public int TotalAssignments { get; set; }
+        public int CompletedAssignments { get; set; }
+        public decimal ProgressPercent { get; set; }
+    }
+
+    public class ScoringAlertDto
+    {
+        public string AlertCode { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public int CommitteeId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public int AssignmentId { get; set; }
+        public string AssignmentCode { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public decimal? Value { get; set; }
+        public decimal? Threshold { get; set; }
+    }
 }

@@ -33,8 +33,12 @@ namespace ThesisManagement.Api.Services
             DefenseAssignments = new GenericRepository<DefenseAssignment>(_db);
             DefenseScores = new GenericRepository<DefenseScore>(_db);
             DefenseTerms = new GenericRepository<DefenseTerm>(_db);
+
             DefenseTermStudents = new GenericRepository<DefenseTermStudent>(_db);
             DefenseTermLecturers = new GenericRepository<DefenseTermLecturer>(_db);
+
+            Rooms = new GenericRepository<Room>(_db);
+
             SyncAuditLogs = new GenericRepository<SyncAuditLog>(_db);
             LecturerBusyTimes = new GenericRepository<LecturerBusyTime>(_db);
             DefenseGroups = new GenericRepository<DefenseGroup>(_db);
@@ -82,6 +86,9 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<DefenseTerm> DefenseTerms { get; }
         public IGenericRepository<DefenseTermStudent> DefenseTermStudents { get; }
         public IGenericRepository<DefenseTermLecturer> DefenseTermLecturers { get; }
+
+        public IGenericRepository<Room> Rooms { get; }
+
         public IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
         public IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
         public IGenericRepository<DefenseGroup> DefenseGroups { get; }

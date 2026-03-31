@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace ThesisManagement.Api.DTOs.DefensePeriods
 {
@@ -25,6 +26,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         [Range(1, int.MaxValue)]
         public int AssignmentId { get; set; }
         public string? RevisedContent { get; set; }
+        public IFormFile? File { get; set; }
     }
 
     public class RejectRevisionRequestDto

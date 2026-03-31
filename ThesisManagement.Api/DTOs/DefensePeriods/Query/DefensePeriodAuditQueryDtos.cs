@@ -2,6 +2,8 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 {
     public class DefensePeriodConfigDto
     {
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
         public List<string> Rooms { get; set; } = new();
         public string MorningStart { get; set; } = "07:30";
         public string AfternoonStart { get; set; } = "13:30";
@@ -13,11 +15,16 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 
     public class DefensePeriodStateDto
     {
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
         public bool LecturerCapabilitiesLocked { get; set; }
         public bool CouncilConfigConfirmed { get; set; }
         public bool Finalized { get; set; }
         public bool ScoresPublished { get; set; }
         public int CouncilCount { get; set; }
+        public List<string> AllowedActions { get; set; } = new();
+        public Dictionary<string, bool> Readiness { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
     }
 
     public class CouncilAuditHistoryDto
@@ -51,6 +58,15 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     }
 
     public class PublishHistoryDto
+    {
+        public int SyncAuditLogId { get; set; }
+        public string Action { get; set; } = string.Empty;
+        public string Result { get; set; } = string.Empty;
+        public string Records { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+
+    public class RevisionAuditTrailDto
     {
         public int SyncAuditLogId { get; set; }
         public string Action { get; set; } = string.Empty;

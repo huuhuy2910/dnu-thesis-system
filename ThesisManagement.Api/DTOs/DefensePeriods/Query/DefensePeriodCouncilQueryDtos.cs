@@ -43,16 +43,37 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     public class CouncilDraftDto
     {
         public int Id { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public DateTime? DefenseDate { get; set; }
         public string ConcurrencyToken { get; set; } = string.Empty;
         public string Room { get; set; } = string.Empty;
         public string SlotId { get; set; } = string.Empty;
         public List<string> CouncilTags { get; set; } = new();
         public List<EligibleStudentDto> MorningStudents { get; set; } = new();
         public List<EligibleStudentDto> AfternoonStudents { get; set; } = new();
+        public List<CouncilAssignmentDto> Assignments { get; set; } = new();
         public List<string> ForbiddenLecturers { get; set; } = new();
         public List<CouncilMemberDto> Members { get; set; } = new();
         public string? Warning { get; set; }
         public string Status { get; set; } = "Draft";
+    }
+
+    public class CouncilAssignmentDto
+    {
+        public int AssignmentId { get; set; }
+        public string AssignmentCode { get; set; } = string.Empty;
+        public string TopicCode { get; set; } = string.Empty;
+        public string TopicTitle { get; set; } = string.Empty;
+        public string StudentCode { get; set; } = string.Empty;
+        public string StudentName { get; set; } = string.Empty;
+        public int? Session { get; set; }
+        public string SessionCode { get; set; } = string.Empty;
+        public DateTime? ScheduledAt { get; set; }
+        public string? StartTime { get; set; }
+        public string? EndTime { get; set; }
+        public int? OrderIndex { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 
     public class CouncilFilterDto
@@ -62,6 +83,23 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string? Room { get; set; }
         public int Page { get; set; } = 1;
         public int Size { get; set; } = 20;
+    }
+
+    public class DefensePeriodCalendarCouncilItemDto
+    {
+        public int CouncilId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Room { get; set; }
+        public DateTime DefenseDate { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class DefensePeriodCalendarDayDto
+    {
+        public DateTime Date { get; set; }
+        public int CouncilCount { get; set; }
+        public List<DefensePeriodCalendarCouncilItemDto> Councils { get; set; } = new();
     }
 
     public class LecturerCommitteeMinuteDto
@@ -94,5 +132,95 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string Type { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
+    }
+
+    public class TopicTagUsageDto
+    {
+        public string TopicCode { get; set; } = string.Empty;
+        public string TopicTitle { get; set; } = string.Empty;
+        public string TagCode { get; set; } = string.Empty;
+        public string TagName { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class LecturerTagUsageDto
+    {
+        public string LecturerCode { get; set; } = string.Empty;
+        public string LecturerName { get; set; } = string.Empty;
+        public string TagCode { get; set; } = string.Empty;
+        public string TagName { get; set; } = string.Empty;
+        public DateTime? AssignedAt { get; set; }
+    }
+
+    public class CommitteeTagUsageDto
+    {
+        public int CommitteeId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public string TagCode { get; set; } = string.Empty;
+        public string TagName { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class TagSummaryDto
+    {
+        public string TagCode { get; set; } = string.Empty;
+        public string TagName { get; set; } = string.Empty;
+        public int TopicCount { get; set; }
+        public int LecturerCount { get; set; }
+        public int CommitteeCount { get; set; }
+    }
+
+    public class DefensePeriodTagOverviewDto
+    {
+        public int DistinctTagCount { get; set; }
+        public int TopicTagLinks { get; set; }
+        public int LecturerTagLinks { get; set; }
+        public int CommitteeTagLinks { get; set; }
+        public List<TagSummaryDto> Tags { get; set; } = new();
+    }
+
+    public class RollbackAvailabilityDto
+    {
+        public string CurrentPeriodStatus { get; set; } = string.Empty;
+        public bool Finalized { get; set; }
+        public bool ScoresPublished { get; set; }
+        public bool CanRollbackPublish { get; set; }
+        public bool CanRollbackFinalize { get; set; }
+        public string RecommendedTarget { get; set; } = string.Empty;
+        public List<string> Blockers { get; set; } = new();
+    }
+
+    public class AutoGenerateConfigDto
+    {
+        public List<string> AvailableRooms { get; set; } = new();
+        public List<string> DefaultSelectedRooms { get; set; } = new();
+        public int SoftMaxCapacity { get; set; }
+        public int TopicsPerSession { get; set; }
+        public int MembersPerCouncil { get; set; }
+        public bool LecturerCapabilitiesLocked { get; set; }
+        public bool CouncilConfigConfirmed { get; set; }
+        public bool Finalized { get; set; }
+        public bool ScoresPublished { get; set; }
+        public bool CanGenerate { get; set; }
+        public List<string> Warnings { get; set; } = new();
+        public GenerateCouncilHeuristicWeightsDto DefaultHeuristicWeights { get; set; } = new();
+    }
+
+    public class AutoGenerateCoverageStatsDto
+    {
+        public int EligibleTopics { get; set; }
+        public int EstimatedCapacity { get; set; }
+        public int EstimatedAssigned { get; set; }
+        public decimal CoveragePercent { get; set; }
+    }
+
+    public class AutoGenerateSimulationResultDto
+    {
+        public string Status { get; set; } = string.Empty;
+        public bool CanGenerate { get; set; }
+        public List<string> AllowedActions { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
+        public List<string> Explainability { get; set; } = new();
+        public AutoGenerateCoverageStatsDto Coverage { get; set; } = new();
     }
 }

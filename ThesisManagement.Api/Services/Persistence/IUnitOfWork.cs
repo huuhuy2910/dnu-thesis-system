@@ -28,8 +28,12 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<DefenseAssignment> DefenseAssignments { get; }
         IGenericRepository<DefenseScore> DefenseScores { get; }
         IGenericRepository<DefenseTerm> DefenseTerms { get; }
+
         IGenericRepository<DefenseTermStudent> DefenseTermStudents { get; }
         IGenericRepository<DefenseTermLecturer> DefenseTermLecturers { get; }
+
+        IGenericRepository<Room> Rooms { get; }
+
         IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
         IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
         IGenericRepository<DefenseGroup> DefenseGroups { get; }

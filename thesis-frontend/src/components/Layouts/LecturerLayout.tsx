@@ -80,7 +80,7 @@ const LecturerLayout: React.FC = () => {
         display: "flex",
         minHeight: "100vh",
         backgroundColor: "#FFFFFF",
-        fontFamily: "'Inter', 'Poppins', 'Roboto', sans-serif",
+        fontFamily: '"Be Vietnam Pro", "Segoe UI", sans-serif',
       }}
     >
       <style>

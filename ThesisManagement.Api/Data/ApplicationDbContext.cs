@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.AspNetCore.Http;
 using System.Linq;
 using System.Text.Json;
 using ThesisManagement.Api.Models;
@@ -10,13 +11,15 @@ namespace ThesisManagement.Api.Data
     public class ApplicationDbContext : DbContext
     {
         private readonly ICurrentUserService? _currentUserService;
+        private readonly IHttpContextAccessor? _httpContextAccessor;
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> opts) : base(opts) { }
 
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> opts, ICurrentUserService currentUserService) 
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> opts, ICurrentUserService currentUserService, IHttpContextAccessor httpContextAccessor) 
             : base(opts)
         {
             _currentUserService = currentUserService;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public DbSet<Department> Departments => Set<Department>();
@@ -34,8 +37,13 @@ namespace ThesisManagement.Api.Data
         public DbSet<DefenseAssignment> DefenseAssignments => Set<DefenseAssignment>();
         public DbSet<DefenseScore> DefenseScores => Set<DefenseScore>();
         public DbSet<DefenseTerm> DefenseTerms => Set<DefenseTerm>();
+
         public DbSet<DefenseTermStudent> DefenseTermStudents => Set<DefenseTermStudent>();
         public DbSet<DefenseTermLecturer> DefenseTermLecturers => Set<DefenseTermLecturer>();
+
+        public DbSet<Room> Rooms => Set<Room>();
+        public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+
         public DbSet<SyncAuditLog> SyncAuditLogs => Set<SyncAuditLog>();
         public DbSet<LecturerBusyTime> LecturerBusyTimes => Set<LecturerBusyTime>();
         public DbSet<DefenseGroup> DefenseGroups => Set<DefenseGroup>();
@@ -45,6 +53,7 @@ namespace ThesisManagement.Api.Data
         public DbSet<DefenseResult> DefenseResults => Set<DefenseResult>();
         public DbSet<DefenseRevision> DefenseRevisions => Set<DefenseRevision>();
         public DbSet<DefenseDocument> DefenseDocuments => Set<DefenseDocument>();
+        public DbSet<CommitteeCodeReservation> CommitteeCodeReservations => Set<CommitteeCodeReservation>();
         public DbSet<CommitteeTag> CommitteeTags => Set<CommitteeTag>();
         
         public DbSet<TopicLecturer> TopicLecturers => Set<TopicLecturer>();
@@ -398,6 +407,54 @@ namespace ThesisManagement.Api.Data
             });
 
             // Committees
+            modelBuilder.Entity<IdempotencyRecord>(b =>
+            {
+                b.ToTable("IDEMPOTENCY_RECORDS");
+                b.HasKey(x => x.IdempotencyRecordID);
+                b.Property(x => x.Action).HasMaxLength(80).IsRequired();
+                b.Property(x => x.RequestKey).HasMaxLength(200).IsRequired();
+                b.Property(x => x.RequestHash).HasMaxLength(128).IsRequired();
+                b.Property(x => x.ResponsePayload).HasColumnType("CLOB");
+                b.Property(x => x.ResponseStatusCode);
+                b.Property(x => x.ResponseSuccess);
+                b.Property(x => x.RecordStatus).HasDefaultValue(IdempotencyRecordStatus.Processing);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.CompletedAt);
+                b.HasIndex(x => new { x.Action, x.PeriodID, x.RequestKey }).IsUnique();
+                b.HasIndex(x => new { x.Action, x.PeriodID, x.RequestKey, x.RequestHash });
+                b.HasIndex(x => x.ExpiresAt);
+            });
+
+            modelBuilder.Entity<CommitteeCodeReservation>(b =>
+            {
+                b.ToTable("COMMITTEECODERESERVATIONS");
+                b.HasKey(x => x.CommitteeCodeReservationId);
+                b.Property(x => x.PeriodId).IsRequired();
+                b.Property(x => x.Year).IsRequired();
+                b.Property(x => x.Sequence).IsRequired();
+                b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.Status).HasMaxLength(20).IsRequired();
+                b.Property(x => x.RequestKey).HasMaxLength(200);
+                b.Property(x => x.ReservedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.ExpiresAt).IsRequired();
+                b.Property(x => x.CommittedAt);
+                b.HasIndex(x => x.CommitteeCode).IsUnique();
+                b.HasIndex(x => new { x.Year, x.Sequence }).IsUnique();
+                b.HasIndex(x => x.ExpiresAt);
+                b.HasIndex(x => new { x.PeriodId, x.RequestKey });
+            });
+
+            modelBuilder.Entity<Room>(b =>
+            {
+                b.ToTable("ROOMS");
+                b.HasKey(x => x.RoomID);
+                b.Property(x => x.RoomCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.RoomCode).IsUnique();
+                b.Property(x => x.Status).HasMaxLength(50);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+            });
+
             modelBuilder.Entity<Committee>(b =>
             {
                 b.ToTable("COMMITTEES", tb =>
@@ -409,6 +466,10 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.CommitteeID);
                 b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.CommitteeCode).IsUnique();
+                b.HasOne(x => x.RoomEntity)
+                    .WithMany()
+                    .HasForeignKey(x => x.RoomID)
+                    .OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
@@ -550,6 +611,7 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.DefenseTermId);
                 b.Property(x => x.Name).HasMaxLength(200).IsRequired();
                 b.Property(x => x.StartDate);
+                b.Property(x => x.EndDate);
                 b.Property(x => x.ConfigJson);
                 b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Draft");
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
@@ -649,7 +711,7 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.SyncAuditLogId);
                 b.Property(x => x.Action).HasMaxLength(150).IsRequired();
                 b.Property(x => x.Result).HasMaxLength(50).IsRequired();
-                b.Property(x => x.Records).HasMaxLength(50).IsRequired();
+                b.Property(x => x.Records).HasMaxLength(4000).IsRequired();
                 b.Property(x => x.Timestamp).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
@@ -1194,6 +1256,27 @@ namespace ThesisManagement.Api.Data
             var userRole = _currentUserService?.GetUserRole();
             var ipAddress = _currentUserService?.GetIpAddress();
             var deviceInfo = _currentUserService?.GetDeviceInfo();
+            var traceIdentifier = _httpContextAccessor?.HttpContext?.TraceIdentifier;
+            var requestId = _httpContextAccessor?.HttpContext?.Request?.Headers["X-Request-ID"].FirstOrDefault();
+            var idempotencyKey = _httpContextAccessor?.HttpContext?.Request?.Headers["Idempotency-Key"].FirstOrDefault();
+            var requestPath = _httpContextAccessor?.HttpContext?.Request?.Path.Value;
+            var requestMethod = _httpContextAccessor?.HttpContext?.Request?.Method;
+            var userAgent = _httpContextAccessor?.HttpContext?.Request?.Headers["User-Agent"].FirstOrDefault();
+
+            var actorTrace = new
+            {
+                UserId = userId,
+                UserCode = userCode,
+                UserRole = userRole,
+                IPAddress = ipAddress,
+                DeviceInfo = deviceInfo,
+                TraceIdentifier = traceIdentifier,
+                RequestId = requestId,
+                IdempotencyKey = idempotencyKey,
+                RequestPath = requestPath,
+                RequestMethod = requestMethod,
+                UserAgent = userAgent
+            };
 
             // Lấy các entity đã thay đổi trước khi save
             var entries = ChangeTracker.Entries()
@@ -1237,23 +1320,14 @@ namespace ThesisManagement.Api.Data
 
                         if (modifiedProperties.Any())
                         {
-                            var oldValues = new Dictionary<string, object?>();
-                            var newValues = new Dictionary<string, object?>();
-
-                            foreach (var propName in modifiedProperties)
-                            {
-                                oldValues[propName] = entry.OriginalValues[propName];
-                                newValues[propName] = entry.CurrentValues[propName];
-                            }
-
                             log = new SystemActivityLog
                             {
                                 EntityName = entityName,
                                 EntityID = entityId,
                                 ActionType = "UPDATE",
                                 ActionDescription = $"Cập nhật {GetFriendlyEntityName(entityName)} - Thay đổi: {string.Join(", ", modifiedProperties)}",
-                                OldValue = JsonSerializer.Serialize(oldValues), // Dữ liệu cũ
-                                NewValue = JsonSerializer.Serialize(newValues), // Dữ liệu mới
+                                OldValue = SerializeEntity(entry.OriginalValues.ToObject()), // Snapshot đầy đủ trước thay đổi
+                                NewValue = SerializeEntity(entry.CurrentValues.ToObject()), // Snapshot đầy đủ sau thay đổi
                                 Module = module,
                                 Status = "PENDING"
                             };
@@ -1285,6 +1359,10 @@ namespace ThesisManagement.Api.Data
                     log.IPAddress = ipAddress;
                     log.DeviceInfo = deviceInfo;
                     log.PerformedAt = DateTime.UtcNow;
+                    log.Comment = JsonSerializer.Serialize(actorTrace);
+                    log.RelatedRecordCode = !string.IsNullOrWhiteSpace(traceIdentifier)
+                        ? traceIdentifier
+                        : requestId;
 
                     logs.Add(log);
                 }

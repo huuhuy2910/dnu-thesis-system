@@ -7,6 +7,7 @@ namespace ThesisManagement.Api.Models
         public int DefenseTermId { get; set; }
         public string Name { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
         public string? ConfigJson { get; set; }
         public string Status { get; set; } = "Draft";
         public DateTime CreatedAt { get; set; }

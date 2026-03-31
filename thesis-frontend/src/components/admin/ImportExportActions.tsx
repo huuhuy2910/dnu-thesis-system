@@ -189,6 +189,24 @@ function renderImportErrorLine(item: ImportErrorItem, index: number): string {
   return `${row}${field}: ${message}`;
 }
 
+function parseEnvelopeForToast(
+  payload: ApiResponse<Record<string, unknown>>,
+  addToast: (message: string, type: "success" | "error" | "warning" | "info") => void,
+) {
+  if (payload.message) {
+    addToast(payload.message, payload.success ? "info" : "error");
+  }
+  if (payload.warnings?.length) {
+    addToast(payload.warnings.map((item) => item.message).join(" | "), "warning");
+  }
+  if (!payload.success && payload.errors) {
+    const errorMessages = Object.values(payload.errors).flat().filter(Boolean);
+    if (errorMessages.length) {
+      addToast(errorMessages.join(" | "), "error");
+    }
+  }
+}
+
 const ImportExportActions: React.FC<ImportExportActionsProps> = ({
   moduleName,
   moduleLabel,
@@ -269,6 +287,7 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       const payload = (await response.json()) as ApiResponse<
         Record<string, unknown>
       >;
+      parseEnvelopeForToast(payload, addToast);
       if (!payload.success) {
         throw new Error(
           payload.message || payload.title || "Import dữ liệu thất bại.",

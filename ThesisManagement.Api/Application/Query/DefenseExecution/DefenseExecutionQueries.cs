@@ -49,6 +49,21 @@ namespace ThesisManagement.Api.Application.Query.DefenseExecution
         Task<ApiResponse<AnalyticsDistributionDto>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default);
     }
 
+    public interface IGetScoringMatrixQuery
+    {
+        Task<ApiResponse<List<ScoringMatrixRowDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+    }
+
+    public interface IGetScoringProgressQuery
+    {
+        Task<ApiResponse<List<ScoringProgressDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+    }
+
+    public interface IGetScoringAlertsQuery
+    {
+        Task<ApiResponse<List<ScoringAlertDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+    }
+
     public interface IBuildDefenseReportQuery
     {
         Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> ExecuteAsync(int periodId, string reportType, string format, int? councilId, CancellationToken cancellationToken = default);
@@ -134,6 +149,30 @@ namespace ThesisManagement.Api.Application.Query.DefenseExecution
         public GetDefenseDistributionAnalyticsQuery(IDefensePeriodQueryProcessor processor) => _processor = processor;
         public Task<ApiResponse<AnalyticsDistributionDto>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default)
             => _processor.GetDistributionAsync(periodId, cancellationToken);
+    }
+
+    public class GetScoringMatrixQuery : IGetScoringMatrixQuery
+    {
+        private readonly IDefensePeriodQueryProcessor _processor;
+        public GetScoringMatrixQuery(IDefensePeriodQueryProcessor processor) => _processor = processor;
+        public Task<ApiResponse<List<ScoringMatrixRowDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+            => _processor.GetScoringMatrixAsync(periodId, committeeId, cancellationToken);
+    }
+
+    public class GetScoringProgressQuery : IGetScoringProgressQuery
+    {
+        private readonly IDefensePeriodQueryProcessor _processor;
+        public GetScoringProgressQuery(IDefensePeriodQueryProcessor processor) => _processor = processor;
+        public Task<ApiResponse<List<ScoringProgressDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+            => _processor.GetScoringProgressAsync(periodId, committeeId, cancellationToken);
+    }
+
+    public class GetScoringAlertsQuery : IGetScoringAlertsQuery
+    {
+        private readonly IDefensePeriodQueryProcessor _processor;
+        public GetScoringAlertsQuery(IDefensePeriodQueryProcessor processor) => _processor = processor;
+        public Task<ApiResponse<List<ScoringAlertDto>>> ExecuteAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+            => _processor.GetScoringAlertsAsync(periodId, committeeId, cancellationToken);
     }
 
     public class BuildDefenseReportQuery : IBuildDefenseReportQuery

@@ -14,6 +14,9 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public int EligibleCount { get; set; }
         public int InvalidCount { get; set; }
         public int RetryAttempts { get; set; } = 1;
+        public string SnapshotVersion { get; set; } = string.Empty;
+        public Dictionary<string, bool> Readiness { get; set; } = new();
+        public Dictionary<string, int> ErrorBreakdown { get; set; } = new();
         public List<SyncRowErrorDto> RowErrors { get; set; } = new();
         public string Message { get; set; } = string.Empty;
     }
@@ -26,6 +29,10 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 
     public class UpdateDefensePeriodConfigDto
     {
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? EndDate { get; set; }
+
         [Required]
         public List<string> Rooms { get; set; } = new();
 
@@ -60,7 +67,43 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     {
         public List<string> SelectedRooms { get; set; } = new();
         public List<string> Tags { get; set; } = new();
+        public GenerateCouncilStrategyDto Strategy { get; set; } = new();
+        public GenerateCouncilConstraintsDto Constraints { get; set; } = new();
         public string? IdempotencyKey { get; set; }
+    }
+
+    public class GenerateCouncilStrategyDto
+    {
+        public bool GroupByTag { get; set; } = true;
+        [Range(1, 10)]
+        public int MaxPerSession { get; set; } = 4;
+        public bool PrioritizeMatchTag { get; set; } = true;
+        public GenerateCouncilHeuristicWeightsDto? HeuristicWeights { get; set; }
+    }
+
+    public class GenerateCouncilHeuristicWeightsDto
+    {
+        [Range(0, 1)]
+        public decimal? TagMatchWeight { get; set; }
+
+        [Range(0, 1)]
+        public decimal? WorkloadWeight { get; set; }
+
+        [Range(0, 1)]
+        public decimal? AvailabilityWeight { get; set; }
+
+        [Range(0, 1)]
+        public decimal? FairnessWeight { get; set; }
+
+        [Range(0, 1)]
+        public decimal? ConsecutiveCommitteePenaltyWeight { get; set; }
+    }
+
+    public class GenerateCouncilConstraintsDto
+    {
+        public bool AvoidSupervisorConflict { get; set; } = true;
+        public bool AvoidLecturerOverlap { get; set; } = true;
+        public List<string> RequireRoles { get; set; } = new() { "CT", "TK" };
     }
 
     public class CouncilUpsertDto
@@ -96,5 +139,156 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     {
         public bool AllowFinalizeAfterWarning { get; set; }
         public string? IdempotencyKey { get; set; }
+    }
+
+    public class RollbackDefensePeriodDto
+    {
+        [Required]
+        [RegularExpression("^(PUBLISH|FINALIZE|ALL)$", ErrorMessage = "Target chỉ hỗ trợ PUBLISH, FINALIZE hoặc ALL")]
+        public string Target { get; set; } = "PUBLISH";
+
+        [Required]
+        public string Reason { get; set; } = string.Empty;
+
+        // Khi rollback publish, mở khóa toàn bộ kết quả để có thể sửa điểm nhanh.
+        public bool ForceUnlockScores { get; set; } = true;
+
+        public string? IdempotencyKey { get; set; }
+    }
+
+    public class RollbackDefensePeriodResponseDto
+    {
+        public string Target { get; set; } = string.Empty;
+        public string PeriodStatusBefore { get; set; } = string.Empty;
+        public string PeriodStatusAfter { get; set; } = string.Empty;
+        public bool FinalizedBefore { get; set; }
+        public bool FinalizedAfter { get; set; }
+        public bool ScoresPublishedBefore { get; set; }
+        public bool ScoresPublishedAfter { get; set; }
+        public int UpdatedCommitteeCount { get; set; }
+        public int UpdatedResultCount { get; set; }
+        public DateTime RolledBackAt { get; set; }
+    }
+
+    public class GenerateCouncilCodeResponseDto
+    {
+        public string CommitteeCode { get; set; } = string.Empty;
+    }
+
+    public class CouncilWorkflowStep1Dto
+    {
+        public string? Name { get; set; }
+
+        public DateTime DefenseDate { get; set; }
+
+        [Required]
+        public string Room { get; set; } = string.Empty;
+
+        public List<string> CouncilTags { get; set; } = new();
+
+        public string? ConcurrencyToken { get; set; }
+    }
+
+    public class CouncilWorkflowStep2Dto
+    {
+        public string? ConcurrencyToken { get; set; }
+        public List<CouncilMemberInputDto> Members { get; set; } = new();
+    }
+
+    public class CouncilAssignmentInputDto
+    {
+        [Required]
+        public string TopicCode { get; set; } = string.Empty;
+
+        public DateTime? ScheduledAt { get; set; }
+
+        [Required]
+        public string SessionCode { get; set; } = DefenseSessionCodes.Morning;
+
+        [Required]
+        public string StartTime { get; set; } = "07:30";
+
+        [Required]
+        public string EndTime { get; set; } = "08:30";
+
+        public int? OrderIndex { get; set; }
+    }
+
+    public class CouncilWorkflowStep3Dto
+    {
+        public string? ConcurrencyToken { get; set; }
+        public List<CouncilAssignmentInputDto> Assignments { get; set; } = new();
+    }
+
+    public class AddCouncilMemberItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
+
+        [Required]
+        public string Role { get; set; } = string.Empty;
+
+        [Required]
+        public string LecturerCode { get; set; } = string.Empty;
+    }
+
+    public class UpdateCouncilMemberItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
+
+        public string? Role { get; set; }
+
+        public string? LecturerCode { get; set; }
+    }
+
+    public class RemoveCouncilMemberItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
+    }
+
+    public class AddCouncilTopicItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
+
+        [Required]
+        public string TopicCode { get; set; } = string.Empty;
+
+        public DateTime? ScheduledAt { get; set; }
+
+        [Required]
+        public string SessionCode { get; set; } = DefenseSessionCodes.Morning;
+
+        [Required]
+        public string StartTime { get; set; } = "07:30";
+
+        [Required]
+        public string EndTime { get; set; } = "08:30";
+
+        public int? OrderIndex { get; set; }
+    }
+
+    public class UpdateCouncilTopicItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
+
+        public DateTime? ScheduledAt { get; set; }
+
+        public string? SessionCode { get; set; }
+
+        public string? StartTime { get; set; }
+
+        public string? EndTime { get; set; }
+
+        public int? OrderIndex { get; set; }
+    }
+
+    public class RemoveCouncilTopicItemDto
+    {
+        [Required]
+        public string ConcurrencyToken { get; set; } = string.Empty;
     }
 }
