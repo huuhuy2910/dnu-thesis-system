@@ -109,7 +109,10 @@ const AppRoutes: React.FC = () => {
           }
         >
           <Route index element={<AdminDashboard />} />
-          <Route path="academic-data" element={<AcademicDataManagementPage />} />
+          <Route
+            path="academic-data"
+            element={<AcademicDataManagementPage />}
+          />
           <Route path="users" element={<UsersManagement />} />
 
           <Route path="students" element={<StudentProfilesManagement />} />
@@ -150,7 +153,10 @@ const AppRoutes: React.FC = () => {
           }
         >
           <Route index element={<StudentServiceDashboard />} />
-          <Route path="academic-data" element={<AcademicDataManagementPage />} />
+          <Route
+            path="academic-data"
+            element={<AcademicDataManagementPage />}
+          />
           <Route path="users" element={<UsersManagement />} />
           <Route path="students" element={<StudentProfilesManagement />} />
           <Route path="lecturers" element={<LecturerProfilesManagement />} />

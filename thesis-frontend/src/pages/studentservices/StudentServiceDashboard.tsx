@@ -64,27 +64,53 @@ function formatDate(value: unknown): string {
 function formatStatus(value: unknown): string {
   const text = normalizeText(value).toLowerCase();
   if (!text) return "Chưa xác định";
-  if (text.includes("overdue") || text.includes("late") || text.includes("quá")) {
+  if (
+    text.includes("overdue") ||
+    text.includes("late") ||
+    text.includes("quá")
+  ) {
     return "Quá hạn";
   }
-  if (text.includes("pending") || text.includes("chờ") || text.includes("review")) {
+  if (
+    text.includes("pending") ||
+    text.includes("chờ") ||
+    text.includes("review")
+  ) {
     return "Chờ xử lý";
   }
-  if (text.includes("done") || text.includes("complete") || text.includes("approved")) {
+  if (
+    text.includes("done") ||
+    text.includes("complete") ||
+    text.includes("approved")
+  ) {
     return "Hoàn thành";
   }
   return value ? String(value) : "Chưa xác định";
 }
 
-function statusTone(value: string): "danger" | "warning" | "success" | "neutral" {
+function statusTone(
+  value: string,
+): "danger" | "warning" | "success" | "neutral" {
   const normalized = value.toLowerCase();
-  if (normalized.includes("quá") || normalized.includes("late") || normalized.includes("overdue")) {
+  if (
+    normalized.includes("quá") ||
+    normalized.includes("late") ||
+    normalized.includes("overdue")
+  ) {
     return "danger";
   }
-  if (normalized.includes("chờ") || normalized.includes("pending") || normalized.includes("review")) {
+  if (
+    normalized.includes("chờ") ||
+    normalized.includes("pending") ||
+    normalized.includes("review")
+  ) {
     return "warning";
   }
-  if (normalized.includes("hoàn") || normalized.includes("done") || normalized.includes("approved")) {
+  if (
+    normalized.includes("hoàn") ||
+    normalized.includes("done") ||
+    normalized.includes("approved")
+  ) {
     return "success";
   }
   return "neutral";
@@ -92,8 +118,16 @@ function statusTone(value: string): "danger" | "warning" | "success" | "neutral"
 
 function resolveIssueTitle(row: DashboardRecord): string {
   return (
-    readDashboardString(row, ["title", "topicTitle", "topicName", "moduleName"], "") ||
-    readDashboardString(row, ["departmentName", "studentFullName", "name"], "") ||
+    readDashboardString(
+      row,
+      ["title", "topicTitle", "topicName", "moduleName"],
+      "",
+    ) ||
+    readDashboardString(
+      row,
+      ["departmentName", "studentFullName", "name"],
+      "",
+    ) ||
     "Mục cần xử lý"
   );
 }
@@ -116,19 +150,28 @@ function resolveIssueSubtitle(row: DashboardRecord): string {
 }
 
 function resolveIssueStatus(row: DashboardRecord): string {
-  return formatStatus(readDashboardString(row, ["status", "state", "priority", "riskLevel"], ""));
+  return formatStatus(
+    readDashboardString(row, ["status", "state", "priority", "riskLevel"], ""),
+  );
 }
 
 function resolveIssueDate(row: DashboardRecord): string {
   return formatDate(
-    readDashboardString(row, ["deadline", "createdAt", "lastUpdated", "updatedAt", "date"], ""),
+    readDashboardString(
+      row,
+      ["deadline", "createdAt", "lastUpdated", "updatedAt", "date"],
+      "",
+    ),
   );
 }
 
 function resolveDepartmentLabel(row: DashboardRecord): string {
   return (
-    readDashboardString(row, ["departmentName", "name", "departmentCode", "facultyName"], "") ||
-    "Khoa / bộ môn"
+    readDashboardString(
+      row,
+      ["departmentName", "name", "departmentCode", "facultyName"],
+      "",
+    ) || "Khoa / bộ môn"
   );
 }
 
@@ -181,7 +224,12 @@ const StudentServiceDashboard: React.FC = () => {
       setError(null);
 
       try {
-        const [overviewResponse, riskResponse, backlogResponse, departmentResponse] = await Promise.all([
+        const [
+          overviewResponse,
+          riskResponse,
+          backlogResponse,
+          departmentResponse,
+        ] = await Promise.all([
           getStudentServiceOverview({ limit: 1 }),
           getStudentServiceAtRisk({ days: 30, limit: 8 }),
           getStudentServiceBacklog({ days: 30, limit: 8 }),
@@ -239,11 +287,22 @@ const StudentServiceDashboard: React.FC = () => {
   }, []);
 
   const overviewRow = useMemo(() => overviewRows[0] ?? {}, [overviewRows]);
-  const maxDepartmentValue = Math.max(1, ...departmentRows.map((row) => resolveDepartmentValue(row)));
+  const maxDepartmentValue = Math.max(
+    1,
+    ...departmentRows.map((row) => resolveDepartmentValue(row)),
+  );
 
   const stats = useMemo<DashboardStat[]>(() => {
-    const riskCount = readDashboardNumber(overviewRow, ["AT_RISK_TOPICS", "atRiskTopics", "riskCount"], riskRows.length);
-    const backlogCount = readDashboardNumber(overviewRow, ["BACKLOG_COUNT", "backlogCount", "pendingCount"], backlogRows.length);
+    const riskCount = readDashboardNumber(
+      overviewRow,
+      ["AT_RISK_TOPICS", "atRiskTopics", "riskCount"],
+      riskRows.length,
+    );
+    const backlogCount = readDashboardNumber(
+      overviewRow,
+      ["BACKLOG_COUNT", "backlogCount", "pendingCount"],
+      backlogRows.length,
+    );
     const pendingApprovals = readDashboardNumber(
       overviewRow,
       ["PENDING_APPROVALS", "pendingApprovals", "topicsPending"],
@@ -294,7 +353,10 @@ const StudentServiceDashboard: React.FC = () => {
 
   const atRiskIssues = useMemo(() => buildIssues(riskRows), [riskRows]);
   const backlogIssues = useMemo(() => buildIssues(backlogRows), [backlogRows]);
-  const departmentBreakdown = useMemo(() => buildDepartments(departmentRows), [departmentRows]);
+  const departmentBreakdown = useMemo(
+    () => buildDepartments(departmentRows),
+    [departmentRows],
+  );
 
   const actions = [
     { label: "Mở quản trị dữ liệu", to: "/student-service/academic-data" },
@@ -349,13 +411,19 @@ const StudentServiceDashboard: React.FC = () => {
           </div>
           <div className="ssd-hero__content">
             <div>
-              <h1 className="ssd-hero__title">Bảng điều khiển student-service</h1>
+              <h1 className="ssd-hero__title">
+                Bảng điều khiển student-service
+              </h1>
               <p className="ssd-hero__desc">
-                Tổng hợp trạng thái đề tài, các mục cần xử lý gấp, và phân bổ theo khoa/bộ môn
-                từ các API student-service.
+                Tổng hợp trạng thái đề tài, các mục cần xử lý gấp, và phân bổ
+                theo khoa/bộ môn từ các API student-service.
               </p>
             </div>
-            <button type="button" className="ssd-refresh-btn" onClick={() => window.location.reload()}>
+            <button
+              type="button"
+              className="ssd-refresh-btn"
+              onClick={() => window.location.reload()}
+            >
               <RefreshCw size={16} />
               Làm mới dữ liệu
             </button>
@@ -364,11 +432,16 @@ const StudentServiceDashboard: React.FC = () => {
 
         <section className="ssd-stat-grid">
           {stats.map((stat) => (
-            <article key={stat.label} className={`ssd-stat-card ${stat.accent}`}>
+            <article
+              key={stat.label}
+              className={`ssd-stat-card ${stat.accent}`}
+            >
               <div className="ssd-stat-card__icon">{stat.icon}</div>
               <div className="ssd-stat-card__body">
                 <div className="ssd-stat-card__label">{stat.label}</div>
-                <div className="ssd-stat-card__value">{stat.value.toLocaleString()}</div>
+                <div className="ssd-stat-card__value">
+                  {stat.value.toLocaleString()}
+                </div>
                 <div className="ssd-stat-card__hint">{stat.hint}</div>
               </div>
             </article>
@@ -389,13 +462,20 @@ const StudentServiceDashboard: React.FC = () => {
                 <div className="ssd-empty-state">Chưa có dữ liệu cảnh báo.</div>
               ) : (
                 atRiskIssues.map((issue, index) => (
-                  <div key={`${issue.title}-${index}`} className="ssd-issue-item">
+                  <div
+                    key={`${issue.title}-${index}`}
+                    className="ssd-issue-item"
+                  >
                     <div className="ssd-issue-item__main">
                       <div className="ssd-issue-item__title">{issue.title}</div>
-                      <div className="ssd-issue-item__subtitle">{issue.subtitle}</div>
+                      <div className="ssd-issue-item__subtitle">
+                        {issue.subtitle}
+                      </div>
                     </div>
                     <div className="ssd-issue-item__meta">
-                      <span className={`ssd-status-badge ${statusTone(issue.status)}`}>
+                      <span
+                        className={`ssd-status-badge ${statusTone(issue.status)}`}
+                      >
                         {issue.status}
                       </span>
                       <span className="ssd-issue-item__date">{issue.date}</span>
@@ -416,7 +496,11 @@ const StudentServiceDashboard: React.FC = () => {
             </div>
             <div className="ssd-action-list">
               {actions.map((action) => (
-                <Link key={action.to} to={action.to} className="ssd-action-card">
+                <Link
+                  key={action.to}
+                  to={action.to}
+                  className="ssd-action-card"
+                >
                   <span>{action.label}</span>
                   <ArrowRight size={16} />
                 </Link>
@@ -439,13 +523,20 @@ const StudentServiceDashboard: React.FC = () => {
                 <div className="ssd-empty-state">Chưa có dữ liệu backlog.</div>
               ) : (
                 backlogIssues.map((issue, index) => (
-                  <div key={`${issue.title}-${index}`} className="ssd-issue-item compact">
+                  <div
+                    key={`${issue.title}-${index}`}
+                    className="ssd-issue-item compact"
+                  >
                     <div className="ssd-issue-item__main">
                       <div className="ssd-issue-item__title">{issue.title}</div>
-                      <div className="ssd-issue-item__subtitle">{issue.subtitle}</div>
+                      <div className="ssd-issue-item__subtitle">
+                        {issue.subtitle}
+                      </div>
                     </div>
                     <div className="ssd-issue-item__meta stacked">
-                      <span className={`ssd-status-badge ${statusTone(issue.status)}`}>
+                      <span
+                        className={`ssd-status-badge ${statusTone(issue.status)}`}
+                      >
                         {issue.status}
                       </span>
                       <span className="ssd-issue-item__date">{issue.date}</span>
@@ -466,10 +557,15 @@ const StudentServiceDashboard: React.FC = () => {
             </div>
             <div className="ssd-bar-list">
               {departmentBreakdown.length === 0 ? (
-                <div className="ssd-empty-state">Chưa có dữ liệu phân bổ theo khoa.</div>
+                <div className="ssd-empty-state">
+                  Chưa có dữ liệu phân bổ theo khoa.
+                </div>
               ) : (
                 departmentBreakdown.map((row) => {
-                  const width = Math.max(8, Math.round((row.value / maxDepartmentValue) * 100));
+                  const width = Math.max(
+                    8,
+                    Math.round((row.value / maxDepartmentValue) * 100),
+                  );
                   return (
                     <div key={row.label} className="ssd-bar-row">
                       <div className="ssd-bar-row__head">
@@ -477,7 +573,10 @@ const StudentServiceDashboard: React.FC = () => {
                         <strong>{row.value}</strong>
                       </div>
                       <div className="ssd-bar-track">
-                        <div className="ssd-bar-fill" style={{ width: `${width}%` }} />
+                        <div
+                          className="ssd-bar-fill"
+                          style={{ width: `${width}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -499,15 +598,33 @@ const StudentServiceDashboard: React.FC = () => {
             <div className="ssd-mini-summary">
               <div className="ssd-mini-summary__item">
                 <span>Đề tài cần duyệt</span>
-                <strong>{readDashboardNumber(overviewRow, ["PENDING_APPROVALS", "pendingApprovals", "topicsPending"], 0).toLocaleString()}</strong>
+                <strong>
+                  {readDashboardNumber(
+                    overviewRow,
+                    ["PENDING_APPROVALS", "pendingApprovals", "topicsPending"],
+                    0,
+                  ).toLocaleString()}
+                </strong>
               </div>
               <div className="ssd-mini-summary__item">
                 <span>Đề tài có rủi ro</span>
-                <strong>{readDashboardNumber(overviewRow, ["AT_RISK_TOPICS", "atRiskTopics", "riskCount"], riskRows.length).toLocaleString()}</strong>
+                <strong>
+                  {readDashboardNumber(
+                    overviewRow,
+                    ["AT_RISK_TOPICS", "atRiskTopics", "riskCount"],
+                    riskRows.length,
+                  ).toLocaleString()}
+                </strong>
               </div>
               <div className="ssd-mini-summary__item">
                 <span>Tồn đọng</span>
-                <strong>{readDashboardNumber(overviewRow, ["BACKLOG_COUNT", "backlogCount"], backlogRows.length).toLocaleString()}</strong>
+                <strong>
+                  {readDashboardNumber(
+                    overviewRow,
+                    ["BACKLOG_COUNT", "backlogCount"],
+                    backlogRows.length,
+                  ).toLocaleString()}
+                </strong>
               </div>
             </div>
           </article>
@@ -522,13 +639,16 @@ const StudentServiceDashboard: React.FC = () => {
             </div>
             <div className="ssd-notes">
               <div className="ssd-note">
-                <strong>1.</strong> Dữ liệu đang lấy trực tiếp từ các API student-service.
+                <strong>1.</strong> Dữ liệu đang lấy trực tiếp từ các API
+                student-service.
               </div>
               <div className="ssd-note">
-                <strong>2.</strong> Giao diện dashboard và CSS được tách riêng để không phụ thuộc admin style.
+                <strong>2.</strong> Giao diện dashboard và CSS được tách riêng
+                để không phụ thuộc admin style.
               </div>
               <div className="ssd-note">
-                <strong>3.</strong> Các module CRUD vẫn nằm trong trang Academic Data Hub.
+                <strong>3.</strong> Các module CRUD vẫn nằm trong trang Academic
+                Data Hub.
               </div>
             </div>
           </article>

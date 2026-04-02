@@ -294,7 +294,15 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 320px", minWidth: 280 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flex: "1 1 320px",
+              minWidth: 280,
+            }}
+          >
             <Search size={16} color="#64748b" />
             <input
               value={searchInput}
@@ -309,7 +317,15 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             />
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", flex: "0 1 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+              flex: "0 1 auto",
+            }}
+          >
             <button
               type="button"
               onClick={() => setShowFilters((prev) => !prev)}
@@ -512,7 +528,6 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             </div>
           </div>
         )}
-
       </div>
 
       <div style={sectionCardStyle}>
@@ -737,7 +752,6 @@ const CatalogTopicsWarehousePage: React.FC = () => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };

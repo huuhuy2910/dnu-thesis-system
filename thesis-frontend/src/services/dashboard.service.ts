@@ -1,7 +1,11 @@
 import { fetchData, FetchDataError } from "../api/fetchData";
 import type { ApiResponse } from "../types/api";
 
-export type DashboardRole = "admin" | "lecturer" | "student" | "student-service";
+export type DashboardRole =
+  | "admin"
+  | "lecturer"
+  | "student"
+  | "student-service";
 
 export type DashboardRecord = Record<string, unknown>;
 
@@ -72,7 +76,9 @@ const OBJECT_CONTAINER_KEYS = [
 
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  const withScheme = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `http://${trimmed}`;
   return withScheme.endsWith("/") ? withScheme.slice(0, -1) : withScheme;
 }
 
@@ -314,7 +320,10 @@ async function fetchDashboardFromPaths<TResponse>(
       return await fetchData<ApiResponse<TResponse>>(`${path}${query}`);
     } catch (error) {
       lastError = error;
-      if (error instanceof FetchDataError && [404, 405].includes(error.status)) {
+      if (
+        error instanceof FetchDataError &&
+        [404, 405].includes(error.status)
+      ) {
         continue;
       }
       throw error;
@@ -337,7 +346,9 @@ async function fetchDashboardEndpoint<TResponse>(
 export async function getDashboardData<TRecord = DashboardRecord>(
   role: DashboardRole,
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardFromPaths<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >(buildCandidatePaths(role), params);
@@ -346,7 +357,9 @@ export async function getDashboardData<TRecord = DashboardRecord>(
 export async function getDashboardSnapshot<TRecord = DashboardRecord>(
   role: DashboardRole,
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardFromPaths<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >(buildSnapshotCandidatePaths(role), params);
@@ -354,7 +367,9 @@ export async function getDashboardSnapshot<TRecord = DashboardRecord>(
 
 export async function getLecturerOverview<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/lecturer/overview", params);
@@ -362,7 +377,9 @@ export async function getLecturerOverview<TRecord = DashboardRecord>(
 
 export async function getLecturerReviewQueue<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/lecturer/review-queue", params);
@@ -370,7 +387,9 @@ export async function getLecturerReviewQueue<TRecord = DashboardRecord>(
 
 export async function getLecturerScoringProgress<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/lecturer/scoring-progress", params);
@@ -378,7 +397,9 @@ export async function getLecturerScoringProgress<TRecord = DashboardRecord>(
 
 export async function getLecturerDeadlineRisk<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/lecturer/deadline-risk", params);
@@ -386,7 +407,9 @@ export async function getLecturerDeadlineRisk<TRecord = DashboardRecord>(
 
 export async function getLecturerWorkloadSnapshot<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/snapshots/lecturer-workload", params);
@@ -394,7 +417,9 @@ export async function getLecturerWorkloadSnapshot<TRecord = DashboardRecord>(
 
 export async function getStudentServiceOverview<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/student-service/overview", params);
@@ -402,7 +427,9 @@ export async function getStudentServiceOverview<TRecord = DashboardRecord>(
 
 export async function getStudentServiceAtRisk<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/student-service/at-risk", params);
@@ -410,15 +437,21 @@ export async function getStudentServiceAtRisk<TRecord = DashboardRecord>(
 
 export async function getStudentServiceBacklog<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/student-service/backlog", params);
 }
 
-export async function getStudentServiceDepartmentBreakdown<TRecord = DashboardRecord>(
+export async function getStudentServiceDepartmentBreakdown<
+  TRecord = DashboardRecord,
+>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/student-service/department-breakdown", params);
@@ -426,7 +459,9 @@ export async function getStudentServiceDepartmentBreakdown<TRecord = DashboardRe
 
 export async function getAdminOverview<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/overview", params);
@@ -434,7 +469,9 @@ export async function getAdminOverview<TRecord = DashboardRecord>(
 
 export async function getAdminPeriodFunnel<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/period-funnel", params);
@@ -442,7 +479,9 @@ export async function getAdminPeriodFunnel<TRecord = DashboardRecord>(
 
 export async function getAdminCouncilCapacity<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/council-capacity", params);
@@ -450,7 +489,9 @@ export async function getAdminCouncilCapacity<TRecord = DashboardRecord>(
 
 export async function getAdminScoreQuality<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/score-quality", params);
@@ -458,7 +499,9 @@ export async function getAdminScoreQuality<TRecord = DashboardRecord>(
 
 export async function getAdminSlaBottleneck<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/sla-bottleneck", params);
@@ -466,7 +509,9 @@ export async function getAdminSlaBottleneck<TRecord = DashboardRecord>(
 
 export async function getAdminSecurityAudit<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/admin/security-audit", params);
@@ -474,7 +519,9 @@ export async function getAdminSecurityAudit<TRecord = DashboardRecord>(
 
 export async function getDailyKpiByRole<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/snapshots/daily-kpi-by-role", params);
@@ -482,7 +529,9 @@ export async function getDailyKpiByRole<TRecord = DashboardRecord>(
 
 export async function getAdminPeriodSnapshot<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/snapshots/period", params);
@@ -490,7 +539,9 @@ export async function getAdminPeriodSnapshot<TRecord = DashboardRecord>(
 
 export async function getSlaBreachDaily<TRecord = DashboardRecord>(
   params: DashboardQueryParams = {},
-): Promise<ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>> {
+): Promise<
+  ApiResponse<DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord>
+> {
   return await fetchDashboardEndpoint<
     DashboardResponseEnvelope<TRecord> | TRecord[] | TRecord
   >("/Dashboards/snapshots/sla-breach-daily", params);
@@ -534,7 +585,9 @@ export function normalizeDashboardItemsFromResponse<TRecord = DashboardRecord>(
 
 export function getApiResponseTraceId(
   response:
-    | ApiResponse<DashboardResponseEnvelope | DashboardRecord[] | DashboardRecord>
+    | ApiResponse<
+        DashboardResponseEnvelope | DashboardRecord[] | DashboardRecord
+      >
     | null
     | undefined,
 ): string | undefined {

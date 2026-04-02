@@ -68,7 +68,9 @@ function normalizeText(value: unknown): string {
   return String(value).trim();
 }
 
-async function resolveLecturerCodeFromSession(userCode: string): Promise<string> {
+async function resolveLecturerCodeFromSession(
+  userCode: string,
+): Promise<string> {
   const cachedLecturerCode = normalizeText(getLecturerCode());
   if (cachedLecturerCode) {
     return cachedLecturerCode;
@@ -81,7 +83,9 @@ async function resolveLecturerCodeFromSession(userCode: string): Promise<string>
   const lecturerProfileResponse = (await fetchData(
     `/LecturerProfiles/get-list?UserCode=${encodeURIComponent(userCode)}`,
   )) as ApiResponse<LecturerProfile[]>;
-  const lecturerCode = normalizeText(lecturerProfileResponse.data?.[0]?.lecturerCode);
+  const lecturerCode = normalizeText(
+    lecturerProfileResponse.data?.[0]?.lecturerCode,
+  );
   setLecturerCode(lecturerCode || null);
   return lecturerCode;
 }
@@ -163,10 +167,18 @@ function resolveActivityStatus(row: DashboardRecord): RecentActivity["status"] {
   const value = normalizeText(
     readDashboardString(row, ["status", "state", "activityStatus"], ""),
   ).toLowerCase();
-  if (value.includes("urgent") || value.includes("late") || value.includes("overdue")) {
+  if (
+    value.includes("urgent") ||
+    value.includes("late") ||
+    value.includes("overdue")
+  ) {
     return "urgent";
   }
-  if (value.includes("done") || value.includes("complete") || value.includes("approved")) {
+  if (
+    value.includes("done") ||
+    value.includes("complete") ||
+    value.includes("approved")
+  ) {
     return "completed";
   }
   return "pending";
@@ -179,7 +191,11 @@ function resolveActivityTitle(row: DashboardRecord): string {
       ["submissionCode", "submissionID", "topicTitle", "topic_title"],
       "",
     ) ||
-    readDashboardString(row, ["title", "name", "topicCode", "studentFullName"], "") ||
+    readDashboardString(
+      row,
+      ["title", "name", "topicCode", "studentFullName"],
+      "",
+    ) ||
     "Hoạt động mới"
   );
 }
@@ -191,7 +207,11 @@ function resolveActivityDescription(row: DashboardRecord): string {
       ["studentFullName", "studentCode", "hoursWaitingReview", "lecturerState"],
       "",
     ) ||
-    readDashboardString(row, ["description", "desc", "message", "content"], "") ||
+    readDashboardString(
+      row,
+      ["description", "desc", "message", "content"],
+      "",
+    ) ||
     "Hoạt động mới"
   );
 }
@@ -228,7 +248,11 @@ function resolveEventTitle(row: DashboardRecord): string {
 }
 
 function resolveEventLocation(row: DashboardRecord): string | undefined {
-  const value = readDashboardString(row, ["location", "room", "venue", "riskLevel"], "");
+  const value = readDashboardString(
+    row,
+    ["location", "room", "venue", "riskLevel"],
+    "",
+  );
   return value || undefined;
 }
 
@@ -249,7 +273,10 @@ function resolveEventTime(row: DashboardRecord): string {
   if (!timestamp) return "--";
   const parsed = new Date(timestamp);
   if (Number.isNaN(parsed.getTime())) return "--";
-  return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return parsed.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function buildActivities(rows: DashboardRecord[]): RecentActivity[] {
@@ -267,7 +294,9 @@ function buildEvents(rows: DashboardRecord[]): UpcomingEvent[] {
   return rows.slice(0, 3).map((row, index) => ({
     id: `${index}-${resolveEventTitle(row)}`,
     title: resolveEventTitle(row),
-    date: formatDate(readDashboardString(row, ["date", "defenseDate", "scheduledAt"], "")),
+    date: formatDate(
+      readDashboardString(row, ["date", "defenseDate", "scheduledAt"], ""),
+    ),
     time: resolveEventTime(row),
     type: resolveEventType(row),
     location: resolveEventLocation(row),
@@ -296,10 +325,20 @@ const Dashboard: React.FC = () => {
           normalizeText(auth.user?.userCode),
         );
         const overviewQuery = lecturerCode ? { lecturerCode } : {};
-        const listQuery = lecturerCode ? { lecturerCode, limit: 10 } : { limit: 10 };
-        const workloadQuery = lecturerCode ? { lecturerCode, days: 30 } : { days: 30 };
+        const listQuery = lecturerCode
+          ? { lecturerCode, limit: 10 }
+          : { limit: 10 };
+        const workloadQuery = lecturerCode
+          ? { lecturerCode, days: 30 }
+          : { days: 30 };
 
-        const [overviewResponse, reviewQueueResponse, scoringResponse, riskResponse, workloadResponse] = await Promise.all([
+        const [
+          overviewResponse,
+          reviewQueueResponse,
+          scoringResponse,
+          riskResponse,
+          workloadResponse,
+        ] = await Promise.all([
           getLecturerOverview(overviewQuery),
           getLecturerReviewQueue(listQuery),
           getLecturerScoringProgress(listQuery),
@@ -369,40 +408,44 @@ const Dashboard: React.FC = () => {
     const workloadRow = workloadRows[0] ?? {};
 
     return {
-      totalStudents:
-        readDashboardNumber(
-          overviewRow,
-          ["CURRENTGUIDINGCOUNT", "currentGuidingCount"],
-          0,
-        ),
-      approvedTopics:
-        readDashboardNumber(
-          overviewRow,
-          ["TOPICS_PENDING_APPROVAL", "topicsPendingApproval"],
-          0,
-        ),
-      pendingReviews:
-        readDashboardNumber(
-          overviewRow,
-          ["PROGRESS_PENDING_REVIEW", "progressPendingReview"],
-          0,
-        ),
-      upcomingDefenses:
-        readDashboardNumber(
-          overviewRow,
-          ["UPCOMING_DEFENSE_7D", "upcomingDefense7d"],
-          0,
-        ),
+      totalStudents: readDashboardNumber(
+        overviewRow,
+        ["CURRENTGUIDINGCOUNT", "currentGuidingCount"],
+        0,
+      ),
+      approvedTopics: readDashboardNumber(
+        overviewRow,
+        ["TOPICS_PENDING_APPROVAL", "topicsPendingApproval"],
+        0,
+      ),
+      pendingReviews: readDashboardNumber(
+        overviewRow,
+        ["PROGRESS_PENDING_REVIEW", "progressPendingReview"],
+        0,
+      ),
+      upcomingDefenses: readDashboardNumber(
+        overviewRow,
+        ["UPCOMING_DEFENSE_7D", "upcomingDefense7d"],
+        0,
+      ),
       completedReports:
         readDashboardNumber(
           overviewRow,
           ["HIGH_RISK_ITEMS", "highRiskItems"],
           readDashboardNumber(scoringRow, ["OVERDUE_COUNT", "overdueCount"], 0),
-        ) || readDashboardNumber(workloadRow, ["HIGH_RISK_ITEMS", "highRiskItems"], 0),
+        ) ||
+        readDashboardNumber(
+          workloadRow,
+          ["HIGH_RISK_ITEMS", "highRiskItems"],
+          0,
+        ),
     };
   }, [overviewRows, scoringRows, workloadRows]);
 
-  const recentActivities = useMemo(() => buildActivities(reviewRows), [reviewRows]);
+  const recentActivities = useMemo(
+    () => buildActivities(reviewRows),
+    [reviewRows],
+  );
   const upcomingEvents = useMemo(() => buildEvents(riskRows), [riskRows]);
 
   if (loading) {
@@ -543,7 +586,10 @@ const Dashboard: React.FC = () => {
           >
             {stats.totalStudents}
           </div>
-          <div className="stat-label" style={{ fontSize: "14px", color: "#666" }}>
+          <div
+            className="stat-label"
+            style={{ fontSize: "14px", color: "#666" }}
+          >
             Sinh viên đang hướng dẫn
           </div>
         </div>
@@ -573,7 +619,10 @@ const Dashboard: React.FC = () => {
           >
             {stats.approvedTopics}
           </div>
-          <div className="stat-label" style={{ fontSize: "14px", color: "#666" }}>
+          <div
+            className="stat-label"
+            style={{ fontSize: "14px", color: "#666" }}
+          >
             Đề tài chờ duyệt
           </div>
         </div>
@@ -599,7 +648,10 @@ const Dashboard: React.FC = () => {
           >
             {stats.pendingReviews}
           </div>
-          <div className="stat-label" style={{ fontSize: "14px", color: "#666" }}>
+          <div
+            className="stat-label"
+            style={{ fontSize: "14px", color: "#666" }}
+          >
             Tiến độ chờ review
           </div>
         </div>
@@ -613,7 +665,11 @@ const Dashboard: React.FC = () => {
             padding: "20px",
           }}
         >
-          <Calendar size={24} color="#8B5CF6" style={{ marginBottom: "12px" }} />
+          <Calendar
+            size={24}
+            color="#8B5CF6"
+            style={{ marginBottom: "12px" }}
+          />
           <div
             className="stat-value"
             style={{
@@ -625,7 +681,10 @@ const Dashboard: React.FC = () => {
           >
             {stats.upcomingDefenses}
           </div>
-          <div className="stat-label" style={{ fontSize: "14px", color: "#666" }}>
+          <div
+            className="stat-label"
+            style={{ fontSize: "14px", color: "#666" }}
+          >
             Bảo vệ 7 ngày
           </div>
         </div>
@@ -675,7 +734,13 @@ const Dashboard: React.FC = () => {
             {recentActivities.length === 0 ? (
               <div style={{ color: "#6B7280" }}>Chưa có hoạt động mới.</div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
                 {recentActivities.map((activity) => (
                   <div
                     key={activity.id}
@@ -778,7 +843,13 @@ const Dashboard: React.FC = () => {
             {upcomingEvents.length === 0 ? (
               <div style={{ color: "#6B7280" }}>Chưa có sự kiện mới.</div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
                 {upcomingEvents.map((event) => (
                   <div
                     key={event.id}
@@ -789,16 +860,40 @@ const Dashboard: React.FC = () => {
                       border: "1px solid #E5E7EB",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
                       <div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>
+                        <div
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 600,
+                            color: "#111827",
+                          }}
+                        >
                           {event.title}
                         </div>
-                        <div style={{ fontSize: 13, color: "#6B7280", marginTop: 6 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: "#6B7280",
+                            marginTop: 6,
+                          }}
+                        >
                           {event.date} · {event.time}
                         </div>
                         {event.location && (
-                          <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: "#6B7280",
+                              marginTop: 4,
+                            }}
+                          >
                             {event.location}
                           </div>
                         )}
@@ -833,24 +928,53 @@ const Dashboard: React.FC = () => {
               border: "1px solid rgba(255, 255, 255, 0.2)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 18,
+              }}
+            >
               <TrendingUp size={22} color="#F37021" />
               <h3 style={{ margin: 0, fontSize: 20, color: "#1F2937" }}>
                 Tóm tắt
               </h3>
             </div>
             <div style={{ display: "grid", gap: 12 }}>
-              <div style={{ padding: 14, background: "#FFF7ED", borderRadius: 14 }}>
-                <div style={{ fontSize: 12, color: "#6B7280" }}>Chỉ tiêu hướng dẫn</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#F37021" }}>{stats.approvedTopics}</div>
+              <div
+                style={{ padding: 14, background: "#FFF7ED", borderRadius: 14 }}
+              >
+                <div style={{ fontSize: 12, color: "#6B7280" }}>
+                  Chỉ tiêu hướng dẫn
+                </div>
+                <div
+                  style={{ fontSize: 24, fontWeight: 700, color: "#F37021" }}
+                >
+                  {stats.approvedTopics}
+                </div>
               </div>
-              <div style={{ padding: 14, background: "#FEFCE8", borderRadius: 14 }}>
-                <div style={{ fontSize: 12, color: "#6B7280" }}>Chỉ tiêu bảo vệ</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#F59E0B" }}>{stats.pendingReviews}</div>
+              <div
+                style={{ padding: 14, background: "#FEFCE8", borderRadius: 14 }}
+              >
+                <div style={{ fontSize: 12, color: "#6B7280" }}>
+                  Chỉ tiêu bảo vệ
+                </div>
+                <div
+                  style={{ fontSize: 24, fontWeight: 700, color: "#F59E0B" }}
+                >
+                  {stats.pendingReviews}
+                </div>
               </div>
-              <div style={{ padding: 14, background: "#EEF2FF", borderRadius: 14 }}>
+              <div
+                style={{ padding: 14, background: "#EEF2FF", borderRadius: 14 }}
+              >
                 <div style={{ fontSize: 12, color: "#6B7280" }}>Rủi ro cao</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#8B5CF6" }}>{stats.upcomingDefenses}</div>
+                <div
+                  style={{ fontSize: 24, fontWeight: 700, color: "#8B5CF6" }}
+                >
+                  {stats.upcomingDefenses}
+                </div>
               </div>
             </div>
           </div>
@@ -865,7 +989,14 @@ const Dashboard: React.FC = () => {
               border: "1px solid rgba(255, 255, 255, 0.2)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 18,
+              }}
+            >
               <Bell size={22} color="#F37021" />
               <h3 style={{ margin: 0, fontSize: 20, color: "#1F2937" }}>
                 Thao tác nhanh

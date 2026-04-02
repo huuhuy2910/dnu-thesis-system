@@ -335,9 +335,12 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       detailPath: (code) => `/Tags/get-by-code/${encodeURIComponent(code)}`,
       createTemplatePath: "/Tags/get-create",
       createPath: "/Tags/create",
-      updateTemplatePath: (token) => `/Tags/get-update/${encodeURIComponent(String(token))}`,
-      updatePath: (token) => `/Tags/update/${encodeURIComponent(String(token))}`,
-      deletePath: (token) => `/Tags/delete/${encodeURIComponent(String(token))}`,
+      updateTemplatePath: (token) =>
+        `/Tags/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/Tags/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/Tags/delete/${encodeURIComponent(String(token))}`,
     },
     exchange: {
       importPath: "/Tags/import",
@@ -385,12 +388,16 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
     ],
     api: {
       listPath: "/CatalogTopics/get-list-with-tags",
-      detailPath: (code) => `/CatalogTopics/get-detail/${encodeURIComponent(code)}`,
+      detailPath: (code) =>
+        `/CatalogTopics/get-detail/${encodeURIComponent(code)}`,
       createTemplatePath: "/CatalogTopics/get-create",
       createPath: "/CatalogTopics/create",
-      updateTemplatePath: (token) => `/CatalogTopics/get-update/${encodeURIComponent(String(token))}`,
-      updatePath: (token) => `/CatalogTopics/update/${encodeURIComponent(String(token))}`,
-      deletePath: (token) => `/CatalogTopics/delete/${encodeURIComponent(String(token))}`,
+      updateTemplatePath: (token) =>
+        `/CatalogTopics/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/CatalogTopics/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/CatalogTopics/delete/${encodeURIComponent(String(token))}`,
     },
     exchange: {
       importPath: "/DataExchange/import/catalogtopics",

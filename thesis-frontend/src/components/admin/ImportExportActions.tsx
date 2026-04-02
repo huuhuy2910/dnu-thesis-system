@@ -126,12 +126,16 @@ function getExportColumns(rows: PreviewRow[], fieldNames: string[]): string[] {
 }
 
 function getBlobSize(bytesOrText: string | Blob): number {
-  return typeof bytesOrText === "string" ? new Blob([bytesOrText]).size : bytesOrText.size;
+  return typeof bytesOrText === "string"
+    ? new Blob([bytesOrText]).size
+    : bytesOrText.size;
 }
 
 function normalizeRows(payload: unknown): PreviewRow[] {
   if (Array.isArray(payload)) {
-    return payload.filter((item) => item && typeof item === "object") as PreviewRow[];
+    return payload.filter(
+      (item) => item && typeof item === "object",
+    ) as PreviewRow[];
   }
 
   if (!payload || typeof payload !== "object") {
@@ -139,10 +143,19 @@ function normalizeRows(payload: unknown): PreviewRow[] {
   }
 
   const source = payload as Record<string, unknown>;
-  const containers = [source.items, source.records, source.result, source.data, source.list, source.payload];
+  const containers = [
+    source.items,
+    source.records,
+    source.result,
+    source.data,
+    source.list,
+    source.payload,
+  ];
   for (const container of containers) {
     if (Array.isArray(container)) {
-      return container.filter((item) => item && typeof item === "object") as PreviewRow[];
+      return container.filter(
+        (item) => item && typeof item === "object",
+      ) as PreviewRow[];
     }
   }
 
@@ -160,26 +173,37 @@ function getRowValue(row: PreviewRow, key: string): unknown {
 }
 
 function buildModuleUrl(path: string, format?: DataExchangeFormat): string {
-  const envBaseRaw = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5180").toString();
-  const ensureScheme = (value: string) => (/^https?:\/\//i.test(value) ? value : `http://${value}`);
+  const envBaseRaw = (
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:5180"
+  ).toString();
+  const ensureScheme = (value: string) =>
+    /^https?:\/\//i.test(value) ? value : `http://${value}`;
   const normalizedBase = (() => {
     const base = ensureScheme(envBaseRaw.trim());
     return base.endsWith("/") ? base.slice(0, -1) : base;
   })();
   const apiBase = `${normalizedBase}/api`;
-  const url = path.startsWith("http") ? path : `${apiBase}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = path.startsWith("http")
+    ? path
+    : `${apiBase}${path.startsWith("/") ? path : `/${path}`}`;
   if (!format) return url;
-  return url.includes("?") ? `${url}&format=${encodeURIComponent(format)}` : `${url}?format=${encodeURIComponent(format)}`;
+  return url.includes("?")
+    ? `${url}&format=${encodeURIComponent(format)}`
+    : `${url}?format=${encodeURIComponent(format)}`;
 }
 
-function parseImportErrors(payload: ApiResponse<Record<string, unknown>>): ImportResult {
+function parseImportErrors(
+  payload: ApiResponse<Record<string, unknown>>,
+): ImportResult {
   const data = (payload.data ?? {}) as Record<string, unknown>;
   const errors = Array.isArray(data.errors)
-    ? data.errors.map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object") return item as ImportErrorRow;
-        return null;
-      }).filter((item): item is ImportErrorItem => item !== null)
+    ? data.errors
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") return item as ImportErrorRow;
+          return null;
+        })
+        .filter((item): item is ImportErrorItem => item !== null)
     : [];
 
   return {
@@ -196,9 +220,18 @@ function renderImportErrorLine(item: ImportErrorItem, index: number): string {
     return item;
   }
 
-  const row = typeof item.row === "number" && Number.isFinite(item.row) ? `Dòng ${item.row}` : `Lỗi ${index + 1}`;
-  const field = typeof item.field === "string" && item.field.trim() ? ` - ${item.field}` : "";
-  const message = typeof item.message === "string" && item.message.trim() ? item.message : "Lỗi dữ liệu";
+  const row =
+    typeof item.row === "number" && Number.isFinite(item.row)
+      ? `Dòng ${item.row}`
+      : `Lỗi ${index + 1}`;
+  const field =
+    typeof item.field === "string" && item.field.trim()
+      ? ` - ${item.field}`
+      : "";
+  const message =
+    typeof item.message === "string" && item.message.trim()
+      ? item.message
+      : "Lỗi dữ liệu";
   return `${row}${field}: ${message}`;
 }
 
@@ -221,12 +254,18 @@ function buildCsv(rows: PreviewRow[], columns: string[]): Blob {
   };
 
   const header = columns.map((item) => escapeCell(item)).join(",");
-  const body = rows.map((row) => columns.map((column) => escapeCell(getRowValue(row, column))).join(",")).join("\n");
+  const body = rows
+    .map((row) =>
+      columns.map((column) => escapeCell(getRowValue(row, column))).join(","),
+    )
+    .join("\n");
   return new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
 }
 
 function buildJson(rows: PreviewRow[]): Blob {
-  return new Blob([JSON.stringify(rows, null, 2)], { type: "application/json;charset=utf-8;" });
+  return new Blob([JSON.stringify(rows, null, 2)], {
+    type: "application/json;charset=utf-8;",
+  });
 }
 
 function buildXlsx(rows: PreviewRow[]): Blob {
@@ -239,7 +278,10 @@ function buildXlsx(rows: PreviewRow[]): Blob {
   });
 }
 
-async function parseFile(file: File, format: DataExchangeFormat): Promise<PreviewRow[]> {
+async function parseFile(
+  file: File,
+  format: DataExchangeFormat,
+): Promise<PreviewRow[]> {
   if (format === "json") {
     const text = await file.text();
     const payload = JSON.parse(text) as unknown;
@@ -253,7 +295,9 @@ async function parseFile(file: File, format: DataExchangeFormat): Promise<Previe
     return [];
   }
   const sheet = workbook.Sheets[firstSheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: "",
+  });
   return rows.filter((item) => item && typeof item === "object");
 }
 
@@ -268,7 +312,8 @@ function getColumnsFromRows(rows: PreviewRow[]): string[] {
 function formatPreviewCell(value: unknown): string {
   if (value === null || value === undefined) return "--";
   if (typeof value === "string") return value || "--";
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   if (Array.isArray(value)) return value.map(formatPreviewCell).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
@@ -282,7 +327,9 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
   const { addToast } = useToast();
   const config = getConfig(moduleName);
   const displayLabel = moduleLabel || config.title;
-  const [dialogMode, setDialogMode] = useState<"import" | "export" | null>(null);
+  const [dialogMode, setDialogMode] = useState<"import" | "export" | null>(
+    null,
+  );
   const [importFormat, setImportFormat] = useState<DataExchangeFormat>("xlsx");
   const [exportFormat, setExportFormat] = useState<DataExchangeFormat>("xlsx");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -295,19 +342,35 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
   const [showErrors, setShowErrors] = useState(false);
   const [exportPreviewRows, setExportPreviewRows] = useState<PreviewRow[]>([]);
   const [isLoadingExportPreview, setIsLoadingExportPreview] = useState(false);
-  const [exportPreviewError, setExportPreviewError] = useState<string | null>(null);
+  const [exportPreviewError, setExportPreviewError] = useState<string | null>(
+    null,
+  );
 
   const requiredFields = useMemo(
-    () => config.fields.filter((field) => field.required).map((field) => field.name),
+    () =>
+      config.fields
+        .filter((field) => field.required)
+        .map((field) => field.name),
     [config.fields],
   );
   const optionalFields = useMemo(
-    () => config.fields.filter((field) => !field.required).map((field) => field.name),
+    () =>
+      config.fields
+        .filter((field) => !field.required)
+        .map((field) => field.name),
     [config.fields],
   );
-  const expectedColumns = useMemo(() => config.tableColumns.map((column) => column.key), [config.tableColumns]);
+  const expectedColumns = useMemo(
+    () => config.tableColumns.map((column) => column.key),
+    [config.tableColumns],
+  );
   const previewColumns = useMemo(() => {
-    const merged = new Set<string>(["#", ...expectedColumns, ...requiredFields, ...optionalFields]);
+    const merged = new Set<string>([
+      "#",
+      ...expectedColumns,
+      ...requiredFields,
+      ...optionalFields,
+    ]);
     return Array.from(merged).filter((item) => item !== "#");
   }, [expectedColumns, optionalFields, requiredFields]);
 
@@ -316,11 +379,17 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       return previewColumns.slice(0, 8);
     }
     const fileColumns = getColumnsFromRows(parsedRows);
-    return Array.from(new Set([...previewColumns, ...fileColumns])).slice(0, 10);
+    return Array.from(new Set([...previewColumns, ...fileColumns])).slice(
+      0,
+      10,
+    );
   }, [parsedRows, previewColumns]);
 
   const exportPreviewColumns = useMemo(() => {
-    return getExportColumns(exportPreviewRows, config.fields.map((field) => field.name));
+    return getExportColumns(
+      exportPreviewRows,
+      config.fields.map((field) => field.name),
+    );
   }, [config.fields, exportPreviewRows]);
 
   const exportColumnCount = useMemo(
@@ -329,7 +398,8 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
   );
 
   const activePreviewColumns = useMemo(
-    () => (dialogMode === "export" ? exportPreviewColumns : importPreviewColumns),
+    () =>
+      dialogMode === "export" ? exportPreviewColumns : importPreviewColumns,
     [dialogMode, exportPreviewColumns, importPreviewColumns],
   );
 
@@ -345,8 +415,14 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
     return requiredFields.filter((field) => !columns.has(normalizeKey(field)));
   }, [parsedRows, requiredFields]);
 
-  const fileColumns = useMemo(() => getColumnsFromRows(parsedRows), [parsedRows]);
-  const previewRows = useMemo(() => parsedRows.slice(0, IMPORT_PREVIEW_LIMIT), [parsedRows]);
+  const fileColumns = useMemo(
+    () => getColumnsFromRows(parsedRows),
+    [parsedRows],
+  );
+  const previewRows = useMemo(
+    () => parsedRows.slice(0, IMPORT_PREVIEW_LIMIT),
+    [parsedRows],
+  );
 
   const importFileStats = useMemo(() => {
     const fileSize = selectedFile ? formatFileSize(selectedFile.size) : "0 MB";
@@ -362,12 +438,16 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       {
         label: "Dung lượng",
         value: selectedFile ? fileSize : "--",
-        hint: selectedFile ? (selectedFile.type || "file upload") : "Chưa chọn file",
+        hint: selectedFile
+          ? selectedFile.type || "file upload"
+          : "Chưa chọn file",
       },
       {
         label: "Số cột",
         value: selectedFile ? String(columnCount || 0) : "--",
-        hint: selectedFile ? `${missingRequiredColumns.length} cột bắt buộc còn thiếu` : `Template có ${expectedCount} cột`,
+        hint: selectedFile
+          ? `${missingRequiredColumns.length} cột bắt buộc còn thiếu`
+          : `Template có ${expectedCount} cột`,
       },
       {
         label: "Định dạng",
@@ -375,13 +455,26 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         hint: selectedFile ? "Sẽ gửi lên API import" : "Chưa có dữ liệu",
       },
     ];
-  }, [importFormat, missingRequiredColumns.length, optionalFields.length, parsedRows, requiredFields.length, selectedFile]);
+  }, [
+    importFormat,
+    missingRequiredColumns.length,
+    optionalFields.length,
+    parsedRows,
+    requiredFields.length,
+    selectedFile,
+  ]);
 
   const exportFileStats = useMemo(() => {
     const recordCount = exportPreviewRows.length;
-    const previewSize = formatFileSize(getBlobSize(JSON.stringify(exportPreviewRows)));
-    const totalDefinedFields = config.fields.filter((field) => !isSystemIdColumn(field.name)).length;
-    const excludedColumns = config.fields.filter((field) => isSystemIdColumn(field.name)).length;
+    const previewSize = formatFileSize(
+      getBlobSize(JSON.stringify(exportPreviewRows)),
+    );
+    const totalDefinedFields = config.fields.filter(
+      (field) => !isSystemIdColumn(field.name),
+    ).length;
+    const excludedColumns = config.fields.filter((field) =>
+      isSystemIdColumn(field.name),
+    ).length;
     return [
       {
         label: "Bản ghi",
@@ -404,7 +497,12 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         hint: "Dùng để dựng file export",
       },
     ];
-  }, [config.exchange.previewPath, config.fields, exportColumnCount, exportPreviewRows]);
+  }, [
+    config.exchange.previewPath,
+    config.fields,
+    exportColumnCount,
+    exportPreviewRows,
+  ]);
 
   const resetImportState = () => {
     setSelectedFile(null);
@@ -435,17 +533,29 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       setExportPreviewError(null);
 
       try {
-        const previewPath = config.exchange.previewPath || `${config.api.listPath}?page=1&pageSize=${EXPORT_PREVIEW_LIMIT}`;
+        const previewPath =
+          config.exchange.previewPath ||
+          `${config.api.listPath}?page=1&pageSize=${EXPORT_PREVIEW_LIMIT}`;
         const response = await fetchData<ApiResponse<unknown>>(previewPath);
         if (!response.success) {
-          throw new Error(response.message || response.title || "Không thể tải preview export.");
+          throw new Error(
+            response.message ||
+              response.title ||
+              "Không thể tải preview export.",
+          );
         }
         if (cancelled) return;
-        setExportPreviewRows(normalizeRows(response.data).slice(0, EXPORT_PREVIEW_LIMIT));
+        setExportPreviewRows(
+          normalizeRows(response.data).slice(0, EXPORT_PREVIEW_LIMIT),
+        );
       } catch (error) {
         if (!cancelled) {
           setExportPreviewRows([]);
-          setExportPreviewError(error instanceof Error ? error.message : "Không thể tải preview export.");
+          setExportPreviewError(
+            error instanceof Error
+              ? error.message
+              : "Không thể tải preview export.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -485,8 +595,13 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       return;
     }
 
-    const extension = file.name.split(".").pop()?.toLowerCase() as DataExchangeFormat | undefined;
-    const detectedFormat = extension && ALLOWED_FORMATS.includes(extension) ? extension : importFormat;
+    const extension = file.name.split(".").pop()?.toLowerCase() as
+      | DataExchangeFormat
+      | undefined;
+    const detectedFormat =
+      extension && ALLOWED_FORMATS.includes(extension)
+        ? extension
+        : importFormat;
     setImportFormat(detectedFormat);
 
     setIsParsingFile(true);
@@ -499,8 +614,11 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         return;
       }
 
-      const missingColumns = requiredFields.filter((field) =>
-        !getColumnsFromRows(rows).some((column) => normalizeKey(column) === normalizeKey(field)),
+      const missingColumns = requiredFields.filter(
+        (field) =>
+          !getColumnsFromRows(rows).some(
+            (column) => normalizeKey(column) === normalizeKey(field),
+          ),
       );
 
       if (missingColumns.length > 0) {
@@ -511,8 +629,13 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
 
       addToast("Đã tạo preview file thành công.", "success");
     } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : "Không thể đọc file.");
-      addToast("Không thể preview file. Hãy kiểm tra định dạng hoặc nội dung.", "warning");
+      setPreviewError(
+        error instanceof Error ? error.message : "Không thể đọc file.",
+      );
+      addToast(
+        "Không thể preview file. Hãy kiểm tra định dạng hoặc nội dung.",
+        "warning",
+      );
     } finally {
       setIsParsingFile(false);
     }
@@ -525,7 +648,10 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
     }
 
     if (missingRequiredColumns.length > 0) {
-      addToast(`Thiếu cột bắt buộc: ${missingRequiredColumns.join(", ")}`, "error");
+      addToast(
+        `Thiếu cột bắt buộc: ${missingRequiredColumns.join(", ")}`,
+        "error",
+      );
       return;
     }
 
@@ -535,7 +661,10 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       formData.append("file", selectedFile);
 
       const token = getAccessToken();
-      const importUrl = buildModuleUrl(config.exchange.importPath, config.exchange.importUsesFormatQuery ? importFormat : undefined);
+      const importUrl = buildModuleUrl(
+        config.exchange.importPath,
+        config.exchange.importUsesFormatQuery ? importFormat : undefined,
+      );
       const response = await fetch(importUrl, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -547,9 +676,13 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         throw new Error(message.trim() || "Import dữ liệu thất bại.");
       }
 
-      const payload = (await response.json()) as ApiResponse<Record<string, unknown>>;
+      const payload = (await response.json()) as ApiResponse<
+        Record<string, unknown>
+      >;
       if (!payload.success) {
-        throw new Error(payload.message || payload.title || "Import dữ liệu thất bại.");
+        throw new Error(
+          payload.message || payload.title || "Import dữ liệu thất bại.",
+        );
       }
 
       const result = parseImportErrors(payload);
@@ -559,7 +692,10 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         await onImportSuccess();
       }
     } catch (error) {
-      addToast(error instanceof Error ? error.message : "Import dữ liệu thất bại.", "error");
+      addToast(
+        error instanceof Error ? error.message : "Import dữ liệu thất bại.",
+        "error",
+      );
     } finally {
       setIsImporting(false);
     }
@@ -573,11 +709,16 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       const response = await fetchData<ApiResponse<unknown>>(exportUrl);
 
       if (!response.success) {
-        throw new Error(response.message || response.title || "Không thể tải dữ liệu export.");
+        throw new Error(
+          response.message || response.title || "Không thể tải dữ liệu export.",
+        );
       }
 
       const rows = normalizeRows(response.data);
-      const columns = getExportColumns(rows, config.fields.map((field) => field.name));
+      const columns = getExportColumns(
+        rows,
+        config.fields.map((field) => field.name),
+      );
 
       if (rows.length === 0) {
         throw new Error("Chưa có dữ liệu để export.");
@@ -595,13 +736,20 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       addToast(`Export preview ${displayLabel} thành công.`, "success");
       setDialogMode(null);
     } catch (error) {
-      addToast(error instanceof Error ? error.message : "Export dữ liệu thất bại.", "error");
+      addToast(
+        error instanceof Error ? error.message : "Export dữ liệu thất bại.",
+        "error",
+      );
     } finally {
       setIsExporting(false);
     }
   };
 
-  const renderPreviewTable = (rows: PreviewRow[], columns: string[], emptyMessage: string) => {
+  const renderPreviewTable = (
+    rows: PreviewRow[],
+    columns: string[],
+    emptyMessage: string,
+  ) => {
     if (rows.length === 0) {
       return <div style={styles.emptyState}>{emptyMessage}</div>;
     }
@@ -614,7 +762,9 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
               <tr>
                 <th style={styles.thNo}>#</th>
                 {columns.map((column) => (
-                  <th key={column} style={styles.th}>{column}</th>
+                  <th key={column} style={styles.th}>
+                    {column}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -623,7 +773,9 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
                 <tr key={`${index}-${columns[0] || "row"}`}>
                   <td style={styles.tdNo}>{index + 1}</td>
                   {columns.map((column) => (
-                    <td key={column} style={styles.td}>{formatPreviewCell(getRowValue(row, column))}</td>
+                    <td key={column} style={styles.td}>
+                      {formatPreviewCell(getRowValue(row, column))}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -634,13 +786,17 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
     );
   };
 
-  const dialogTitle = dialogMode === "import" ? `Import ${displayLabel}` : `Export ${displayLabel}`;
+  const dialogTitle =
+    dialogMode === "import"
+      ? `Import ${displayLabel}`
+      : `Export ${displayLabel}`;
 
   const actionLabel = dialogMode === "import" ? "Import" : "Download";
   const actionHandler = dialogMode === "import" ? handleImport : handleExport;
-  const actionDisabled = dialogMode === "import"
-    ? isImporting || isParsingFile || selectedFile === null
-    : isExporting;
+  const actionDisabled =
+    dialogMode === "import"
+      ? isImporting || isParsingFile || selectedFile === null
+      : isExporting;
 
   return (
     <>
@@ -709,10 +865,18 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
         }
       `}</style>
       <div style={styles.triggerGroup}>
-        <button type="button" style={styles.secondaryButton} onClick={handleOpenImport}>
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={handleOpenImport}
+        >
           <Upload size={16} /> Import
         </button>
-        <button type="button" style={styles.secondaryButton} onClick={handleOpenExport}>
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={handleOpenExport}
+        >
           <Download size={16} /> Export
         </button>
       </div>
@@ -720,299 +884,386 @@ const ImportExportActions: React.FC<ImportExportActionsProps> = ({
       {dialogMode && (
         <div style={styles.overlay} role="dialog" aria-modal="true">
           <div style={styles.card}>
-            <div style={styles.cardScroll} className="import-export-popup-scroll">
-                  <div style={styles.cardHeader}>
-                    <div>
-                      <div style={styles.eyebrow}>Data exchange</div>
-                      <h3 style={styles.title}>{dialogTitle}</h3>
-                      <p style={styles.subtitle}>
-                        Dùng một popup chung để xem trước dữ liệu, kiểm tra cột bắt buộc và xác nhận trước khi thao tác.
-                      </p>
+            <div
+              style={styles.cardScroll}
+              className="import-export-popup-scroll"
+            >
+              <div style={styles.cardHeader}>
+                <div>
+                  <div style={styles.eyebrow}>Data exchange</div>
+                  <h3 style={styles.title}>{dialogTitle}</h3>
+                  <p style={styles.subtitle}>
+                    Dùng một popup chung để xem trước dữ liệu, kiểm tra cột bắt
+                    buộc và xác nhận trước khi thao tác.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDialog}
+                  style={styles.iconButton}
+                  aria-label="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={styles.tabBar}>
+                <button
+                  type="button"
+                  onClick={() => setDialogMode("import")}
+                  style={
+                    dialogMode === "import" ? styles.tabActive : styles.tab
+                  }
+                >
+                  <FileUp size={15} /> Import
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDialogMode("export")}
+                  style={
+                    dialogMode === "export" ? styles.tabActive : styles.tab
+                  }
+                >
+                  <Download size={15} /> Export
+                </button>
+              </div>
+
+              <div style={styles.body}>
+                <aside style={styles.sidePanel}>
+                  <div style={styles.sideSection}>
+                    <div style={styles.sideHeading}>Ghi chú cột mẫu</div>
+                    <div style={styles.noteList}>
+                      {requiredFields.map((field) => (
+                        <div
+                          key={field}
+                          style={{
+                            ...styles.noteItemRequired,
+                            ...(isHighlightedField(field)
+                              ? styles.noteItemHighlighted
+                              : null),
+                          }}
+                        >
+                          <CheckCircle2 size={14} /> {field} là bắt buộc
+                        </div>
+                      ))}
+                      {optionalFields.slice(0, 8).map((field) => (
+                        <div
+                          key={field}
+                          style={{
+                            ...styles.noteItemOptional,
+                            ...(isHighlightedField(field)
+                              ? styles.noteItemHighlighted
+                              : null),
+                          }}
+                        >
+                          <ArrowRight size={14} /> {field} tùy chọn
+                        </div>
+                      ))}
+                      {config.exchange.importNotes?.map((note) => (
+                        <div key={note} style={styles.noteItemInfo}>
+                          <AlertCircle size={14} /> {note}
+                        </div>
+                      ))}
                     </div>
-                    <button type="button" onClick={closeDialog} style={styles.iconButton} aria-label="Đóng">
-                      <X size={18} />
-                    </button>
                   </div>
 
-                  <div style={styles.tabBar}>
-                    <button
-                      type="button"
-                      onClick={() => setDialogMode("import")}
-                      style={dialogMode === "import" ? styles.tabActive : styles.tab}
-                    >
-                      <FileUp size={15} /> Import
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDialogMode("export")}
-                      style={dialogMode === "export" ? styles.tabActive : styles.tab}
-                    >
-                      <Download size={15} /> Export
-                    </button>
+                  <div style={styles.sideSection}>
+                    <div style={styles.sideHeading}>Template preview</div>
+                    <div style={styles.miniText}>
+                      Các cột chính đang được dùng:{" "}
+                      {expectedColumns.join(", ") || "--"}
+                    </div>
+                    <div style={styles.miniText}>
+                      Tối đa{" "}
+                      {dialogMode === "import"
+                        ? IMPORT_PREVIEW_LIMIT
+                        : EXPORT_PREVIEW_LIMIT}{" "}
+                      dòng xem trước.
+                    </div>
                   </div>
+                </aside>
 
-                  <div style={styles.body}>
-                    <aside style={styles.sidePanel}>
-                      <div style={styles.sideSection}>
-                        <div style={styles.sideHeading}>Ghi chú cột mẫu</div>
-                        <div style={styles.noteList}>
-                          {requiredFields.map((field) => (
-                            <div
-                              key={field}
-                              style={{
-                                ...styles.noteItemRequired,
-                                ...(isHighlightedField(field)
-                                  ? styles.noteItemHighlighted
-                                  : null),
-                              }}
+                <section style={styles.mainPanel}>
+                  {dialogMode === "import" ? (
+                    <>
+                      <div style={styles.importBox}>
+                        <div style={styles.sectionHeaderRow}>
+                          <div style={styles.sectionTitle}>
+                            Chọn file import
+                          </div>
+                          <button
+                            type="button"
+                            style={styles.sectionActionButton}
+                            className="import-export-action-button"
+                            onClick={actionHandler}
+                            disabled={actionDisabled}
+                          >
+                            {actionLabel}
+                          </button>
+                        </div>
+                        <div style={styles.inlineRow}>
+                          <label style={styles.formatSelectWrap}>
+                            <span style={styles.labelText}>Định dạng</span>
+                            <select
+                              value={importFormat}
+                              onChange={(event) =>
+                                setImportFormat(
+                                  event.target.value as DataExchangeFormat,
+                                )
+                              }
+                              style={styles.select}
+                              disabled={isParsingFile || isImporting}
                             >
-                              <CheckCircle2 size={14} /> {field} là bắt buộc
+                              {ALLOWED_FORMATS.map((format) => (
+                                <option key={format} value={format}>
+                                  {format.toUpperCase()}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <label style={styles.fileButton}>
+                              <FileSpreadsheet size={16} />
+                              {selectedFile ? selectedFile.name : "Chọn file"}
+                              <input
+                                type="file"
+                                accept=".xlsx,.csv,.json"
+                                onChange={(event) =>
+                                  void handleFileChange(
+                                    event.target.files?.[0] ?? null,
+                                  )
+                                }
+                                style={{ display: "none" }}
+                                disabled={isParsingFile || isImporting}
+                              />
+                            </label>
+
+                            {selectedFile && (
+                              <button
+                                type="button"
+                                onClick={() => handleFileChange(null)}
+                                style={styles.clearFileButton}
+                                aria-label="Bỏ chọn file"
+                                title="Bỏ chọn file"
+                                disabled={isParsingFile || isImporting}
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={styles.helperRow}>
+                          <span style={styles.helperPill}>
+                            Có thể chọn lại file bất kỳ lúc nào
+                          </span>
+                          <span style={styles.helperPill}>
+                            File &gt; 10MB sẽ bị chặn
+                          </span>
+                        </div>
+
+                        <div style={styles.infoGrid}>
+                          {importFileStats.map((item) => (
+                            <div key={item.label} style={styles.infoCard}>
+                              <div style={styles.infoLabel}>{item.label}</div>
+                              <div style={styles.infoValue}>{item.value}</div>
+                              <div style={styles.infoHint}>{item.hint}</div>
                             </div>
                           ))}
-                          {optionalFields.slice(0, 8).map((field) => (
-                            <div
-                              key={field}
-                              style={{
-                                ...styles.noteItemOptional,
-                                ...(isHighlightedField(field)
-                                  ? styles.noteItemHighlighted
-                                  : null),
-                              }}
-                            >
-                              <ArrowRight size={14} /> {field} tùy chọn
-                            </div>
-                          ))}
-                          {config.exchange.importNotes?.map((note) => (
-                            <div key={note} style={styles.noteItemInfo}>
-                              <AlertCircle size={14} /> {note}
+                        </div>
+
+                        {previewError && (
+                          <div style={styles.warningBox}>
+                            <AlertCircle size={16} /> {previewError}
+                          </div>
+                        )}
+
+                        {missingRequiredColumns.length > 0 && (
+                          <div style={styles.errorBox}>
+                            <AlertCircle size={16} /> Thiếu cột bắt buộc:{" "}
+                            {missingRequiredColumns.join(", ")}
+                          </div>
+                        )}
+
+                        {parsedRows.length > 0 && (
+                          <div style={styles.successBox}>
+                            <CheckCircle2 size={16} /> Đã đọc{" "}
+                            {parsedRows.length} dòng. Preview hiển thị{" "}
+                            {previewRows.length} dòng đầu.
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={styles.previewCard}>
+                        <div style={styles.sectionHeaderRow}>
+                          <div style={styles.sectionTitle}>
+                            Preview file trước khi import
+                          </div>
+                          <div style={styles.sectionActionHint}>
+                            Xem trước dữ liệu trước khi xác nhận
+                          </div>
+                        </div>
+                        {renderPreviewTable(
+                          previewRows,
+                          importPreviewColumns,
+                          "Hãy chọn file để xem preview.",
+                        )}
+                        {fileColumns.length > 0 && (
+                          <div style={styles.metaText}>
+                            Cột phát hiện: {fileColumns.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={styles.importBox}>
+                        <div style={styles.sectionHeaderRow}>
+                          <div style={styles.sectionTitle}>
+                            Thiết lập export
+                          </div>
+                          <button
+                            type="button"
+                            style={styles.sectionActionButton}
+                            className="import-export-action-button"
+                            onClick={actionHandler}
+                            disabled={actionDisabled}
+                          >
+                            {actionLabel}
+                          </button>
+                        </div>
+                        <label style={styles.formatSelectWrap}>
+                          <span style={styles.labelText}>Định dạng</span>
+                          <select
+                            value={exportFormat}
+                            onChange={(event) =>
+                              setExportFormat(
+                                event.target.value as DataExchangeFormat,
+                              )
+                            }
+                            style={styles.select}
+                            disabled={isExporting}
+                          >
+                            {ALLOWED_FORMATS.map((format) => (
+                              <option key={format} value={format}>
+                                {format.toUpperCase()}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <div style={styles.helperRow}>
+                          <span style={styles.helperPill}>
+                            Preview được lấy từ API danh sách gần nhất
+                          </span>
+                          <span style={styles.helperPill}>
+                            Nếu export server lỗi sẽ fallback sang file
+                            client-side
+                          </span>
+                        </div>
+
+                        <div style={styles.infoGrid}>
+                          {exportFileStats.map((item) => (
+                            <div key={item.label} style={styles.infoCard}>
+                              <div style={styles.infoLabel}>{item.label}</div>
+                              <div style={styles.infoValue}>{item.value}</div>
+                              <div style={styles.infoHint}>{item.hint}</div>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div style={styles.sideSection}>
-                        <div style={styles.sideHeading}>Template preview</div>
-                        <div style={styles.miniText}>Các cột chính đang được dùng: {expectedColumns.join(", ") || "--"}</div>
-                        <div style={styles.miniText}>Tối đa {dialogMode === "import" ? IMPORT_PREVIEW_LIMIT : EXPORT_PREVIEW_LIMIT} dòng xem trước.</div>
+                      <div style={styles.previewCard}>
+                        <div style={styles.sectionHeaderRow}>
+                          <div style={styles.sectionTitle}>
+                            Preview dữ liệu export
+                          </div>
+                          <div style={styles.sectionActionHint}>
+                            Dữ liệu sẽ được đóng gói đủ cột trừ cột id
+                          </div>
+                        </div>
+                        {isLoadingExportPreview ? (
+                          <div style={styles.loadingBox}>
+                            <RefreshCw size={16} className="spin" /> Đang tải dữ
+                            liệu preview...
+                          </div>
+                        ) : exportPreviewError ? (
+                          <div style={styles.warningBox}>
+                            <AlertCircle size={16} /> {exportPreviewError}
+                          </div>
+                        ) : (
+                          renderPreviewTable(
+                            exportPreviewRows,
+                            exportPreviewColumns,
+                            "Chưa có dữ liệu preview export.",
+                          )
+                        )}
                       </div>
-                    </aside>
+                    </>
+                  )}
 
-                    <section style={styles.mainPanel}>
-                      {dialogMode === "import" ? (
-                        <>
-                          <div style={styles.importBox}>
-                            <div style={styles.sectionHeaderRow}>
-                              <div style={styles.sectionTitle}>Chọn file import</div>
-                              <button
-                                type="button"
-                                style={styles.sectionActionButton}
-                                className="import-export-action-button"
-                                onClick={actionHandler}
-                                disabled={actionDisabled}
-                              >
-                                {actionLabel}
-                              </button>
-                            </div>
-                            <div style={styles.inlineRow}>
-                              <label style={styles.formatSelectWrap}>
-                                <span style={styles.labelText}>Định dạng</span>
-                                <select
-                                  value={importFormat}
-                                  onChange={(event) => setImportFormat(event.target.value as DataExchangeFormat)}
-                                  style={styles.select}
-                                  disabled={isParsingFile || isImporting}
-                                >
-                                  {ALLOWED_FORMATS.map((format) => (
-                                    <option key={format} value={format}>
-                                      {format.toUpperCase()}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
+                  {importResult && dialogMode === "import" && (
+                    <div style={styles.resultCard}>
+                      <div style={styles.sectionTitle}>Kết quả import</div>
+                      <div style={styles.resultGrid}>
+                        <div style={styles.resultStat}>
+                          <span>Tổng dòng</span>
+                          <strong>{importResult.totalRows}</strong>
+                        </div>
+                        <div style={styles.resultStat}>
+                          <span>Tạo mới</span>
+                          <strong>{importResult.createdCount}</strong>
+                        </div>
+                        <div style={styles.resultStat}>
+                          <span>Cập nhật</span>
+                          <strong>{importResult.updatedCount}</strong>
+                        </div>
+                        <div style={styles.resultStat}>
+                          <span>Thất bại</span>
+                          <strong>{importResult.failedCount}</strong>
+                        </div>
+                      </div>
 
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                                <label style={styles.fileButton}>
-                                  <FileSpreadsheet size={16} />
-                                  {selectedFile ? selectedFile.name : "Chọn file"}
-                                  <input
-                                    type="file"
-                                    accept=".xlsx,.csv,.json"
-                                    onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
-                                    style={{ display: "none" }}
-                                    disabled={isParsingFile || isImporting}
-                                  />
-                                </label>
-
-                                {selectedFile && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleFileChange(null)}
-                                    style={styles.clearFileButton}
-                                    aria-label="Bỏ chọn file"
-                                    title="Bỏ chọn file"
-                                    disabled={isParsingFile || isImporting}
+                      {importResult.errors.length > 0 && (
+                        <div style={styles.errorListWrap}>
+                          <button
+                            type="button"
+                            onClick={() => setShowErrors((prev) => !prev)}
+                            style={styles.smallButton}
+                          >
+                            {showErrors ? "Ẩn lỗi" : "Xem lỗi chi tiết"}
+                          </button>
+                          {showErrors && (
+                            <div style={styles.errorListFrame}>
+                              <div style={styles.errorList}>
+                                {importResult.errors.map((item, index) => (
+                                  <div
+                                    key={`${index}-${typeof item === "string" ? item : (item.row ?? "na")}`}
+                                    style={styles.errorItem}
                                   >
-                                    <X size={16} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            <div style={styles.helperRow}>
-                              <span style={styles.helperPill}>Có thể chọn lại file bất kỳ lúc nào</span>
-                              <span style={styles.helperPill}>File &gt; 10MB sẽ bị chặn</span>
-                            </div>
-
-                            <div style={styles.infoGrid}>
-                              {importFileStats.map((item) => (
-                                <div key={item.label} style={styles.infoCard}>
-                                  <div style={styles.infoLabel}>{item.label}</div>
-                                  <div style={styles.infoValue}>{item.value}</div>
-                                  <div style={styles.infoHint}>{item.hint}</div>
-                                </div>
-                              ))}
-                            </div>
-
-                            {previewError && (
-                              <div style={styles.warningBox}>
-                                <AlertCircle size={16} /> {previewError}
-                              </div>
-                            )}
-
-                            {missingRequiredColumns.length > 0 && (
-                              <div style={styles.errorBox}>
-                                <AlertCircle size={16} /> Thiếu cột bắt buộc: {missingRequiredColumns.join(", ")}
-                              </div>
-                            )}
-
-                            {parsedRows.length > 0 && (
-                              <div style={styles.successBox}>
-                                <CheckCircle2 size={16} /> Đã đọc {parsedRows.length} dòng. Preview hiển thị {previewRows.length} dòng đầu.
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={styles.previewCard}>
-                            <div style={styles.sectionHeaderRow}>
-                              <div style={styles.sectionTitle}>Preview file trước khi import</div>
-                              <div style={styles.sectionActionHint}>Xem trước dữ liệu trước khi xác nhận</div>
-                            </div>
-                            {renderPreviewTable(previewRows, importPreviewColumns, "Hãy chọn file để xem preview.")}
-                            {fileColumns.length > 0 && (
-                              <div style={styles.metaText}>Cột phát hiện: {fileColumns.join(", ")}</div>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={styles.importBox}>
-                            <div style={styles.sectionHeaderRow}>
-                              <div style={styles.sectionTitle}>Thiết lập export</div>
-                              <button
-                                type="button"
-                                style={styles.sectionActionButton}
-                                className="import-export-action-button"
-                                onClick={actionHandler}
-                                disabled={actionDisabled}
-                              >
-                                {actionLabel}
-                              </button>
-                            </div>
-                            <label style={styles.formatSelectWrap}>
-                              <span style={styles.labelText}>Định dạng</span>
-                              <select
-                                value={exportFormat}
-                                onChange={(event) => setExportFormat(event.target.value as DataExchangeFormat)}
-                                style={styles.select}
-                                disabled={isExporting}
-                              >
-                                {ALLOWED_FORMATS.map((format) => (
-                                  <option key={format} value={format}>
-                                    {format.toUpperCase()}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <div style={styles.helperRow}>
-                              <span style={styles.helperPill}>Preview được lấy từ API danh sách gần nhất</span>
-                              <span style={styles.helperPill}>Nếu export server lỗi sẽ fallback sang file client-side</span>
-                            </div>
-
-                            <div style={styles.infoGrid}>
-                              {exportFileStats.map((item) => (
-                                <div key={item.label} style={styles.infoCard}>
-                                  <div style={styles.infoLabel}>{item.label}</div>
-                                  <div style={styles.infoValue}>{item.value}</div>
-                                  <div style={styles.infoHint}>{item.hint}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div style={styles.previewCard}>
-                            <div style={styles.sectionHeaderRow}>
-                              <div style={styles.sectionTitle}>Preview dữ liệu export</div>
-                              <div style={styles.sectionActionHint}>Dữ liệu sẽ được đóng gói đủ cột trừ cột id</div>
-                            </div>
-                            {isLoadingExportPreview ? (
-                              <div style={styles.loadingBox}>
-                                <RefreshCw size={16} className="spin" /> Đang tải dữ liệu preview...
-                              </div>
-                            ) : exportPreviewError ? (
-                              <div style={styles.warningBox}>
-                                <AlertCircle size={16} /> {exportPreviewError}
-                              </div>
-                            ) : (
-                              renderPreviewTable(
-                                exportPreviewRows,
-                                exportPreviewColumns,
-                                "Chưa có dữ liệu preview export.",
-                              )
-                            )}
-                          </div>
-                        </>
-                      )}
-
-                      {importResult && dialogMode === "import" && (
-                        <div style={styles.resultCard}>
-                          <div style={styles.sectionTitle}>Kết quả import</div>
-                          <div style={styles.resultGrid}>
-                            <div style={styles.resultStat}><span>Tổng dòng</span><strong>{importResult.totalRows}</strong></div>
-                            <div style={styles.resultStat}><span>Tạo mới</span><strong>{importResult.createdCount}</strong></div>
-                            <div style={styles.resultStat}><span>Cập nhật</span><strong>{importResult.updatedCount}</strong></div>
-                            <div style={styles.resultStat}><span>Thất bại</span><strong>{importResult.failedCount}</strong></div>
-                          </div>
-
-                          {importResult.errors.length > 0 && (
-                            <div style={styles.errorListWrap}>
-                              <button
-                                type="button"
-                                onClick={() => setShowErrors((prev) => !prev)}
-                                style={styles.smallButton}
-                              >
-                                {showErrors ? "Ẩn lỗi" : "Xem lỗi chi tiết"}
-                              </button>
-                              {showErrors && (
-                                <div style={styles.errorListFrame}>
-                                  <div style={styles.errorList}>
-                                    {importResult.errors.map((item, index) => (
-                                      <div key={`${index}-${typeof item === "string" ? item : item.row ?? "na"}`} style={styles.errorItem}>
-                                        {renderImportErrorLine(item, index)}
-                                      </div>
-                                    ))}
+                                    {renderImportErrorLine(item, index)}
                                   </div>
-                                </div>
-                              )}
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
                       )}
-                    </section>
-                  </div>
-                </div>
+                    </div>
+                  )}
+                </section>
               </div>
             </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -1055,7 +1306,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
     padding: 24,
     borderBottom: "1px solid rgba(148,163,184,0.18)",
-    background: "linear-gradient(135deg, rgba(243,112,33,0.08), rgba(14,165,233,0.05))",
+    background:
+      "linear-gradient(135deg, rgba(243,112,33,0.08), rgba(14,165,233,0.05))",
   },
   eyebrow: {
     display: "inline-flex",
@@ -1177,7 +1429,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
   },
   noteItemHighlighted: {
-    background: "linear-gradient(135deg, rgba(243,112,33,0.16), rgba(255,247,237,0.96))",
+    background:
+      "linear-gradient(135deg, rgba(243,112,33,0.16), rgba(255,247,237,0.96))",
     border: "1px solid rgba(243,112,33,0.28)",
     color: "#9a3412",
     boxShadow: "0 10px 20px rgba(243,112,33,0.08)",

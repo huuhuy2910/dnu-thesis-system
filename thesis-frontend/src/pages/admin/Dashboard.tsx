@@ -121,7 +121,9 @@ function resolveTitle(row: DashboardRecord): string {
       row,
       ["defenseTermName", "committeeName", "moduleName", "kpiName"],
       "",
-    ) || readDashboardString(row, ["title", "topicTitle", "topicName"], "") || "--"
+    ) ||
+    readDashboardString(row, ["title", "topicTitle", "topicName"], "") ||
+    "--"
   );
 }
 
@@ -148,7 +150,11 @@ function resolveLecturer(row: DashboardRecord): string {
     ["committeeCode", "moduleName", "roleName", "committeeName"],
     "",
   );
-  const code = readDashboardString(row, ["loadRatio", "kpiValue", "memberCount"], "");
+  const code = readDashboardString(
+    row,
+    ["loadRatio", "kpiValue", "memberCount"],
+    "",
+  );
   if (fullName && code) {
     return `${fullName} (${code})`;
   }
@@ -157,7 +163,11 @@ function resolveLecturer(row: DashboardRecord): string {
 
 function resolveNotificationTitle(row: DashboardRecord): string {
   return (
-    readDashboardString(row, ["moduleName", "actionType", "userCode", "kpiName"], "") ||
+    readDashboardString(
+      row,
+      ["moduleName", "actionType", "userCode", "kpiName"],
+      "",
+    ) ||
     readDashboardString(row, ["title", "notifTitle", "name", "message"], "") ||
     "Thông báo"
   );
@@ -167,9 +177,21 @@ function resolveNotificationDesc(row: DashboardRecord): string {
   return (
     readDashboardString(
       row,
-      ["failedCount", "breachCount", "totalCount", "assignmentCount", "kpiValue"],
+      [
+        "failedCount",
+        "breachCount",
+        "totalCount",
+        "assignmentCount",
+        "kpiValue",
+      ],
       "",
-    ) || readDashboardString(row, ["desc", "description", "message", "content"], "") || "--"
+    ) ||
+    readDashboardString(
+      row,
+      ["desc", "description", "message", "content"],
+      "",
+    ) ||
+    "--"
   );
 }
 
@@ -309,19 +331,30 @@ const Dashboard: React.FC = () => {
         const funnelEnvelope = normalizeDashboardResponse(funnelResponse);
         const capacityEnvelope = normalizeDashboardResponse(capacityResponse);
         const qualityEnvelope = normalizeDashboardResponse(qualityResponse);
-        const bottleneckEnvelope = normalizeDashboardResponse(bottleneckResponse);
+        const bottleneckEnvelope =
+          normalizeDashboardResponse(bottleneckResponse);
         const auditEnvelope = normalizeDashboardResponse(auditResponse);
         const dailyKpiEnvelope = normalizeDashboardResponse(dailyKpiResponse);
         const periodEnvelope = normalizeDashboardResponse(periodResponse);
         const breachEnvelope = normalizeDashboardResponse(breachResponse);
 
-        setOverviewRows(normalizeDashboardItems<DashboardRecord>(overviewEnvelope));
+        setOverviewRows(
+          normalizeDashboardItems<DashboardRecord>(overviewEnvelope),
+        );
         setFunnelRows(normalizeDashboardItems<DashboardRecord>(funnelEnvelope));
-        setCapacityRows(normalizeDashboardItems<DashboardRecord>(capacityEnvelope));
-        setQualityRows(normalizeDashboardItems<DashboardRecord>(qualityEnvelope));
-        setBottleneckRows(normalizeDashboardItems<DashboardRecord>(bottleneckEnvelope));
+        setCapacityRows(
+          normalizeDashboardItems<DashboardRecord>(capacityEnvelope),
+        );
+        setQualityRows(
+          normalizeDashboardItems<DashboardRecord>(qualityEnvelope),
+        );
+        setBottleneckRows(
+          normalizeDashboardItems<DashboardRecord>(bottleneckEnvelope),
+        );
         setAuditRows(normalizeDashboardItems<DashboardRecord>(auditEnvelope));
-        setDailyKpiRows(normalizeDashboardItems<DashboardRecord>(dailyKpiEnvelope));
+        setDailyKpiRows(
+          normalizeDashboardItems<DashboardRecord>(dailyKpiEnvelope),
+        );
         setPeriodRows(normalizeDashboardItems<DashboardRecord>(periodEnvelope));
         setBreachRows(normalizeDashboardItems<DashboardRecord>(breachEnvelope));
       } catch (loadError) {
@@ -355,9 +388,15 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  const recentTopics = useMemo(() => toRecentTopics(capacityRows), [capacityRows]);
+  const recentTopics = useMemo(
+    () => toRecentTopics(capacityRows),
+    [capacityRows],
+  );
   const notifications = useMemo(() => toNotifications(auditRows), [auditRows]);
-  const chartData = useMemo(() => buildChartData(funnelRows.length > 0 ? funnelRows : breachRows), [breachRows, funnelRows]);
+  const chartData = useMemo(
+    () => buildChartData(funnelRows.length > 0 ? funnelRows : breachRows),
+    [breachRows, funnelRows],
+  );
   const maxChartValue = Math.max(1, ...chartData.map((item) => item.value));
 
   const insights = useMemo(() => {
@@ -370,29 +409,41 @@ const Dashboard: React.FC = () => {
       {
         label: "Chất lượng chấm",
         value:
-          readDashboardString(qualityRow, ["AVG_FINAL_SCORE", "avgFinalScore"], "--") ||
-          "--",
+          readDashboardString(
+            qualityRow,
+            ["AVG_FINAL_SCORE", "avgFinalScore"],
+            "--",
+          ) || "--",
         detail: `Khóa: ${readDashboardNumber(qualityRow, ["LOCKED_RESULT_COUNT", "lockedResultCount"], 0)}`,
       },
       {
         label: "KPI gần nhất",
         value:
-          readDashboardString(kpiRow, ["KPI_NAME", "kpiName", "ROLE_NAME", "roleName"], "--") ||
-          "--",
+          readDashboardString(
+            kpiRow,
+            ["KPI_NAME", "kpiName", "ROLE_NAME", "roleName"],
+            "--",
+          ) || "--",
         detail: `Giá trị: ${readDashboardString(kpiRow, ["KPI_VALUE", "kpiValue"], "--") || "--"}`,
       },
       {
         label: "Kỳ gần nhất",
         value:
-          readDashboardString(periodRow, ["DEFENSE_TERM_NAME", "defenseTermName", "SNAP_DATE"], "--") ||
-          "--",
+          readDashboardString(
+            periodRow,
+            ["DEFENSE_TERM_NAME", "defenseTermName", "SNAP_DATE"],
+            "--",
+          ) || "--",
         detail: `Phân bổ: ${readDashboardNumber(periodRow, ["ASSIGNMENT_COUNT", "assignmentCount"], 0)}`,
       },
       {
         label: "Điểm nghẽn SLA",
         value:
-          readDashboardString(bottleneckRow, ["MODULE_NAME", "moduleName"], "--") ||
-          "--",
+          readDashboardString(
+            bottleneckRow,
+            ["MODULE_NAME", "moduleName"],
+            "--",
+          ) || "--",
         detail: `Vi phạm: ${readDashboardNumber(bottleneckRow, ["BREACH_COUNT", "breachCount"], 0)}`,
       },
     ];
@@ -404,25 +455,41 @@ const Dashboard: React.FC = () => {
     return [
       {
         label: "TỔNG ĐỀ TÀI",
-        value: readDashboardNumber(overviewRow, ["TOTAL_TOPICS", "totalTopics"], 0),
+        value: readDashboardNumber(
+          overviewRow,
+          ["TOTAL_TOPICS", "totalTopics"],
+          0,
+        ),
         icon: <Users size={28} />,
         color: "orange",
       },
       {
         label: "ĐỀ TÀI CHỜ DUYỆT",
-        value: readDashboardNumber(overviewRow, ["TOPICS_PENDING", "topicsPending"], 0),
+        value: readDashboardNumber(
+          overviewRow,
+          ["TOPICS_PENDING", "topicsPending"],
+          0,
+        ),
         icon: <BookOpen size={28} />,
         color: "blue",
       },
       {
         label: "TỔNG BÀI NỘP",
-        value: readDashboardNumber(overviewRow, ["TOTAL_SUBMISSIONS", "totalSubmissions"], 0),
+        value: readDashboardNumber(
+          overviewRow,
+          ["TOTAL_SUBMISSIONS", "totalSubmissions"],
+          0,
+        ),
         icon: <FileText size={28} />,
         color: "green",
       },
       {
         label: "VƯỢT SLA",
-        value: readDashboardNumber(overviewRow, ["SUBMISSION_SLA_BREACHES", "totalSlaBreaches"], 0),
+        value: readDashboardNumber(
+          overviewRow,
+          ["SUBMISSION_SLA_BREACHES", "totalSlaBreaches"],
+          0,
+        ),
         icon: <CalendarDays size={28} />,
         color: "purple",
       },
@@ -488,7 +555,10 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-content">
         <div className="chart-section">
           <h2>
-            <TrendingUp size={24} style={{ marginRight: 12, color: "#f37021" }} />
+            <TrendingUp
+              size={24}
+              style={{ marginRight: 12, color: "#f37021" }}
+            />
             TIẾN ĐỘ HOÀN THÀNH ĐỒ ÁN
           </h2>
           <div className="chart-container">
@@ -563,11 +633,15 @@ const Dashboard: React.FC = () => {
             ) : (
               recentTopics.map((topic, index) => (
                 <tr key={index}>
-                  <td style={{ maxWidth: "350px", fontWeight: 600 }}>{topic.title}</td>
+                  <td style={{ maxWidth: "350px", fontWeight: 600 }}>
+                    {topic.title}
+                  </td>
                   <td style={{ fontWeight: 500 }}>{topic.student}</td>
                   <td style={{ fontWeight: 500 }}>{topic.lecturer}</td>
                   <td>
-                    <span className={`status-badge ${getStatusColor(topic.status)}`}>
+                    <span
+                      className={`status-badge ${getStatusColor(topic.status)}`}
+                    >
                       {topic.statusText}
                     </span>
                   </td>

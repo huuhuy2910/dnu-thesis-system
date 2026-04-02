@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Edit,
-  Eye,
-  Filter,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions";
 import { useToast } from "../../context/useToast";
@@ -206,7 +199,9 @@ const TagsManagement: React.FC = () => {
       setTotalCount(apiTotal > 0 ? apiTotal : normalized.fallbackTotal);
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải danh sách tags.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải danh sách tags.",
         "error",
       );
       setRows([]);
@@ -301,7 +296,10 @@ const TagsManagement: React.FC = () => {
       addToast("Xóa tag thành công.", "success");
       await loadRows();
     } catch (error) {
-      addToast(error instanceof Error ? error.message : "Không thể xóa tag.", "error");
+      addToast(
+        error instanceof Error ? error.message : "Không thể xóa tag.",
+        "error",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -387,7 +385,14 @@ const TagsManagement: React.FC = () => {
           justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", gap: 10, flex: "1 1 460px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flex: "1 1 460px",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ flex: "1 1 260px", position: "relative" }}>
             <Search
               size={18}
@@ -532,7 +537,11 @@ const TagsManagement: React.FC = () => {
               setFilters((prev) => ({ ...prev, tagCode: event.target.value }))
             }
             placeholder="Lọc theo TagCode"
-            style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 10 }}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: 8,
+              padding: 10,
+            }}
           />
           <input
             value={filters.tagName}
@@ -540,7 +549,11 @@ const TagsManagement: React.FC = () => {
               setFilters((prev) => ({ ...prev, tagName: event.target.value }))
             }
             placeholder="Lọc theo TagName"
-            style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 10 }}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: 8,
+              padding: 10,
+            }}
           />
           <button
             type="button"
@@ -586,7 +599,13 @@ const TagsManagement: React.FC = () => {
                   <td>{row.description || ""}</td>
                   <td>{formatDate(row.createdAt)}</td>
                   <td>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => void openDetail(row)}
@@ -854,7 +873,6 @@ const TagsManagement: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
