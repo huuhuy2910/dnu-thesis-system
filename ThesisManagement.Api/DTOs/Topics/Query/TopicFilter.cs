@@ -17,5 +17,6 @@ namespace ThesisManagement.Api.DTOs.Topics.Query
         public string? SupervisorLecturerCode { get; set; }
         public string? DepartmentCode { get; set; }
         public string? CatalogTopicCode { get; set; }
+        public int? DefenseTermId { get; set; }
     }
 }

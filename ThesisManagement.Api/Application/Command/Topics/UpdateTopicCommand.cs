@@ -87,6 +87,23 @@ namespace ThesisManagement.Api.Application.Command.Topics
                 entity.DepartmentID = dto.DepartmentID.Value;
             if (dto.DepartmentCode is not null)
                 entity.DepartmentCode = dto.DepartmentCode;
+
+            if (dto.DefenseTermId.HasValue)
+            {
+                if (dto.DefenseTermId.Value <= 0)
+                {
+                    entity.DefenseTermId = null;
+                }
+                else
+                {
+                    var defenseTerm = await _uow.DefenseTerms.GetByIdAsync(dto.DefenseTermId.Value);
+                    if (defenseTerm == null)
+                        return OperationResult<TopicReadDto>.Failed($"DefenseTerm ID '{dto.DefenseTermId.Value}' không tồn tại", 400);
+
+                    entity.DefenseTermId = dto.DefenseTermId.Value;
+                }
+            }
+
             if (dto.Status is not null)
                 entity.Status = dto.Status;
             if (dto.ResubmitCount.HasValue)

@@ -5,7 +5,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -88,23 +87,6 @@ const priorityLabelMap: Record<string, string> = {
   URGENT: "Khẩn",
 };
 
-function normalizeActionUrl(actionUrl: string | null): string | null {
-  if (!actionUrl) return null;
-  if (actionUrl.startsWith("http://") || actionUrl.startsWith("https://")) {
-    return actionUrl;
-  }
-
-  if (actionUrl.startsWith("/reports/student")) {
-    return actionUrl.replace("/reports/student", "/student/reports");
-  }
-
-  if (actionUrl.startsWith("/reports/lecturer")) {
-    return actionUrl.replace("/reports/lecturer", "/lecturer/reports");
-  }
-
-  return actionUrl;
-}
-
 function mergeByRecipientId(
   current: NotificationRecipientDto[],
   incoming: NotificationRecipientDto[],
@@ -161,7 +143,6 @@ function eventToRecipient(
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
-  const navigate = useNavigate();
   const { addToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PanelMode>("feed");
@@ -416,18 +397,8 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
       if (!item.isRead) {
         await markOneAsRead(item.recipientID);
       }
-
-      const actionUrl = normalizeActionUrl(item.notification.actionUrl);
-      if (actionUrl) {
-        setIsOpen(false);
-        if (/^https?:\/\//i.test(actionUrl)) {
-          window.open(actionUrl, "_blank", "noopener,noreferrer");
-          return;
-        }
-        navigate(actionUrl);
-      }
     },
-    [markOneAsRead, navigate],
+    [markOneAsRead],
   );
 
   useEffect(() => {

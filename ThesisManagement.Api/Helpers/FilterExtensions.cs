@@ -355,6 +355,9 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.CatalogTopicCode))
                 query = query.Where(x => x.CatalogTopicCode == filter.CatalogTopicCode);
 
+            if (filter.DefenseTermId.HasValue)
+                query = query.Where(x => x.DefenseTermId == filter.DefenseTermId.Value);
+
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
 

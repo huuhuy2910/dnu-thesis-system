@@ -42,6 +42,7 @@ using ThesisManagement.Api.Application.Query.CatalogTopicTags;
 using ThesisManagement.Api.Application.Query.CatalogTopics;
 using ThesisManagement.Api.Application.Query.ConversationMembers;
 using ThesisManagement.Api.Application.Query.Conversations;
+using ThesisManagement.Api.Application.Query.Dashboards;
 using ThesisManagement.Api.Application.Query.DefenseExecution;
 using ThesisManagement.Api.Application.Query.DefensePeriods;
 using ThesisManagement.Api.Application.Query.DefenseSetup;
@@ -82,6 +83,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Net;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -367,6 +370,7 @@ builder.Services.AddScoped<IGetSystemActivityLogsByEntityQuery, GetSystemActivit
 builder.Services.AddScoped<IGetSystemActivityLogsByUserQuery, GetSystemActivityLogsByUserQuery>();
 builder.Services.AddScoped<IGetSystemActivityLogsByModuleQuery, GetSystemActivityLogsByModuleQuery>();
 builder.Services.AddScoped<IGetSystemActivityLogStatsQuery, GetSystemActivityLogStatsQuery>();
+builder.Services.AddScoped<IDashboardQueryProcessor, DashboardQueryProcessor>();
 builder.Services.AddScoped<IGetMyNotificationsListQuery, GetMyNotificationsListQuery>();
 builder.Services.AddScoped<IGetMyUnreadCountQuery, GetMyUnreadCountQuery>();
 builder.Services.AddScoped<IGetMyNotificationPreferencesQuery, GetMyNotificationPreferencesQuery>();
@@ -526,6 +530,35 @@ app.UseCors("AllowAll");
 app.UseMiddleware<ApiObservabilityMiddleware>();
 
 app.UseAuthentication();
+
+// Development-only convenience: allow testing protected APIs from Swagger UI without manually entering JWT.
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        var isApiRequest = context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase);
+        var referer = context.Request.Headers.Referer.ToString();
+        var fromSwaggerUi = !string.IsNullOrWhiteSpace(referer) && referer.Contains("/swagger", StringComparison.OrdinalIgnoreCase);
+        var isLocal = context.Connection.RemoteIpAddress != null && IPAddress.IsLoopback(context.Connection.RemoteIpAddress);
+
+        if (isApiRequest && fromSwaggerUi && isLocal)
+        {
+            var identity = new ClaimsIdentity(
+                new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, "1"),
+                    new Claim(ClaimTypes.Name, "swagger-dev"),
+                    new Claim(ClaimTypes.Role, "Admin"),
+                    new Claim("userCode", "ADMIN")
+                },
+                "SwaggerDev");
+
+            context.User = new ClaimsPrincipal(identity);
+        }
+
+        await next();
+    });
+}
 
 // Legacy X-User-* header middleware removed after FE migrated to JWT Bearer.
 

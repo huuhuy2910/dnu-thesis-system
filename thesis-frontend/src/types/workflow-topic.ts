@@ -13,6 +13,7 @@ export interface WorkflowTopic {
   title: string;
   summary: string;
   type: string;
+  defenseTermId: number | null;
   proposerUserID: number;
   proposerUserCode: string;
   proposerStudentProfileID: number;
@@ -38,6 +39,7 @@ export interface WorkflowResubmitRequest {
   title: string;
   summary: string;
   type: "CATALOG" | "SELF";
+  defenseTermId: number;
   proposerUserID: number;
   proposerUserCode: string;
   proposerStudentProfileID: number;
@@ -55,6 +57,13 @@ export interface WorkflowResubmitRequest {
   useCatalogTopicTags: boolean;
   forceCreateNewTopic: boolean;
   studentNote: string;
+}
+
+export interface DefenseTermOption {
+  defenseTermId: number;
+  defenseTermCode: string;
+  defenseTermName: string;
+  status?: string;
 }
 
 export interface WorkflowMutationResponse {

@@ -25,80 +25,10 @@ import type { Tag, CatalogTopicTag, TopicTag } from "../../types/tag";
 import type { ApiResponse } from "../../types/api";
 import { useAuth } from "../../hooks/useAuth";
 import {
-  type WorkflowDecisionRequest,
-  type WorkflowDetailResponse,
-  type WorkflowMutationResponse,
-  type WorkflowTimelineResponse,
-} from "../../types/workflow-topic";
-
-const WORKFLOW_BASE = "/workflows/topics";
-
-function ensureWorkflowSuccess<T>(
-  envelope: ApiResponse<T>,
-  fallbackMessage: string,
-): { data: T; totalCount: number } {
-  if (
-    !envelope.success ||
-    envelope.data === null ||
-    envelope.data === undefined
-  ) {
-    throw new Error(envelope.message || envelope.title || fallbackMessage);
-  }
-  return {
-    data: envelope.data,
-    totalCount: Number(envelope.totalCount || 0),
-  };
-}
-
-async function getWorkflowTopicDetailApi(
-  topicId: number,
-): Promise<WorkflowDetailResponse> {
-  const envelope = await fetchData<ApiResponse<WorkflowDetailResponse>>(
-    `${WORKFLOW_BASE}/detail/${topicId}`,
-    { method: "GET" },
-  );
-  return ensureWorkflowSuccess(
-    envelope,
-    "Không thể tải chi tiết workflow đề tài.",
-  ).data;
-}
-
-async function getWorkflowTopicTimelineApi(
-  topicId: number,
-): Promise<WorkflowTimelineResponse> {
-  const envelope = await fetchData<ApiResponse<WorkflowTimelineResponse>>(
-    `${WORKFLOW_BASE}/timeline/${topicId}`,
-    { method: "GET" },
-  );
-  return ensureWorkflowSuccess(
-    envelope,
-    "Không thể tải timeline workflow theo topicID.",
-  ).data;
-}
-
-async function decideWorkflowTopicApi(
-  topicId: number,
-  payload: WorkflowDecisionRequest,
-): Promise<WorkflowMutationResponse> {
-  if (
-    (payload.action === "reject" || payload.action === "revision") &&
-    !payload.comment.trim()
-  ) {
-    throw new Error("Reject/Revision bắt buộc phải có comment.");
-  }
-
-  const envelope = await fetchData<ApiResponse<WorkflowMutationResponse>>(
-    `${WORKFLOW_BASE}/decision/${topicId}`,
-    {
-      method: "POST",
-      body: payload,
-    },
-  );
-  return ensureWorkflowSuccess(
-    envelope,
-    "Không thể gửi quyết định duyệt đề tài.",
-  ).data;
-}
+  decideTopicWorkflow,
+  getTopicWorkflowDetail,
+  getTopicWorkflowTimeline,
+} from "../../services/topic-workflow.service";
 
 interface TopicDisplay {
   topicID: number;
@@ -484,8 +414,8 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
   const syncTopicFromWorkflow = useCallback(
     async (topicID: number) => {
       const [detail, timeline] = await Promise.all([
-        getWorkflowTopicDetailApi(topicID),
-        getWorkflowTopicTimelineApi(topicID),
+        getTopicWorkflowDetail(topicID),
+        getTopicWorkflowTimeline(topicID),
       ]);
 
       const status = mapApiStatusToDisplay(detail.topic.status);
@@ -561,7 +491,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
   const handleApprove = async (topicID: number) => {
     try {
       setUpdatingStatus(`approve-${topicID}`);
-      await decideWorkflowTopicApi(topicID, {
+      await decideTopicWorkflow(topicID, {
         action: "approve",
         comment: "Đề tài đạt yêu cầu",
       });
@@ -586,7 +516,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     try {
       setUpdatingStatus(`reject-${topicID}`);
 
-      await decideWorkflowTopicApi(topicID, {
+      await decideTopicWorkflow(topicID, {
         action: "reject",
         comment,
       });
@@ -611,7 +541,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
     try {
       setUpdatingStatus(`revision-${topicID}`);
 
-      await decideWorkflowTopicApi(topicID, {
+      await decideTopicWorkflow(topicID, {
         action: "revision",
         comment,
       });

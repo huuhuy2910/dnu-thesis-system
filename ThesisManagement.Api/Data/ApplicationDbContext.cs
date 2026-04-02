@@ -222,6 +222,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.SupervisorLecturerCode).HasMaxLength(30);
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
+                b.Property(x => x.DefenseTermId);
                 // Oracle: map to CLOB by convention
                 b.Property(x => x.LecturerComment);
                 
@@ -230,6 +231,7 @@ namespace ThesisManagement.Api.Data
                 
                 // Configure CatalogTopic navigation
                 b.HasOne(x => x.CatalogTopic).WithMany().HasForeignKey(x => x.CatalogTopicCode).HasPrincipalKey(x => x.CatalogTopicCode).IsRequired(false);
+                b.HasOne(x => x.DefenseTerm).WithMany(x => x.Topics).HasForeignKey(x => x.DefenseTermId).OnDelete(DeleteBehavior.SetNull);
             });
 
             // ProgressMilestones
@@ -1180,7 +1182,12 @@ namespace ThesisManagement.Api.Data
                 "DEFENSE_MINUTES",
                 "DEFENSE_RESULTS",
                 "DEFENSE_REVISIONS",
-                "DEFENSE_DOCUMENTS"
+                "DEFENSE_DOCUMENTS",
+                "NOTIFICATIONS",
+                "NOTIFICATION_RECIPIENTS",
+                "NOTIFICATION_PREFERENCES",
+                "NOTIFICATION_OUTBOX",
+                "TOPIC_WORKFLOW_AUDITS"
             };
 
             var keepPascalCaseColumns = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
@@ -1207,9 +1214,8 @@ namespace ThesisManagement.Api.Data
 
                 entityType.SetTableName(normalizedTableName);
 
+                // Keep explicit column mappings for special tables using snake_case names.
                 if (preserveExplicitMappingTables.Contains(normalizedTableName))
-                // Keep explicit snake_case mappings for audit table.
-                if (string.Equals(normalizedTableName, "TOPIC_WORKFLOW_AUDITS", StringComparison.Ordinal))
                 {
                     continue;
                 }

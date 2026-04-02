@@ -20,6 +20,7 @@ namespace ThesisManagement.Api.DTOs.Workflows.Command
         string? CatalogTopicCode,
         int? DepartmentID,
         string? DepartmentCode,
+        int? DefenseTermId,
         IEnumerable<int>? TagIDs,
         IEnumerable<string>? TagCodes,
         bool? UseCatalogTopicTags,
