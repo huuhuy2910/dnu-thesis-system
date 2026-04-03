@@ -28,4 +28,33 @@ namespace ThesisManagement.Api.DTOs.CatalogTopics.Query
         DateTime? LastUpdated,
         IReadOnlyList<CatalogTopicTagItemDto> Tags
     );
+
+    public record CatalogTopicEligibleLecturerDto(
+        int LecturerProfileID,
+        string LecturerCode,
+        string? UserCode,
+        string? DepartmentCode,
+        string? Degree,
+        int GuideQuota,
+        int DefenseQuota,
+        int CurrentGuidingCount,
+        string? FullName,
+        string? Email,
+        string? PhoneNumber,
+        IReadOnlyList<CatalogTopicTagItemDto> Tags
+    );
+
+    public record CatalogTopicDetailReadDto(
+        int CatalogTopicID,
+        string CatalogTopicCode,
+        string Title,
+        string? Summary,
+        string? DepartmentCode,
+        string? AssignedStatus,
+        DateTime? AssignedAt,
+        DateTime? CreatedAt,
+        DateTime? LastUpdated,
+        IReadOnlyList<CatalogTopicTagItemDto> Tags,
+        IReadOnlyList<CatalogTopicEligibleLecturerDto> EligibleLecturers
+    );
 }
