@@ -2,47 +2,19 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
-  Download,
-  FileUp,
+  Eye,
   Filter,
-  RefreshCw,
+  Loader2,
+  PencilLine,
   Search,
-  Upload,
+  Trash2,
+  X,
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { fetchData, FetchDataError } from "../../api/fetchData";
+import ImportExportActions from "../../components/admin/ImportExportActions";
 import { useToast } from "../../context/useToast";
-import { getAccessToken } from "../../services/auth-session.service";
 import type { ApiResponse } from "../../types/api";
 import "../admin/Dashboard.css";
-
-type DataExchangeFormat = "xlsx" | "csv" | "json";
-
-type ImportResult = {
-  module: string;
-  format: string;
-  totalRows: number;
-  createdCount: number;
-  updatedCount: number;
-  failedCount: number;
-  errors: string[];
-};
-
-type ParsedCatalogTopicRow = {
-  rowNumber: number;
-  catalogTopicCode: string;
-  title: string;
-  summary: string;
-  departmentCode: string;
-  assignedStatus: string;
-  assignedAt: string;
-  tagCodes?: string;
-};
-
-type ValidationResult = {
-  missingTitleRows: number[];
-  duplicateCatalogTopicCodes: Array<{ code: string; rows: number[] }>;
-};
 
 type CatalogTopicTagDto = {
   tagID: number;
@@ -61,6 +33,44 @@ type CatalogTopicWithTagsDto = {
   createdAt: string;
   lastUpdated: string;
   tags: CatalogTopicTagDto[];
+};
+
+type CatalogTopicEligibleLecturerDto = {
+  lecturerProfileID: number;
+  lecturerCode: string;
+  userCode: string;
+  departmentCode: string;
+  degree: string;
+  guideQuota: number;
+  defenseQuota: number;
+  currentGuidingCount: number;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  tags: CatalogTopicTagDto[];
+};
+
+type CatalogTopicDetailDto = CatalogTopicWithTagsDto & {
+  eligibleLecturers: CatalogTopicEligibleLecturerDto[];
+};
+
+type CatalogTopicEditForm = {
+  title: string;
+  summary: string;
+  departmentCode: string;
+  assignedStatus: string;
+  assignedAt: string;
+  tagCodes: string;
+};
+
+type ModalMode = "detail" | "edit" | null;
+
+type TagLookupDto = {
+  tagID: number;
+  tagCode: string;
+  tagName: string;
+  description?: string;
+  createdAt?: string;
 };
 
 type WarehouseFilters = {
@@ -82,24 +92,6 @@ type SortableField =
   | "createdAt"
   | "lastUpdated";
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-const PREVIEW_SIZE = 10;
-const ALLOWED_FORMATS: DataExchangeFormat[] = ["xlsx", "csv", "json"];
-
-const envBaseRaw = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5180"
-).toString();
-
-const ensureScheme = (value: string) =>
-  /^https?:\/\//i.test(value) ? value : `http://${value}`;
-
-const normalizedBase = (() => {
-  const base = ensureScheme(envBaseRaw.trim());
-  return base.endsWith("/") ? base.slice(0, -1) : base;
-})();
-
-const apiBase = `${normalizedBase}/api`;
-
 const sectionCardStyle: React.CSSProperties = {
   background: "#fff",
   borderRadius: 12,
@@ -109,119 +101,6 @@ const sectionCardStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
 };
-
-function toText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
-}
-
-function normalizeFieldName(value: string): string {
-  return value.replace(/[\s_-]/g, "").toLowerCase();
-}
-
-function getFieldValue(
-  row: Record<string, unknown>,
-  candidates: string[],
-): string {
-  const entries = Object.entries(row);
-  for (const candidate of candidates) {
-    const expected = normalizeFieldName(candidate);
-    const found = entries.find(
-      ([key]) => normalizeFieldName(String(key)) === expected,
-    );
-    if (found) {
-      return toText(found[1]).trim();
-    }
-  }
-  return "";
-}
-
-function normalizeTagCodes(raw: string): string {
-  const chunks = raw
-    .split(/[;,|]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const item of chunks) {
-    const normalized = item.toUpperCase();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    unique.push(item);
-  }
-
-  return unique.join(";");
-}
-
-function mapRowToCatalogTopic(
-  row: Record<string, unknown>,
-  rowNumber: number,
-): ParsedCatalogTopicRow {
-  const rawTagCodes = getFieldValue(row, ["tagCodes", "tagCode", "tags"]);
-  return {
-    rowNumber,
-    catalogTopicCode: getFieldValue(row, ["catalogTopicCode"]),
-    title: getFieldValue(row, ["title"]),
-    summary: getFieldValue(row, ["summary", "description"]),
-    departmentCode: getFieldValue(row, ["departmentCode"]),
-    assignedStatus: getFieldValue(row, ["assignedStatus"]),
-    assignedAt: getFieldValue(row, ["assignedAt"]),
-    ...(rawTagCodes !== "" ? { tagCodes: normalizeTagCodes(rawTagCodes) } : {}),
-  };
-}
-
-function inferFormatFromFileName(name: string): DataExchangeFormat | null {
-  const ext = name.split(".").pop()?.toLowerCase();
-  if (!ext) return null;
-  if (ext === "xlsx" || ext === "csv" || ext === "json") {
-    return ext;
-  }
-  return null;
-}
-
-function validateRows(rows: ParsedCatalogTopicRow[]): ValidationResult {
-  const missingTitleRows: number[] = [];
-  const duplicates = new Map<string, number[]>();
-
-  rows.forEach((row) => {
-    if (!row.title.trim()) {
-      missingTitleRows.push(row.rowNumber);
-    }
-
-    const code = row.catalogTopicCode.trim();
-    if (!code) return;
-    const normalizedCode = code.toUpperCase();
-    const current = duplicates.get(normalizedCode) || [];
-    current.push(row.rowNumber);
-    duplicates.set(normalizedCode, current);
-  });
-
-  const duplicateCatalogTopicCodes = Array.from(duplicates.entries())
-    .filter(([, rowsByCode]) => rowsByCode.length > 1)
-    .map(([code, rowsByCode]) => ({ code, rows: rowsByCode }));
-
-  return { missingTitleRows, duplicateCatalogTopicCodes };
-}
-
-function normalizeImportResult(source: unknown): ImportResult {
-  const payload = (source ?? {}) as Record<string, unknown>;
-  return {
-    module: toText(payload.module),
-    format: toText(payload.format),
-    totalRows: Number(payload.totalRows || 0),
-    createdCount: Number(payload.createdCount || 0),
-    updatedCount: Number(payload.updatedCount || 0),
-    failedCount: Number(payload.failedCount || 0),
-    errors: Array.isArray(payload.errors)
-      ? payload.errors.map((item) => toText(item)).filter(Boolean)
-      : [],
-  };
-}
 
 function normalizeCatalogTopicsWithTags(payload: unknown): {
   items: CatalogTopicWithTagsDto[];
@@ -257,7 +136,32 @@ function normalizeCatalogTopicsWithTags(payload: unknown): {
   return { items: [], fallbackTotal: 0 };
 }
 
-function formatDateTime(value: string): string {
+function normalizeCatalogTopicDetail(
+  payload: unknown,
+  fallback: CatalogTopicWithTagsDto,
+): CatalogTopicDetailDto {
+  const source = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const tags = Array.isArray(source.tags) ? (source.tags as CatalogTopicTagDto[]) : fallback.tags;
+  const eligibleLecturers = Array.isArray(source.eligibleLecturers)
+    ? (source.eligibleLecturers as CatalogTopicEligibleLecturerDto[])
+    : [];
+
+  return {
+    catalogTopicID: Number(source.catalogTopicID ?? fallback.catalogTopicID),
+    catalogTopicCode: String(source.catalogTopicCode ?? fallback.catalogTopicCode),
+    title: String(source.title ?? fallback.title ?? ""),
+    summary: String(source.summary ?? fallback.summary ?? ""),
+    departmentCode: String(source.departmentCode ?? fallback.departmentCode ?? ""),
+    assignedStatus: String(source.assignedStatus ?? fallback.assignedStatus ?? ""),
+    assignedAt: (source.assignedAt as string | null | undefined) ?? fallback.assignedAt,
+    createdAt: String(source.createdAt ?? fallback.createdAt ?? ""),
+    lastUpdated: String(source.lastUpdated ?? fallback.lastUpdated ?? ""),
+    tags,
+    eligibleLecturers,
+  };
+}
+
+function formatDateTime(value: string | null | undefined): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -296,47 +200,45 @@ function getReadableError(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-async function parseResponseError(response: Response): Promise<string> {
-  const fallback = "Không thể xử lý yêu cầu import/export.";
-  try {
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as unknown;
-      return getReadableError(payload, fallback);
-    }
-    const text = await response.text();
-    return text.trim() || fallback;
-  } catch {
-    return fallback;
+function normalizeTagLookup(payload: unknown): TagLookupDto[] {
+  if (Array.isArray(payload)) {
+    return payload.filter((item) => item && typeof item === "object") as TagLookupDto[];
   }
+
+  if (payload && typeof payload === "object") {
+    const source = payload as Record<string, unknown>;
+    const candidates = [source.items, source.records, source.result, source.data, source.list];
+    const list = candidates.find((item) => Array.isArray(item));
+    if (Array.isArray(list)) {
+      return list.filter((item) => item && typeof item === "object") as TagLookupDto[];
+    }
+  }
+
+  return [];
 }
 
-function toPayloadRows(
-  rows: ParsedCatalogTopicRow[],
-): Array<Record<string, string>> {
-  return rows.map((row) => {
-    const payload: Record<string, string> = {
-      title: row.title,
-    };
+function normalizeDateTimeInput(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
-    if (row.catalogTopicCode) payload.catalogTopicCode = row.catalogTopicCode;
-    if (row.summary) payload.summary = row.summary;
-    if (row.departmentCode) payload.departmentCode = row.departmentCode;
-    if (row.assignedStatus) payload.assignedStatus = row.assignedStatus;
-    if (row.assignedAt) payload.assignedAt = row.assignedAt;
-    if (Object.prototype.hasOwnProperty.call(row, "tagCodes")) {
-      payload.tagCodes = row.tagCodes || "";
-    }
-
-    return payload;
-  });
+function parseTagCodes(value: string): string[] {
+  return value
+    .split(/[,;\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 const CatalogTopicsWarehousePage: React.FC = () => {
   const { addToast } = useToast();
 
   const [rows, setRows] = useState<CatalogTopicWithTagsDto[]>([]);
+  const [tagLookup, setTagLookup] = useState<TagLookupDto[]>([]);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -355,25 +257,21 @@ const CatalogTopicsWarehousePage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
-
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [format, setFormat] = useState<DataExchangeFormat>("xlsx");
-  const [normalizeBeforeImport, setNormalizeBeforeImport] = useState(true);
-  const [previewRows, setPreviewRows] = useState<ParsedCatalogTopicRow[]>([]);
-  const [parsedRows, setParsedRows] = useState<ParsedCatalogTopicRow[]>([]);
-  const [validation, setValidation] = useState<ValidationResult>({
-    missingTitleRows: [],
-    duplicateCatalogTopicCodes: [],
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [selectedTopic, setSelectedTopic] = useState<CatalogTopicDetailDto | null>(null);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+  const [isModalSaving, setIsModalSaving] = useState(false);
+  const [isTagPickerOpen, setIsTagPickerOpen] = useState(false);
+  const [tagPickerSearch, setTagPickerSearch] = useState("");
+  const [tagSelectionDraft, setTagSelectionDraft] = useState<string[]>([]);
+  const [editForm, setEditForm] = useState<CatalogTopicEditForm>({
+    title: "",
+    summary: "",
+    departmentCode: "",
+    assignedStatus: "",
+    assignedAt: "",
+    tagCodes: "",
   });
-  const [parsingError, setParsingError] = useState<string | null>(null);
-  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-
-  const canImport = useMemo(
-    () => !!selectedFile && !isImporting,
-    [isImporting, selectedFile],
-  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -422,6 +320,26 @@ const CatalogTopicsWarehousePage: React.FC = () => {
     ],
   );
 
+  const tagLookupMap = useMemo(
+    () => new Map(tagLookup.map((tag) => [tag.tagCode.trim().toLowerCase(), tag])),
+    [tagLookup],
+  );
+
+  const selectedTagCodes = useMemo(
+    () => parseTagCodes(editForm.tagCodes),
+    [editForm.tagCodes],
+  );
+
+  const filteredTagOptions = useMemo(() => {
+    const keyword = tagPickerSearch.trim().toLowerCase();
+    if (!keyword) return tagLookup;
+
+    return tagLookup.filter((tag) => {
+      const haystack = [tag.tagCode, tag.tagName, tag.description ?? ""].join(" ").toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [tagLookup, tagPickerSearch]);
+
   const loadRows = useCallback(async () => {
     setIsLoadingRows(true);
     try {
@@ -456,12 +374,33 @@ const CatalogTopicsWarehousePage: React.FC = () => {
     }
   }, [addToast, queryParams]);
 
+  const loadTags = useCallback(async () => {
+    setIsLoadingTags(true);
+    try {
+      const response = await fetchData<ApiResponse<unknown>>(
+        "/Tags/list?Page=0&PageSize=100",
+        { method: "GET" },
+      );
+
+      if (!response?.success) {
+        throw new Error(response?.message || "Không thể tải danh sách tag.");
+      }
+
+      setTagLookup(normalizeTagLookup(response.data));
+    } catch {
+      setTagLookup([]);
+    } finally {
+      setIsLoadingTags(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const expectedColumns =
-    "catalogTopicCode,title,summary,departmentCode,assignedStatus,assignedAt,tagCodes";
+  useEffect(() => {
+    void loadTags();
+  }, [loadTags]);
 
   const updateFilter = (key: keyof WarehouseFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -496,250 +435,155 @@ const CatalogTopicsWarehousePage: React.FC = () => {
     setSortDescending(false);
   };
 
-  const handleParseRows = async (
-    file: File,
-    inferredFormat: DataExchangeFormat,
-  ) => {
-    const rawBuffer = await file.arrayBuffer();
+  const closeModal = () => {
+    setModalMode(null);
+    setSelectedTopic(null);
+    setIsModalLoading(false);
+    setIsModalSaving(false);
+    setIsTagPickerOpen(false);
+    setTagPickerSearch("");
+    setTagSelectionDraft([]);
+  };
 
-    if (inferredFormat === "json") {
-      const text = new TextDecoder().decode(rawBuffer);
-      const parsed = JSON.parse(text) as unknown;
-      const arr = Array.isArray(parsed)
-        ? parsed
-        : parsed && typeof parsed === "object"
-          ? ((parsed as Record<string, unknown>).items as unknown[])
-          : [];
+  const openTagPicker = () => {
+    setTagSelectionDraft(selectedTagCodes);
+    setTagPickerSearch("");
+    setIsTagPickerOpen(true);
+  };
 
-      if (!Array.isArray(arr)) {
-        throw new Error(
-          "JSON phải là mảng object (hoặc có trường items là mảng).",
-        );
-      }
-
-      const mapped = arr
-        .filter((item) => item && typeof item === "object")
-        .map((item, index) =>
-          mapRowToCatalogTopic(item as Record<string, unknown>, index + 1),
-        );
-
-      setParsedRows(mapped);
-      setPreviewRows(mapped.slice(0, PREVIEW_SIZE));
-      setValidation(validateRows(mapped));
-      return;
-    }
-
-    const workbook = XLSX.read(rawBuffer, { type: "array" });
-    const firstSheetName = workbook.SheetNames[0];
-    if (!firstSheetName) {
-      throw new Error("Không tìm thấy sheet dữ liệu trong file.");
-    }
-
-    const sheet = workbook.Sheets[firstSheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-    });
-
-    const mapped = rows.map((row, index) =>
-      mapRowToCatalogTopic(row, index + 2),
+  const toggleTagSelection = (tagCode: string) => {
+    setTagSelectionDraft((prev) =>
+      prev.some((item) => item.toLowerCase() === tagCode.toLowerCase())
+        ? prev.filter((item) => item.toLowerCase() !== tagCode.toLowerCase())
+        : [...prev, tagCode],
     );
-    setParsedRows(mapped);
-    setPreviewRows(mapped.slice(0, PREVIEW_SIZE));
-    setValidation(validateRows(mapped));
   };
 
-  const resetDataState = () => {
-    setPreviewRows([]);
-    setParsedRows([]);
-    setParsingError(null);
-    setImportResult(null);
-    setValidation({ missingTitleRows: [], duplicateCatalogTopicCodes: [] });
+  const applyTagSelection = () => {
+    setEditForm((prev) => ({
+      ...prev,
+      tagCodes: tagSelectionDraft.join(", "),
+    }));
+    setIsTagPickerOpen(false);
   };
 
-  const handleSelectFile = async (file: File | null) => {
-    setSelectedFile(file);
-    resetDataState();
-    if (!file) return;
-
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      addToast("File vượt quá giới hạn 10MB.", "error");
-      setSelectedFile(null);
-      return;
-    }
-
-    const inferred = inferFormatFromFileName(file.name);
-    if (!inferred) {
-      addToast("Chỉ hỗ trợ file .xlsx, .csv hoặc .json.", "error");
-      setSelectedFile(null);
-      return;
-    }
-
-    setFormat(inferred);
+  const openDetail = async (row: CatalogTopicWithTagsDto) => {
+    setModalMode("detail");
+    setSelectedTopic(null);
+    setIsModalLoading(true);
     try {
-      await handleParseRows(file, inferred);
-      addToast("Đã đọc file và tạo preview thành công.", "success");
-    } catch (error) {
-      setParsingError(
-        error instanceof Error ? error.message : "Không thể đọc dữ liệu file.",
-      );
-      addToast(
-        "Không thể preview file. Bạn vẫn có thể import trực tiếp.",
-        "warning",
-      );
-    }
-  };
-
-  const downloadTemplate = async () => {
-    setIsDownloadingTemplate(true);
-    try {
-      const token = getAccessToken();
-      const response = await fetch(
-        `${apiBase}/DataExchange/export/catalogtopics?format=${format}`,
-        {
-          method: "GET",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        },
+      const response = await fetchData<ApiResponse<unknown>>(
+        `/CatalogTopics/get-detail/${encodeURIComponent(row.catalogTopicCode)}`,
+        { method: "GET" },
       );
 
-      if (!response.ok) {
-        throw new Error(await parseResponseError(response));
+      if (!response?.success) {
+        throw new Error(response?.message || "Không thể tải chi tiết đề tài.");
       }
 
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = blobUrl;
-      anchor.download = `catalogtopics-template.${format}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(blobUrl);
-      addToast("Tải template thành công.", "success");
+      setSelectedTopic(normalizeCatalogTopicDetail(response.data, row));
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải template.",
+        error instanceof Error ? error.message : "Không thể tải chi tiết đề tài.",
+        "error",
+      );
+      closeModal();
+    } finally {
+      setIsModalLoading(false);
+    }
+  };
+
+  const openEdit = async (row: CatalogTopicWithTagsDto) => {
+    setModalMode("edit");
+    setSelectedTopic(null);
+    setIsModalLoading(true);
+    try {
+      const response = await fetchData<ApiResponse<unknown>>(
+        `/CatalogTopics/get-update/${encodeURIComponent(row.catalogTopicCode)}`,
+        { method: "GET" },
+      );
+
+      if (!response?.success) {
+        throw new Error(response?.message || "Không thể tải dữ liệu sửa.");
+      }
+
+      const payload = (response.data as Record<string, unknown>) || {};
+      const tags = Array.isArray(payload.tags) ? (payload.tags as CatalogTopicTagDto[]) : row.tags;
+      setSelectedTopic({
+        ...row,
+        ...payload,
+        tags,
+        eligibleLecturers: [],
+      } as CatalogTopicDetailDto);
+      setEditForm({
+        title: String(payload.title ?? row.title ?? ""),
+        summary: String(payload.summary ?? row.summary ?? ""),
+        departmentCode: String(payload.departmentCode ?? row.departmentCode ?? ""),
+        assignedStatus: String(payload.assignedStatus ?? row.assignedStatus ?? ""),
+        assignedAt: normalizeDateTimeInput((payload.assignedAt as string | null | undefined) ?? row.assignedAt),
+        tagCodes: tags.length > 0 ? tags.map((tag) => tag.tagCode).join(", ") : row.tags.map((tag) => tag.tagCode).join(", "),
+      });
+    } catch (error) {
+      addToast(
+        error instanceof Error ? error.message : "Không thể tải dữ liệu sửa.",
+        "error",
+      );
+      closeModal();
+    } finally {
+      setIsModalLoading(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!selectedTopic) return;
+    setIsModalSaving(true);
+    try {
+      const normalizedCodes = selectedTagCodes;
+      const resolvedTags = normalizedCodes
+        .map((code) => tagLookupMap.get(code.toLowerCase()))
+        .filter((item): item is TagLookupDto => Boolean(item));
+
+      await fetchData(`/CatalogTopics/update/${encodeURIComponent(selectedTopic.catalogTopicCode)}`, {
+        method: "PUT",
+        body: {
+          title: editForm.title.trim(),
+          summary: editForm.summary.trim(),
+          departmentCode: editForm.departmentCode.trim(),
+          assignedStatus: editForm.assignedStatus.trim(),
+          assignedAt: editForm.assignedAt ? new Date(editForm.assignedAt).toISOString() : null,
+          tagIDs: resolvedTags.map((tag) => tag.tagID),
+          tagCodes: normalizedCodes,
+        },
+      });
+
+      addToast("Cập nhật đề tài thành công.", "success");
+      closeModal();
+      void loadRows();
+    } catch (error) {
+      addToast(
+        error instanceof Error ? error.message : "Không thể cập nhật đề tài.",
         "error",
       );
     } finally {
-      setIsDownloadingTemplate(false);
+      setIsModalSaving(false);
     }
   };
 
-  const doImport = async () => {
-    if (!selectedFile) {
-      addToast("Vui lòng chọn file import.", "warning");
-      return;
-    }
+  const removeTopic = async (row: CatalogTopicWithTagsDto) => {
+    if (!window.confirm(`Bạn chắc chắn muốn xóa đề tài ${row.catalogTopicCode}?`)) return;
 
-    if (validation.missingTitleRows.length > 0) {
-      addToast(
-        `Thiếu cột title ở ${validation.missingTitleRows.length} dòng. Vui lòng sửa trước khi import.`,
-        "error",
-      );
-      return;
-    }
-
-    if (validation.duplicateCatalogTopicCodes.length > 0) {
-      addToast(
-        "Phát hiện catalogTopicCode bị trùng trong cùng file. Hệ thống vẫn cho phép import nhưng có thể gây update ngoài ý muốn.",
-        "warning",
-      );
-    }
-
-    setIsImporting(true);
     try {
-      const token = getAccessToken();
-      const formData = new FormData();
-
-      if (normalizeBeforeImport && parsedRows.length > 0) {
-        const payloadRows = toPayloadRows(parsedRows);
-        const jsonBlob = new Blob([JSON.stringify(payloadRows, null, 2)], {
-          type: "application/json",
-        });
-        const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
-        const normalizedFile = new File(
-          [jsonBlob],
-          `${baseName}-normalized.json`,
-          {
-            type: "application/json",
-          },
-        );
-        formData.append("file", normalizedFile);
-        formData.append("format", "json");
-      } else {
-        formData.append("file", selectedFile);
-        formData.append("format", format);
-      }
-
-      const response = await fetch(
-        `${apiBase}/DataExchange/import/catalogtopics`,
-        {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          body: formData,
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(await parseResponseError(response));
-      }
-
-      const payload = (await response.json()) as ApiResponse<unknown> | unknown;
-      if (
-        payload &&
-        typeof payload === "object" &&
-        "success" in payload &&
-        (payload as ApiResponse<unknown>).success === false
-      ) {
-        throw new Error(
-          (payload as ApiResponse<unknown>).message ||
-            (payload as ApiResponse<unknown>).title ||
-            "Import catalogtopics thất bại.",
-        );
-      }
-
-      const source =
-        payload &&
-        typeof payload === "object" &&
-        "data" in payload &&
-        (payload as ApiResponse<unknown>).data
-          ? (payload as ApiResponse<unknown>).data
-          : payload;
-
-      const result = normalizeImportResult(source);
-      setImportResult(result);
-      addToast("Import kho đề tài thành công.", "success");
+      await fetchData(`/CatalogTopics/delete/${encodeURIComponent(row.catalogTopicCode)}`, {
+        method: "DELETE",
+      });
+      addToast("Xóa đề tài thành công.", "success");
+      void loadRows();
     } catch (error) {
       addToast(
-        error instanceof Error
-          ? error.message
-          : "Import catalogtopics thất bại.",
+        error instanceof Error ? error.message : "Không thể xóa đề tài.",
         "error",
       );
-    } finally {
-      setIsImporting(false);
     }
-  };
-
-  const exportErrorsAsJson = () => {
-    if (!importResult || importResult.errors.length === 0) return;
-    const payload = {
-      module: importResult.module || "catalogtopics",
-      failedCount: importResult.failedCount,
-      errors: importResult.errors,
-      exportedAt: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "catalogtopics-import-errors.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -756,10 +600,10 @@ const CatalogTopicsWarehousePage: React.FC = () => {
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
+            alignItems: "flex-start",
             justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
           <div
@@ -768,6 +612,7 @@ const CatalogTopicsWarehousePage: React.FC = () => {
               alignItems: "center",
               gap: 8,
               flex: "1 1 320px",
+              minWidth: 280,
             }}
           >
             <Search size={16} color="#64748b" />
@@ -784,7 +629,15 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             />
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+              flex: "0 1 auto",
+            }}
+          >
             <button
               type="button"
               onClick={() => setShowFilters((prev) => !prev)}
@@ -848,6 +701,12 @@ const CatalogTopicsWarehousePage: React.FC = () => {
               )}
               {sortDescending ? "DESC" : "ASC"}
             </button>
+
+            <ImportExportActions
+              moduleName="catalogtopics"
+              moduleLabel="Kho đề tài có sẵn"
+              onImportSuccess={loadRows}
+            />
           </div>
         </div>
 
@@ -981,9 +840,23 @@ const CatalogTopicsWarehousePage: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
 
+      <div style={sectionCardStyle}>
         <div style={{ overflowX: "auto" }}>
-          <table className="topics-table">
+          <table
+            className="topics-table"
+            style={{ width: "100%", tableLayout: "fixed", minWidth: 0 }}
+          >
+            <colgroup>
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "30%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "16%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>
@@ -1040,39 +913,14 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                   </button>
                 </th>
                 <th>Tags</th>
-                <th>
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("createdAt")}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Ngày tạo
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("lastUpdated")}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Cập nhật
-                  </button>
-                </th>
+                <th style={{ textAlign: "center" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingRows ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={`skeleton-${index}`}>
-                    {Array.from({ length: 8 }).map((__, idx) => (
+                    {Array.from({ length: 7 }).map((__, idx) => (
                       <td key={`skeleton-${index}-${idx}`}>
                         <div
                           style={{
@@ -1088,21 +936,35 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8}>Không có dữ liệu kho đề tài.</td>
+                  <td colSpan={7}>Không có dữ liệu kho đề tài.</td>
                 </tr>
               ) : (
                 rows.map((row) => (
                   <tr key={`catalogtopic-${row.catalogTopicID}`}>
                     <td>{row.catalogTopicCode || "--"}</td>
-                    <td>{row.title || "--"}</td>
-                    <td>{row.summary || "--"}</td>
+                    <td style={{ wordBreak: "break-word" }}>{row.title || "--"}</td>
+                    <td>
+                      <div
+                        title={row.summary || ""}
+                        style={{
+                          width: "100%",
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 2,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "normal",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {row.summary || "--"}
+                      </div>
+                    </td>
                     <td>{row.departmentCode || "--"}</td>
                     <td>{row.assignedStatus || "--"}</td>
                     <td>
                       {Array.isArray(row.tags) && row.tags.length > 0 ? (
-                        <div
-                          style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
-                        >
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {row.tags.map((tag) => (
                             <span
                               key={`${row.catalogTopicID}-${tag.tagID}`}
@@ -1124,8 +986,70 @@ const CatalogTopicsWarehousePage: React.FC = () => {
                         "--"
                       )}
                     </td>
-                    <td>{formatDateTime(row.createdAt)}</td>
-                    <td>{formatDateTime(row.lastUpdated)}</td>
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          gap: 6,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void openDetail(row)}
+                          title="Xem chi tiết"
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            background: "#fff",
+                            borderRadius: 8,
+                            padding: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void openEdit(row)}
+                          title="Sửa"
+                          style={{
+                            border: "1px solid #fcd34d",
+                            background: "#fff",
+                            color: "#b45309",
+                            borderRadius: 8,
+                            padding: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <PencilLine size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void removeTopic(row)}
+                          title="Xóa"
+                          style={{
+                            border: "1px solid #fecaca",
+                            background: "#fff",
+                            color: "#b91c1c",
+                            borderRadius: 8,
+                            padding: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -1204,411 +1128,667 @@ const CatalogTopicsWarehousePage: React.FC = () => {
         </div>
       </div>
 
-      <div style={sectionCardStyle}>
+      {modalMode && (
         <div
+          role="dialog"
+          aria-modal="true"
           style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 150,
+            background: "rgba(15,23,42,0.58)",
+            backdropFilter: "blur(4px)",
+            padding: 16,
             display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
           }}
         >
-          <div style={{ display: "grid", gap: 4 }}>
-            <strong style={{ color: "#0f172a" }}>
-              Bước 1: Tải template trước khi import
-            </strong>
-            <span style={{ color: "#64748b", fontSize: 13 }}>
-              Cột mẫu: {expectedColumns}
-            </span>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <label
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "0 8px",
-                background: "#fff",
-              }}
-            >
-              <span style={{ fontSize: 13, color: "#334155" }}>Định dạng</span>
-              <select
-                value={format}
-                onChange={(event) =>
-                  setFormat(event.target.value as DataExchangeFormat)
-                }
-                style={{
-                  border: "none",
-                  padding: "8px 0",
-                  background: "transparent",
-                }}
-              >
-                {ALLOWED_FORMATS.map((item) => (
-                  <option key={item} value={item}>
-                    {item.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={() => void downloadTemplate()}
-              disabled={isDownloadingTemplate}
-              style={{
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                color: "#0f172a",
-                borderRadius: 8,
-                padding: "8px 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {isDownloadingTemplate ? (
-                <RefreshCw size={16} />
-              ) : (
-                <Download size={16} />
-              )}
-              Tải template
-            </button>
-          </div>
-        </div>
-
-        <div
-          style={{
-            borderRadius: 10,
-            border: "1px dashed #cbd5e1",
-            padding: 14,
-            display: "grid",
-            gap: 10,
-            background: "#f8fafc",
-          }}
-        >
-          <strong style={{ color: "#0f172a" }}>
-            Bước 2: Chọn file để preview và kiểm tra nhanh
-          </strong>
           <div
             style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              alignItems: "center",
+              width: "min(1400px, 100%)",
+              maxHeight: "92vh",
+              overflow: "hidden",
+              borderRadius: 24,
+              background: "linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)",
+              border: "1px solid rgba(148,163,184,0.28)",
+              boxShadow: "0 28px 80px rgba(15,23,42,0.35)",
+              display: "grid",
+              gridTemplateRows: "auto 1fr auto",
             }}
           >
-            <label
+            <div
               style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "8px 12px",
-                background: "#fff",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-                fontWeight: 600,
+                padding: 24,
+                borderBottom: "1px solid rgba(148,163,184,0.18)",
+                background:
+                  "linear-gradient(135deg, rgba(243,112,33,0.08), rgba(14,165,233,0.05))",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 16,
               }}
             >
-              <FileUp size={16} />
-              Chọn file
-              <input
-                type="file"
-                accept=".xlsx,.csv,.json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] || null;
-                  void handleSelectFile(file);
-                }}
-                style={{ display: "none" }}
-              />
-            </label>
+              <div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(243,112,33,0.12)",
+                    color: "#c2410c",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.06,
+                  }}
+                >
+                  Data exchange
+                </div>
+                <h3 style={{ margin: "10px 0 6px", fontSize: 28, lineHeight: 1.1, color: "#0f172a" }}>
+                  {modalMode === "detail"
+                    ? `Chi tiết ${selectedTopic?.catalogTopicCode || "đề tài"}`
+                    : `Sửa ${selectedTopic?.catalogTopicCode || "đề tài"}`}
+                </h3>
+                <p style={{ margin: 0, color: "#64748b", lineHeight: 1.6, maxWidth: 860 }}>
+                  {modalMode === "detail"
+                    ? "Xem đầy đủ thông tin đề tài, danh sách tag và danh sách giảng viên đủ điều kiện."
+                    : "Chỉnh sửa thông tin đề tài và cập nhật quan hệ tag theo tagCode."}
+                </p>
+              </div>
 
-            <span style={{ color: "#475569", fontSize: 13 }}>
-              {selectedFile
-                ? `Đã chọn: ${selectedFile.name}`
-                : "Chưa chọn file"}
-            </span>
-
-            {selectedFile && (
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedFile(null);
-                  resetDataState();
-                }}
+                onClick={closeModal}
                 style={{
-                  border: "1px solid #fecaca",
-                  color: "#b91c1c",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                }}
-              >
-                Bỏ file
-              </button>
-            )}
-          </div>
-
-          <label
-            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-          >
-            <input
-              type="checkbox"
-              checked={normalizeBeforeImport}
-              onChange={(event) =>
-                setNormalizeBeforeImport(event.target.checked)
-              }
-            />
-            <span style={{ color: "#334155", fontSize: 13 }}>
-              Chuẩn hóa tagCodes và import bằng JSON (khuyến nghị)
-            </span>
-          </label>
-
-          {parsingError && (
-            <div
-              style={{
-                border: "1px solid #fecaca",
-                background: "#fff1f2",
-                borderRadius: 8,
-                padding: 10,
-                color: "#9f1239",
-                fontSize: 13,
-              }}
-            >
-              {parsingError}
-            </div>
-          )}
-
-          {validation.missingTitleRows.length > 0 && (
-            <div
-              style={{
-                border: "1px solid #fecaca",
-                background: "#fff1f2",
-                borderRadius: 8,
-                padding: 10,
-                color: "#9f1239",
-                fontSize: 13,
-              }}
-            >
-              Thiếu cột title tại dòng: {validation.missingTitleRows.join(", ")}
-            </div>
-          )}
-
-          {validation.duplicateCatalogTopicCodes.length > 0 && (
-            <div
-              style={{
-                border: "1px solid #fde68a",
-                background: "#fffbeb",
-                borderRadius: 8,
-                padding: 10,
-                color: "#92400e",
-                fontSize: 13,
-                display: "grid",
-                gap: 6,
-              }}
-            >
-              <strong>Cảnh báo trùng catalogTopicCode trong cùng file:</strong>
-              {validation.duplicateCatalogTopicCodes.map((item) => (
-                <span key={`${item.code}-${item.rows.join("-")}`}>
-                  {item.code}: dòng {item.rows.join(", ")}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {previewRows.length > 0 && (
-            <div style={{ overflowX: "auto" }}>
-              <table className="topics-table">
-                <thead>
-                  <tr>
-                    <th>Dòng</th>
-                    <th>catalogTopicCode</th>
-                    <th>title</th>
-                    <th>departmentCode</th>
-                    <th>assignedStatus</th>
-                    <th>assignedAt</th>
-                    <th>tagCodes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewRows.map((row) => (
-                    <tr key={`preview-${row.rowNumber}`}>
-                      <td>{row.rowNumber}</td>
-                      <td>{row.catalogTopicCode || "-"}</td>
-                      <td>{row.title || "-"}</td>
-                      <td>{row.departmentCode || "-"}</td>
-                      <td>{row.assignedStatus || "-"}</td>
-                      <td>{row.assignedAt || "-"}</td>
-                      <td>
-                        {Object.prototype.hasOwnProperty.call(row, "tagCodes")
-                          ? row.tagCodes || "(xóa tag)"
-                          : "(giữ nguyên)"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <span style={{ color: "#64748b", fontSize: 12 }}>
-                Preview {previewRows.length}/{parsedRows.length} dòng đầu.
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => void doImport()}
-            disabled={!canImport}
-            style={{
-              border: "none",
-              background: "#f37021",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "9px 14px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            <Upload size={16} />
-            {isImporting
-              ? "Đang import..."
-              : importResult
-                ? "Import lại"
-                : "Bước 3: Import"}
-          </button>
-        </div>
-      </div>
-
-      <div style={sectionCardStyle}>
-        <strong style={{ color: "#0f172a" }}>Quy tắc tagCodes</strong>
-        <ul
-          style={{
-            margin: 0,
-            paddingLeft: 18,
-            color: "#334155",
-            lineHeight: 1.5,
-          }}
-        >
-          <li>
-            Có cột tagCodes và để trống: backend sẽ xóa toàn bộ tag đang gán.
-          </li>
-          <li>
-            Không có cột tagCodes: backend giữ nguyên quan hệ tag hiện tại.
-          </li>
-          <li>
-            Nếu tồn tại tagCode chưa có trong hệ thống, cả dòng import sẽ lỗi.
-          </li>
-        </ul>
-      </div>
-
-      {importResult && (
-        <div style={sectionCardStyle}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
-              gap: 10,
-            }}
-          >
-            {[
-              { label: "Tổng dòng", value: importResult.totalRows },
-              { label: "Tạo mới", value: importResult.createdCount },
-              { label: "Cập nhật", value: importResult.updatedCount },
-              { label: "Lỗi", value: importResult.failedCount },
-            ].map((item) => (
-              <div
-                key={item.label}
-                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
                   border: "1px solid #e2e8f0",
-                  borderRadius: 10,
-                  padding: 12,
-                  background: "#f8fafc",
+                  background: "#fff",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                  flexShrink: 0,
                 }}
+                aria-label="Đóng"
               >
-                <div style={{ color: "#64748b", fontSize: 12 }}>
-                  {item.label}
-                </div>
-                <div
-                  style={{ color: "#0f172a", fontSize: 22, fontWeight: 700 }}
-                >
-                  {item.value}
-                </div>
-              </div>
-            ))}
-          </div>
+                <X size={18} />
+              </button>
+            </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <strong style={{ color: "#0f172a" }}>Chi tiết lỗi theo dòng</strong>
-            <button
-              type="button"
-              disabled={importResult.errors.length === 0}
-              onClick={exportErrorsAsJson}
+            <div style={{ overflow: "auto", padding: 24, display: "grid", gap: 16 }}>
+              {isModalLoading ? (
+                <div
+                  style={{
+                    minHeight: 280,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    color: "#475569",
+                    fontWeight: 600,
+                  }}
+                >
+                  <Loader2 size={18} className="spin" /> Đang tải dữ liệu...
+                </div>
+              ) : modalMode === "detail" ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "0.95fr 1.05fr",
+                    gap: 16,
+                    alignItems: "start",
+                  }}
+                >
+                  <div style={sectionCardStyle}>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Thông tin chính</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.25 }}>
+                        {selectedTopic?.title || "--"}
+                      </div>
+                      <div style={{ color: "#475569", lineHeight: 1.6 }}>{selectedTopic?.summary || "--"}</div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                      {[
+                        ["Mã đề tài", selectedTopic?.catalogTopicCode],
+                        ["Khoa/Bộ môn", selectedTopic?.departmentCode],
+                        ["Trạng thái", selectedTopic?.assignedStatus],
+                        ["Assigned at", formatDateTime(selectedTopic?.assignedAt ?? null)],
+                        ["Created at", formatDateTime(selectedTopic?.createdAt ?? null)],
+                        ["Last updated", formatDateTime(selectedTopic?.lastUpdated ?? null)],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          style={{
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 14,
+                            background: "linear-gradient(180deg, #fff, #f8fafc)",
+                            padding: 12,
+                            display: "grid",
+                            gap: 6,
+                          }}
+                        >
+                          <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>{label}</div>
+                          <div style={{ color: "#0f172a", fontWeight: 700, lineHeight: 1.4 }}>{value || "--"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 16 }}>
+                    <div style={sectionCardStyle}>
+                      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Tags</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {selectedTopic?.tags?.length ? (
+                          selectedTopic.tags.map((tag) => (
+                            <span
+                              key={tag.tagID}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "7px 10px",
+                                borderRadius: 999,
+                                background: "#fff7ed",
+                                border: "1px solid #fed7aa",
+                                color: "#9a3412",
+                                fontSize: 13,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {tag.tagCode}
+                              <span style={{ color: "#c2410c", fontWeight: 600 }}>{tag.tagName}</span>
+                            </span>
+                          ))
+                        ) : (
+                          <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có tag.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={sectionCardStyle}>
+                      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Giảng viên đủ điều kiện</div>
+                      {selectedTopic?.eligibleLecturers?.length ? (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", color: "#334155", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.04 }}>Giảng viên</th>
+                                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", color: "#334155", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.04 }}>Khoa</th>
+                                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", color: "#334155", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.04 }}>Học vị</th>
+                                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", color: "#334155", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.04 }}>Quota</th>
+                                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", color: "#334155", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.04 }}>Tag</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedTopic.eligibleLecturers.map((lecturer) => (
+                                <tr key={lecturer.lecturerProfileID} style={{ verticalAlign: "top" }}>
+                                  <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>
+                                    <div style={{ fontWeight: 800, color: "#0f172a", lineHeight: 1.4, whiteSpace: "nowrap" }}>{lecturer.fullName}</div>
+                                    <div style={{ color: "#64748b", fontSize: 13, marginTop: 4, lineHeight: 1.4, whiteSpace: "nowrap" }}>
+                                      {lecturer.email || "--"} · {lecturer.phoneNumber || "--"}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", color: "#334155" }}>
+                                    {lecturer.departmentCode || "--"}
+                                  </td>
+                                  <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                                    <span className="status-badge in-progress">{lecturer.degree || "--"}</span>
+                                  </td>
+                                  <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", color: "#334155" }}>
+                                    <div style={{ display: "grid", gap: 4 }}>
+                                      <span>Hướng dẫn: {lecturer.currentGuidingCount}/{lecturer.guideQuota}</span>
+                                      <span>Bảo vệ: {lecturer.defenseQuota}</span>
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                                    {Array.isArray(lecturer.tags) && lecturer.tags.length > 0 ? (
+                                      <div style={{ display: "flex", flexWrap: "nowrap", gap: 6, overflowX: "auto" }}>
+                                        {lecturer.tags.map((tag) => (
+                                          <span
+                                            key={`${lecturer.lecturerProfileID}-${tag.tagID}`}
+                                            style={{
+                                              padding: "4px 8px",
+                                              borderRadius: 999,
+                                              background: "#eff6ff",
+                                              border: "1px solid #bfdbfe",
+                                              color: "#1d4ed8",
+                                              fontSize: 12,
+                                              fontWeight: 700,
+                                            }}
+                                          >
+                                            {tag.tagCode}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: "#64748b", fontSize: 13 }}>--</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có giảng viên đủ điều kiện.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16, alignItems: "start" }}>
+                  <div style={sectionCardStyle}>
+                    <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Thông tin chỉnh sửa</div>
+                    <div style={{ display: "grid", gap: 12 }}>
+                      <label style={{ display: "grid", gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Tiêu đề</span>
+                        <input
+                          value={editForm.title}
+                          onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                          style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "10px 12px", background: "#fff" }}
+                        />
+                      </label>
+
+                      <label style={{ display: "grid", gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Tóm tắt</span>
+                        <textarea
+                          value={editForm.summary}
+                          onChange={(event) => setEditForm((prev) => ({ ...prev, summary: event.target.value }))}
+                          rows={6}
+                          style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: 12, background: "#fff", fontFamily: "inherit", resize: "vertical" }}
+                        />
+                      </label>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Mã khoa/bộ môn</span>
+                          <input
+                            value={editForm.departmentCode}
+                            onChange={(event) => setEditForm((prev) => ({ ...prev, departmentCode: event.target.value }))}
+                            style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "10px 12px", background: "#fff" }}
+                          />
+                        </label>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Trạng thái</span>
+                          <input
+                            value={editForm.assignedStatus}
+                            onChange={(event) => setEditForm((prev) => ({ ...prev, assignedStatus: event.target.value }))}
+                            style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "10px 12px", background: "#fff" }}
+                          />
+                        </label>
+                      </div>
+
+                      <label style={{ display: "grid", gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Assigned at</span>
+                        <input
+                          type="datetime-local"
+                          value={editForm.assignedAt}
+                          onChange={(event) => setEditForm((prev) => ({ ...prev, assignedAt: event.target.value }))}
+                          style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "10px 12px", background: "#fff" }}
+                        />
+                      </label>
+
+                      <label style={{ display: "grid", gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Tags</span>
+                        <div
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 10,
+                            padding: 12,
+                            background: "#fff",
+                            display: "grid",
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                            <div style={{ color: "#64748b", fontSize: 13 }}>
+                              Chọn tag từ danh sách popup, hệ thống sẽ tự đồng bộ tagID khi lưu.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={openTagPicker}
+                              style={{
+                                border: "1px solid #cbd5e1",
+                                borderRadius: 8,
+                                padding: "8px 12px",
+                                background: "#fff",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Chọn tag
+                            </button>
+                          </div>
+
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {selectedTagCodes.length > 0 ? (
+                              selectedTagCodes.map((code) => {
+                                const matchedTag = tagLookupMap.get(code.toLowerCase());
+                                return (
+                                  <span
+                                    key={code}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      padding: "6px 10px",
+                                      borderRadius: 999,
+                                      background: matchedTag ? "#f0fdf4" : "#fef2f2",
+                                      border: matchedTag ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                                      color: matchedTag ? "#166534" : "#991b1b",
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    {code}
+                                    <span style={{ fontWeight: 600 }}>{matchedTag ? matchedTag.tagName : "Không khớp"}</span>
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có tag nào được chọn.</div>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 16 }}>
+                    <div style={sectionCardStyle}>
+                      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Xem trước tag</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {selectedTagCodes.length > 0 ? (
+                          selectedTagCodes.map((code) => {
+                            const matchedTag = tagLookupMap.get(code.toLowerCase());
+                            return (
+                              <span
+                                key={code}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  padding: "7px 10px",
+                                  borderRadius: 999,
+                                  background: matchedTag ? "#f0fdf4" : "#fef2f2",
+                                  border: matchedTag ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                                  color: matchedTag ? "#166534" : "#991b1b",
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {code}
+                                <span style={{ fontWeight: 600 }}>{matchedTag ? matchedTag.tagName : "Không khớp"}</span>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có tag codes.</div>
+                        )}
+                      </div>
+                      <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.5 }}>
+                        {isLoadingTags
+                          ? "Đang tải danh sách tag để đồng bộ tagIDs..."
+                          : `Đã tải ${tagLookup.length} tag để map tagIDs khi lưu.`}
+                      </div>
+                    </div>
+
+                    <div style={sectionCardStyle}>
+                      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}>Thông tin hiện tại</div>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <div style={{ color: "#0f172a", fontWeight: 700 }}>{selectedTopic?.catalogTopicCode}</div>
+                        <div style={{ color: "#475569", lineHeight: 1.6 }}>{selectedTopic?.summary || "--"}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {selectedTopic?.tags?.map((tag) => (
+                            <span key={tag.tagID} style={{ padding: "6px 10px", borderRadius: 999, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412", fontSize: 12, fontWeight: 700 }}>
+                              {tag.tagCode}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div
               style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                padding: "8px 12px",
-                background: "#fff",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
+                padding: 16,
+                borderTop: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
               }}
             >
-              <Download size={14} /> Tải lỗi JSON
-            </button>
-          </div>
-
-          <div style={{ overflowX: "auto", maxHeight: 320, overflowY: "auto" }}>
-            <table className="topics-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Nội dung lỗi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {importResult.errors.length === 0 ? (
-                  <tr>
-                    <td colSpan={2}>Không có lỗi.</td>
-                  </tr>
-                ) : (
-                  importResult.errors.map((error, index) => (
-                    <tr key={`import-error-${index}`}>
-                      <td>{index + 1}</td>
-                      <td>{error}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={isModalSaving}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  background: "#fff",
+                  fontWeight: 600,
+                }}
+              >
+                {modalMode === "detail" ? "Đóng" : "Hủy"}
+              </button>
+              {modalMode === "edit" && (
+                <button
+                  type="button"
+                  onClick={() => void saveEdit()}
+                  disabled={isModalSaving}
+                  style={{
+                    border: "none",
+                    background: "#f37021",
+                    color: "#fff",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  {isModalSaving ? <Loader2 size={16} className="spin" /> : null}
+                  {isModalSaving ? "Đang lưu..." : "Lưu thay đổi"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
+
+      {modalMode === "edit" && isTagPickerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 170,
+            background: "rgba(15,23,42,0.62)",
+            backdropFilter: "blur(4px)",
+            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "min(920px, 100%)",
+              maxHeight: "90vh",
+              overflow: "hidden",
+              borderRadius: 20,
+              background: "#fff",
+              border: "1px solid rgba(148,163,184,0.24)",
+              boxShadow: "0 24px 70px rgba(15,23,42,0.3)",
+              display: "grid",
+              gridTemplateRows: "auto auto 1fr auto",
+            }}
+          >
+            <div
+              style={{
+                padding: 20,
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800, textTransform: "uppercase" }}>Tag picker</div>
+                <h3 style={{ margin: "6px 0 0", fontSize: 22, color: "#0f172a" }}>Chọn tag cho đề tài</h3>
+                <p style={{ margin: "6px 0 0", color: "#64748b", lineHeight: 1.6 }}>
+                  Chọn nhiều tag trong popup này, sau đó hệ thống sẽ cập nhật tagCode và tagID tương ứng khi lưu.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsTagPickerOpen(false)}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  background: "#fff",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                }}
+                aria-label="Đóng popup tag"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0", display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  value={tagPickerSearch}
+                  onChange={(event) => setTagPickerSearch(event.target.value)}
+                  placeholder="Tìm theo mã tag, tên tag hoặc mô tả"
+                  style={{
+                    flex: "1 1 320px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    background: "#fff",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setTagSelectionDraft([])}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "9px 12px",
+                    background: "#fff",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Bỏ chọn hết
+                </button>
+              </div>
+
+              <div style={{ color: "#64748b", fontSize: 13 }}>
+                Đã chọn <strong>{tagSelectionDraft.length}</strong> / {tagLookup.length} tag
+              </div>
+            </div>
+
+            <div style={{ overflow: "auto", padding: 16 }}>
+              <div style={{ display: "grid", gap: 10 }}>
+                {filteredTagOptions.length > 0 ? (
+                  filteredTagOptions.map((tag) => {
+                    const checked = tagSelectionDraft.some((item) => item.toLowerCase() === tag.tagCode.toLowerCase());
+                    return (
+                      <label
+                        key={tag.tagID}
+                        style={{
+                          border: checked ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+                          background: checked ? "#eff6ff" : "#fff",
+                          borderRadius: 14,
+                          padding: 14,
+                          display: "grid",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleTagSelection(tag.tagCode)}
+                            style={{ marginTop: 4 }}
+                          />
+                          <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                              <div style={{ fontWeight: 800, color: "#0f172a" }}>{tag.tagCode}</div>
+                              <div style={{ fontSize: 13, color: "#64748b" }}>{tag.tagName}</div>
+                            </div>
+                            <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
+                              {tag.description || "Không có mô tả."}
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div style={{ color: "#64748b", fontSize: 13, padding: 12, textAlign: "center" }}>
+                    Không tìm thấy tag phù hợp.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ padding: 16, borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setIsTagPickerOpen(false)}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  background: "#fff",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={applyTagSelection}
+                style={{
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  background: "#f37021",
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Áp dụng tag
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

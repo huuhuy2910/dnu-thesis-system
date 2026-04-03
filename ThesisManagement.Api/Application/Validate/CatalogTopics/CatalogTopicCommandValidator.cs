@@ -17,6 +17,12 @@ namespace ThesisManagement.Api.Application.Validate.CatalogTopics
             if (dto.Title is not null && string.IsNullOrWhiteSpace(dto.Title))
                 return "Title cannot be empty";
 
+            if (dto.TagIDs != null && dto.TagIDs.Any(x => x <= 0))
+                return "TagIDs must be positive numbers";
+
+            if (dto.TagCodes != null && dto.TagCodes.Any(x => string.IsNullOrWhiteSpace(x)))
+                return "TagCodes cannot contain empty values";
+
             return null;
         }
     }

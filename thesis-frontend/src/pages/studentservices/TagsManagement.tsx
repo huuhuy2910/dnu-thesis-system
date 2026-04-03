@@ -1,15 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Edit,
-  Eye,
-  Filter,
-  Plus,
-  Search,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
+import ImportExportActions from "../../components/admin/ImportExportActions";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
 import "../admin/Dashboard.css";
@@ -26,38 +18,10 @@ type TagReadDto = {
   createdAt: string;
 };
 
-type DataImportResultDto = {
-  module: string;
-  format: string;
-  totalRows: number;
-  createdCount: number;
-  updatedCount: number;
-  failedCount: number;
-  errors: string[];
-};
-
-const acceptedExtensions = ["xlsx", "csv", "json"] as const;
-
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
-}
-
-function getApiError(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === "object") {
-    const source = payload as Record<string, unknown>;
-    if (typeof source.message === "string" && source.message.trim()) {
-      return source.message;
-    }
-    if (source.errors && typeof source.errors === "object") {
-      const first = Object.values(source.errors as Record<string, unknown>)[0];
-      if (Array.isArray(first) && typeof first[0] === "string") {
-        return first[0];
-      }
-    }
-  }
-  return fallback;
 }
 
 function normalizeList(payload: unknown): {
@@ -162,15 +126,6 @@ const TagsManagement: React.FC = () => {
     description: "",
   });
 
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importFormat, setImportFormat] = useState("");
-  const [isImporting, setIsImporting] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [importResult, setImportResult] = useState<DataImportResultDto | null>(
-    null,
-  );
-
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearchKeyword(searchInput.trim());
@@ -244,7 +199,9 @@ const TagsManagement: React.FC = () => {
       setTotalCount(apiTotal > 0 ? apiTotal : normalized.fallbackTotal);
     } catch (error) {
       addToast(
-        error instanceof Error ? error.message : "Không thể tải danh sách tags.",
+        error instanceof Error
+          ? error.message
+          : "Không thể tải danh sách tags.",
         "error",
       );
       setRows([]);
@@ -339,7 +296,10 @@ const TagsManagement: React.FC = () => {
       addToast("Xóa tag thành công.", "success");
       await loadRows();
     } catch (error) {
-      addToast(error instanceof Error ? error.message : "Không thể xóa tag.", "error");
+      addToast(
+        error instanceof Error ? error.message : "Không thể xóa tag.",
+        "error",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -397,73 +357,6 @@ const TagsManagement: React.FC = () => {
     }
   };
 
-  const detectFormatByName = (fileName: string): string => {
-    const ext = fileName.split(".").pop()?.toLowerCase() || "";
-    return acceptedExtensions.includes(ext as (typeof acceptedExtensions)[number])
-      ? ext
-      : "";
-  };
-
-  const setImportFileWithValidation = (file: File | null) => {
-    if (!file) {
-      setImportFile(null);
-      return;
-    }
-
-    const ext = detectFormatByName(file.name);
-    if (!ext) {
-      addToast("File import chỉ chấp nhận .xlsx, .csv hoặc .json.", "warning");
-      setImportFile(null);
-      return;
-    }
-
-    setImportFile(file);
-    if (!importFormat) {
-      setImportFormat(ext);
-    }
-  };
-
-  const handleImportSubmit = async () => {
-    if (!importFile) {
-      addToast("Vui lòng chọn file import.", "warning");
-      return;
-    }
-
-    setIsImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", importFile);
-      if (importFormat) {
-        formData.append("format", importFormat);
-      }
-
-      const response = await fetchData<ApiResponse<DataImportResultDto>>(
-        "/Tags/import",
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-
-      if (!response.success || !response.data) {
-        throw new Error(
-          getApiError(response, "Không thể import danh sách tags."),
-        );
-      }
-
-      setImportResult(response.data);
-      addToast("Import tags thành công.", "success");
-      await loadRows();
-    } catch (error) {
-      addToast(
-        error instanceof Error ? error.message : "Không thể import tags.",
-        "error",
-      );
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
   const resetFilters = () => {
     setSearchInput("");
     setSearchKeyword("");
@@ -492,7 +385,14 @@ const TagsManagement: React.FC = () => {
           justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", gap: 10, flex: "1 1 460px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flex: "1 1 460px",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ flex: "1 1 260px", position: "relative" }}>
             <Search
               size={18}
@@ -610,30 +510,11 @@ const TagsManagement: React.FC = () => {
           >
             <Plus size={16} /> Create Tag
           </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowImportModal(true);
-              setImportResult(null);
-              setImportFile(null);
-              setImportFormat("");
-            }}
-            style={{
-              border: "1px solid #fdba74",
-              background: "#fff",
-              color: "#c2410c",
-              borderRadius: 8,
-              padding: "9px 12px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <Upload size={16} /> Import Tags
-          </button>
+          <ImportExportActions
+            moduleName="tags"
+            moduleLabel="Quản lý tags"
+            onImportSuccess={loadRows}
+          />
         </div>
       </div>
 
@@ -656,7 +537,11 @@ const TagsManagement: React.FC = () => {
               setFilters((prev) => ({ ...prev, tagCode: event.target.value }))
             }
             placeholder="Lọc theo TagCode"
-            style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 10 }}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: 8,
+              padding: 10,
+            }}
           />
           <input
             value={filters.tagName}
@@ -664,7 +549,11 @@ const TagsManagement: React.FC = () => {
               setFilters((prev) => ({ ...prev, tagName: event.target.value }))
             }
             placeholder="Lọc theo TagName"
-            style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 10 }}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: 8,
+              padding: 10,
+            }}
           />
           <button
             type="button"
@@ -710,7 +599,13 @@ const TagsManagement: React.FC = () => {
                   <td>{row.description || ""}</td>
                   <td>{formatDate(row.createdAt)}</td>
                   <td>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => void openDetail(row)}
@@ -974,230 +869,6 @@ const TagsManagement: React.FC = () => {
                       : "Lưu cập nhật"}
                 </button>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showImportModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 90,
-            padding: 14,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 760,
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              maxHeight: "88vh",
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                padding: 16,
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Import Tags</h3>
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  color: "#64748b",
-                }}
-                title="Đóng"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: 16, display: "grid", gap: 14 }}>
-              <div
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragOver(true);
-                }}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  setIsDragOver(false);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setIsDragOver(false);
-                  const file = event.dataTransfer.files?.[0] || null;
-                  setImportFileWithValidation(file);
-                }}
-                onClick={() => document.getElementById("tags-import-file")?.click()}
-                style={{
-                  border: `2px dashed ${isDragOver ? "#f37021" : "#cbd5e1"}`,
-                  borderRadius: 12,
-                  padding: "26px 18px",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  background: isDragOver ? "#fff7ed" : "#f8fafc",
-                }}
-              >
-                <Upload size={24} style={{ color: "#f37021", marginBottom: 8 }} />
-                <div style={{ fontWeight: 600 }}>
-                  Kéo thả file hoặc bấm để chọn file import
-                </div>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                  Hỗ trợ: .xlsx, .csv, .json
-                </div>
-                <input
-                  id="tags-import-file"
-                  type="file"
-                  accept=".xlsx,.csv,.json"
-                  style={{ display: "none" }}
-                  onChange={(event) =>
-                    setImportFileWithValidation(event.target.files?.[0] || null)
-                  }
-                />
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 220px",
-                  gap: 10,
-                }}
-              >
-                <input
-                  value={importFile?.name || ""}
-                  readOnly
-                  placeholder="Chưa chọn file"
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: 10,
-                    background: "#f8fafc",
-                  }}
-                />
-                <select
-                  value={importFormat}
-                  onChange={(event) => setImportFormat(event.target.value)}
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: 10,
-                  }}
-                >
-                  <option value="">Auto detect format</option>
-                  <option value="xlsx">xlsx</option>
-                  <option value="csv">csv</option>
-                  <option value="json">json</option>
-                </select>
-              </div>
-
-              <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.6 }}>
-                Cột/keys kỳ vọng: <strong>tagCode</strong> (optional),
-                <strong> tagName</strong> (required), <strong>description</strong>
-                (optional).
-              </div>
-
-              {importResult && (
-                <div
-                  style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 10,
-                    padding: 12,
-                    background: "#f8fafc",
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
-                      gap: 8,
-                    }}
-                  >
-                    <div><strong>Total:</strong> {importResult.totalRows}</div>
-                    <div><strong>Created:</strong> {importResult.createdCount}</div>
-                    <div><strong>Updated:</strong> {importResult.updatedCount}</div>
-                    <div><strong>Failed:</strong> {importResult.failedCount}</div>
-                  </div>
-
-                  {importResult.errors?.length > 0 && (
-                    <div>
-                      <div style={{ fontWeight: 700, marginBottom: 8, color: "#b91c1c" }}>
-                        Danh sách lỗi import
-                      </div>
-                      <div
-                        style={{
-                          maxHeight: 170,
-                          overflowY: "auto",
-                          border: "1px solid #fecaca",
-                          borderRadius: 8,
-                          background: "#fff1f2",
-                          padding: 8,
-                        }}
-                      >
-                        {importResult.errors.map((item, idx) => (
-                          <div key={`${item}-${idx}`} style={{ fontSize: 12, color: "#9f1239" }}>
-                            - {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                padding: 16,
-                borderTop: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                disabled={isImporting}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                }}
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleImportSubmit()}
-                disabled={isImporting || !importFile}
-                style={{
-                  border: "none",
-                  background: isImporting || !importFile ? "#94a3b8" : "#f37021",
-                  color: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                }}
-              >
-                {isImporting ? "Đang import..." : "Import"}
-              </button>
             </div>
           </div>
         </div>

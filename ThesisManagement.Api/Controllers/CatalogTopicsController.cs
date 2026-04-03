@@ -62,7 +62,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var dto = await _getCatalogTopicDetailQuery.ExecuteAsync(code);
             if (dto == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(dto));
+            return Ok(ApiResponse<CatalogTopicDetailReadDto>.SuccessResponse(dto));
         }
 
         [HttpGet("get-create")]
@@ -83,7 +83,7 @@ namespace ThesisManagement.Api.Controllers
         {
             var dto = await _getCatalogTopicUpdateQuery.ExecuteAsync(code);
             if (dto == null) return NotFound(ApiResponse<object>.Fail("CatalogTopic not found", 404));
-            return Ok(ApiResponse<CatalogTopicUpdateDto>.SuccessResponse(dto));
+            return Ok(ApiResponse<CatalogTopicWithTagsReadDto>.SuccessResponse(dto));
         }
 
         [HttpPut("update/{code}")]
@@ -93,7 +93,7 @@ namespace ThesisManagement.Api.Controllers
             if (!result.Success)
                 return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
-            return Ok(ApiResponse<CatalogTopicReadDto>.SuccessResponse(result.Data));
+            return Ok(ApiResponse<CatalogTopicWithTagsReadDto>.SuccessResponse(result.Data));
         }
 
         [HttpDelete("delete/{code}")]
