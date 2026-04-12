@@ -60,7 +60,7 @@ namespace ThesisManagement.Api.Services.FileStorage
             return $"{baseUrl}{url}";
         }
 
-        public async Task<OperationResult<string>> UploadAsync(IFormFile file, string scope, CancellationToken cancellationToken = default)
+        public async Task<OperationResult<string>> UploadAsync(IFormFile file, string scope, CancellationToken cancellationToken = default, bool allowLocalFallback = true)
         {
             if (file == null || file.Length == 0)
                 return OperationResult<string>.Failed("File is required", 400);
@@ -80,6 +80,9 @@ namespace ThesisManagement.Api.Services.FileStorage
             var managedUrl = await TryUploadToMegaAsync(content, storageFileName, safeScope, cancellationToken);
             if (!string.IsNullOrWhiteSpace(managedUrl))
                 return OperationResult<string>.Succeeded(managedUrl, 201);
+
+            if (!allowLocalFallback)
+                return OperationResult<string>.Failed("Mega upload failed", 503);
 
             var localUrl = await SaveLocalAsync(content, safeScope, storageFileName, cancellationToken);
             return OperationResult<string>.Succeeded(localUrl, 201);

@@ -67,7 +67,9 @@
   background: #fff;
   font: inherit;
   color: #0f172a;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .management-sectioned-form-input:focus {

@@ -127,7 +127,7 @@ namespace ThesisManagement.Api.Application.Command.Reports
                 {
                     if (file.Length <= 0) continue;
 
-                    var uploadResult = await _storageService.UploadAsync(file, "uploads");
+                    var uploadResult = await _storageService.UploadAsync(file, "uploads", allowLocalFallback: false);
                     if (!uploadResult.Success)
                     {
                         foreach (var uploadedUrl in uploadedUrls)

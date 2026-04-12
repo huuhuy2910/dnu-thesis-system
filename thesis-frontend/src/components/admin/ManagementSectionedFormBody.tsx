@@ -17,7 +17,9 @@ type ManagementSectionedFormBodyProps = {
   fullWidthFieldNames?: string[];
 };
 
-const ManagementSectionedFormBody: React.FC<ManagementSectionedFormBodyProps> = ({
+const ManagementSectionedFormBody: React.FC<
+  ManagementSectionedFormBodyProps
+> = ({
   sections,
   values,
   getFieldDefinition,
@@ -38,7 +40,10 @@ const ManagementSectionedFormBody: React.FC<ManagementSectionedFormBodyProps> = 
         if (sectionFields.length === 0) return null;
 
         return (
-          <section key={section.title} className="management-sectioned-form-section">
+          <section
+            key={section.title}
+            className="management-sectioned-form-section"
+          >
             <header className="management-sectioned-form-section-header">
               <h4>{section.title}</h4>
               <p>{section.description}</p>
@@ -49,7 +54,8 @@ const ManagementSectionedFormBody: React.FC<ManagementSectionedFormBodyProps> = 
                 const field = getFieldDefinition(fieldName);
                 const value = values[field.name] ?? "";
                 const isTextarea = field.type === "textarea";
-                const isFullWidth = isTextarea || fullWidthFieldSet.has(field.name);
+                const isFullWidth =
+                  isTextarea || fullWidthFieldSet.has(field.name);
 
                 return (
                   <label
@@ -64,7 +70,9 @@ const ManagementSectionedFormBody: React.FC<ManagementSectionedFormBodyProps> = 
                       <textarea
                         value={value}
                         rows={4}
-                        onChange={(event) => onFieldChange(field.name, event.target.value)}
+                        onChange={(event) =>
+                          onFieldChange(field.name, event.target.value)
+                        }
                         className="management-sectioned-form-input"
                       />
                     ) : (
@@ -77,7 +85,9 @@ const ManagementSectionedFormBody: React.FC<ManagementSectionedFormBodyProps> = 
                               : "text"
                         }
                         value={value}
-                        onChange={(event) => onFieldChange(field.name, event.target.value)}
+                        onChange={(event) =>
+                          onFieldChange(field.name, event.target.value)
+                        }
                         className="management-sectioned-form-input"
                       />
                     )}

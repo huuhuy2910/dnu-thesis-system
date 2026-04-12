@@ -34,7 +34,11 @@
 .management-form-section__note {
   padding: 10px 12px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(243, 112, 33, 0.08), rgba(14, 165, 233, 0.06));
+  background: linear-gradient(
+    135deg,
+    rgba(243, 112, 33, 0.08),
+    rgba(14, 165, 233, 0.06)
+  );
   color: #334155;
   font-size: 13px;
   line-height: 1.55;
@@ -73,7 +77,10 @@
   font: inherit;
   color: #0f172a;
   background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 .management-form-section__input:focus,

@@ -60,7 +60,9 @@ const ManagementFormSection: React.FC<ManagementFormSectionProps> = ({
         </button>
       ) : null}
 
-      {note ? <div className="management-form-section__note">{note}</div> : null}
+      {note ? (
+        <div className="management-form-section__note">{note}</div>
+      ) : null}
 
       <div className="management-form-section__grid">
         {fields.map((field) => {
@@ -80,16 +82,26 @@ const ManagementFormSection: React.FC<ManagementFormSectionProps> = ({
               {isTextarea ? (
                 <textarea
                   value={value}
-                  onChange={(event) => onFieldChange(field.name, event.target.value)}
+                  onChange={(event) =>
+                    onFieldChange(field.name, event.target.value)
+                  }
                   rows={4}
                   disabled={isDisabled}
                   className="management-form-section__textarea"
                 />
               ) : (
                 <input
-                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                  type={
+                    field.type === "number"
+                      ? "number"
+                      : field.type === "date"
+                        ? "date"
+                        : "text"
+                  }
                   value={value}
-                  onChange={(event) => onFieldChange(field.name, event.target.value)}
+                  onChange={(event) =>
+                    onFieldChange(field.name, event.target.value)
+                  }
                   disabled={isDisabled}
                   className="management-form-section__input"
                 />

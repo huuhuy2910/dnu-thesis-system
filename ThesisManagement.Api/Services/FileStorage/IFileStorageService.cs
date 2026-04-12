@@ -17,7 +17,7 @@ namespace ThesisManagement.Api.Services.FileStorage
     {
         long MaxUploadSizeBytes { get; }
 
-        Task<OperationResult<string>> UploadAsync(IFormFile file, string scope, CancellationToken cancellationToken = default);
+        Task<OperationResult<string>> UploadAsync(IFormFile file, string scope, CancellationToken cancellationToken = default, bool allowLocalFallback = true);
         Task<OperationResult<FileStorageReadResult>> OpenReadAsync(string? url, CancellationToken cancellationToken = default);
         Task<OperationResult<object?>> DeleteAsync(string? url, CancellationToken cancellationToken = default);
         Task<OperationResult<string>> MoveAsync(string? url, string targetScope, CancellationToken cancellationToken = default);

@@ -1083,7 +1083,12 @@ const TopicsManagement: React.FC = () => {
               {columns.map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
-              <th style={{ textAlign: "center", width: topicTableColumnWidths.action }}>
+              <th
+                style={{
+                  textAlign: "center",
+                  width: topicTableColumnWidths.action,
+                }}
+              >
                 Thao tác
               </th>
             </tr>
