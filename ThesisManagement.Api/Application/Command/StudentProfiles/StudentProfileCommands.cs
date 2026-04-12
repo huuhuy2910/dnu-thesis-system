@@ -4,6 +4,7 @@ using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Application.Validate.StudentProfiles;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.StudentProfiles
 {
@@ -17,10 +18,12 @@ namespace ThesisManagement.Api.Application.Command.StudentProfiles
     public class UploadStudentAvatarCommand : IUploadStudentAvatarCommand
     {
         private readonly IUnitOfWork _uow;
+        private readonly IFileStorageService _storageService;
 
-        public UploadStudentAvatarCommand(IUnitOfWork uow)
+        public UploadStudentAvatarCommand(IUnitOfWork uow, IFileStorageService storageService)
         {
             _uow = uow;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<StudentAvatarUploadResult>> ExecuteAsync(string code, IFormFile? file)
@@ -33,44 +36,22 @@ namespace ThesisManagement.Api.Application.Command.StudentProfiles
             if (!string.IsNullOrWhiteSpace(validationError))
                 return OperationResult<StudentAvatarUploadResult>.Failed(validationError, 400);
 
-            var fileExtension = Path.GetExtension(file!.FileName).ToLowerInvariant();
-            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "students");
-            if (!Directory.Exists(avatarsRoot))
-                Directory.CreateDirectory(avatarsRoot);
+            var oldImageUrl = student.StudentImage;
+            var uploadResult = await _storageService.UploadAsync(file!, "avatars/students");
+            if (!uploadResult.Success)
+                return OperationResult<StudentAvatarUploadResult>.Failed(uploadResult.ErrorMessage ?? "Upload avatar failed", uploadResult.StatusCode);
 
-            if (!string.IsNullOrEmpty(student.StudentImage))
-            {
-                var oldImagePath = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "wwwroot",
-                    student.StudentImage.TrimStart('/').Replace("/", "\\"));
-
-                if (System.IO.File.Exists(oldImagePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(oldImagePath);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-
-            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
-            var savePath = Path.Combine(avatarsRoot, uniqueName);
-
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var imageUrl = $"/avatars/students/{uniqueName}";
+            var imageUrl = uploadResult.Data!;
             student.StudentImage = imageUrl;
             student.LastUpdated = DateTime.UtcNow;
 
             _uow.StudentProfiles.Update(student);
             await _uow.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(oldImageUrl) && !string.Equals(oldImageUrl, imageUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                await _storageService.DeleteAsync(oldImageUrl);
+            }
 
             return OperationResult<StudentAvatarUploadResult>.Succeeded(
                 new StudentAvatarUploadResult(code, imageUrl, "Upload avatar thành công"));

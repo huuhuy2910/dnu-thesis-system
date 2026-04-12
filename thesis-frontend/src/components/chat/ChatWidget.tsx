@@ -17,7 +17,7 @@ import {
   Eye,
 } from "lucide-react";
 import "./ChatWidget.css";
-import { getAvatarUrl } from "../../api/fetchData";
+import { getAvatarUrl, normalizeUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useChat } from "../../hooks/useChat";
 import type {
@@ -145,25 +145,11 @@ function isImageAttachment(attachment: ChatMessageAttachment): boolean {
 }
 
 function resolveAttachmentUrl(path?: string | null): string {
-  if (!path) return "";
-  const value = String(path);
-  if (
-    value.startsWith("blob:") ||
-    value.startsWith("data:") ||
-    /^https?:\/\//i.test(value)
-  ) {
-    return value;
-  }
-  return getAvatarUrl(value);
+  return normalizeUrl(path);
 }
 
 function resolveReactionAvatar(path?: string | null): string {
-  if (!path) return "";
-  const value = String(path);
-  if (/^https?:\/\//i.test(value) || value.startsWith("data:")) {
-    return value;
-  }
-  return getAvatarUrl(value);
+  return normalizeUrl(path);
 }
 
 const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {

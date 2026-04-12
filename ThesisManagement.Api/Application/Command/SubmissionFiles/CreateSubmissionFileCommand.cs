@@ -6,6 +6,7 @@ using ThesisManagement.Api.DTOs.SubmissionFiles.Command;
 using ThesisManagement.Api.DTOs.SubmissionFiles.Query;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.SubmissionFiles
 {
@@ -19,11 +20,13 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
     {
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
+        private readonly IFileStorageService _storageService;
 
-        public CreateSubmissionFileCommand(IUnitOfWork uow, IMapper mapper)
+        public CreateSubmissionFileCommand(IUnitOfWork uow, IMapper mapper, IFileStorageService storageService)
         {
             _uow = uow;
             _mapper = mapper;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<SubmissionFileReadDto>> ExecuteAsync(SubmissionFileCreateDto dto)
@@ -60,21 +63,12 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
 
             if (file != null && file.Length > 0)
             {
-                var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                if (!Directory.Exists(uploadsRoot))
-                    Directory.CreateDirectory(uploadsRoot);
+                var uploadResult = await _storageService.UploadAsync(file, "uploads");
+                if (!uploadResult.Success)
+                    return OperationResult<SubmissionFileReadDto>.Failed(uploadResult.ErrorMessage ?? "Upload file failed", uploadResult.StatusCode);
 
-                var originalFileName = Path.GetFileName(file.FileName);
-                var uniqueName = $"{Guid.NewGuid():N}_{originalFileName}";
-                var savePath = Path.Combine(uploadsRoot, uniqueName);
-
-                using (var stream = new FileStream(savePath, FileMode.Create))
-                {
-                    await file.CopyToAsync(stream);
-                }
-
-                fileUrl = $"/uploads/{uniqueName}";
-                finalFileName = originalFileName;
+                fileUrl = uploadResult.Data!;
+                finalFileName = Path.GetFileName(file.FileName);
                 finalFileSize = file.Length;
                 finalMimeType = file.ContentType;
             }

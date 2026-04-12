@@ -4,6 +4,7 @@ using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Application.Validate.LecturerProfiles;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.LecturerProfiles
 {
@@ -17,10 +18,12 @@ namespace ThesisManagement.Api.Application.Command.LecturerProfiles
     public class UploadLecturerAvatarCommand : IUploadLecturerAvatarCommand
     {
         private readonly IUnitOfWork _uow;
+        private readonly IFileStorageService _storageService;
 
-        public UploadLecturerAvatarCommand(IUnitOfWork uow)
+        public UploadLecturerAvatarCommand(IUnitOfWork uow, IFileStorageService storageService)
         {
             _uow = uow;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<LecturerAvatarUploadResult>> ExecuteAsync(string code, IFormFile? file)
@@ -33,44 +36,22 @@ namespace ThesisManagement.Api.Application.Command.LecturerProfiles
             if (!string.IsNullOrWhiteSpace(validationError))
                 return OperationResult<LecturerAvatarUploadResult>.Failed(validationError, 400);
 
-            var fileExtension = Path.GetExtension(file!.FileName).ToLowerInvariant();
-            var avatarsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars", "lecturers");
-            if (!Directory.Exists(avatarsRoot))
-                Directory.CreateDirectory(avatarsRoot);
+            var oldImageUrl = lecturer.ProfileImage;
+            var uploadResult = await _storageService.UploadAsync(file!, "avatars/lecturers");
+            if (!uploadResult.Success)
+                return OperationResult<LecturerAvatarUploadResult>.Failed(uploadResult.ErrorMessage ?? "Upload avatar failed", uploadResult.StatusCode);
 
-            if (!string.IsNullOrEmpty(lecturer.ProfileImage))
-            {
-                var oldImagePath = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "wwwroot",
-                    lecturer.ProfileImage.TrimStart('/').Replace("/", "\\"));
-
-                if (System.IO.File.Exists(oldImagePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(oldImagePath);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-
-            var uniqueName = $"{code}_{Guid.NewGuid():N}{fileExtension}";
-            var savePath = Path.Combine(avatarsRoot, uniqueName);
-
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var imageUrl = $"/avatars/lecturers/{uniqueName}";
+            var imageUrl = uploadResult.Data!;
             lecturer.ProfileImage = imageUrl;
             lecturer.LastUpdated = DateTime.UtcNow;
 
             _uow.LecturerProfiles.Update(lecturer);
             await _uow.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(oldImageUrl) && !string.Equals(oldImageUrl, imageUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                await _storageService.DeleteAsync(oldImageUrl);
+            }
 
             return OperationResult<LecturerAvatarUploadResult>.Succeeded(
                 new LecturerAvatarUploadResult(code, imageUrl, "Upload avatar thành công"));

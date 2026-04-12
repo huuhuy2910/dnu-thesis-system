@@ -17,8 +17,9 @@ import {
   History,
   User,
 } from "lucide-react";
-import { fetchData, getAvatarUrl } from "../../api/fetchData";
+import { fetchData, getAvatarUrl, normalizeUrl } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions";
+import ManagementSectionedFormBody from "../../components/admin/ManagementSectionedFormBody";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
 import "./StudentProfilesManagement.css";
@@ -1437,7 +1438,7 @@ const StudentProfilesManagement: React.FC = () => {
                                         {files.map((file) => (
                                           <a
                                             key={file.fileID}
-                                            href={getAvatarUrl(file.fileURL)}
+                                            href={normalizeUrl(file.fileURL)}
                                             target="_blank"
                                             rel="noreferrer"
                                           >
@@ -1487,60 +1488,14 @@ const StudentProfilesManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="spm-edit-layout">
-              {editFieldSections.map((section) => (
-                <section key={section.title} className="spm-edit-section">
-                  <header className="spm-edit-section-header">
-                    <h4>{section.title}</h4>
-                    <p>{section.description}</p>
-                  </header>
-                  <div className="spm-form-grid">
-                    {section.fields.map((fieldName) => {
-                      const field = getFieldDefinition(fieldName);
-                      const value = formValues[field.name] || "";
-
-                      return (
-                        <label key={field.name} className="spm-form-field">
-                          <span>
-                            {field.label}
-                            {field.required ? " *" : ""}
-                          </span>
-                          {field.type === "textarea" ? (
-                            <textarea
-                              value={value}
-                              rows={3}
-                              onChange={(event) =>
-                                setFormValues((prev) => ({
-                                  ...prev,
-                                  [field.name]: event.target.value,
-                                }))
-                              }
-                            />
-                          ) : (
-                            <input
-                              type={
-                                field.type === "number"
-                                  ? "number"
-                                  : field.type === "date"
-                                    ? "date"
-                                    : "text"
-                              }
-                              value={value}
-                              onChange={(event) =>
-                                setFormValues((prev) => ({
-                                  ...prev,
-                                  [field.name]: event.target.value,
-                                }))
-                              }
-                            />
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
+            <ManagementSectionedFormBody
+              sections={editFieldSections}
+              values={formValues}
+              getFieldDefinition={getFieldDefinition}
+              onFieldChange={(name, value) =>
+                setFormValues((prev) => ({ ...prev, [name]: value }))
+              }
+            />
 
             <div className="spm-form-actions">
               <button

@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
 import { fetchData } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions";
+import ManagementFormSection, {
+  type ManagementFormField,
+} from "../../components/admin/ManagementFormSection";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
 import "../admin/Dashboard.css";
@@ -17,6 +20,12 @@ type TagReadDto = {
   description?: string;
   createdAt: string;
 };
+
+const tagFormFields: ManagementFormField[] = [
+  { name: "tagCode", label: "Tag Code (optional)" },
+  { name: "tagName", label: "Tag Name", required: true },
+  { name: "description", label: "Description", type: "textarea" },
+];
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -735,9 +744,13 @@ const TagsManagement: React.FC = () => {
             style={{
               width: "100%",
               maxWidth: 620,
+              maxHeight: "90vh",
               background: "#fff",
               borderRadius: 12,
               border: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
             }}
           >
             <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0" }}>
@@ -767,65 +780,24 @@ const TagsManagement: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div style={{ padding: 16, display: "grid", gap: 10 }}>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Tag Code (optional)</span>
-                  <input
-                    value={formValues.tagCode}
-                    onChange={(event) =>
-                      setFormValues((prev) => ({
-                        ...prev,
-                        tagCode: event.target.value,
-                      }))
-                    }
-                    disabled={activeModal === "edit"}
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: 10,
-                      background: activeModal === "edit" ? "#f8fafc" : "#fff",
-                    }}
-                  />
-                </label>
-
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Tag Name *</span>
-                  <input
-                    value={formValues.tagName}
-                    onChange={(event) =>
-                      setFormValues((prev) => ({
-                        ...prev,
-                        tagName: event.target.value,
-                      }))
-                    }
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: 10,
-                    }}
-                  />
-                </label>
-
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Description</span>
-                  <textarea
-                    value={formValues.description}
-                    onChange={(event) =>
-                      setFormValues((prev) => ({
-                        ...prev,
-                        description: event.target.value,
-                      }))
-                    }
-                    rows={4}
-                    style={{
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      padding: 10,
-                      fontFamily: "inherit",
-                    }}
-                  />
-                </label>
-              </div>
+              <ManagementFormSection
+                fields={tagFormFields}
+                values={formValues}
+                onFieldChange={(name, value) =>
+                  setFormValues((prev) => ({ ...prev, [name]: value }))
+                }
+                onSubmit={() => void handleSubmit()}
+                onClose={() => setActiveModal(null)}
+                isSubmitting={isSubmitting}
+                note={
+                  activeModal === "create"
+                    ? "Nhập thông tin tag mới theo schema chuẩn. Tag Code có thể để trống nếu backend tự sinh hoặc map theo quy ước hiện có."
+                    : "Chỉnh sửa tên và mô tả tag. Tag Code được giữ nguyên để đồng bộ với các dữ liệu liên quan."
+                }
+                disabledFields={activeModal === "edit" ? ["tagCode"] : []}
+                showActions={false}
+                showCloseButton={false}
+              />
             )}
 
             <div

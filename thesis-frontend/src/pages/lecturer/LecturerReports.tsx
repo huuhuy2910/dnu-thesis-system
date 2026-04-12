@@ -10,7 +10,7 @@ import {
   MessageSquare,
   X,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, normalizeUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../context/useToast";
 import {
@@ -193,18 +193,6 @@ const LecturerReports: React.FC = () => {
   const [activeLecturerCode, setActiveLecturerCode] = useState<string>(
     () => getLecturerCode() || "",
   );
-
-  const getAbsoluteUrl = (url: string) => {
-    if (/^https?:\/\//i.test(url)) return url;
-    const envBase = (import.meta.env.VITE_API_BASE_URL || "").toString();
-    if (!envBase) return url.startsWith("/") ? url : `/${url}`;
-    const normalizedBase = envBase.endsWith("/")
-      ? envBase.slice(0, -1)
-      : envBase;
-    return url.startsWith("/")
-      ? `${normalizedBase}${url}`
-      : `${normalizedBase}/${url}`;
-  };
 
   useEffect(() => {
     const resolveLecturerCode = async () => {
@@ -402,7 +390,7 @@ const LecturerReports: React.FC = () => {
     try {
       // Use the correct API endpoint for downloading files
       const downloadUrl = `/api/SubmissionFiles/download/${fileID}`;
-      const url = getAbsoluteUrl(downloadUrl);
+      const url = normalizeUrl(downloadUrl);
 
       const token = getAccessToken();
       const resp = await fetch(url, {
@@ -1469,7 +1457,7 @@ const LecturerReports: React.FC = () => {
                               : null;
                             return sup?.profileImage ? (
                               <img
-                                src={sup.profileImage}
+                                src={normalizeUrl(sup.profileImage)}
                                 alt="Avatar giảng viên"
                                 style={{
                                   width: "100%",

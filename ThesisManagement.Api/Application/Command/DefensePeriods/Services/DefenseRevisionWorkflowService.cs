@@ -5,6 +5,7 @@ using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Data;
 using ThesisManagement.Api.DTOs.DefensePeriods;
 using ThesisManagement.Api.Models;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
 {
@@ -19,21 +20,21 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly ThesisManagement.Api.Services.IUnitOfWork _uow;
-        private readonly IWebHostEnvironment _env;
         private readonly IDefenseAuditTrailService _auditTrail;
         private readonly DefenseRevisionQuorumOptions _quorumOptions;
+        private readonly IFileStorageService _storageService;
 
         public DefenseRevisionWorkflowService(
             ApplicationDbContext db,
             ThesisManagement.Api.Services.IUnitOfWork uow,
-            IWebHostEnvironment env,
             IDefenseAuditTrailService auditTrail,
+            IFileStorageService storageService,
             IOptions<DefenseRevisionQuorumOptions> quorumOptions)
         {
             _db = db;
             _uow = uow;
-            _env = env;
             _auditTrail = auditTrail;
+            _storageService = storageService;
             _quorumOptions = quorumOptions.Value;
         }
 
@@ -70,50 +71,62 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 throw new BusinessRuleException("Không tìm thấy assignment của sinh viên.");
             }
 
-            var uploadDir = Path.Combine(_env.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot"), "uploads", "revisions");
-            Directory.CreateDirectory(uploadDir);
-            var fileName = $"rev_{request.AssignmentId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
-            var fullPath = Path.Combine(uploadDir, fileName);
-            await using (var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            string? uploadedRevisionUrl = null;
+            try
             {
-                await file.CopyToAsync(fs, cancellationToken);
-            }
-
-            var revision = await _db.DefenseRevisions.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
-            var beforeSnapshot = revision == null ? null : new { revision.RevisedContent, revision.RevisionFileUrl, revision.FinalStatus };
-            if (revision == null)
-            {
-                revision = new DefenseRevision
+                var uploadResult = await _storageService.UploadAsync(file, "uploads/revisions", cancellationToken);
+                if (!uploadResult.Success)
                 {
-                    AssignmentId = request.AssignmentId,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _uow.DefenseRevisions.AddAsync(revision);
-            }
+                    throw new BusinessRuleException(uploadResult.ErrorMessage ?? "Không thể upload file revision.");
+                }
 
-            revision.RevisedContent = request.RevisedContent;
-            revision.RevisionFileUrl = $"/uploads/revisions/{fileName}";
-            revision.IsCtApproved = false;
-            revision.IsGvhdApproved = false;
-            revision.IsUvtkApproved = false;
-            revision.FinalStatus = RevisionFinalStatus.Pending;
-            revision.LastUpdated = DateTime.UtcNow;
-            if (revision.Id > 0)
+                uploadedRevisionUrl = uploadResult.Data!;
+
+                var revision = await _db.DefenseRevisions.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
+                var beforeSnapshot = revision == null ? null : new { revision.RevisedContent, revision.RevisionFileUrl, revision.FinalStatus };
+                if (revision == null)
+                {
+                    revision = new DefenseRevision
+                    {
+                        AssignmentId = request.AssignmentId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.DefenseRevisions.AddAsync(revision);
+                }
+
+                revision.RevisedContent = request.RevisedContent;
+                revision.RevisionFileUrl = uploadedRevisionUrl;
+                revision.IsCtApproved = false;
+                revision.IsGvhdApproved = false;
+                revision.IsUvtkApproved = false;
+                revision.FinalStatus = RevisionFinalStatus.Pending;
+                revision.LastUpdated = DateTime.UtcNow;
+                if (revision.Id > 0)
+                {
+                    _uow.DefenseRevisions.Update(revision);
+                }
+
+                await _uow.SaveChangesAsync();
+                await tx.CommitAsync(cancellationToken);
+
+                await _auditTrail.WriteAsync(
+                    "STUDENT_REVISION_SUBMIT",
+                    "SUCCESS",
+                    beforeSnapshot,
+                    new { revision.RevisedContent, revision.RevisionFileUrl, revision.FinalStatus },
+                    new { request.AssignmentId, StudentCode = studentCode },
+                    actorUserId,
+                    cancellationToken);
+            }
+            catch
             {
-                _uow.DefenseRevisions.Update(revision);
+                if (!string.IsNullOrWhiteSpace(uploadedRevisionUrl))
+                {
+                    await _storageService.DeleteAsync(uploadedRevisionUrl, cancellationToken);
+                }
+
+                throw;
             }
-
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync(cancellationToken);
-
-            await _auditTrail.WriteAsync(
-                "STUDENT_REVISION_SUBMIT",
-                "SUCCESS",
-                beforeSnapshot,
-                new { revision.RevisedContent, revision.RevisionFileUrl, revision.FinalStatus },
-                new { request.AssignmentId, StudentCode = studentCode },
-                actorUserId,
-                cancellationToken);
         }
 
         private async Task UpdateRevisionStatusAsync(int revisionId, string lecturerCode, int actorUserId, bool approved, string? reason, CancellationToken cancellationToken)
