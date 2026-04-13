@@ -57,14 +57,14 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public List<string> Tags { get; set; } = new();
     }
 
-    public class UpdateLecturerBusySlotsDto
-    {
-        [Required]
-        public List<string> BusySlots { get; set; } = new();
-    }
-
     public class GenerateCouncilsRequestDto
     {
+        [MinLength(1)]
+        public List<string> SelectedTopicCodes { get; set; } = new();
+
+        [MinLength(1)]
+        public List<string> SelectedLecturerCodes { get; set; } = new();
+
         public List<string> SelectedRooms { get; set; } = new();
         public List<string> Tags { get; set; } = new();
         public GenerateCouncilStrategyDto Strategy { get; set; } = new();
@@ -88,9 +88,6 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 
         [Range(0, 1)]
         public decimal? WorkloadWeight { get; set; }
-
-        [Range(0, 1)]
-        public decimal? AvailabilityWeight { get; set; }
 
         [Range(0, 1)]
         public decimal? FairnessWeight { get; set; }
@@ -290,5 +287,85 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     {
         [Required]
         public string ConcurrencyToken { get; set; } = string.Empty;
+    }
+
+    public class DefensePeriodLifecycleActionRequestDto
+    {
+        [Required]
+        public string Action { get; set; } = string.Empty;
+
+        public string? IdempotencyKey { get; set; }
+
+        public SyncDefensePeriodRequestDto? Sync { get; set; }
+
+        public FinalizeDefensePeriodDto? Finalize { get; set; }
+
+        // Fallback when FE sends finalize fields at root level instead of nested Finalize object.
+        public bool? AllowFinalizeAfterWarning { get; set; }
+
+        public RollbackDefensePeriodDto? Rollback { get; set; }
+
+        // Fallback when FE sends rollback fields at root level instead of nested Rollback object.
+        public string? RollbackTarget { get; set; }
+        public string? RollbackReason { get; set; }
+        public bool? RollbackForceUnlockScores { get; set; }
+
+        // Fallback when FE sends sync fields at root level instead of nested Sync object.
+        public bool? RetryOnFailure { get; set; }
+
+        public DefensePeriodArchiveRequestDto? Archive { get; set; }
+
+        public DefensePeriodReopenRequestDto? Reopen { get; set; }
+    }
+
+    public class DefensePeriodSetupConfigRequestDto
+    {
+        public UpdateDefensePeriodConfigDto? Config { get; set; }
+
+        public bool LockLecturerCapabilities { get; set; }
+
+        public ConfirmCouncilConfigDto? CouncilConfig { get; set; }
+    }
+
+    public class DefensePeriodSetupGenerateRequestDto
+    {
+        [Required]
+        public string Mode { get; set; } = "GENERATE";
+
+        [Required]
+        public GenerateCouncilsRequestDto Request { get; set; } = new();
+
+        public string? IdempotencyKey { get; set; }
+    }
+
+    public class CouncilCompactUpsertRequestDto
+    {
+        // Optional operation-driven mode for FE compact integration.
+        // If omitted, API keeps backward compatible behavior based on CouncilId + Data.
+        public string? Operation { get; set; }
+
+        public int? CouncilId { get; set; }
+
+        public string? LecturerCode { get; set; }
+
+        public int? AssignmentId { get; set; }
+
+        public string? ConcurrencyToken { get; set; }
+
+        public CouncilUpsertDto? Data { get; set; }
+
+        public CouncilWorkflowStep1Dto? Step1 { get; set; }
+
+        public CouncilWorkflowStep2Dto? Step2 { get; set; }
+
+        public CouncilWorkflowStep3Dto? Step3 { get; set; }
+
+        public AddCouncilMemberItemDto? MemberAdd { get; set; }
+
+        public UpdateCouncilMemberItemDto? MemberUpdate { get; set; }
+
+        public AddCouncilTopicItemDto? TopicAdd { get; set; }
+
+        public UpdateCouncilTopicItemDto? TopicUpdate { get; set; }
     }
 }

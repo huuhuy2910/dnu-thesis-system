@@ -29,9 +29,9 @@ namespace ThesisManagement.Api.Hubs
 
         private string? GetUserCode()
         {
-            var claim = Context.User?.FindFirst(ClaimTypes.Name)
-                        ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)
-                        ?? Context.User?.FindFirst("userCode");
+            var claim = Context.User?.FindFirst("userCode")
+                        ?? Context.User?.FindFirst(ClaimTypes.Name)
+                        ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier);
             return claim?.Value;
         }
     }

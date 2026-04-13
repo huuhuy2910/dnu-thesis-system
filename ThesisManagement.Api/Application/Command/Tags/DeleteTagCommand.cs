@@ -24,9 +24,18 @@ namespace ThesisManagement.Api.Application.Command.Tags
             if (item == null)
                 return OperationResult<string>.Failed("Tag not found", 404);
 
-            var usedInCatalogTopics = await _uow.CatalogTopicTags.Query().AnyAsync(x => x.TagID == id);
-            var usedInTopics = await _uow.TopicTags.Query().AnyAsync(x => x.TagID == id);
-            var usedInLecturers = await _uow.LecturerTags.Query().AnyAsync(x => x.TagID == id);
+            var usedInCatalogTopics = await _uow.CatalogTopicTags.Query()
+                .Where(x => x.TagID == id)
+                .Select(x => (int?)x.TagID)
+                .FirstOrDefaultAsync() != null;
+            var usedInTopics = await _uow.TopicTags.Query()
+                .Where(x => x.TagID == id)
+                .Select(x => (int?)x.TagID)
+                .FirstOrDefaultAsync() != null;
+            var usedInLecturers = await _uow.LecturerTags.Query()
+                .Where(x => x.TagID == id)
+                .Select(x => (int?)x.TagID)
+                .FirstOrDefaultAsync() != null;
 
             if (usedInCatalogTopics || usedInTopics || usedInLecturers)
                 return OperationResult<string>.Failed("Cannot delete tag because it is being used", 400);

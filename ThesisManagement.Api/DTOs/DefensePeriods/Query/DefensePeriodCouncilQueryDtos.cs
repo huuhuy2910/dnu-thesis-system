@@ -23,14 +23,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string LecturerCode { get; set; } = string.Empty;
         public string LecturerName { get; set; } = string.Empty;
         public List<string> Tags { get; set; } = new();
-        public List<string> BusySlots { get; set; } = new();
         public string? Warning { get; set; }
-    }
-
-    public class LecturerBusySlotsDto
-    {
-        public string LecturerCode { get; set; } = string.Empty;
-        public List<string> BusySlots { get; set; } = new();
     }
 
     public class CouncilMemberDto
@@ -38,6 +31,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string Role { get; set; } = string.Empty;
         public string LecturerCode { get; set; } = string.Empty;
         public string LecturerName { get; set; } = string.Empty;
+        public List<string> Tags { get; set; } = new();
     }
 
     public class CouncilDraftDto
@@ -65,6 +59,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string AssignmentCode { get; set; } = string.Empty;
         public string TopicCode { get; set; } = string.Empty;
         public string TopicTitle { get; set; } = string.Empty;
+        public List<string> Tags { get; set; } = new();
         public string StudentCode { get; set; } = string.Empty;
         public string StudentName { get; set; } = string.Empty;
         public int? Session { get; set; }

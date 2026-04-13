@@ -94,6 +94,13 @@ builder.Services.AddControllers(options =>
     // Thêm global filter để log activities
     options.Filters.Add<ThesisManagement.Api.Filters.ActivityLogFilter>();
     options.Filters.Add<ThesisManagement.Api.Filters.ApiResponseSignalFilter>();
+})
+.AddJsonOptions(options =>
+{
+    // Lock naming policy to avoid accidental contract drift between FE and BE.
+    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.DictionaryKeyPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
 builder.Services.AddSignalR();
 
@@ -441,7 +448,6 @@ builder.Services.AddScoped<IUpdateTopicCommand, UpdateTopicCommand>();
 builder.Services.AddScoped<IDeleteTopicCommand, DeleteTopicCommand>();
 builder.Services.AddScoped<ISyncDefensePeriodCommand, SyncDefensePeriodCommand>();
 builder.Services.AddScoped<IUpdateDefensePeriodConfigCommand, UpdateDefensePeriodConfigCommand>();
-builder.Services.AddScoped<IUpdateLecturerBusySlotsCommand, UpdateLecturerBusySlotsCommand>();
 builder.Services.AddScoped<ILockLecturerCapabilitiesCommand, LockLecturerCapabilitiesCommand>();
 builder.Services.AddScoped<IConfirmCouncilConfigCommand, ConfirmCouncilConfigCommand>();
 builder.Services.AddScoped<IGenerateCouncilsCommand, GenerateCouncilsCommand>();
@@ -476,7 +482,6 @@ builder.Services.AddScoped<IGetRollbackAvailabilityQuery, GetRollbackAvailabilit
 builder.Services.AddScoped<IGetDefenseSyncErrorsQuery, GetDefenseSyncErrorsQuery>();
 builder.Services.AddScoped<IExportDefenseSyncErrorsQuery, ExportDefenseSyncErrorsQuery>();
 builder.Services.AddScoped<IGetLecturerCapabilitiesQueryV2, GetLecturerCapabilitiesQueryV2>();
-builder.Services.AddScoped<IGetLecturerBusySlotsQuery, GetLecturerBusySlotsQuery>();
 builder.Services.AddScoped<IGetCouncilsQueryV2, GetCouncilsQueryV2>();
 builder.Services.AddScoped<IGetCouncilCalendarQuery, GetCouncilCalendarQuery>();
 builder.Services.AddScoped<IGetCouncilDetailQueryV2, GetCouncilDetailQueryV2>();

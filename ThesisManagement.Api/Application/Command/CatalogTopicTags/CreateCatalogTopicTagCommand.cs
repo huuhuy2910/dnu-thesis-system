@@ -52,7 +52,10 @@ namespace ThesisManagement.Api.Application.Command.CatalogTopicTags
             if (catalogTopicId == 0 || tagId == 0)
                 return OperationResult<CatalogTopicTagReadDto>.Failed("CatalogTopicID and TagID are required", 400);
 
-            var exists = await _uow.CatalogTopicTags.Query().AnyAsync(x => x.CatalogTopicID == catalogTopicId && x.TagID == tagId);
+            var exists = await _uow.CatalogTopicTags.Query()
+                .Where(x => x.CatalogTopicID == catalogTopicId && x.TagID == tagId)
+                .Select(x => (int?)x.CatalogTopicID)
+                .FirstOrDefaultAsync() != null;
             if (exists)
                 return OperationResult<CatalogTopicTagReadDto>.Failed("This catalog topic-tag relationship already exists", 400);
 

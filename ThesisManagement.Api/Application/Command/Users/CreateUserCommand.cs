@@ -33,7 +33,10 @@ namespace ThesisManagement.Api.Application.Command.Users
             var userCode = dto.UserCode.Trim();
             var role = dto.Role.Trim();
 
-            var exists = await _uow.Users.Query().AnyAsync(x => x.UserCode == userCode);
+            var exists = await _uow.Users.Query()
+                .Where(x => x.UserCode == userCode)
+                .Select(x => x.UserCode)
+                .FirstOrDefaultAsync() != null;
             if (exists)
                 return UserCommandResult<UserReadDto>.Failed("Username already exists", 409);
 

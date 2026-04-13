@@ -16,6 +16,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
+import DefenseTermQuickInfo from "../../components/admin/DefenseTermQuickInfo";
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -354,6 +355,14 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <DefenseTermQuickInfo
+        roleLabel="Sinh viên"
+        termCode="2026.1"
+        termName="Đợt bảo vệ HK2 năm học 2025-2026"
+        roundIndex={1}
+        status="Preparing"
+      />
 
       {/* Stats Cards */}
       <div

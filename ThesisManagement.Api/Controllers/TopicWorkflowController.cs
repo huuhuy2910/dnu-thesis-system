@@ -9,7 +9,7 @@ using ThesisManagement.Api.DTOs.Workflows.Query;
 namespace ThesisManagement.Api.Controllers
 {
     [ApiController]
-    [Authorize]
+    [Authorize(Roles = "Admin,Head,Lecturer,Student,StudentService")]
     [Route("api/workflows/topics")]
     public class TopicWorkflowController : ControllerBase
     {
@@ -43,6 +43,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("audits")]
+        [Authorize(Roles = "Admin,Head,Lecturer,StudentService")]
         public async Task<IActionResult> Audits([FromQuery] TopicWorkflowAuditFilter filter)
         {
             var result = await _getAuditHistoryQuery.ExecuteAsync(filter);
@@ -53,6 +54,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("timeline/{topicId:int}")]
+        [Authorize(Roles = "Admin,Head,Lecturer,Student,StudentService")]
         public async Task<IActionResult> Timeline(int topicId)
         {
             var result = await _getTimelineByTopicIdQuery.ExecuteAsync(topicId);
@@ -63,6 +65,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("timeline-by-code/{topicCode}")]
+        [Authorize(Roles = "Admin,Head,Lecturer,Student,StudentService")]
         public async Task<IActionResult> TimelineByCode(string topicCode)
         {
             var result = await _getTimelineByTopicCodeQuery.ExecuteAsync(topicCode);
@@ -73,6 +76,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet("detail/{topicId:int}")]
+        [Authorize(Roles = "Admin,Head,Lecturer,Student,StudentService")]
         public async Task<IActionResult> Detail(int topicId)
         {
             var result = await _getDetailQuery.ExecuteAsync(topicId);
@@ -83,6 +87,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpPost("submit")]
+        [Authorize(Roles = "Student,Admin,StudentService")]
         public async Task<IActionResult> Submit([FromBody] TopicResubmitWorkflowRequestDto request)
         {
             var result = await _submitCommand.ExecuteAsync(request);
@@ -93,6 +98,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpPost("resubmit")]
+        [Authorize(Roles = "Student,Admin,StudentService")]
         public async Task<IActionResult> Resubmit([FromBody] TopicResubmitWorkflowRequestDto request)
         {
             var result = await _resubmitCommand.ExecuteAsync(request);
@@ -103,6 +109,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpPost("decision/{topicId:int}")]
+        [Authorize(Roles = "Lecturer,Head,Admin,StudentService")]
         public async Task<IActionResult> Decide(int topicId, [FromBody] TopicDecisionWorkflowRequestDto request)
         {
             var result = await _decideCommand.ExecuteAsync(topicId, request);
@@ -113,6 +120,7 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpDelete("rollback-my-test-data")]
+        [Authorize(Roles = "Student,Admin,StudentService")]
         public async Task<IActionResult> RollbackMyTestData([FromQuery] string? topicCode)
         {
             var result = await _rollbackCommand.ExecuteAsync(topicCode);

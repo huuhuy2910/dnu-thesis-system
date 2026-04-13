@@ -40,7 +40,6 @@ namespace ThesisManagement.Api.Services
             Rooms = new GenericRepository<Room>(_db);
 
             SyncAuditLogs = new GenericRepository<SyncAuditLog>(_db);
-            LecturerBusyTimes = new GenericRepository<LecturerBusyTime>(_db);
             DefenseGroups = new GenericRepository<DefenseGroup>(_db);
             ExportFiles = new GenericRepository<ExportFile>(_db);
             EvaluationReviews = new GenericRepository<EvaluationReview>(_db);
@@ -90,7 +89,6 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<Room> Rooms { get; }
 
         public IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
-        public IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
         public IGenericRepository<DefenseGroup> DefenseGroups { get; }
         public IGenericRepository<ExportFile> ExportFiles { get; }
         public IGenericRepository<EvaluationReview> EvaluationReviews { get; }

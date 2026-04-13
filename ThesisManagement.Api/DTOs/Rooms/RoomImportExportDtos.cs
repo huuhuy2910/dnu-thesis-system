@@ -31,4 +31,14 @@ namespace ThesisManagement.Api.DTOs.Rooms
         public int FailedCount { get; set; }
         public List<RoomImportRowResultDto> Rows { get; set; } = new();
     }
+
+    public class RoomUsageByDateItemDto
+    {
+        public int CommitteeID { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
+        public string? CommitteeName { get; set; }
+        public int? DefenseTermId { get; set; }
+        public DateTime DefenseDate { get; set; }
+        public string? Status { get; set; }
+    }
 }

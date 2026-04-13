@@ -45,7 +45,6 @@ namespace ThesisManagement.Api.Data
         public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
         public DbSet<SyncAuditLog> SyncAuditLogs => Set<SyncAuditLog>();
-        public DbSet<LecturerBusyTime> LecturerBusyTimes => Set<LecturerBusyTime>();
         public DbSet<DefenseGroup> DefenseGroups => Set<DefenseGroup>();
         public DbSet<ExportFile> ExportFiles => Set<ExportFile>();
         public DbSet<EvaluationReview> EvaluationReviews => Set<EvaluationReview>();
@@ -450,11 +449,12 @@ namespace ThesisManagement.Api.Data
             {
                 b.ToTable("ROOMS");
                 b.HasKey(x => x.RoomID);
-                b.Property(x => x.RoomCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.RoomID).HasColumnName("ROOM_ID");
+                b.Property(x => x.RoomCode).HasColumnName("ROOM_CODE").HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.RoomCode).IsUnique();
-                b.Property(x => x.Status).HasMaxLength(50);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
-                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.Status).HasColumnName("ROOM_STATUS").HasMaxLength(50);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasColumnName("LAST_UPDATED").HasDefaultValueSql("SYSTIMESTAMP");
             });
 
             modelBuilder.Entity<Committee>(b =>
@@ -468,10 +468,17 @@ namespace ThesisManagement.Api.Data
                 b.HasKey(x => x.CommitteeID);
                 b.Property(x => x.CommitteeCode).HasMaxLength(40).IsRequired();
                 b.HasIndex(x => x.CommitteeCode).IsUnique();
-                b.HasOne(x => x.RoomEntity)
-                    .WithMany()
-                    .HasForeignKey(x => x.RoomID)
-                    .OnDelete(DeleteBehavior.SetNull);
+                b.Ignore(x => x.RoomID);
+                b.Ignore(x => x.RoomEntity);
+                b.Property(x => x.Room).HasMaxLength(40);
+                b.Property(x => x.Name).HasMaxLength(200);
+                b.Property(x => x.Status).HasMaxLength(50);
+                b.HasOne(x => x.DefenseTerm)
+                    .WithMany(x => x.Committees)
+                    .HasForeignKey(x => x.DefenseTermId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                b.HasIndex(x => x.DefenseTermId);
+                b.HasIndex(x => new { x.DefenseTermId, x.DefenseDate, x.Room });
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
@@ -542,7 +549,11 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.MemberLecturerCode).HasMaxLength(30);
                 b.Property(x => x.MemberUserCode).HasMaxLength(40);
                 b.Property(x => x.Role).HasMaxLength(100);
-                b.Property(x => x.IsChair).HasDefaultValue(false);
+                b.Property(x => x.IsChair)
+                    .HasConversion(
+                        v => v.HasValue ? (v.Value ? 1 : 0) : (int?)null,
+                        v => v.HasValue ? v.Value == 1 : (bool?)null)
+                    .HasDefaultValue(false);
             });
 
             var sessionConverter = new ValueConverter<int?, string?>(
@@ -562,22 +573,28 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.AssignmentCode).HasMaxLength(60).IsRequired();
                 b.HasIndex(x => x.AssignmentCode).IsUnique();
                 b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicCode).HasPrincipalKey(x => x.TopicCode);
-                b.HasOne(x => x.Committee).WithMany().HasForeignKey(x => x.CommitteeCode).HasPrincipalKey(x => x.CommitteeCode);
+                b.HasOne(x => x.Committee)
+                    .WithMany()
+                    .HasForeignKey(x => x.CommitteeID)
+                    .OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.DefenseTerm)
+                    .WithMany(x => x.DefenseAssignments)
+                    .HasForeignKey(x => x.DefenseTermId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                b.HasIndex(x => x.CommitteeID);
+                b.HasIndex(x => x.DefenseTermId);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.Session)
                     .HasConversion(sessionConverter)
                     .HasMaxLength(20);
-                b.Property(x => x.Shift)
-                    .HasConversion<string>()
-                    .HasMaxLength(20);
+                b.Ignore(x => x.Shift);
                 b.Property(x => x.OrderIndex);
-                // Oracle provider maps TimeSpan to INTERVAL DAY TO SECOND
-                b.Property(x => x.StartTime);
-                b.Property(x => x.EndTime);
-                b.Property(x => x.AssignedBy).HasMaxLength(40);
-                b.Property(x => x.AssignedAt);
-                b.Property(x => x.Status).HasMaxLength(30);
+                b.Ignore(x => x.StartTime);
+                b.Ignore(x => x.EndTime);
+                b.Ignore(x => x.AssignedBy);
+                b.Ignore(x => x.AssignedAt);
+                b.Ignore(x => x.Status);
             });
 
             // DefenseScores
@@ -715,20 +732,6 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.Result).HasMaxLength(50).IsRequired();
                 b.Property(x => x.Records).HasMaxLength(4000).IsRequired();
                 b.Property(x => x.Timestamp).HasDefaultValueSql("SYSTIMESTAMP");
-            });
-
-            // LecturerBusyTimes
-            modelBuilder.Entity<LecturerBusyTime>(b =>
-            {
-                b.ToTable("LECTURERBUSYTIMES");
-                b.HasKey(x => x.LecturerBusyTimeId);
-                b.Property(x => x.Slot).HasMaxLength(20).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
-                b.HasOne(x => x.LecturerProfile)
-                    .WithMany()
-                    .HasForeignKey(x => x.LecturerProfileId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                b.HasIndex(x => new { x.LecturerProfileId, x.Slot }).IsUnique();
             });
 
             // DefenseGroups
@@ -1222,6 +1225,13 @@ namespace ThesisManagement.Api.Data
 
                 foreach (var property in entityType.GetProperties())
                 {
+                    if (normalizedTableName == "DEFENSEASSIGNMENTS"
+                        && string.Equals(property.Name, nameof(DefenseAssignment.Session), StringComparison.Ordinal))
+                    {
+                        property.SetColumnName("SHIFT");
+                        continue;
+                    }
+
                     var keepPascalCase = keepPascalCaseColumns.TryGetValue(normalizedTableName, out var columns)
                                         && columns.Contains(property.Name);
 
@@ -1231,7 +1241,14 @@ namespace ThesisManagement.Api.Data
         }
 
         private static string? FormatSessionValue(int? value)
-            => value.HasValue ? value.Value.ToString() : null;
+        {
+            if (!value.HasValue)
+            {
+                return null;
+            }
+
+            return value.Value == 2 ? "AFTERNOON" : "MORNING";
+        }
 
         private static int? ParseSessionValue(string? value)
         {
@@ -1240,7 +1257,22 @@ namespace ThesisManagement.Api.Data
                 return null;
             }
 
-            var digits = new string(value.Where(char.IsDigit).ToArray());
+            var normalized = value.Trim().ToUpperInvariant();
+            if (normalized.Contains("AFTERNOON", StringComparison.Ordinal)
+                || normalized.Contains("CHIEU", StringComparison.Ordinal)
+                || normalized == "PM")
+            {
+                return 2;
+            }
+
+            if (normalized.Contains("MORNING", StringComparison.Ordinal)
+                || normalized.Contains("SANG", StringComparison.Ordinal)
+                || normalized == "AM")
+            {
+                return 1;
+            }
+
+            var digits = new string(normalized.Where(char.IsDigit).ToArray());
             if (string.IsNullOrEmpty(digits))
             {
                 return null;

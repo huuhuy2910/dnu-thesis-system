@@ -13,6 +13,7 @@ import {
   Bell,
   ChevronRight,
 } from "lucide-react";
+import DefenseTermQuickInfo from "../../components/admin/DefenseTermQuickInfo";
 
 interface DashboardStats {
   totalStudents: number;
@@ -250,6 +251,14 @@ const Dashboard: React.FC = () => {
           Tổng quan về hoạt động hướng dẫn và quản lý đề tài luận văn
         </p>
       </div>
+
+      <DefenseTermQuickInfo
+        roleLabel="Giảng viên"
+        termCode="2026.1"
+        termName="Đợt bảo vệ HK2 năm học 2025-2026"
+        roundIndex={1}
+        status="Preparing"
+      />
 
       {/* Stats Cards */}
       <div

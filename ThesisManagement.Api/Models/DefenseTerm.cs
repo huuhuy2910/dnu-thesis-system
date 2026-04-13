@@ -14,6 +14,8 @@ namespace ThesisManagement.Api.Models
         public DateTime LastUpdated { get; set; }
 
         public ICollection<Topic>? Topics { get; set; }
+        public ICollection<Committee>? Committees { get; set; }
+        public ICollection<DefenseAssignment>? DefenseAssignments { get; set; }
         public ICollection<DefenseTermStudent>? DefenseTermStudents { get; set; }
         public ICollection<DefenseTermLecturer>? DefenseTermLecturers { get; set; }
     }

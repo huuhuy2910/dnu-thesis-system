@@ -3,48 +3,51 @@ using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Globalization;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.Rooms;
+using ThesisManagement.Api.Data;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
 
 namespace ThesisManagement.Api.Controllers
 {
     [Authorize(Roles = "Admin,Head")]
-    [Route("api/v1/rooms")]
+    [Route("api/rooms")]
     public class RoomsController : BaseApiController
     {
-        public RoomsController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper)
+        private readonly ApplicationDbContext _db;
+        private static string? _cachedRoomsReadSql;
+
+        public RoomsController(IUnitOfWork uow, ICodeGenerator codeGen, IMapper mapper, ApplicationDbContext db)
             : base(uow, codeGen, mapper)
         {
+            _db = db;
         }
 
         [HttpGet("get-list")]
         public async Task<IActionResult> GetList([FromQuery] string? keyword = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
-            var query = _uow.Rooms.Query();
+            var allRooms = await LoadRoomsForReadAsync(HttpContext.RequestAborted);
 
+            IEnumerable<RoomReadDto> filtered = allRooms;
             if (!string.IsNullOrWhiteSpace(keyword))
             {
-                var k = keyword.Trim().ToUpper();
-                query = query.Where(x => x.RoomCode.ToUpper().Contains(k) || (x.Status != null && x.Status.ToUpper().Contains(k)));
+                var k = keyword.Trim().ToUpperInvariant();
+                filtered = filtered.Where(x =>
+                    (!string.IsNullOrWhiteSpace(x.RoomCode) && x.RoomCode.ToUpperInvariant().Contains(k))
+                    || (!string.IsNullOrWhiteSpace(x.Status) && x.Status.ToUpperInvariant().Contains(k)));
             }
 
-            var total = await query.CountAsync();
-            var items = await query
+            var safePage = Math.Max(page, 1);
+            var safePageSize = Math.Max(pageSize, 1);
+            var total = filtered.Count();
+            var items = filtered
                 .OrderBy(x => x.RoomCode)
-                .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
-                .Take(Math.Max(pageSize, 1))
-                .Select(x => new RoomReadDto
-                {
-                    RoomID = x.RoomID,
-                    RoomCode = x.RoomCode,
-                    Status = x.Status,
-                    CreatedAt = x.CreatedAt,
-                    LastUpdated = x.LastUpdated
-                })
-                .ToListAsync();
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToList();
 
             return Ok(ApiResponse<IEnumerable<RoomReadDto>>.SuccessResponse(items, total));
         }
@@ -52,20 +55,14 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("get-detail/{id:int}")]
         public async Task<IActionResult> GetDetail(int id)
         {
-            var room = await _uow.Rooms.GetByIdAsync(id);
+            var room = (await LoadRoomsForReadAsync(HttpContext.RequestAborted))
+                .FirstOrDefault(x => x.RoomID == id);
             if (room == null)
             {
                 return NotFound(ApiResponse<object>.Fail("Room not found", 404));
             }
 
-            return Ok(ApiResponse<RoomReadDto>.SuccessResponse(new RoomReadDto
-            {
-                RoomID = room.RoomID,
-                RoomCode = room.RoomCode,
-                Status = room.Status,
-                CreatedAt = room.CreatedAt,
-                LastUpdated = room.LastUpdated
-            }));
+            return Ok(ApiResponse<RoomReadDto>.SuccessResponse(room));
         }
 
         [HttpPost("create")]
@@ -81,7 +78,10 @@ namespace ThesisManagement.Api.Controllers
                 return BadRequest(ApiResponse<object>.Fail(statusError!, 400));
             }
 
-            var duplicated = await _uow.Rooms.Query().AnyAsync(x => x.RoomCode == code);
+            var duplicated = await _uow.Rooms.Query()
+                .Where(x => x.RoomCode == code)
+                .Select(x => (int?)x.RoomID)
+                .FirstOrDefaultAsync() != null;
             if (duplicated)
             {
                 return Conflict(ApiResponse<object>.Fail("RoomCode already exists", 409));
@@ -128,7 +128,10 @@ namespace ThesisManagement.Api.Controllers
                 return BadRequest(ApiResponse<object>.Fail(statusError!, 400));
             }
 
-            var duplicated = await _uow.Rooms.Query().AnyAsync(x => x.RoomID != id && x.RoomCode == code);
+            var duplicated = await _uow.Rooms.Query()
+                .Where(x => x.RoomID != id && x.RoomCode == code)
+                .Select(x => (int?)x.RoomID)
+                .FirstOrDefaultAsync() != null;
             if (duplicated)
             {
                 return Conflict(ApiResponse<object>.Fail("RoomCode already exists", 409));
@@ -183,7 +186,7 @@ namespace ThesisManagement.Api.Controllers
         [HttpGet("status-summary")]
         public async Task<IActionResult> GetStatusSummary()
         {
-            var rooms = await _uow.Rooms.Query().AsNoTracking().ToListAsync();
+            var rooms = await LoadRoomsForReadAsync(HttpContext.RequestAborted);
             var summary = rooms
                 .GroupBy(x => string.IsNullOrWhiteSpace(x.Status) ? "(Không khai báo)" : x.Status.Trim(), StringComparer.OrdinalIgnoreCase)
                 .OrderBy(g => g.Key)
@@ -197,15 +200,55 @@ namespace ThesisManagement.Api.Controllers
             return Ok(ApiResponse<IEnumerable<RoomStatusSummaryItemDto>>.SuccessResponse(summary, summary.Count));
         }
 
+        [HttpGet("usage-by-date")]
+        public async Task<IActionResult> GetUsageByDate([FromQuery] string roomCode, [FromQuery] DateTime date, [FromQuery] int? periodId = null)
+        {
+            if (!TryNormalizeRoomCode(roomCode, out var normalizedCode, out var codeError))
+            {
+                return BadRequest(ApiResponse<object>.Fail(codeError!, 400));
+            }
+
+            var dayStart = date.Date;
+            var dayEnd = dayStart.AddDays(1);
+
+            var query = _uow.Committees.Query().AsNoTracking()
+                .Where(x => x.Room == normalizedCode
+                    && x.DefenseDate.HasValue
+                    && x.DefenseDate.Value >= dayStart
+                    && x.DefenseDate.Value < dayEnd);
+
+            if (periodId.HasValue)
+            {
+                query = query.Where(x => x.DefenseTermId == periodId.Value);
+            }
+
+            var items = await query
+                .OrderBy(x => x.CommitteeCode)
+                .Select(x => new RoomUsageByDateItemDto
+                {
+                    CommitteeID = x.CommitteeID,
+                    CommitteeCode = x.CommitteeCode,
+                    CommitteeName = x.Name,
+                    DefenseTermId = x.DefenseTermId,
+                    DefenseDate = x.DefenseDate!.Value,
+                    Status = x.Status
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<IEnumerable<RoomUsageByDateItemDto>>.SuccessResponse(items, items.Count));
+        }
+
         [HttpGet("export")]
         public async Task<IActionResult> Export([FromQuery] string? keyword = null, [FromQuery] string? status = null)
         {
-            var query = _uow.Rooms.Query().AsNoTracking();
+            IEnumerable<RoomReadDto> rooms = await LoadRoomsForReadAsync(HttpContext.RequestAborted);
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
                 var k = keyword.Trim().ToUpperInvariant();
-                query = query.Where(x => x.RoomCode.ToUpper().Contains(k) || (x.Status != null && x.Status.ToUpper().Contains(k)));
+                rooms = rooms.Where(x =>
+                    (!string.IsNullOrWhiteSpace(x.RoomCode) && x.RoomCode.ToUpperInvariant().Contains(k))
+                    || (!string.IsNullOrWhiteSpace(x.Status) && x.Status.ToUpperInvariant().Contains(k)));
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -215,10 +258,10 @@ namespace ThesisManagement.Api.Controllers
                     return BadRequest(ApiResponse<object>.Fail(error!, 400));
                 }
 
-                query = query.Where(x => x.Status == normalizedStatus);
+                rooms = rooms.Where(x => string.Equals(x.Status, normalizedStatus, StringComparison.OrdinalIgnoreCase));
             }
 
-            var rooms = await query.OrderBy(x => x.RoomCode).ToListAsync();
+            var roomList = rooms.OrderBy(x => x.RoomCode).ToList();
 
             using var workbook = new XLWorkbook();
             var sheet = workbook.Worksheets.Add("Rooms");
@@ -227,16 +270,16 @@ namespace ThesisManagement.Api.Controllers
             sheet.Cell(1, 3).Value = "CreatedAt";
             sheet.Cell(1, 4).Value = "LastUpdated";
 
-            for (var i = 0; i < rooms.Count; i++)
+            for (var i = 0; i < roomList.Count; i++)
             {
                 var row = i + 2;
-                sheet.Cell(row, 1).Value = rooms[i].RoomCode;
-                sheet.Cell(row, 2).Value = rooms[i].Status ?? string.Empty;
-                sheet.Cell(row, 3).Value = rooms[i].CreatedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-                sheet.Cell(row, 4).Value = rooms[i].LastUpdated.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                sheet.Cell(row, 1).Value = roomList[i].RoomCode;
+                sheet.Cell(row, 2).Value = roomList[i].Status ?? string.Empty;
+                sheet.Cell(row, 3).Value = roomList[i].CreatedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                sheet.Cell(row, 4).Value = roomList[i].LastUpdated.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             }
 
-            sheet.Range(1, 1, Math.Max(1, rooms.Count + 1), 4).CreateTable();
+            sheet.Range(1, 1, Math.Max(1, roomList.Count + 1), 4).CreateTable();
             sheet.Columns().AdjustToContents();
 
             using var stream = new MemoryStream();
@@ -407,7 +450,11 @@ namespace ThesisManagement.Api.Controllers
                 return NotFound(ApiResponse<object>.Fail("Room not found", 404));
             }
 
-            var isInUse = await _uow.Committees.Query().AnyAsync(x => x.RoomID == id);
+            var normalizedCode = room.RoomCode.Trim().ToUpperInvariant();
+            var isInUse = await _uow.Committees.Query()
+                .Where(x => x.Room == normalizedCode)
+                .Select(x => (int?)x.CommitteeID)
+                .FirstOrDefaultAsync() != null;
             if (isInUse)
             {
                 return Conflict(ApiResponse<object>.Fail("Room is referenced by committees", 409));
@@ -478,6 +525,143 @@ namespace ThesisManagement.Api.Controllers
             }
 
             return true;
+        }
+
+        private async Task<List<RoomReadDto>> LoadRoomsForReadAsync(CancellationToken cancellationToken)
+        {
+            var (rawSqlSucceeded, rawSqlRows) = await TryLoadRoomsByRawSqlAsync(cancellationToken);
+            if (rawSqlSucceeded)
+            {
+                return rawSqlRows;
+            }
+
+            try
+            {
+                return await _uow.Rooms.Query().AsNoTracking()
+                    .OrderBy(x => x.RoomCode)
+                    .Select(x => new RoomReadDto
+                    {
+                        RoomID = x.RoomID,
+                        RoomCode = x.RoomCode,
+                        Status = x.Status,
+                        CreatedAt = x.CreatedAt,
+                        LastUpdated = x.LastUpdated
+                    })
+                    .ToListAsync(cancellationToken);
+            }
+            catch (Exception ex) when (IsOracleInvalidIdentifier(ex))
+            {
+                return new List<RoomReadDto>();
+            }
+        }
+
+        private async Task<(bool Succeeded, List<RoomReadDto> Rows)> TryLoadRoomsByRawSqlAsync(CancellationToken cancellationToken)
+        {
+            var sqlCandidates = new[]
+            {
+                "SELECT ROOM_ID, ROOM_CODE, ROOM_STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOM_CODE",
+                "SELECT ROOMID, ROOM_CODE, ROOM_STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOM_CODE",
+                "SELECT ROOM_ID, ROOM_CODE, STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOM_CODE",
+                "SELECT ROOMID, ROOM_CODE, STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOM_CODE",
+                "SELECT ROOM_ID, ROOMCODE, ROOM_STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOMCODE",
+                "SELECT ROOMID, ROOMCODE, ROOM_STATUS, CREATEDAT, LASTUPDATED FROM ROOMS ORDER BY ROOMCODE",
+                "SELECT ROOM_ID, ROOMCODE, STATUS, CREATED_AT, LAST_UPDATED FROM ROOMS ORDER BY ROOMCODE",
+                "SELECT ROOMID, ROOMCODE, STATUS, CREATEDAT, LASTUPDATED FROM ROOMS ORDER BY ROOMCODE"
+            };
+
+            var orderedCandidates = string.IsNullOrWhiteSpace(_cachedRoomsReadSql)
+                ? sqlCandidates
+                : (new[] { _cachedRoomsReadSql! }
+                    .Concat(sqlCandidates.Where(x => !string.Equals(x, _cachedRoomsReadSql, StringComparison.Ordinal)))
+                    .ToArray());
+
+            var connection = _db.Database.GetDbConnection();
+            var shouldClose = connection.State != ConnectionState.Open;
+            if (shouldClose)
+            {
+                await connection.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                foreach (var sql in orderedCandidates)
+                {
+                    try
+                    {
+                        using var command = connection.CreateCommand();
+                        command.CommandText = sql;
+
+                        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                        var rows = new List<RoomReadDto>();
+
+                        while (await reader.ReadAsync(cancellationToken))
+                        {
+                            var roomId = reader.IsDBNull(0) ? 0 : Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+                            var roomCode = reader.IsDBNull(1) ? string.Empty : (reader.GetValue(1)?.ToString() ?? string.Empty);
+                            var status = reader.IsDBNull(2) ? null : reader.GetValue(2)?.ToString();
+                            var createdAt = ReadDateTimeOrDefault(reader, 3, DateTime.UtcNow);
+                            var lastUpdated = ReadDateTimeOrDefault(reader, 4, createdAt);
+
+                            if (string.IsNullOrWhiteSpace(roomCode))
+                            {
+                                continue;
+                            }
+
+                            rows.Add(new RoomReadDto
+                            {
+                                RoomID = roomId,
+                                RoomCode = roomCode.Trim().ToUpperInvariant(),
+                                Status = status,
+                                CreatedAt = createdAt,
+                                LastUpdated = lastUpdated
+                            });
+                        }
+
+                        _cachedRoomsReadSql = sql;
+
+                        return (true, rows);
+                    }
+                    catch (Exception ex) when (IsOracleInvalidIdentifier(ex))
+                    {
+                        // Try next candidate projection.
+                    }
+                }
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+
+            return (false, new List<RoomReadDto>());
+        }
+
+        private static DateTime ReadDateTimeOrDefault(System.Data.Common.DbDataReader reader, int index, DateTime fallback)
+        {
+            if (reader.IsDBNull(index))
+            {
+                return fallback;
+            }
+
+            var raw = reader.GetValue(index);
+            if (raw is DateTime dt)
+            {
+                return dt;
+            }
+
+            if (DateTime.TryParse(raw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+            {
+                return parsed;
+            }
+
+            return fallback;
+        }
+
+        private static bool IsOracleInvalidIdentifier(Exception ex)
+        {
+            return ex.Message.Contains("ORA-00904", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

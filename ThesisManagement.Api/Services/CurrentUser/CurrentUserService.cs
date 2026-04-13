@@ -54,7 +54,8 @@ namespace ThesisManagement.Api.Services
             if (context == null) return null;
 
             // Ưu tiên lấy từ Claims (JWT)
-            var claimUserCode = context.User?.FindFirst(ClaimTypes.Name)?.Value;
+            var claimUserCode = context.User?.FindFirst("userCode")?.Value
+                ?? context.User?.FindFirst(ClaimTypes.Name)?.Value;
             if (!string.IsNullOrEmpty(claimUserCode))
             {
                 return claimUserCode;

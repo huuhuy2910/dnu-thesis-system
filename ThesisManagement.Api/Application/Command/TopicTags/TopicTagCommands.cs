@@ -39,7 +39,10 @@ namespace ThesisManagement.Api.Application.Command.TopicTags
             if (topic == null)
                 return OperationResult<TopicTagReadDto>.Failed($"Topic with code '{topicCode}' not found", 404);
 
-            var exists = await _uow.TopicTags.Query().AnyAsync(tt => tt.TopicCode == topicCode && tt.TagID == tagId);
+            var exists = await _uow.TopicTags.Query()
+                .Where(tt => tt.TopicCode == topicCode && tt.TagID == tagId)
+                .Select(tt => (int?)tt.TagID)
+                .FirstOrDefaultAsync() != null;
             if (exists)
                 return OperationResult<TopicTagReadDto>.Failed("This TopicTag already exists", 400);
 

@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Building2,
   ShieldCheck,
+  CalendarDays,
 } from "lucide-react";
 import "./SideNav.css";
 import "./AdminNav.css";
@@ -61,6 +62,16 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
       icon: <ClipboardList size={18} />,
     },
     {
+      path: `${basePath}/defense-periods`,
+      label: "Quản lý đợt",
+      icon: <CalendarDays size={18} />,
+    },
+    {
+      path: `${basePath}/rooms`,
+      label: "Quản lý phòng",
+      icon: <Building2 size={18} />,
+    },
+    {
       path: `${basePath}/tags`,
       label: "Quản lý tags",
       icon: <BookOpen size={18} />,
@@ -80,9 +91,14 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
       icon: <BookOpen size={18} />,
     },
     {
-      path: `${basePath}/committees`,
-      label: "Hội đồng & phân công",
+      path: `${basePath}/committees/management`,
+      label: "Phân công hội đồng",
       icon: <ShieldCheck size={18} />,
+    },
+    {
+      path: `${basePath}/committees/operations`,
+      label: "Điều hành chấm điểm",
+      icon: <Activity size={18} />,
     },
     {
       path: `${basePath}/notifications/create`,

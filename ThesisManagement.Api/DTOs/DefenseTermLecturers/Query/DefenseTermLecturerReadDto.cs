@@ -7,6 +7,7 @@ namespace ThesisManagement.Api.DTOs.DefenseTermLecturers.Query
         int DefenseTermId,
         int LecturerProfileID,
         string LecturerCode,
+        string LecturerName,
         string UserCode,
         string? Role,
         bool IsPrimary,

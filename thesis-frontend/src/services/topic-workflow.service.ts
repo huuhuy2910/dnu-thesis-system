@@ -1,6 +1,7 @@
 import { fetchData } from "../api/fetchData";
 import type { ApiResponse } from "../types/api";
 import type {
+  DefensePeriodId,
   DefenseTermOption,
   WorkflowAuditFilter,
   WorkflowAuditItem,
@@ -32,15 +33,15 @@ function ensureWorkflowSuccess<T>(
   };
 }
 
-function toNumberOrNull(value: unknown): number | null {
+function toPeriodIdOrNull(value: unknown): DefensePeriodId | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
   if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
+    const trimmed = value.trim();
+    if (trimmed) {
+      return trimmed;
     }
   }
 
@@ -57,20 +58,26 @@ function normalizeDefenseTermOption(item: unknown): DefenseTermOption | null {
   }
 
   const record = item as Record<string, unknown>;
-  const defenseTermId = toNumberOrNull(
-    record.defenseTermId ?? record.defenseTermID ?? record.id,
+  const defenseTermId = toPeriodIdOrNull(
+    record.defenseTermId ??
+      record.DefenseTermId ??
+      record.defenseTermID ??
+      record.periodId ??
+      record.id,
   );
 
-  if (defenseTermId === null || defenseTermId <= 0) {
+  if (defenseTermId === null) {
     return null;
   }
 
   const defenseTermCode =
-    toStringOrEmpty(record.defenseTermCode ?? record.code) ||
-    `TERM-${defenseTermId}`;
+    toStringOrEmpty(
+      record.defenseTermCode ?? record.defensePeriodCode ?? record.code,
+    ) || String(defenseTermId);
   const defenseTermName =
-    toStringOrEmpty(record.defenseTermName ?? record.name ?? record.termName) ||
-    `Dot ${defenseTermId}`;
+    toStringOrEmpty(
+      record.defenseTermName ?? record.name ?? record.termName,
+    ) || `Dot ${defenseTermCode}`;
   const status = toStringOrEmpty(record.status) || undefined;
 
   return {
@@ -81,9 +88,29 @@ function normalizeDefenseTermOption(item: unknown): DefenseTermOption | null {
   };
 }
 
+function extractEnvelopeList(data: unknown): unknown[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  const record = data as Record<string, unknown>;
+  if (Array.isArray(record.items)) {
+    return record.items;
+  }
+  if (Array.isArray(record.Items)) {
+    return record.Items;
+  }
+
+  return [];
+}
+
 export async function getDefenseTermList(): Promise<DefenseTermOption[]> {
   const envelope = await fetchData<ApiResponse<unknown>>(
-    "/DefenseTerms/get-list",
+    "/defense-periods",
     {
       method: "GET",
     },
@@ -94,13 +121,7 @@ export async function getDefenseTermList(): Promise<DefenseTermOption[]> {
     "Khong the tai danh sach dot bao ve.",
   );
 
-  const list = Array.isArray(data)
-    ? data
-    : typeof data === "object" &&
-        data !== null &&
-        Array.isArray((data as { items?: unknown[] }).items)
-      ? (data as { items: unknown[] }).items
-      : [];
+  const list = extractEnvelopeList(data);
 
   const normalized = list
     .map(normalizeDefenseTermOption)

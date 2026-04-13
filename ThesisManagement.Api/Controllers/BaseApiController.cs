@@ -49,7 +49,7 @@ namespace ThesisManagement.Api.Controllers
         {
             if (User?.Identity != null && User.Identity.IsAuthenticated)
             {
-                var c = User.FindFirst(ClaimTypes.Name) ?? User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userCode");
+                var c = User.FindFirst("userCode") ?? User.FindFirst(ClaimTypes.Name) ?? User.FindFirst(ClaimTypes.NameIdentifier);
                 if (c != null) return c.Value;
             }
 

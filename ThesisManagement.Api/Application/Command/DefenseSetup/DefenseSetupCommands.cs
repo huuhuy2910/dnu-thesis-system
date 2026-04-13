@@ -19,11 +19,6 @@ namespace ThesisManagement.Api.Application.Command.DefenseSetup
         Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, CancellationToken cancellationToken = default);
     }
 
-    public interface IUpdateLecturerBusySlotsCommand
-    {
-        Task<ApiResponse<bool>> ExecuteAsync(int periodId, string lecturerCode, UpdateLecturerBusySlotsDto request, int actorUserId, CancellationToken cancellationToken = default);
-    }
-
     public interface IConfirmCouncilConfigCommand
     {
         Task<ApiResponse<bool>> ExecuteAsync(int periodId, ConfirmCouncilConfigDto request, int actorUserId, CancellationToken cancellationToken = default);
@@ -136,14 +131,6 @@ namespace ThesisManagement.Api.Application.Command.DefenseSetup
         public LockLecturerCapabilitiesCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
         public Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, CancellationToken cancellationToken = default)
             => _processor.LockLecturerCapabilitiesAsync(periodId, actorUserId, cancellationToken);
-    }
-
-    public class UpdateLecturerBusySlotsCommand : IUpdateLecturerBusySlotsCommand
-    {
-        private readonly IDefensePeriodCommandProcessor _processor;
-        public UpdateLecturerBusySlotsCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int periodId, string lecturerCode, UpdateLecturerBusySlotsDto request, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.UpdateLecturerBusySlotsAsync(periodId, lecturerCode, request, actorUserId, cancellationToken);
     }
 
     public class ConfirmCouncilConfigCommand : IConfirmCouncilConfigCommand

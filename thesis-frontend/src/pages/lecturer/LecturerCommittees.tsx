@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   createConcurrencyToken,
   createIdempotencyKey,
@@ -9,6 +10,22 @@ import {
 import { useToast } from "../../context/useToast";
 import { FetchDataError, fetchData } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
+import {
+  pickCaseInsensitiveValue,
+  readEnvelopeAllowedActions,
+  readEnvelopeData,
+  readEnvelopeErrorMessages,
+  readEnvelopeMessage,
+  readEnvelopeSuccess,
+  readEnvelopeWarningMessages,
+  toCompatResponse,
+} from "../../utils/api-envelope";
+import {
+  extractDefensePeriodId,
+  getActiveDefensePeriodId,
+  normalizeDefensePeriodId,
+  setActiveDefensePeriodId,
+} from "../../utils/defensePeriod";
 
 import {
   BookOpenCheck,
@@ -100,54 +117,229 @@ const panels: Array<{ key: PanelKey; label: string; icon: React.ReactNode }> = [
 
 const cardStyle: React.CSSProperties = {
   background: "#ffffff",
-  border: "1px solid #e6e9ef",
-  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  borderRadius: 12,
   padding: 18,
-  boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
 };
 
 const LecturerCommittees: React.FC = () => {
   const { addToast } = useToast();
-  const periodId = "2026.1";
-  const periodBase = `/v1/defense-periods/${encodeURIComponent(periodId)}`;
+  const [searchParams] = useSearchParams();
+  const queryPeriodId = normalizeDefensePeriodId(searchParams.get("periodId"));
+  const [periodId, setPeriodId] = useState<number | null>(
+    () => queryPeriodId ?? getActiveDefensePeriodId(),
+  );
+  const periodBase = periodId ? `/defense-periods/${periodId}` : "";
   const lecturerBase = `${periodBase}/lecturer`;
+  const periodIdText = String(periodId ?? "");
+  const missingPeriodWarningRef = useRef(false);
+  const pickSnapshotSection = pickCaseInsensitiveValue;
+
+  const getLecturerSnapshot = () =>
+    fetchData<ApiResponse<Record<string, unknown>>>(`${lecturerBase}/snapshot`, {
+      method: "GET",
+    });
+
   const lecturerApi = {
-    getCommittees: () => fetchData<ApiResponse<Record<string, unknown>>>(`${lecturerBase}/committees`, { method: "GET" }),
-    getCommitteeMinutes: (id: string | number) => fetchData<ApiResponse<Record<string, unknown>[]>>(`${lecturerBase}/committees/${id}/minutes`, { method: "GET" }),
+    getCommittees: async () => {
+      const snapshotRes = await getLecturerSnapshot();
+      const snapshot = readEnvelopeData<Record<string, unknown>>(snapshotRes);
+      const committees = pickSnapshotSection<Array<Record<string, unknown>>>(
+        snapshot,
+        ["committees", "Committees"],
+        [],
+      );
+
+      return toCompatResponse(snapshotRes, {
+        items: Array.isArray(committees) ? committees : [],
+      });
+    },
+    getCommitteeMinutes: async (id: string | number) => {
+      const snapshotRes = await getLecturerSnapshot();
+      const snapshot = readEnvelopeData<Record<string, unknown>>(snapshotRes);
+      const minutesRows = pickSnapshotSection<Array<Record<string, unknown>>>(
+        snapshot,
+        ["minutes", "Minutes"],
+        [],
+      );
+      const committeeId = Number(id);
+      const filtered = (Array.isArray(minutesRows) ? minutesRows : []).filter(
+        (item) =>
+          Number(item.committeeId ?? item.councilId ?? 0) === committeeId ||
+          String(item.committeeCode ?? "") === String(id),
+      );
+
+      return toCompatResponse(snapshotRes, filtered);
+    },
     updateCommitteeMinutes: (id: string | number, payload: Record<string, unknown>, idempotencyKey?: string) =>
-      fetchData<ApiResponse<boolean>>(`${lecturerBase}/committees/${id}/minutes`, {
-        method: "PUT",
-        body: payload,
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/minutes/upsert`, {
+        method: "POST",
+        body: {
+          committeeId: Number(id),
+          ...payload,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
     submitIndependentScore: (id: string | number, payload: Record<string, unknown>, idempotencyKey?: string) =>
-      fetchData<ApiResponse<boolean>>(`${lecturerBase}/committees/${id}/scores/independent`, {
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/scoring/actions`, {
         method: "POST",
-        body: payload,
+        body: {
+          action: "SUBMIT",
+          committeeId: Number(id),
+          ...payload,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
     reopenRequestByCommittee: (id: string | number, payload: Record<string, unknown>, idempotencyKey?: string) =>
-      fetchData<ApiResponse<boolean>>(`${lecturerBase}/committees/${id}/scores/reopen-request`, {
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/scoring/actions`, {
         method: "POST",
-        body: payload,
+        body: {
+          action: "REOPEN_REQUEST",
+          committeeId: Number(id),
+          ...payload,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
     lockSessionByCommittee: (id: string | number, idempotencyKey?: string) =>
-      fetchData<ApiResponse<boolean>>(`${lecturerBase}/committees/${id}/lock-session`, {
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/scoring/actions`, {
         method: "POST",
-        body: {},
+        body: {
+          action: "LOCK_SESSION",
+          committeeId: Number(id),
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
-    getRevisionQueue: () => fetchData<ApiResponse<Record<string, unknown>[]>>(`${lecturerBase}/revision-queue`, { method: "GET" }),
-    getScoringMatrix: (committeeId?: string | number) => fetchData<ApiResponse<Record<string, unknown>[]>>(`${lecturerBase}/scoring/matrix${committeeId != null ? `?committeeId=${committeeId}` : ""}`, { method: "GET" }),
-    getScoringAlerts: (committeeId?: string | number) => fetchData<ApiResponse<Record<string, unknown>[]>>(`${lecturerBase}/scoring/alerts${committeeId != null ? `?committeeId=${committeeId}` : ""}`, { method: "GET" }),
-    approveRevision: (revisionId: number, idempotencyKey?: string) => fetchData<ApiResponse<boolean>>(`${lecturerBase}/revisions/${revisionId}/approve`, { method: "POST", body: idempotencyKey ? { idempotencyKey } : {}, headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined }),
-    rejectRevision: (revisionId: number, reason: string, idempotencyKey?: string) => fetchData<ApiResponse<boolean>>(`${lecturerBase}/revisions/${revisionId}/reject`, { method: "POST", body: { reason, ...(idempotencyKey ? { idempotencyKey } : {}) }, headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined }),
+    getRevisionQueue: async () => {
+      const snapshotRes = await getLecturerSnapshot();
+      const snapshot = readEnvelopeData<Record<string, unknown>>(snapshotRes);
+      const queue = pickSnapshotSection<Array<Record<string, unknown>>>(
+        snapshot,
+        ["revisionQueue", "RevisionQueue"],
+        [],
+      );
+      return toCompatResponse(snapshotRes, Array.isArray(queue) ? queue : []);
+    },
+    getScoringMatrix: async (committeeId?: string | number) => {
+      const snapshotRes = await getLecturerSnapshot();
+      const snapshot = readEnvelopeData<Record<string, unknown>>(snapshotRes);
+      const scoring = pickSnapshotSection<Record<string, unknown>>(
+        snapshot,
+        ["scoring", "Scoring"],
+        {},
+      );
+      const matrixRows = pickSnapshotSection<Array<Record<string, unknown>>>(
+        scoring,
+        ["matrix", "Matrix"],
+        [],
+      );
+      const normalizedRows = Array.isArray(matrixRows) ? matrixRows : [];
+      const filtered =
+        committeeId == null
+          ? normalizedRows
+          : normalizedRows.filter(
+              (item) =>
+                Number(item.committeeId ?? item.councilId ?? 0) ===
+                  Number(committeeId) ||
+                String(item.committeeCode ?? "") === String(committeeId),
+            );
+      return toCompatResponse(snapshotRes, filtered);
+    },
+    getScoringAlerts: async (committeeId?: string | number) => {
+      const snapshotRes = await getLecturerSnapshot();
+      const snapshot = readEnvelopeData<Record<string, unknown>>(snapshotRes);
+      const scoring = pickSnapshotSection<Record<string, unknown>>(
+        snapshot,
+        ["scoring", "Scoring"],
+        {},
+      );
+      const alertRows = pickSnapshotSection<Array<Record<string, unknown>>>(
+        scoring,
+        ["alerts", "Alerts"],
+        [],
+      );
+      const normalizedRows = Array.isArray(alertRows) ? alertRows : [];
+      const filtered =
+        committeeId == null
+          ? normalizedRows
+          : normalizedRows.filter(
+              (item) =>
+                Number(item.committeeId ?? item.councilId ?? 0) ===
+                  Number(committeeId) ||
+                String(item.committeeCode ?? "") === String(committeeId),
+            );
+      return toCompatResponse(snapshotRes, filtered);
+    },
+    approveRevision: (revisionId: number, idempotencyKey?: string) =>
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/revisions/actions`, {
+        method: "POST",
+        body: {
+          action: "APPROVE",
+          revisionId,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
+        headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      }),
+    rejectRevision: (revisionId: number, reason: string, idempotencyKey?: string) =>
+      fetchData<ApiResponse<boolean>>(`${lecturerBase}/revisions/actions`, {
+        method: "POST",
+        body: {
+          action: "REJECT",
+          revisionId,
+          reason,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
+        headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      }),
   };
   const currentRole: RoleCode = "Chair";
   const notifyError = (message: string) => addToast(message, "error");
   const notifySuccess = (message: string) => addToast(message, "success");
   const notifyInfo = (message: string) => addToast(message, "info");
+
+  useEffect(() => {
+    if (queryPeriodId && queryPeriodId !== periodId) {
+      setPeriodId(queryPeriodId);
+    }
+  }, [periodId, queryPeriodId]);
+
+  useEffect(() => {
+    setActiveDefensePeriodId(periodId);
+  }, [periodId]);
+
+  useEffect(() => {
+    if (periodId != null) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolvePeriod = async () => {
+      try {
+        const response = await fetchData<ApiResponse<unknown>>("/defense-periods", {
+          method: "GET",
+        });
+        const payload = readEnvelopeData<unknown>(response);
+        const fallbackPeriodId = extractDefensePeriodId(payload);
+        if (!cancelled && fallbackPeriodId != null) {
+          setPeriodId(fallbackPeriodId);
+          setActiveDefensePeriodId(fallbackPeriodId);
+        }
+      } catch {
+        // Keep explicit warning state when no period can be resolved.
+      }
+    };
+
+    void resolvePeriod();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [periodId]);
 
   const [activePanel, setActivePanel] = useState<PanelKey>("councils");
   const [committees, setCommittees] = useState<Committee[]>([]);
@@ -187,9 +379,6 @@ const LecturerCommittees: React.FC = () => {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number>(0);
   const [backendAllowedActions, setBackendAllowedActions] = useState<string[]>([]);
 
-  const parseErrors = (errors: Record<string, string[]> | null | undefined) =>
-    Object.values(errors ?? {}).flat().filter(Boolean);
-
   const hasAllowedAction = (...actions: string[]) => {
     if (backendAllowedActions.length === 0) {
       return true;
@@ -198,19 +387,26 @@ const LecturerCommittees: React.FC = () => {
   };
 
   const notifyApiFailure = (response: ApiResponse<unknown> | null | undefined, fallback: string) => {
-    if (response?.allowedActions) {
-      setBackendAllowedActions(response.allowedActions);
+    const allowedActions = readEnvelopeAllowedActions(response);
+    if (allowedActions.length > 0) {
+      setBackendAllowedActions(allowedActions);
     }
-    if (response?.warnings?.length) {
-      notifyInfo(response.warnings.map((item) => item.message).join(" | "));
+
+    const warnings = readEnvelopeWarningMessages(response);
+    if (warnings.length) {
+      notifyInfo(warnings.join(" | "));
     }
-    if (!response?.success) {
-      const messages = parseErrors(response?.errors);
-      notifyError(messages[0] || response?.message || fallback);
+
+    const success = readEnvelopeSuccess(response);
+    const messages = readEnvelopeErrorMessages(response);
+    const message = readEnvelopeMessage(response);
+    if (!success) {
+      notifyError(messages[0] || message || fallback);
       return true;
     }
-    if (response?.message) {
-      notifyInfo(response.message);
+
+    if (message) {
+      notifyInfo(message);
     }
     return false;
   };
@@ -320,6 +516,19 @@ const LecturerCommittees: React.FC = () => {
 
   useEffect(() => {
     const hydrateLecturerData = async () => {
+      if (!periodId) {
+        setLoadingData(false);
+        if (!missingPeriodWarningRef.current) {
+          notifyInfo("Chua chon dot bao ve. Vui long chon dot de tai du lieu.");
+          missingPeriodWarningRef.current = true;
+        }
+        setCommittees([]);
+        setRevisionQueue([]);
+        setRevision(EMPTY_REVISION);
+        return;
+      }
+
+      missingPeriodWarningRef.current = false;
       setLoadingData(true);
       try {
         const [committeeRes, revisionRes] = await Promise.all([
@@ -327,8 +536,10 @@ const LecturerCommittees: React.FC = () => {
           lecturerApi.getRevisionQueue(),
         ]);
 
-        if (committeeRes?.allowedActions) {
-          setBackendAllowedActions(committeeRes.allowedActions);
+        const allowedActions =
+          committeeRes?.allowedActions ?? committeeRes?.AllowedActions;
+        if (allowedActions) {
+          setBackendAllowedActions(allowedActions);
         }
 
         const committeeItems =
@@ -458,7 +669,7 @@ const LecturerCommittees: React.FC = () => {
       window.localStorage.setItem(
         "lecturer_minutes_draft",
         JSON.stringify({
-          periodId,
+          periodId: periodIdText,
           selectedCommitteeId,
           summary,
           review,
@@ -482,17 +693,17 @@ const LecturerCommittees: React.FC = () => {
     strengths,
     weaknesses,
     recommendations,
-    periodId,
+    periodIdText,
   ]);
 
   const formatSession = (session: Committee["session"]) =>
     session === "MORNING" ? "MORNING (Sáng)" : "AFTERNOON (Chiều)";
 
   const pushTrace = (action: string, note?: string) => {
-    const idempotencyKey = createIdempotencyKey(periodId, action);
+    const idempotencyKey = createIdempotencyKey(periodIdText || "NA", action);
     setLatestActionTrace({
       action,
-      periodId,
+      periodId: periodIdText || "NA",
       idempotencyKey,
       concurrencyToken: assignmentConcurrencyToken,
       note,
@@ -511,7 +722,7 @@ const LecturerCommittees: React.FC = () => {
       return;
     }
     try {
-      const idempotencyKey = createIdempotencyKey(periodId, "lecturer-score-submit");
+      const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-score-submit");
       const assignmentId = selectedAssignmentId;
       if (!assignmentId) {
         notifyError("Vui lòng chọn assignment cần chấm điểm.");
@@ -530,7 +741,7 @@ const LecturerCommittees: React.FC = () => {
       pushTrace("submit-score", "[UC3.2] Đã gửi điểm độc lập.");
       setAssignmentConcurrencyToken(createConcurrencyToken("lecturer-assignment"));
       await refreshScoringData(selectedCommitteeNumericId);
-      if (response?.idempotencyReplay) {
+      if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
         notifyInfo("Yêu cầu gửi điểm đã được xử lý trước đó (idempotency replay).");
       } else {
         notifySuccess("Đã gửi điểm độc lập thành công.");
@@ -547,22 +758,22 @@ const LecturerCommittees: React.FC = () => {
         margin: "0 auto",
         padding: 24,
         position: "relative",
-        fontFamily: '"Be Vietnam Pro", "Segoe UI", system-ui, sans-serif',
+        fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
       }}
       className="lecturer-revamp-root"
     >
       <style>
         {`
           .lecturer-revamp-root {
-            --lec-accent: #1d4ed8;
+            --lec-accent: #f37021;
             --lec-ink: #0f172a;
-            --lec-muted: #475569;
-            --lec-line: #d9dde5;
+            --lec-muted: #64748b;
+            --lec-line: #cbd5e1;
             --lec-btn-h: 44px;
             --lec-input-h: 48px;
             --lec-pill-h: 44px;
             --lec-cell-px: 12px;
-            font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             color: var(--lec-ink);
             background: #ffffff;
             border-radius: 12px;
@@ -578,7 +789,7 @@ const LecturerCommittees: React.FC = () => {
             letter-spacing: 0.06em;
             text-transform: uppercase;
             font-weight: 700;
-            color: #64748b;
+            color: #0f172a;
             line-height: 1.35;
           }
           .lecturer-revamp-root .lec-value {
@@ -590,13 +801,13 @@ const LecturerCommittees: React.FC = () => {
           .lecturer-revamp-root .lec-meta {
             font-size: 13px;
             line-height: 1.45;
-            color: #475569;
+            color: #0f172a;
           }
           .lecturer-revamp-root .lec-control-bar {
             min-height: 56px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #cbd5e1;
             border-radius: 10px;
-            background: #f8fafc;
+            background: #ffffff;
             padding: 10px;
             display: flex;
             align-items: center;
@@ -605,13 +816,13 @@ const LecturerCommittees: React.FC = () => {
           }
           .lecturer-revamp-root .content { position:relative; z-index:1; }
           .lecturer-revamp-root button {
-            font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             font-weight: 600;
             font-size: 14px;
             border-radius: 10px;
-            color: #111827;
+            color: #0f172a;
           }
-          .lecturer-revamp-root input, .lecturer-revamp-root textarea, .lecturer-revamp-root select { border:1px solid var(--lec-line); border-radius:10px; padding:8px 12px; background:#fff; font-size:16px; }
+          .lecturer-revamp-root input, .lecturer-revamp-root textarea, .lecturer-revamp-root select { border:1px solid var(--lec-line); border-radius:10px; padding:8px 12px; background:#ffffff; font-size:16px; }
           .lecturer-revamp-root input,
           .lecturer-revamp-root select {
             height: var(--lec-input-h);
@@ -621,15 +832,15 @@ const LecturerCommittees: React.FC = () => {
           .lecturer-revamp-root textarea {
             min-height: 112px;
           }
-          .lecturer-revamp-root input:focus, .lecturer-revamp-root textarea:focus, .lecturer-revamp-root select:focus { outline:none; border-color:var(--lec-accent); box-shadow:0 0 0 3px rgba(37,99,235,.14); }
+          .lecturer-revamp-root input:focus, .lecturer-revamp-root textarea:focus, .lecturer-revamp-root select:focus { outline:none; border-color:var(--lec-accent); box-shadow:0 0 0 3px rgba(243,112,33,.16); }
           .lec-pill {
-            border: 1px solid #cfd8e3;
+            border: 1px solid #cbd5e1;
             border-radius: 999px;
             min-height: 42px;
             padding: 0 16px;
             background: #ffffff;
             font-weight: 600;
-            color: #334155;
+            color: #0f172a;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
@@ -648,15 +859,15 @@ const LecturerCommittees: React.FC = () => {
             bottom: 5px;
             height: 2px;
             border-radius: 999px;
-            background: #f97316;
+            background: #f37021;
             transform: scaleX(0);
             transform-origin: center;
             transition: transform .24s ease;
           }
           .lec-pill.active {
-            border-color: #1d4ed8;
-            background: #eff6ff;
-            color: #1e40af;
+            border-color: #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
           }
           .lec-pill.active::after,
           .lec-pill:hover::after {
@@ -669,88 +880,88 @@ const LecturerCommittees: React.FC = () => {
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            background: #f8fafc;
-            border: 1px solid #dbe2ea;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
           }
           .lec-pill.active .pill-icon {
             background: #ffffff;
-            border-color: #93c5fd;
+            border-color: #cbd5e1;
           }
           .lec-pill:hover {
-            border-color: #94a3b8;
+            border-color: #cbd5e1;
             background: #ffffff;
             color: #0f172a;
           }
           .lec-primary {
-              border: 1px solid #ea580c;
+              border: none;
               border-radius: 12px;
-              background: #f97316;
-              color: #fff;
+              background: #f37021;
+              color: #ffffff;
               padding: 0 16px;
               font-weight: 600;
               cursor: pointer;
               font-size: 14px;
               line-height: 1.2;
               min-height: var(--lec-btn-h);
-              box-shadow: 0 6px 14px rgba(249, 115, 22, 0.26);
+              box-shadow: 0 6px 14px rgba(243, 112, 33, 0.26);
           }
-            .lec-primary:hover:not(:disabled) { background: #ea580c; border-color:#ea580c; transform: translateY(-1px); box-shadow: 0 10px 18px rgba(234, 88, 12, 0.28); }
+            .lec-primary:hover:not(:disabled) { background: #f37021; border-color:#f37021; transform: translateY(-1px); box-shadow: 0 10px 18px rgba(243, 112, 33, 0.28); }
             .lec-primary:disabled {
-              background: #94a3b8;
-              border-color: #94a3b8;
-              color: #fff;
+              background: #f8fafc;
+              border-color: #cbd5e1;
+              color: #64748b;
               box-shadow: none;
               cursor: not-allowed;
             }
             .lec-accent {
-              border: 1px solid #1e40af;
+              border: 1px solid #cbd5e1;
               border-radius: 12px;
-              background: #1d4ed8;
-              color: #fff;
+              background: #ffffff;
+              color: #0f172a;
               padding: 0 16px;
               font-weight: 600;
               min-height: var(--lec-btn-h);
               cursor: pointer;
             }
             .lec-accent:hover:not(:disabled) {
-              border-color: #1e3a8a;
-              background: #1e40af;
+              border-color: #cbd5e1;
+              background: #ffffff;
               transform: translateY(-1px);
             }
             .lec-accent:disabled {
-              border-color: #fdba74;
-              background: #fdba74;
-              color: #fff;
+              border-color: #cbd5e1;
+              background: #f8fafc;
+              color: #64748b;
               box-shadow: none;
               cursor: not-allowed;
             }
             .lec-ghost {
               border: 1px solid #cbd5e1;
               border-radius: 12px;
-              background: #fff;
-              color: #111827;
+              background: #ffffff;
+              color: #0f172a;
               padding: 0 14px;
               font-weight: 600;
               min-height: var(--lec-btn-h);
               cursor: pointer;
             }
             .lec-ghost:hover:not(:disabled) {
-              border-color: #2563eb;
-              background: #eff6ff;
+              border-color: #cbd5e1;
+              background: #ffffff;
               transform: translateY(-1px);
             }
             .lec-ghost:disabled {
-              border-color: #e5e7eb;
-              background: #f1f5f9;
-              color: #64748b;
+              border-color: #cbd5e1;
+              background: #ffffff;
+              color: #0f172a;
               box-shadow: none;
               cursor: not-allowed;
             }
           .lec-soft {
-            border: 1px solid #cfd8e3;
+            border: 1px solid #cbd5e1;
             border-radius: 12px;
             background: #ffffff;
-            color: #111827;
+            color: #0f172a;
             padding: 0 14px;
             font-weight: 600;
             cursor: pointer;
@@ -758,7 +969,7 @@ const LecturerCommittees: React.FC = () => {
             line-height: 1.2;
             min-height: var(--lec-btn-h);
           }
-          .lec-soft:hover { background: #f8fafc; border-color:#94a3b8; transform: translateY(-1px); }
+          .lec-soft:hover { background: #ffffff; border-color: #cbd5e1; transform: translateY(-1px); }
           .lecturer-revamp-root textarea {
             line-height: 1.45;
           }
@@ -793,9 +1004,9 @@ const LecturerCommittees: React.FC = () => {
             display:inline-flex;
             align-items:center;
             gap:8px;
-            border:1px solid #d7dfea;
+            border:1px solid #cbd5e1;
             background:#ffffff;
-            color:#475569;
+            color:#0f172a;
             border-radius:12px;
             font-size:12px;
             font-weight:600;
@@ -829,12 +1040,13 @@ const LecturerCommittees: React.FC = () => {
             borderRadius: 12,
             padding: 20,
             marginBottom: 16,
-            border: "1px solid #e6e9ef",
+            border: "1px solid #cbd5e1",
             background: "#ffffff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
         >
-          <h1 className="lec-heading" style={{ margin: 0, color: "#ea580c", display: "flex", alignItems: "center", gap: 10 }}>
-            <Gavel size={30} color="#ea580c" /> Hội đồng và chấm điểm
+          <h1 className="lec-heading" style={{ margin: 0, color: "#f37021", display: "flex", alignItems: "center", gap: 10 }}>
+            <Gavel size={30} color="#f37021" /> Hội đồng và chấm điểm
           </h1>
           <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <span className="lec-tag-live" style={{ animation: "none" }}>
@@ -844,28 +1056,28 @@ const LecturerCommittees: React.FC = () => {
               Vai trò: {selectedCommittee?.role ?? currentRole}
             </span>
           </div>
-          <div style={{ marginTop: 12, border: "1px solid #e2e8f0", borderRadius: 10, padding: 10, background: "#f8fafc", fontSize: 13, color: "#475569" }}>
+          <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 10, padding: 10, background: "#ffffff", fontSize: 13, color: "#0f172a" }}>
             Cập nhật gần nhất: {latestActionTrace?.at ?? "Chưa có"}
           </div>
         </section>
 
         <section style={{ ...cardStyle, marginBottom: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-            <div style={{ border: "1px solid #BAE6FD", borderRadius: 14, padding: 12, background: "#FFFFFF" }}>
+            <div style={{ border: "1px solid #cbd5e1", borderRadius: 14, padding: 12, background: "#ffffff" }}>
               <div className="lec-kicker">Đang họp</div>
-              <div className="lec-value" style={{ color: "#0e7490" }}>{committeeStats.live}</div>
+              <div className="lec-value" style={{ color: "#0f172a" }}>{committeeStats.live}</div>
             </div>
-            <div style={{ border: "1px solid #BAE6FD", borderRadius: 14, padding: 12, background: "#FFFFFF" }}>
+            <div style={{ border: "1px solid #cbd5e1", borderRadius: 14, padding: 12, background: "#ffffff" }}>
               <div className="lec-kicker">Sắp diễn ra</div>
-              <div className="lec-value" style={{ color: "#0369a1" }}>{committeeStats.upcoming}</div>
+              <div className="lec-value" style={{ color: "#0f172a" }}>{committeeStats.upcoming}</div>
             </div>
-            <div style={{ border: "1px solid #BAE6FD", borderRadius: 14, padding: 12, background: "#FFFFFF" }}>
+            <div style={{ border: "1px solid #cbd5e1", borderRadius: 14, padding: 12, background: "#ffffff" }}>
               <div className="lec-kicker">Đã khóa</div>
               <div className="lec-value" style={{ color: "#0f172a" }}>{committeeStats.locked}</div>
             </div>
-            <div style={{ border: "1px solid #BAE6FD", borderRadius: 14, padding: 12, background: "#FFFFFF" }}>
+            <div style={{ border: "1px solid #cbd5e1", borderRadius: 14, padding: 12, background: "#ffffff" }}>
               <div className="lec-kicker">Chờ duyệt chỉnh sửa</div>
-              <div className="lec-value" style={{ color: "#b45309" }}>{committeeStats.pendingRevision}</div>
+              <div className="lec-value" style={{ color: "#f37021" }}>{committeeStats.pendingRevision}</div>
             </div>
           </div>
         </section>
@@ -889,10 +1101,10 @@ const LecturerCommittees: React.FC = () => {
         {activePanel === "councils" && (
           <section style={cardStyle}>
             <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-              <CalendarClock size={18} color="#0284C7" /> Danh sách hội đồng
+              <CalendarClock size={18} color="#0f172a" /> Danh sách hội đồng
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-              {loadingData && <div style={{ color: "#64748B", fontSize: 13 }}>Đang tải danh sách hội đồng...</div>}
+              {loadingData && <div style={{ color: "#0f172a", fontSize: 13 }}>Đang tải danh sách hội đồng...</div>}
               {committees.map((committee) => (
                 <button
                   key={committee.id}
@@ -902,28 +1114,28 @@ const LecturerCommittees: React.FC = () => {
                     setActivePanel("minutes");
                   }}
                   style={{
-                    border: committee.id === selectedCommitteeId ? "1px solid #0284C7" : "1px solid #DBEAFE",
+                    border: committee.id === selectedCommitteeId ? "1px solid #cbd5e1" : "1px solid #cbd5e1",
                     background:
                       committee.id === selectedCommitteeId
-                        ? "linear-gradient(150deg, #EFF6FF 0%, #FFF7ED 100%)"
-                        : "#FFFFFF",
+                        ? "linear-gradient(150deg, #ffffff 0%, #ffffff 100%)"
+                        : "#ffffff",
                     borderRadius: 14,
                     padding: 14,
                     textAlign: "left",
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: "#0F172A" }}>{committee.id}</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: "#334155" }}>
-                    <MapPin size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#0284C7" }} />
+                  <div style={{ fontWeight: 700, color: "#0f172a" }}>{committee.id}</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: "#0f172a" }}>
+                    <MapPin size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#0f172a" }} />
                     {committee.room} · {formatSession(committee.session)} · {new Date(committee.date).toLocaleDateString("vi-VN")}
                   </div>
-                  <div style={{ marginTop: 2, fontSize: 13, color: "#334155" }}>
-                    <Clock4 size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#F97316" }} />
+                  <div style={{ marginTop: 2, fontSize: 13, color: "#0f172a" }}>
+                    <Clock4 size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#f37021" }} />
                     Khung giờ: {committee.slot}
                   </div>
-                  <div style={{ marginTop: 2, fontSize: 13, color: "#334155" }}>
-                    <Users2 size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#0284C7" }} />
+                  <div style={{ marginTop: 2, fontSize: 13, color: "#0f172a" }}>
+                    <Users2 size={13} style={{ verticalAlign: "text-bottom", marginRight: 4, color: "#0f172a" }} />
                     Số sinh viên: {committee.studentCount}
                   </div>
                   <div
@@ -936,16 +1148,16 @@ const LecturerCommittees: React.FC = () => {
                       fontWeight: 700,
                       color:
                         committee.status === "Đang họp"
-                          ? "#0369A1"
+                          ? "#0f172a"
                           : committee.status === "Sắp diễn ra"
-                            ? "#B45309"
-                            : "#166534",
+                            ? "#f37021"
+                            : "#0f172a",
                       background:
                         committee.status === "Đang họp"
-                          ? "#E0F2FE"
+                          ? "#ffffff"
                           : committee.status === "Sắp diễn ra"
-                            ? "#FFEDD5"
-                            : "#DCFCE7",
+                            ? "#ffffff"
+                            : "#ffffff",
                     }}
                   >
                     {committee.status}
@@ -953,7 +1165,7 @@ const LecturerCommittees: React.FC = () => {
                 </button>
               ))}
               {!loadingData && committees.length === 0 && (
-                <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có hội đồng từ API.</div>
+                <div style={{ color: "#0f172a", fontSize: 13 }}>Chưa có hội đồng từ API.</div>
               )}
             </div>
           </section>
@@ -963,7 +1175,7 @@ const LecturerCommittees: React.FC = () => {
           <section style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
               <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <ClipboardPen size={18} color="#0284C7" /> Nhập biên bản hội đồng
+                <ClipboardPen size={18} color="#0f172a" /> Nhập biên bản hội đồng
               </h2>
               <select value={selectedCommitteeId} onChange={(event) => setSelectedCommitteeId(event.target.value)}>
                 {committees.length === 0 && <option value="">Chưa có hội đồng</option>}
@@ -987,16 +1199,16 @@ const LecturerCommittees: React.FC = () => {
                   {committee.id}
                 </button>
               ))}
-              {committees.length === 0 && <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có hội đồng để nhập biên bản.</div>}
+              {committees.length === 0 && <div style={{ color: "#0f172a", fontSize: 13 }}>Chưa có hội đồng để nhập biên bản.</div>}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
               <div style={{ display: "grid", gap: 12 }}>
                 {selectedCommittee ? (
-                  <div style={{ padding: 14, border: "1px solid #DBEAFE", borderRadius: 14, background: "linear-gradient(160deg, #F8FAFF 0%, #FFFFFF 100%)" }}>
-                    <div style={{ fontSize: 12, color: "#64748B", marginBottom: 4 }}>Hội đồng đang thao tác</div>
+                  <div style={{ padding: 14, border: "1px solid #cbd5e1", borderRadius: 14, background: "linear-gradient(160deg, #ffffff 0%, #ffffff 100%)" }}>
+                    <div style={{ fontSize: 12, color: "#0f172a", marginBottom: 4 }}>Hội đồng đang thao tác</div>
                     <div style={{ fontWeight: 800, fontSize: 18 }}>{selectedCommittee.id}</div>
-                    <div style={{ marginTop: 8, display: "grid", gap: 6, fontSize: 13, color: "#334155" }}>
+                    <div style={{ marginTop: 8, display: "grid", gap: 6, fontSize: 13, color: "#0f172a" }}>
                       <div>Phòng: {selectedCommittee.room}</div>
                       <div>Phiên: {formatSession(selectedCommittee.session)}</div>
                       <div>Ngày: {new Date(selectedCommittee.date).toLocaleDateString("vi-VN")}</div>
@@ -1007,9 +1219,9 @@ const LecturerCommittees: React.FC = () => {
                   </div>
                 ) : null}
 
-                <div style={{ padding: 14, border: "1px solid #E2E8F0", borderRadius: 14, background: "#FFFFFF" }}>
+                <div style={{ padding: 14, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>Mẫu nhập</div>
-                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#475569" }}>
+                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#0f172a" }}>
                     <div>• Tóm tắt</div>
                     <div>• Hỏi đáp</div>
                     <div>• Nhận xét</div>
@@ -1018,39 +1230,39 @@ const LecturerCommittees: React.FC = () => {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #DBEAFE", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#0F172A" }}>Tóm tắt nội dung</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Tóm tắt nội dung</span>
                   <textarea value={summary} onChange={(event) => setSummary(event.target.value)} rows={5} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #DBEAFE", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#0F172A" }}>Ý kiến phản biện</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Ý kiến phản biện</span>
                   <textarea value={review} onChange={(event) => setReview(event.target.value)} rows={5} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #DBEAFE", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#0F172A" }}>Câu hỏi</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Câu hỏi</span>
                   <textarea value={questions} onChange={(event) => setQuestions(event.target.value)} rows={5} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #DBEAFE", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#0F172A" }}>Trả lời</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Trả lời</span>
                   <textarea value={answers} onChange={(event) => setAnswers(event.target.value)} rows={5} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #FED7AA", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#9A3412" }}>Điểm mạnh</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Điểm mạnh</span>
                   <textarea value={strengths} onChange={(event) => setStrengths(event.target.value)} rows={4} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #FED7AA", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#9A3412" }}>Điểm yếu</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Điểm yếu</span>
                   <textarea value={weaknesses} onChange={(event) => setWeaknesses(event.target.value)} rows={4} />
                 </label>
-                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #FED7AA", borderRadius: 14, background: "#FFFFFF" }}>
-                  <span style={{ fontWeight: 700, color: "#9A3412" }}>Kiến nghị</span>
+                <label style={{ display: "grid", gap: 6, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#ffffff" }}>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Kiến nghị</span>
                   <textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} rows={4} />
                 </label>
               </div>
             </div>
 
             <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 13, color: "#64748B" }}>{lastAutoSave ? `Lưu gần nhất · ${lastAutoSave}` : ""}</div>
+              <div style={{ fontSize: 13, color: "#0f172a" }}>{lastAutoSave ? `Lưu gần nhất · ${lastAutoSave}` : ""}</div>
               <button
                 type="button"
                 className="lec-primary"
@@ -1066,7 +1278,7 @@ const LecturerCommittees: React.FC = () => {
                     return;
                   }
                   try {
-                    const idempotencyKey = createIdempotencyKey(periodId, "lecturer-minutes-save");
+                    const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-minutes-save");
                     const response = await lecturerApi.updateCommitteeMinutes(selectedCommitteeNumericId, {
                       assignmentId,
                       summaryContent: summary,
@@ -1098,7 +1310,7 @@ const LecturerCommittees: React.FC = () => {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
             <section style={cardStyle}>
               <h2 className="lec-section-title" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <Star size={18} color="#0284C7" /> Chấm điểm
+                <Star size={18} color="#0f172a" /> Chấm điểm
               </h2>
                 <label style={{ display: "grid", gap: 6 }}>
                   <span className="lec-label">Điểm của tôi (0.0 - 10.0)</span>
@@ -1112,7 +1324,7 @@ const LecturerCommittees: React.FC = () => {
                   disabled={submitted || sessionLocked}
                 />
               </label>
-              {!isScoreValid && <div style={{ color: "#B91C1C", marginTop: 6 }}>Điểm phải nằm trong khoảng 0 đến 10.</div>}
+              {!isScoreValid && <div style={{ color: "#0f172a", marginTop: 6 }}>Điểm phải nằm trong khoảng 0 đến 10.</div>}
 
               <label style={{ display: "grid", gap: 6, marginTop: 8 }}>
                 <span className="lec-label">Nhận xét</span>
@@ -1159,7 +1371,7 @@ const LecturerCommittees: React.FC = () => {
                       return;
                     }
                     try {
-                      const idempotencyKey = createIdempotencyKey(periodId, "lecturer-score-reopen");
+                      const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-score-reopen");
                       const assignmentId = selectedAssignmentId;
                       if (!assignmentId) {
                         notifyError("Vui lòng chọn assignment cần mở lại biểu mẫu.");
@@ -1177,7 +1389,7 @@ const LecturerCommittees: React.FC = () => {
                       pushTrace("reopen-score", "[UC3.4] Chair yêu cầu mở lại biểu mẫu.");
                       setAssignmentConcurrencyToken(createConcurrencyToken("lecturer-assignment"));
                       await refreshScoringData(selectedCommitteeNumericId);
-                      if (response?.idempotencyReplay) {
+                      if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
                         notifyInfo("Yêu cầu mở lại biểu mẫu đã tồn tại (idempotency replay).");
                       } else {
                         notifyInfo("Đã yêu cầu mở lại biểu mẫu chấm điểm.");
@@ -1191,36 +1403,36 @@ const LecturerCommittees: React.FC = () => {
                   Yêu cầu mở lại biểu mẫu
                 </button>
               </div>
-              {!isChair && <div style={{ marginTop: 8, color: "#B45309" }}>Chỉ Chair mới được yêu cầu mở lại.</div>}
+              {!isChair && <div style={{ marginTop: 8, color: "#f37021" }}>Chỉ Chair mới được yêu cầu mở lại.</div>}
 
-              {submitted && <div style={{ marginTop: 8, color: "#166534" }}>Đã gửi điểm và khóa biểu mẫu cá nhân.</div>}
-              {chairRequestedReopen && <div style={{ marginTop: 8, color: "#B45309" }}>Biểu mẫu đã mở lại theo yêu cầu Chủ tịch.</div>}
+              {submitted && <div style={{ marginTop: 8, color: "#0f172a" }}>Đã gửi điểm và khóa biểu mẫu cá nhân.</div>}
+              {chairRequestedReopen && <div style={{ marginTop: 8, color: "#f37021" }}>Biểu mẫu đã mở lại theo yêu cầu Chủ tịch.</div>}
             </section>
 
             <section style={cardStyle}>
               <h2 className="lec-section-title" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <ShieldCheck size={18} color="#0284C7" /> Cảnh báo và chốt ca
+                <ShieldCheck size={18} color="#0f172a" /> Cảnh báo và chốt ca
               </h2>
 
-              <div style={{ border: "1px solid #DBEAFE", borderRadius: 12, padding: 10, marginBottom: 10 }}>
+              <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: 10, marginBottom: 10 }}>
                 <div style={{ fontWeight: 700 }}>Cảnh báo điểm lệch</div>
                 <div style={{ marginTop: 6, fontSize: 14 }}>
                   Phương sai: <strong>{scoringOverview.variance ?? "-"}</strong> · Ngưỡng: {scoringOverview.varianceThreshold ?? "-"}
                 </div>
                 {hasVarianceAlert ? (
-                  <div style={{ marginTop: 6, color: "#B91C1C", display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ marginTop: 6, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
                     <ShieldAlert size={16} /> Điểm lệch vượt ngưỡng, cần thảo luận lại.
                   </div>
                 ) : (
-                  <div style={{ marginTop: 6, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ marginTop: 6, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
                     <CheckCircle2 size={16} /> Điểm trong ngưỡng an toàn.
                   </div>
                 )}
               </div>
 
-              <div style={{ border: "1px solid #DBEAFE", borderRadius: 12, padding: 10, marginBottom: 10 }}>
+              <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: 10, marginBottom: 10 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 28, lineHeight: 1.16 }}>Tính điểm tổng hợp</div>
-                <div style={{ color: "#64748B", fontSize: 13 }}>
+                <div style={{ color: "#0f172a", fontSize: 13 }}>
                   Dữ liệu điểm tổng hợp được lấy trực tiếp từ backend.
                 </div>
                 <div style={{ marginTop: 8, fontSize: 13 }}>
@@ -1231,14 +1443,21 @@ const LecturerCommittees: React.FC = () => {
               <button
                 type="button"
                 className="lec-primary"
-                style={{ background: sessionLocked ? "#94A3B8" : "linear-gradient(135deg,#334155 0%, #1E293B 100%)", display: "inline-flex", alignItems: "center", gap: 8 }}
+                style={{
+                  background: sessionLocked ? "#f8fafc" : "#f37021",
+                  color: sessionLocked ? "#64748b" : "#ffffff",
+                  border: sessionLocked ? "1px solid #cbd5e1" : "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
                 onClick={async () => {
                   if (!isChair) {
                     notifyError(ucError("UC3.4-CHAIR_ONLY"));
                     return;
                   }
                   try {
-                    const idempotencyKey = createIdempotencyKey(periodId, "lecturer-score-lock");
+                    const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-score-lock");
                     const response = await lecturerApi.lockSessionByCommittee(selectedCommitteeNumericId, idempotencyKey);
                     if (notifyApiFailure(response as ApiResponse<unknown>, "Khóa phiên chấm thất bại.")) {
                       return;
@@ -1247,7 +1466,7 @@ const LecturerCommittees: React.FC = () => {
                     pushTrace("lock-session", "[UC3.5] Chair đã khóa phiên chấm.");
                     setAssignmentConcurrencyToken(createConcurrencyToken("lecturer-assignment"));
                     await refreshScoringData(selectedCommitteeNumericId);
-                    if (response?.idempotencyReplay) {
+                    if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
                       notifyInfo("Yêu cầu khóa phiên đã được xử lý trước đó (idempotency replay).");
                     } else {
                       notifySuccess("Đã khóa hội đồng chấm điểm.");
@@ -1265,7 +1484,7 @@ const LecturerCommittees: React.FC = () => {
               >
                 <Lock size={15} /> {sessionLocked ? "Đã khóa ca bảo vệ" : "Khóa hội đồng"}
               </button>
-              {!isChair && <div style={{ marginTop: 8, color: "#B45309" }}>Chỉ Chair mới có quyền khóa phiên chấm.</div>}
+              {!isChair && <div style={{ marginTop: 8, color: "#f37021" }}>Chỉ Chair mới có quyền khóa phiên chấm.</div>}
             </section>
           </div>
         )}
@@ -1273,14 +1492,14 @@ const LecturerCommittees: React.FC = () => {
         {activePanel === "revision" && (
           <section style={cardStyle}>
             <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-              <FileCheck2 size={18} color="#0284C7" /> Duyệt bản chỉnh sửa
+              <FileCheck2 size={18} color="#0f172a" /> Duyệt bản chỉnh sửa
             </h2>
 
-            <div style={{ border: "1px solid #DBEAFE", borderRadius: 12, padding: 12 }}>
+            <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: 12 }}>
               <div style={{ fontWeight: 700 }}>
                 {revision.studentCode} · {revision.topicTitle}
               </div>
-              <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>
+              <div style={{ marginTop: 6, color: "#0f172a", fontSize: 13 }}>
                 Mở tệp PDF, đọc nhận xét và đưa ra quyết định duyệt.
               </div>
 
@@ -1289,7 +1508,7 @@ const LecturerCommittees: React.FC = () => {
                   type="button"
                   className="lec-soft"
                   disabled={!isChair || !hasAllowedAction("APPROVE_REVISION", "UC4.2.APPROVE")}
-                  style={{ borderColor: "#16A34A", color: "#166534", background: "#F0FDF4", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  style={{ borderColor: "#0f172a", color: "#0f172a", background: "#ffffff", display: "inline-flex", alignItems: "center", gap: 6 }}
                   onClick={async () => {
                     if (!isChair) {
                       notifyError(ucError("UC3.4-CHAIR_ONLY"));
@@ -1297,7 +1516,7 @@ const LecturerCommittees: React.FC = () => {
                     }
                     try {
                       const revisionId = revision.revisionId || Number(String(revision.studentCode).replace(/\D+/g, "")) || 1;
-                      const idempotencyKey = createIdempotencyKey(periodId, "lecturer-approve-revision");
+                      const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-approve-revision");
                       const response = await lecturerApi.approveRevision(revisionId, idempotencyKey);
                       if (notifyApiFailure(response as ApiResponse<unknown>, "Không duyệt được bản chỉnh sửa.")) {
                         return;
@@ -1305,7 +1524,7 @@ const LecturerCommittees: React.FC = () => {
                       await refreshRevisionQueue();
                       pushTrace("approve-revision", "[UC4.2] Duyệt bản chỉnh sửa.");
                       setAssignmentConcurrencyToken(createConcurrencyToken("lecturer-assignment"));
-                      if (response?.idempotencyReplay) {
+                      if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
                         notifyInfo("Yêu cầu duyệt đã được xử lý trước đó (idempotency replay).");
                       } else {
                         notifySuccess("Đã duyệt bản chỉnh sửa.");
@@ -1321,7 +1540,7 @@ const LecturerCommittees: React.FC = () => {
                   type="button"
                   className="lec-soft"
                   disabled={!isChair || !hasAllowedAction("REJECT_REVISION", "UC4.2.REJECT")}
-                  style={{ borderColor: "#DC2626", color: "#B91C1C", background: "#FEF2F2", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  style={{ borderColor: "#fecaca", color: "#b91c1c", background: "#ffffff", display: "inline-flex", alignItems: "center", gap: 6 }}
                   onClick={async () => {
                     if (!isChair) {
                       notifyError(ucError("UC3.4-CHAIR_ONLY"));
@@ -1333,7 +1552,7 @@ const LecturerCommittees: React.FC = () => {
                     }
                     try {
                       const revisionId = revision.revisionId || Number(String(revision.studentCode).replace(/\D+/g, "")) || 1;
-                      const idempotencyKey = createIdempotencyKey(periodId, "lecturer-reject-revision");
+                      const idempotencyKey = createIdempotencyKey(periodIdText || "NA", "lecturer-reject-revision");
                       const response = await lecturerApi.rejectRevision(revisionId, reopenReason.trim(), idempotencyKey);
                       if (notifyApiFailure(response as ApiResponse<unknown>, "Không từ chối được bản chỉnh sửa.")) {
                         return;
@@ -1341,7 +1560,7 @@ const LecturerCommittees: React.FC = () => {
                       await refreshRevisionQueue();
                       pushTrace("reject-revision", "[UC4.2] Từ chối bản chỉnh sửa có lý do.");
                       setAssignmentConcurrencyToken(createConcurrencyToken("lecturer-assignment"));
-                      if (response?.idempotencyReplay) {
+                      if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
                         notifyInfo("Yêu cầu từ chối đã được xử lý trước đó (idempotency replay).");
                       } else {
                         notifyInfo("Đã từ chối bản chỉnh sửa kèm lý do.");
@@ -1355,30 +1574,30 @@ const LecturerCommittees: React.FC = () => {
                 </button>
               </div>
               <label style={{ display: "grid", gap: 6, marginTop: 8 }}>
-                <span style={{ fontSize: 12, color: "#64748B" }}>Lý do reject (bắt buộc theo UC)</span>
+                <span style={{ fontSize: 12, color: "#0f172a" }}>Lý do reject (bắt buộc theo UC)</span>
                 <textarea value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} rows={3} />
               </label>
 
-              <div style={{ marginTop: 8, color: revision.status === "approved" ? "#166534" : revision.status === "rejected" ? "#B91C1C" : "#475569" }}>
+              <div style={{ marginTop: 8, color: revision.status === "approved" ? "#0f172a" : revision.status === "rejected" ? "#0f172a" : "#0f172a" }}>
                 Trạng thái hiện tại: {revision.status}
               </div>
-              {revision.reason && <div style={{ marginTop: 4, color: "#B91C1C", fontSize: 13 }}>Lý do: {revision.reason}</div>}
+              {revision.reason && <div style={{ marginTop: 4, color: "#0f172a", fontSize: 13 }}>Lý do: {revision.reason}</div>}
             </div>
 
-            <div style={{ marginTop: 12, border: "1px solid #DBEAFE", borderRadius: 12, padding: 10 }}>
+            <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 12, padding: 10 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Hàng chờ duyệt</div>
               {revisionQueue.map((item) => (
                 <div key={`${item.studentCode}-${item.topicTitle}`} style={{ fontSize: 12, marginBottom: 7 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span>{item.studentCode} · {item.topicTitle}</span>
-                    <span style={{ color: item.status === "approved" ? "#166534" : item.status === "rejected" ? "#B91C1C" : "#B45309" }}>
+                    <span style={{ color: item.status === "approved" ? "#0f172a" : item.status === "rejected" ? "#0f172a" : "#f37021" }}>
                       {item.status}
                     </span>
                   </div>
-                  {item.reason && <div style={{ color: "#B91C1C" }}>Lý do từ chối: {item.reason}</div>}
+                  {item.reason && <div style={{ color: "#0f172a" }}>Lý do từ chối: {item.reason}</div>}
                 </div>
               ))}
-              {revisionQueue.length === 0 && <div style={{ fontSize: 12, color: "#64748B" }}>Không có bản chỉnh sửa chờ duyệt.</div>}
+              {revisionQueue.length === 0 && <div style={{ fontSize: 12, color: "#0f172a" }}>Không có bản chỉnh sửa chờ duyệt.</div>}
             </div>
           </section>
         )}

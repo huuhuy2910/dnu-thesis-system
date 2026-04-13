@@ -20,4 +20,21 @@ export interface ApiResponse<T = unknown> {
   idempotencyReplay?: boolean;
   concurrencyToken?: string | null;
   allowedActions?: string[];
+
+  // Compact BE envelope can return PascalCase fields.
+  Success?: boolean;
+  Code?: string | number | null;
+  HttpStatusCode?: number;
+  Title?: string | null;
+  Message?: string | null;
+  Data?: T | null;
+  TotalCount?: number;
+  IsRedirect?: boolean;
+  RedirectUrl?: string | null;
+  Errors?: Record<string, string[]> | null;
+  Warnings?: ApiWarning[];
+  TraceId?: string;
+  IdempotencyReplay?: boolean;
+  ConcurrencyToken?: string | null;
+  AllowedActions?: string[];
 }

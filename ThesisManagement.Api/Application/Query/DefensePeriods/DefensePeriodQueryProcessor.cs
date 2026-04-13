@@ -24,7 +24,6 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         Task<ApiResponse<List<SyncErrorDetailDto>>> GetSyncErrorsAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> ExportSyncErrorsAsync(int periodId, string format, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<LecturerCapabilityDto>>> GetLecturerCapabilitiesAsync(int periodId, CancellationToken cancellationToken = default);
-        Task<ApiResponse<List<LecturerBusySlotsDto>>> GetLecturerBusySlotsAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<PagedResult<CouncilDraftDto>>> GetCouncilsAsync(int periodId, CouncilFilterDto filter, CancellationToken cancellationToken = default);
         Task<ApiResponse<CouncilDraftDto>> GetCouncilDetailAsync(int periodId, int councilId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<TopicTagUsageDto>>> GetTopicTagsAsync(int periodId, string? tagCode = null, CancellationToken cancellationToken = default);
@@ -111,26 +110,63 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         public async Task<ApiResponse<List<EligibleStudentDto>>> GetStudentsAsync(int periodId, bool eligibleOnly, CancellationToken cancellationToken = default)
         {
-            var topics = await _db.Topics.AsNoTracking().OrderBy(t => t.TopicCode).ToListAsync(cancellationToken);
-            var eligibleTopicCodes = await LoadEligibleTopicCodesFromMilestonesAsync(topics, cancellationToken);
-            var studentCodes = topics.Where(t => !string.IsNullOrWhiteSpace(t.ProposerStudentCode)).Select(t => t.ProposerStudentCode!).Distinct().ToList();
-            var students = await _db.StudentProfiles.AsNoTracking().Where(s => studentCodes.Contains(s.StudentCode)).ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
-            var topicTagMap = await LoadTopicTagMapAsync(topics.Select(x => x.TopicCode).ToList(), cancellationToken);
-
-            var rows = topics.Select(t =>
+            var periodExists = await PeriodExistsAsync(periodId, cancellationToken);
+            if (!periodExists)
             {
-                var isEligible = eligibleTopicCodes.Contains(t.TopicCode);
-                var valid = !string.IsNullOrWhiteSpace(t.ProposerStudentCode) && !string.IsNullOrWhiteSpace(t.SupervisorLecturerCode);
+                return ApiResponse<List<EligibleStudentDto>>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var periodStudents = await _db.DefenseTermStudents.AsNoTracking()
+                .Where(x => x.DefenseTermId == periodId)
+                .OrderBy(x => x.StudentCode)
+                .ToListAsync(cancellationToken);
+
+            if (periodStudents.Count == 0)
+            {
+                return ApiResponse<List<EligibleStudentDto>>.SuccessResponse(new List<EligibleStudentDto>());
+            }
+
+            var studentCodes = periodStudents
+                .Where(x => !string.IsNullOrWhiteSpace(x.StudentCode))
+                .Select(x => x.StudentCode)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var students = await _db.StudentProfiles.AsNoTracking()
+                .Where(s => studentCodes.Contains(s.StudentCode))
+                .ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
+
+            var topics = await _db.Topics.AsNoTracking()
+                .Where(t => t.DefenseTermId == periodId && t.ProposerStudentCode != null && studentCodes.Contains(t.ProposerStudentCode))
+                .OrderBy(t => t.TopicCode)
+                .ToListAsync(cancellationToken);
+
+            var eligibleTopicCodes = await LoadEligibleTopicCodesFromMilestonesAsync(topics, cancellationToken);
+            var topicTagMap = await LoadTopicTagMapAsync(topics.Select(x => x.TopicCode).ToList(), cancellationToken);
+            var topicByStudentCode = topics
+                .Where(t => !string.IsNullOrWhiteSpace(t.ProposerStudentCode))
+                .GroupBy(t => t.ProposerStudentCode!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.LastUpdated ?? x.CreatedAt).ThenBy(x => x.TopicCode).First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var rows = periodStudents.Select(periodStudent =>
+            {
+                topicByStudentCode.TryGetValue(periodStudent.StudentCode, out var topic);
+
+                var isEligible = topic != null && eligibleTopicCodes.Contains(topic.TopicCode);
+                var valid = topic != null && !string.IsNullOrWhiteSpace(topic.SupervisorLecturerCode);
                 return new EligibleStudentDto
                 {
-                    StudentCode = t.ProposerStudentCode ?? string.Empty,
-                    StudentName = t.ProposerStudentCode != null && students.TryGetValue(t.ProposerStudentCode, out var n) ? n : (t.ProposerStudentCode ?? string.Empty),
-                    TopicTitle = t.Title,
-                    SupervisorCode = t.SupervisorLecturerCode,
-                    Tags = topicTagMap.TryGetValue(t.TopicCode, out var tags) ? tags.ToList() : new List<string>(),
+                    StudentCode = periodStudent.StudentCode,
+                    StudentName = students.TryGetValue(periodStudent.StudentCode, out var n) ? n : periodStudent.StudentCode,
+                    TopicTitle = topic?.Title ?? string.Empty,
+                    SupervisorCode = topic?.SupervisorLecturerCode,
+                    Tags = topic != null && topicTagMap.TryGetValue(topic.TopicCode, out var tags) ? tags.ToList() : new List<string>(),
                     IsEligible = isEligible,
                     Valid = valid,
-                    Error = valid ? null : "Thiếu StudentCode hoặc SupervisorCode"
+                    Error = valid ? null : (topic == null ? "Chưa có đề tài trong đợt" : "Thiếu SupervisorCode")
                 };
             }).ToList();
 
@@ -176,50 +212,65 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
 
             var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var isArchived = string.Equals(period.Status, "Archived", StringComparison.OrdinalIgnoreCase);
             var readiness = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
             {
                 ["module2"] = config.CouncilConfigConfirmed && config.LecturerCapabilitiesLocked,
                 ["canFinalize"] = config.CouncilIds.Count > 0 && !config.Finalized,
                 ["canPublish"] = config.Finalized && !config.ScoresPublished,
                 ["canRollbackPublish"] = config.ScoresPublished,
-                ["canRollbackFinalize"] = config.Finalized && !config.ScoresPublished
+                ["canRollbackFinalize"] = config.Finalized && !config.ScoresPublished,
+                ["canArchive"] = !isArchived && config.ScoresPublished,
+                ["canReopen"] = isArchived
             };
 
             var allowedActions = new List<string>();
-            if (!config.LecturerCapabilitiesLocked)
+            if (isArchived)
             {
-                allowedActions.Add("LOCK_LECTURER_CAPABILITIES");
+                allowedActions.Add("REOPEN");
             }
-
-            if (!config.CouncilConfigConfirmed)
+            else
             {
-                allowedActions.Add("CONFIRM_COUNCIL_CONFIG");
-            }
+                if (!config.LecturerCapabilitiesLocked)
+                {
+                    allowedActions.Add("LOCK_LECTURER_CAPABILITIES");
+                }
 
-            if (!config.Finalized)
-            {
-                allowedActions.Add("GENERATE_COUNCILS");
-                allowedActions.Add("UPDATE_COUNCILS");
-            }
+                if (!config.CouncilConfigConfirmed)
+                {
+                    allowedActions.Add("CONFIRM_COUNCIL_CONFIG");
+                }
 
-            if (readiness["canFinalize"])
-            {
-                allowedActions.Add("FINALIZE");
-            }
+                if (!config.Finalized)
+                {
+                    allowedActions.Add("GENERATE_COUNCILS");
+                    allowedActions.Add("UPDATE_COUNCILS");
+                }
 
-            if (readiness["canPublish"])
-            {
-                allowedActions.Add("PUBLISH");
-            }
+                if (readiness["canFinalize"])
+                {
+                    allowedActions.Add("FINALIZE");
+                }
 
-            if (readiness["canRollbackPublish"])
-            {
-                allowedActions.Add("ROLLBACK_PUBLISH");
-            }
+                if (readiness["canPublish"])
+                {
+                    allowedActions.Add("PUBLISH");
+                }
 
-            if (readiness["canRollbackFinalize"])
-            {
-                allowedActions.Add("ROLLBACK_FINALIZE");
+                if (readiness["canRollbackPublish"])
+                {
+                    allowedActions.Add("ROLLBACK_PUBLISH");
+                }
+
+                if (readiness["canRollbackFinalize"])
+                {
+                    allowedActions.Add("ROLLBACK_FINALIZE");
+                }
+
+                if (readiness["canArchive"])
+                {
+                    allowedActions.Add("ARCHIVE");
+                }
             }
 
             var warnings = new List<string>();
@@ -320,7 +371,13 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         public async Task<ApiResponse<List<SyncErrorDetailDto>>> GetSyncErrorsAsync(int periodId, CancellationToken cancellationToken = default)
         {
-            var rows = await BuildSyncErrorRowsAsync(cancellationToken);
+            var periodExists = await PeriodExistsAsync(periodId, cancellationToken);
+            if (!periodExists)
+            {
+                return ApiResponse<List<SyncErrorDetailDto>>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var rows = await BuildSyncErrorRowsAsync(periodId, cancellationToken);
             return ApiResponse<List<SyncErrorDetailDto>>.SuccessResponse(rows);
         }
 
@@ -332,7 +389,13 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 return ApiResponse<(byte[] Content, string FileName, string ContentType)>.Fail("Định dạng không hợp lệ. Chỉ hỗ trợ csv hoặc xlsx.", 400);
             }
 
-            var rows = await BuildSyncErrorRowsAsync(cancellationToken);
+            var periodExists = await PeriodExistsAsync(periodId, cancellationToken);
+            if (!periodExists)
+            {
+                return ApiResponse<(byte[] Content, string FileName, string ContentType)>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var rows = await BuildSyncErrorRowsAsync(periodId, cancellationToken);
             var fileNameBase = $"sync-errors_{periodId}_{DateTime.UtcNow:yyyyMMddHHmmss}";
 
             if (normalizedFormat == "xlsx")
@@ -367,57 +430,57 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         public async Task<ApiResponse<List<LecturerCapabilityDto>>> GetLecturerCapabilitiesAsync(int periodId, CancellationToken cancellationToken = default)
         {
+            var periodExists = await PeriodExistsAsync(periodId, cancellationToken);
+            if (!periodExists)
+            {
+                return ApiResponse<List<LecturerCapabilityDto>>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+            }
+
+            var periodLecturers = await _db.DefenseTermLecturers.AsNoTracking()
+                .Where(x => x.DefenseTermId == periodId)
+                .OrderBy(x => x.LecturerCode)
+                .ToListAsync(cancellationToken);
+
+            if (periodLecturers.Count == 0)
+            {
+                return ApiResponse<List<LecturerCapabilityDto>>.SuccessResponse(new List<LecturerCapabilityDto>());
+            }
+
+            var lecturerCodes = periodLecturers
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .Select(x => x.LecturerCode)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
             var lecturers = await _db.LecturerProfiles.AsNoTracking()
+                .Where(l => lecturerCodes.Contains(l.LecturerCode))
                 .Select(l => new { l.LecturerCode, Name = l.FullName })
                 .OrderBy(x => x.LecturerCode)
                 .ToListAsync(cancellationToken);
 
-            var tagMap = await _db.LecturerTags.AsNoTracking()
+            var tagRows = await _db.LecturerTags.AsNoTracking()
                 .Join(_db.Tags.AsNoTracking(), lt => lt.TagID, tg => tg.TagID, (lt, tg) => new { lt.LecturerCode, tg.TagCode })
-                .GroupBy(x => x.LecturerCode!)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(v => v.TagCode).Distinct(StringComparer.OrdinalIgnoreCase).ToList(), cancellationToken);
+                .Where(x => x.LecturerCode != null && lecturerCodes.Contains(x.LecturerCode))
+                .ToListAsync(cancellationToken);
 
-            var busyMap = await _db.LecturerBusyTimes.AsNoTracking()
-                .Join(_db.LecturerProfiles.AsNoTracking(), bt => bt.LecturerProfileId, lp => lp.LecturerProfileID, (bt, lp) => new { lp.LecturerCode, bt.Slot })
-                .GroupBy(x => x.LecturerCode)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(v => v.Slot).Distinct(StringComparer.OrdinalIgnoreCase).ToList(), cancellationToken);
+            var tagMap = tagRows
+                .GroupBy(x => x.LecturerCode!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(v => v.TagCode).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
 
             var data = lecturers.Select(l => new LecturerCapabilityDto
             {
                 LecturerCode = l.LecturerCode,
                 LecturerName = l.Name ?? l.LecturerCode,
                 Tags = tagMap.TryGetValue(l.LecturerCode, out var tags) ? tags : new List<string>(),
-                BusySlots = busyMap.TryGetValue(l.LecturerCode, out var busy) ? busy : new List<string>(),
                 Warning = !tagMap.TryGetValue(l.LecturerCode, out var lecturerTags) || lecturerTags.Count == 0
                     ? "Thiếu tag chuyên môn"
                     : null
             }).ToList();
 
             return ApiResponse<List<LecturerCapabilityDto>>.SuccessResponse(data);
-        }
-
-        public async Task<ApiResponse<List<LecturerBusySlotsDto>>> GetLecturerBusySlotsAsync(int periodId, CancellationToken cancellationToken = default)
-        {
-            var periodExists = await _db.DefenseTerms.AsNoTracking().AnyAsync(x => x.DefenseTermId == periodId, cancellationToken);
-            if (!periodExists)
-            {
-                return ApiResponse<List<LecturerBusySlotsDto>>.Fail("Không tìm thấy đợt bảo vệ.", 404);
-            }
-
-            var rows = await _db.LecturerProfiles.AsNoTracking()
-                .GroupJoin(
-                    _db.LecturerBusyTimes.AsNoTracking(),
-                    lp => lp.LecturerProfileID,
-                    bt => bt.LecturerProfileId,
-                    (lp, busy) => new LecturerBusySlotsDto
-                    {
-                        LecturerCode = lp.LecturerCode,
-                        BusySlots = busy.Select(x => x.Slot).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList()
-                    })
-                .OrderBy(x => x.LecturerCode)
-                .ToListAsync(cancellationToken);
-
-            return ApiResponse<List<LecturerBusySlotsDto>>.SuccessResponse(rows);
         }
 
         public async Task<ApiResponse<PagedResult<CouncilDraftDto>>> GetCouncilsAsync(int periodId, CouncilFilterDto filter, CancellationToken cancellationToken = default)
@@ -440,20 +503,21 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             if (!string.IsNullOrWhiteSpace(filter.Tag))
             {
                 var tag = filter.Tag.Trim();
-                var committeeIds = await _db.CommitteeTags.AsNoTracking().Where(ct => ct.TagCode == tag).Select(ct => ct.CommitteeID).ToListAsync(cancellationToken);
-                query = query.Where(c => committeeIds.Contains(c.CommitteeID));
+                var tagCommitteeIds = await _db.CommitteeTags.AsNoTracking().Where(ct => ct.TagCode == tag).Select(ct => ct.CommitteeID).ToListAsync(cancellationToken);
+                query = query.Where(c => tagCommitteeIds.Contains(c.CommitteeID));
             }
 
             var totalCount = await query.CountAsync(cancellationToken);
-            var committees = await query.OrderBy(c => c.CommitteeCode)
+            var committeeIds = await query.OrderBy(c => c.CommitteeCode)
                 .Skip((Math.Max(filter.Page, 1) - 1) * Math.Max(filter.Size, 1))
                 .Take(Math.Max(filter.Size, 1))
+                .Select(c => c.CommitteeID)
                 .ToListAsync(cancellationToken);
 
             var items = new List<CouncilDraftDto>();
-            foreach (var committee in committees)
+            foreach (var committeeId in committeeIds)
             {
-                var detail = await BuildCouncilDtoAsync(periodId, committee.CommitteeID, cancellationToken);
+                var detail = await BuildCouncilDtoAsync(periodId, committeeId, cancellationToken);
                 items.Add(detail);
             }
 
@@ -1836,9 +1900,12 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             return stream.ToArray();
         }
 
-        private async Task<List<SyncErrorDetailDto>> BuildSyncErrorRowsAsync(CancellationToken cancellationToken)
+        private async Task<List<SyncErrorDetailDto>> BuildSyncErrorRowsAsync(int periodId, CancellationToken cancellationToken)
         {
-            var topics = await _db.Topics.AsNoTracking().OrderBy(t => t.TopicCode).ToListAsync(cancellationToken);
+            var topics = await _db.Topics.AsNoTracking()
+                .Where(t => t.DefenseTermId == periodId)
+                .OrderBy(t => t.TopicCode)
+                .ToListAsync(cancellationToken);
             var eligibleTopicCodes = await LoadEligibleTopicCodesFromMilestonesAsync(topics, cancellationToken);
             var rows = new List<SyncErrorDetailDto>();
 
@@ -1885,9 +1952,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         TopicCode = topic.TopicCode,
                         StudentCode = studentCode,
                         SupervisorCode = supervisorCode,
-                        Field = "ProgressMilestone",
+                        Field = "TopicStatus",
                         ErrorCode = DefenseUcErrorCodes.Sync.InvalidTopicStatus,
-                        Message = "Topic chưa đạt milestone đủ điều kiện bảo vệ."
+                        Message = "Topic chưa có trạng thái 'Đủ điều kiện bảo vệ'."
                     });
                 }
             }
@@ -1901,7 +1968,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             if (config.CouncilIds.Count == 0)
             {
                 var allTopicCodes = await _db.Topics.AsNoTracking()
-                    .Where(x => !string.IsNullOrWhiteSpace(x.TopicCode))
+                    .Where(x => x.DefenseTermId == periodId && !string.IsNullOrWhiteSpace(x.TopicCode))
                     .Select(x => x.TopicCode)
                     .ToListAsync(cancellationToken);
 
@@ -1919,32 +1986,13 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         private async Task<HashSet<string>> GetScopedLecturerCodesAsync(int periodId, CancellationToken cancellationToken)
         {
-            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
-            if (config.CouncilIds.Count == 0)
-            {
-                var allLecturerCodes = await _db.LecturerProfiles.AsNoTracking()
-                    .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
-                    .Select(x => x.LecturerCode)
-                    .ToListAsync(cancellationToken);
-
-                return allLecturerCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            }
-
-            var committeeMemberCodes = await _db.CommitteeMembers.AsNoTracking()
-                .Where(x => x.CommitteeID.HasValue && config.CouncilIds.Contains(x.CommitteeID.Value) && x.MemberLecturerCode != null)
-                .Select(x => x.MemberLecturerCode!)
+            var periodLecturerCodes = await _db.DefenseTermLecturers.AsNoTracking()
+                .Where(x => x.DefenseTermId == periodId && x.LecturerCode != null)
+                .Select(x => x.LecturerCode!)
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
-            var scopedTopicCodes = await GetScopedTopicCodesAsync(periodId, cancellationToken);
-            var supervisorCodes = await _db.Topics.AsNoTracking()
-                .Where(x => scopedTopicCodes.Contains(x.TopicCode) && x.SupervisorLecturerCode != null)
-                .Select(x => x.SupervisorLecturerCode!)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            return committeeMemberCodes
-                .Concat(supervisorCodes)
+            return periodLecturerCodes
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
@@ -1952,7 +2000,10 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         private async Task TrackExportAsync(int periodId, string fileName, string status, CancellationToken cancellationToken)
         {
             var code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}";
-            var existing = await _db.ExportFiles.AsNoTracking().AnyAsync(x => x.FileCode == code, cancellationToken);
+            var existing = await _db.ExportFiles.AsNoTracking()
+                .Where(x => x.FileCode == code)
+                .Select(x => x.FileCode)
+                .FirstOrDefaultAsync(cancellationToken) != null;
             if (existing)
             {
                 code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}{Random.Shared.Next(10, 99)}";
@@ -1970,6 +2021,16 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             await _db.SaveChangesAsync(cancellationToken);
         }
 
+        private async Task<bool> PeriodExistsAsync(int periodId, CancellationToken cancellationToken)
+        {
+            var existingPeriodId = await _db.DefenseTerms.AsNoTracking()
+                .Where(x => x.DefenseTermId == periodId)
+                .Select(x => (int?)x.DefenseTermId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return existingPeriodId.HasValue;
+        }
+
         private async Task<Dictionary<string, HashSet<string>>> LoadTopicTagMapAsync(List<string> topicCodes, CancellationToken cancellationToken)
         {
             if (topicCodes.Count == 0)
@@ -1977,95 +2038,131 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 return new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
             }
 
-            return await _db.TopicTags.AsNoTracking()
+            var rows = await _db.TopicTags.AsNoTracking()
                 .Where(x => x.TopicCode != null && topicCodes.Contains(x.TopicCode))
                 .Join(_db.Tags.AsNoTracking(), tt => tt.TagID, tg => tg.TagID, (tt, tg) => new { tt.TopicCode, tg.TagCode })
-                .GroupBy(x => x.TopicCode!)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(v => v.TagCode).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationToken);
+                .ToListAsync(cancellationToken);
+
+            return rows
+                .Where(x => !string.IsNullOrWhiteSpace(x.TopicCode))
+                .GroupBy(x => x.TopicCode!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(v => v.TagCode).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        private async Task<Dictionary<string, HashSet<string>>> LoadLecturerTagMapAsync(List<string> lecturerCodes, CancellationToken cancellationToken)
+        {
+            if (lecturerCodes.Count == 0)
+            {
+                return new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var rows = await _db.LecturerTags.AsNoTracking()
+                .Where(x => x.LecturerCode != null && lecturerCodes.Contains(x.LecturerCode))
+                .Join(_db.Tags.AsNoTracking(), lt => lt.TagID, tg => tg.TagID, (lt, tg) => new { lt.LecturerCode, tg.TagCode })
+                .ToListAsync(cancellationToken);
+
+            return rows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .GroupBy(x => x.LecturerCode!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(v => v.TagCode).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
         }
 
         private async Task<DefensePeriodConfigSnapshot> GetPeriodConfigAsync(int periodId, CancellationToken cancellationToken)
         {
             var period = await _db.DefenseTerms.AsNoTracking().FirstOrDefaultAsync(x => x.DefenseTermId == periodId, cancellationToken);
-            if (period == null || string.IsNullOrWhiteSpace(period.ConfigJson))
+            if (period == null)
             {
                 return new DefensePeriodConfigSnapshot();
             }
+
+            DefensePeriodConfigSnapshot config;
 
             try
             {
-                return JsonSerializer.Deserialize<DefensePeriodConfigSnapshot>(period.ConfigJson) ?? new DefensePeriodConfigSnapshot();
+                config = string.IsNullOrWhiteSpace(period.ConfigJson)
+                    ? new DefensePeriodConfigSnapshot()
+                    : (JsonSerializer.Deserialize<DefensePeriodConfigSnapshot>(period.ConfigJson) ?? new DefensePeriodConfigSnapshot());
             }
             catch
             {
-                return new DefensePeriodConfigSnapshot();
-            }
-        }
-
-        private async Task<HashSet<string>> LoadEligibleTopicCodesFromMilestonesAsync(IEnumerable<Topic> topics, CancellationToken cancellationToken)
-        {
-            var topicList = topics
-                .Where(t => !string.IsNullOrWhiteSpace(t.TopicCode))
-                .ToList();
-
-            if (topicList.Count == 0)
-            {
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                config = new DefensePeriodConfigSnapshot();
             }
 
-            var topicIds = topicList.Select(t => t.TopicID).Distinct().ToList();
-            var latestMilestones = await _db.ProgressMilestones.AsNoTracking()
-                .Where(x => topicIds.Contains(x.TopicID))
-                .GroupBy(x => x.TopicID)
-                .Select(g => g
-                    .OrderByDescending(x => x.MilestoneID)
-                    .Select(x => new
-                    {
-                        x.TopicID,
-                        x.TopicCode,
-                        x.MilestoneTemplateCode,
-                        x.State
-                    })
-                    .First())
+            var fkCouncilIds = await _db.Committees.AsNoTracking()
+                .Where(x => x.DefenseTermId == periodId)
+                .Select(x => x.CommitteeID)
                 .ToListAsync(cancellationToken);
 
-            var eligibleTopicIds = latestMilestones
-                .Where(x => IsEligibleMilestone(x.MilestoneTemplateCode, x.State))
-                .Select(x => x.TopicID)
-                .ToHashSet();
+            if (fkCouncilIds.Count > 0)
+            {
+                config.CouncilIds = config.CouncilIds
+                    .Concat(fkCouncilIds)
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+            }
 
-            var eligibleTopicCodes = topicList
-                .Where(t => eligibleTopicIds.Contains(t.TopicID))
+            return config;
+        }
+
+        private Task<HashSet<string>> LoadEligibleTopicCodesFromMilestonesAsync(IEnumerable<Topic> topics, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var eligibleTopicCodes = topics
+                .Where(t => !string.IsNullOrWhiteSpace(t.TopicCode) && IsDefenseEligibleTopicStatus(t.Status))
                 .Select(t => t.TopicCode)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var milestone in latestMilestones)
-            {
-                if (!string.IsNullOrWhiteSpace(milestone.TopicCode) && IsEligibleMilestone(milestone.MilestoneTemplateCode, milestone.State))
-                {
-                    eligibleTopicCodes.Add(milestone.TopicCode);
-                }
-            }
-
-            return eligibleTopicCodes;
+            return Task.FromResult(eligibleTopicCodes);
         }
 
-        private static bool IsEligibleMilestone(string? milestoneTemplateCode, string? state)
+        private static bool IsDefenseEligibleTopicStatus(string? status)
         {
-            if (string.Equals(milestoneTemplateCode, "MS_PROG1", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrWhiteSpace(state))
+            var normalized = NormalizeKeyword(status);
+            if (string.IsNullOrWhiteSpace(normalized))
             {
                 return false;
             }
 
-            return state.IndexOf("đủ điều kiện bảo vệ", StringComparison.OrdinalIgnoreCase) >= 0
-                || state.IndexOf("eligible", StringComparison.OrdinalIgnoreCase) >= 0
-                || state.IndexOf("đề tài đã duyệt", StringComparison.OrdinalIgnoreCase) >= 0
-                || state.IndexOf("approved", StringComparison.OrdinalIgnoreCase) >= 0;
+            return normalized.Contains("DU DIEU KIEN BAO VE", StringComparison.Ordinal)
+                || normalized.Contains("ELIGIBLE", StringComparison.Ordinal)
+                || normalized.Contains("READY FOR DEFENSE", StringComparison.Ordinal)
+                || normalized.Contains("READY_FOR_DEFENSE", StringComparison.Ordinal)
+                || normalized.Contains("APPROVED", StringComparison.Ordinal);
+        }
+
+        private static string NormalizeKeyword(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(decomposed.Length);
+
+            foreach (var character in decomposed)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+                {
+                    continue;
+                }
+
+                builder.Append(char.ToUpperInvariant(character));
+            }
+
+            return builder
+                .ToString()
+                .Replace('\u0110', 'D')
+                .Replace('\u0111', 'd')
+                .Normalize(NormalizationForm.FormC);
         }
 
             private static string ToSessionCode(int? session)
@@ -2075,12 +2172,46 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         private async Task<CouncilDraftDto> BuildCouncilDtoAsync(int periodId, int councilId, CancellationToken cancellationToken)
         {
-            var committee = await _db.Committees.AsNoTracking().FirstAsync(x => x.CommitteeID == councilId, cancellationToken);
-            var assignments = await _db.DefenseAssignments.AsNoTracking().Where(x => x.CommitteeID == councilId).OrderBy(x => x.Session).ThenBy(x => x.StartTime).ToListAsync(cancellationToken);
+            var committee = await _db.Committees.AsNoTracking()
+                .Where(x => x.CommitteeID == councilId)
+                .Select(x => new Committee
+                {
+                    CommitteeID = x.CommitteeID,
+                    CommitteeCode = x.CommitteeCode,
+                    Name = x.Name,
+                    DefenseDate = x.DefenseDate,
+                    LastUpdated = x.LastUpdated,
+                    Room = x.Room,
+                    Status = x.Status
+                })
+                .FirstAsync(cancellationToken);
+
+            var assignments = await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => x.CommitteeID == councilId)
+                .OrderBy(x => x.Session)
+                .ThenBy(x => x.OrderIndex)
+                .ThenBy(x => x.AssignmentID)
+                .Select(x => new DefenseAssignment
+                {
+                    AssignmentID = x.AssignmentID,
+                    AssignmentCode = x.AssignmentCode,
+                    TopicCode = x.TopicCode,
+                    Session = x.Session,
+                    ScheduledAt = x.ScheduledAt,
+                    OrderIndex = x.OrderIndex
+                })
+                .ToListAsync(cancellationToken);
             var topicCodes = assignments.Where(x => !string.IsNullOrWhiteSpace(x.TopicCode)).Select(x => x.TopicCode!).ToList();
             var topics = await _db.Topics.AsNoTracking().Where(x => topicCodes.Contains(x.TopicCode)).ToListAsync(cancellationToken);
+            var topicTagMap = await LoadTopicTagMapAsync(topicCodes, cancellationToken);
             var tags = await _db.CommitteeTags.AsNoTracking().Where(x => x.CommitteeID == councilId).Select(x => x.TagCode).ToListAsync(cancellationToken);
             var members = await _db.CommitteeMembers.AsNoTracking().Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
+            var memberCodes = members
+                .Where(x => !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => x.MemberLecturerCode!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var lecturerTagMap = await LoadLecturerTagMapAsync(memberCodes, cancellationToken);
             var students = await _db.StudentProfiles.AsNoTracking().ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
             var lecturerNameMap = await _db.LecturerProfiles.AsNoTracking()
                 .Select(l => new { l.LecturerCode, Name = l.FullName ?? l.LecturerCode })
@@ -2102,7 +2233,10 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 {
                     Role = m.Role ?? string.Empty,
                     LecturerCode = m.MemberLecturerCode ?? string.Empty,
-                    LecturerName = lecturerNameMap.TryGetValue(m.MemberLecturerCode ?? string.Empty, out var name) ? name : (m.MemberLecturerCode ?? string.Empty)
+                    LecturerName = lecturerNameMap.TryGetValue(m.MemberLecturerCode ?? string.Empty, out var name) ? name : (m.MemberLecturerCode ?? string.Empty),
+                    Tags = lecturerTagMap.TryGetValue(m.MemberLecturerCode ?? string.Empty, out var memberTags)
+                        ? memberTags.OrderBy(x => x).ToList()
+                        : new List<string>()
                 }).ToList()
             };
 
@@ -2121,6 +2255,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     AssignmentCode = assignment.AssignmentCode,
                     TopicCode = topic.TopicCode,
                     TopicTitle = topic.Title,
+                    Tags = topicTagMap.TryGetValue(topic.TopicCode, out var assignmentTags)
+                        ? assignmentTags.OrderBy(x => x).ToList()
+                        : new List<string>(),
                     StudentCode = studentCode,
                     StudentName = students.TryGetValue(studentCode, out var studentName) ? studentName : studentCode,
                     Session = assignment.Session,
@@ -2129,7 +2266,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     StartTime = assignment.StartTime?.ToString(@"hh\:mm"),
                     EndTime = assignment.EndTime?.ToString(@"hh\:mm"),
                     OrderIndex = assignment.OrderIndex,
-                    Status = assignment.Status ?? string.Empty
+                    Status = string.Empty
                 });
             }
 
@@ -2143,6 +2280,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     StudentName = topic.ProposerStudentCode != null && students.TryGetValue(topic.ProposerStudentCode, out var n) ? n : (topic.ProposerStudentCode ?? string.Empty),
                     TopicTitle = topic.Title,
                     SupervisorCode = topic.SupervisorLecturerCode,
+                    Tags = topicTagMap.TryGetValue(topic.TopicCode, out var morningTags)
+                        ? morningTags.OrderBy(x => x).ToList()
+                        : new List<string>(),
                     IsEligible = true,
                     Valid = true
                 });
@@ -2158,6 +2298,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     StudentName = topic.ProposerStudentCode != null && students.TryGetValue(topic.ProposerStudentCode, out var n) ? n : (topic.ProposerStudentCode ?? string.Empty),
                     TopicTitle = topic.Title,
                     SupervisorCode = topic.SupervisorLecturerCode,
+                    Tags = topicTagMap.TryGetValue(topic.TopicCode, out var afternoonTags)
+                        ? afternoonTags.OrderBy(x => x).ToList()
+                        : new List<string>(),
                     IsEligible = true,
                     Valid = true
                 });

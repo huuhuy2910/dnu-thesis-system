@@ -7,13 +7,15 @@ export type WorkflowStatusCode =
 
 export type WorkflowDecisionAction = "approve" | "reject" | "revision";
 
+export type DefensePeriodId = string | number;
+
 export interface WorkflowTopic {
   topicID: number;
   topicCode: string;
   title: string;
   summary: string;
   type: string;
-  defenseTermId: number | null;
+  defenseTermId: DefensePeriodId | null;
   proposerUserID: number;
   proposerUserCode: string;
   proposerStudentProfileID: number;
@@ -39,7 +41,7 @@ export interface WorkflowResubmitRequest {
   title: string;
   summary: string;
   type: "CATALOG" | "SELF";
-  defenseTermId: number;
+  defenseTermId: DefensePeriodId;
   proposerUserID: number;
   proposerUserCode: string;
   proposerStudentProfileID: number;
@@ -60,7 +62,7 @@ export interface WorkflowResubmitRequest {
 }
 
 export interface DefenseTermOption {
-  defenseTermId: number;
+  defenseTermId: DefensePeriodId;
   defenseTermCode: string;
   defenseTermName: string;
   status?: string;

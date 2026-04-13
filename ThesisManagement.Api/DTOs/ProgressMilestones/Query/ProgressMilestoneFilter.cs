@@ -6,6 +6,7 @@ namespace ThesisManagement.Api.DTOs.ProgressMilestones.Query
     {
         public int? TopicID { get; set; }
         public string? TopicCode { get; set; }
+        public int? DefenseTermId { get; set; }
         public string? MilestoneTemplateCode { get; set; }
         public string? State { get; set; }
         public string? MilestoneCode { get; set; }

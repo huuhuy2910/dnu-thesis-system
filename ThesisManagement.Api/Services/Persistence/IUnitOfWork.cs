@@ -35,7 +35,6 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<Room> Rooms { get; }
 
         IGenericRepository<SyncAuditLog> SyncAuditLogs { get; }
-        IGenericRepository<LecturerBusyTime> LecturerBusyTimes { get; }
         IGenericRepository<DefenseGroup> DefenseGroups { get; }
         IGenericRepository<ExportFile> ExportFiles { get; }
         IGenericRepository<EvaluationReview> EvaluationReviews { get; }

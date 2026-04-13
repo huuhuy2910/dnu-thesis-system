@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Shield,
 } from "lucide-react";
+import DefenseTermQuickInfo from "../../components/admin/DefenseTermQuickInfo";
 import "./Dashboard.css";
 
 // ==========================================
@@ -181,6 +182,14 @@ const Dashboard: React.FC = () => {
         </h1>
         <p>TỔNG QUAN HOẠT ĐỘNG VÀ DỮ LIỆU HỆ THỐNG ĐỒ ÁN TỐT NGHIỆP</p>
       </div>
+
+      <DefenseTermQuickInfo
+        roleLabel="Quản trị viên"
+        termCode="2026.1"
+        termName="Đợt bảo vệ HK2 năm học 2025-2026"
+        roundIndex={1}
+        status="Preparing"
+      />
 
       {/* Stats Cards Grid */}
       <div className="stats-grid">

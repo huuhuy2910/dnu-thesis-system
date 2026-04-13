@@ -58,6 +58,8 @@ public class DefensePeriodEndToEndFlowTests
 
         var generateResult = await processor.GenerateCouncilsAsync(1, new GenerateCouncilsRequestDto
         {
+            SelectedTopicCodes = new List<string> { "T001", "T002", "T003", "T004", "T005", "T006", "T007", "T008" },
+            SelectedLecturerCodes = new List<string> { "L001", "L002", "L003", "L004" },
             SelectedRooms = new List<string> { "R101" },
             IdempotencyKey = "generate-e2e"
         }, actorUserId: 1001);
@@ -160,16 +162,38 @@ public class DefensePeriodEndToEndFlowTests
 
     private static void SeedPeriodAndMasterData(ApplicationDbContext db)
     {
+        var now = DateTime.UtcNow;
+
         db.DefenseTerms.Add(new DefenseTerm
         {
             DefenseTermId = 1,
             Name = "Term 1",
             StartDate = DateTime.UtcNow.Date,
             Status = "Preparing",
-            CreatedAt = DateTime.UtcNow,
-            LastUpdated = DateTime.UtcNow,
+            CreatedAt = now,
+            LastUpdated = now,
             ConfigJson = "{}"
         });
+
+        db.StudentProfiles.AddRange(
+            new StudentProfile { StudentProfileID = 1, StudentCode = "S001", UserID = 1, FullName = "Student 1" },
+            new StudentProfile { StudentProfileID = 2, StudentCode = "S002", UserID = 2, FullName = "Student 2" },
+            new StudentProfile { StudentProfileID = 3, StudentCode = "S003", UserID = 3, FullName = "Student 3" },
+            new StudentProfile { StudentProfileID = 4, StudentCode = "S004", UserID = 4, FullName = "Student 4" },
+            new StudentProfile { StudentProfileID = 5, StudentCode = "S005", UserID = 5, FullName = "Student 5" },
+            new StudentProfile { StudentProfileID = 6, StudentCode = "S006", UserID = 6, FullName = "Student 6" },
+            new StudentProfile { StudentProfileID = 7, StudentCode = "S007", UserID = 7, FullName = "Student 7" },
+            new StudentProfile { StudentProfileID = 8, StudentCode = "S008", UserID = 8, FullName = "Student 8" });
+
+        db.DefenseTermStudents.AddRange(
+            new DefenseTermStudent { DefenseTermStudentID = 1, DefenseTermId = 1, StudentProfileID = 1, StudentCode = "S001", UserCode = "S001", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 2, DefenseTermId = 1, StudentProfileID = 2, StudentCode = "S002", UserCode = "S002", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 3, DefenseTermId = 1, StudentProfileID = 3, StudentCode = "S003", UserCode = "S003", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 4, DefenseTermId = 1, StudentProfileID = 4, StudentCode = "S004", UserCode = "S004", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 5, DefenseTermId = 1, StudentProfileID = 5, StudentCode = "S005", UserCode = "S005", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 6, DefenseTermId = 1, StudentProfileID = 6, StudentCode = "S006", UserCode = "S006", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 7, DefenseTermId = 1, StudentProfileID = 7, StudentCode = "S007", UserCode = "S007", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 8, DefenseTermId = 1, StudentProfileID = 8, StudentCode = "S008", UserCode = "S008", CreatedAt = now, LastUpdated = now });
 
         db.LecturerProfiles.AddRange(
             new LecturerProfile { LecturerProfileID = 1, LecturerCode = "L001", FullName = "Lec 1" },
@@ -177,25 +201,31 @@ public class DefensePeriodEndToEndFlowTests
             new LecturerProfile { LecturerProfileID = 3, LecturerCode = "L003", FullName = "Lec 3" },
             new LecturerProfile { LecturerProfileID = 4, LecturerCode = "L004", FullName = "Lec 4" });
 
+        db.DefenseTermLecturers.AddRange(
+            new DefenseTermLecturer { DefenseTermLecturerID = 1, DefenseTermId = 1, LecturerProfileID = 1, LecturerCode = "L001", UserCode = "L001", Role = "Chair", IsPrimary = true, CreatedAt = now, LastUpdated = now },
+            new DefenseTermLecturer { DefenseTermLecturerID = 2, DefenseTermId = 1, LecturerProfileID = 2, LecturerCode = "L002", UserCode = "L002", Role = "Secretary", IsPrimary = true, CreatedAt = now, LastUpdated = now },
+            new DefenseTermLecturer { DefenseTermLecturerID = 3, DefenseTermId = 1, LecturerProfileID = 3, LecturerCode = "L003", UserCode = "L003", Role = "Reviewer", IsPrimary = true, CreatedAt = now, LastUpdated = now },
+            new DefenseTermLecturer { DefenseTermLecturerID = 4, DefenseTermId = 1, LecturerProfileID = 4, LecturerCode = "L004", UserCode = "L004", Role = "Member", IsPrimary = true, CreatedAt = now, LastUpdated = now });
+
         db.Topics.AddRange(
-            new Topic { TopicID = 1, TopicCode = "T001", Title = "Topic 1", Type = "Research", ProposerUserID = 1, ProposerStudentCode = "S001", SupervisorLecturerCode = "SUP001", Status = "Eligible" },
-            new Topic { TopicID = 2, TopicCode = "T002", Title = "Topic 2", Type = "Research", ProposerUserID = 2, ProposerStudentCode = "S002", SupervisorLecturerCode = "SUP002", Status = "Eligible" },
-            new Topic { TopicID = 3, TopicCode = "T003", Title = "Topic 3", Type = "Research", ProposerUserID = 3, ProposerStudentCode = "S003", SupervisorLecturerCode = "SUP003", Status = "Eligible" },
-            new Topic { TopicID = 4, TopicCode = "T004", Title = "Topic 4", Type = "Research", ProposerUserID = 4, ProposerStudentCode = "S004", SupervisorLecturerCode = "SUP004", Status = "Eligible" },
-            new Topic { TopicID = 5, TopicCode = "T005", Title = "Topic 5", Type = "Research", ProposerUserID = 5, ProposerStudentCode = "S005", SupervisorLecturerCode = "SUP005", Status = "Eligible" },
-            new Topic { TopicID = 6, TopicCode = "T006", Title = "Topic 6", Type = "Research", ProposerUserID = 6, ProposerStudentCode = "S006", SupervisorLecturerCode = "SUP006", Status = "Eligible" },
-            new Topic { TopicID = 7, TopicCode = "T007", Title = "Topic 7", Type = "Research", ProposerUserID = 7, ProposerStudentCode = "S007", SupervisorLecturerCode = "SUP007", Status = "Eligible" },
-            new Topic { TopicID = 8, TopicCode = "T008", Title = "Topic 8", Type = "Research", ProposerUserID = 8, ProposerStudentCode = "S008", SupervisorLecturerCode = "SUP008", Status = "Eligible" });
+            new Topic { TopicID = 1, TopicCode = "T001", Title = "Topic 1", Type = "Research", ProposerUserID = 1, ProposerStudentCode = "S001", SupervisorLecturerCode = "SUP001", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 2, TopicCode = "T002", Title = "Topic 2", Type = "Research", ProposerUserID = 2, ProposerStudentCode = "S002", SupervisorLecturerCode = "SUP002", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 3, TopicCode = "T003", Title = "Topic 3", Type = "Research", ProposerUserID = 3, ProposerStudentCode = "S003", SupervisorLecturerCode = "SUP003", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 4, TopicCode = "T004", Title = "Topic 4", Type = "Research", ProposerUserID = 4, ProposerStudentCode = "S004", SupervisorLecturerCode = "SUP004", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 5, TopicCode = "T005", Title = "Topic 5", Type = "Research", ProposerUserID = 5, ProposerStudentCode = "S005", SupervisorLecturerCode = "SUP005", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 6, TopicCode = "T006", Title = "Topic 6", Type = "Research", ProposerUserID = 6, ProposerStudentCode = "S006", SupervisorLecturerCode = "SUP006", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 7, TopicCode = "T007", Title = "Topic 7", Type = "Research", ProposerUserID = 7, ProposerStudentCode = "S007", SupervisorLecturerCode = "SUP007", DefenseTermId = 1, Status = "Eligible" },
+            new Topic { TopicID = 8, TopicCode = "T008", Title = "Topic 8", Type = "Research", ProposerUserID = 8, ProposerStudentCode = "S008", SupervisorLecturerCode = "SUP008", DefenseTermId = 1, Status = "Eligible" });
 
         db.ProgressMilestones.AddRange(
-            new ProgressMilestone { MilestoneID = 1, MilestoneCode = "MS-1", TopicID = 1, TopicCode = "T001", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 2, MilestoneCode = "MS-2", TopicID = 2, TopicCode = "T002", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 3, MilestoneCode = "MS-3", TopicID = 3, TopicCode = "T003", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 4, MilestoneCode = "MS-4", TopicID = 4, TopicCode = "T004", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 5, MilestoneCode = "MS-5", TopicID = 5, TopicCode = "T005", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 6, MilestoneCode = "MS-6", TopicID = 6, TopicCode = "T006", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 7, MilestoneCode = "MS-7", TopicID = 7, TopicCode = "T007", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow },
-            new ProgressMilestone { MilestoneID = 8, MilestoneCode = "MS-8", TopicID = 8, TopicCode = "T008", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = DateTime.UtcNow, LastUpdated = DateTime.UtcNow });
+            new ProgressMilestone { MilestoneID = 1, MilestoneCode = "MS-1", TopicID = 1, TopicCode = "T001", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 2, MilestoneCode = "MS-2", TopicID = 2, TopicCode = "T002", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 3, MilestoneCode = "MS-3", TopicID = 3, TopicCode = "T003", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 4, MilestoneCode = "MS-4", TopicID = 4, TopicCode = "T004", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 5, MilestoneCode = "MS-5", TopicID = 5, TopicCode = "T005", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 6, MilestoneCode = "MS-6", TopicID = 6, TopicCode = "T006", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 7, MilestoneCode = "MS-7", TopicID = 7, TopicCode = "T007", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now },
+            new ProgressMilestone { MilestoneID = 8, MilestoneCode = "MS-8", TopicID = 8, TopicCode = "T008", MilestoneTemplateCode = "MS_PROG1", State = "Eligible", CreatedAt = now, LastUpdated = now });
 
         db.SaveChanges();
     }

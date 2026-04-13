@@ -381,6 +381,9 @@ namespace ThesisManagement.Api.Helpers
             if (!string.IsNullOrWhiteSpace(filter.TopicCode))
                 query = query.Where(x => x.TopicCode == filter.TopicCode);
 
+            if (filter.DefenseTermId.HasValue)
+                query = query.Where(x => x.Topic != null && x.Topic.DefenseTermId == filter.DefenseTermId.Value);
+
             // Type field removed from ProgressMilestone - skip type-based filtering
 
             if (!string.IsNullOrEmpty(filter.MilestoneTemplateCode))
@@ -628,6 +631,9 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrEmpty(filter.SubmissionCode))
                 query = query.Where(x => x.SubmissionCode.Contains(filter.SubmissionCode));
+
+            if (filter.DefenseTermId.HasValue)
+                query = query.Where(x => x.Milestone != null && x.Milestone.Topic != null && x.Milestone.Topic.DefenseTermId == filter.DefenseTermId.Value);
 
             if (filter.MilestoneID.HasValue)
                 query = query.Where(x => x.MilestoneID == filter.MilestoneID.Value);

@@ -70,8 +70,10 @@ namespace ThesisManagement.Api.Application.Query.Topics
                     ProposerUserCode = filter.ProposerUserCode,
                     ProposerStudentCode = filter.ProposerStudentCode,
                     SupervisorUserCode = filter.SupervisorUserCode,
+                    SupervisorLecturerCode = filter.SupervisorLecturerCode,
                     DepartmentCode = filter.DepartmentCode,
                     CatalogTopicCode = filter.CatalogTopicCode,
+                    DefenseTermId = filter.DefenseTermId,
                     FromDate = filter.FromDate,
                     ToDate = filter.ToDate,
                     SortBy = filter.SortBy

@@ -39,11 +39,6 @@ namespace ThesisManagement.Api.Application.Query.DefenseSetup
         Task<ApiResponse<List<LecturerCapabilityDto>>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default);
     }
 
-    public interface IGetLecturerBusySlotsQuery
-    {
-        Task<ApiResponse<List<LecturerBusySlotsDto>>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default);
-    }
-
     public interface IGetCouncilsQueryV2
     {
         Task<ApiResponse<PagedResult<CouncilDraftDto>>> ExecuteAsync(int periodId, CouncilFilterDto filter, CancellationToken cancellationToken = default);
@@ -143,14 +138,6 @@ namespace ThesisManagement.Api.Application.Query.DefenseSetup
         public GetLecturerCapabilitiesQueryV2(IDefensePeriodQueryProcessor processor) => _processor = processor;
         public Task<ApiResponse<List<LecturerCapabilityDto>>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default)
             => _processor.GetLecturerCapabilitiesAsync(periodId, cancellationToken);
-    }
-
-    public class GetLecturerBusySlotsQuery : IGetLecturerBusySlotsQuery
-    {
-        private readonly IDefensePeriodQueryProcessor _processor;
-        public GetLecturerBusySlotsQuery(IDefensePeriodQueryProcessor processor) => _processor = processor;
-        public Task<ApiResponse<List<LecturerBusySlotsDto>>> ExecuteAsync(int periodId, CancellationToken cancellationToken = default)
-            => _processor.GetLecturerBusySlotsAsync(periodId, cancellationToken);
     }
 
     public class GetCouncilsQueryV2 : IGetCouncilsQueryV2

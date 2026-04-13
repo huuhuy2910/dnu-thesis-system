@@ -5,6 +5,7 @@ namespace ThesisManagement.Api.DTOs.ProgressSubmissions.Query
     public class ProgressSubmissionFilter : BaseFilter
     {
         public string? SubmissionCode { get; set; }
+        public int? DefenseTermId { get; set; }
         public int? MilestoneID { get; set; }
         public string? MilestoneCode { get; set; }
         public int? StudentUserID { get; set; }

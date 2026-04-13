@@ -49,10 +49,13 @@ namespace ThesisManagement.Api.Application.Command.CatalogTopicTags
                 nextTagCode = tag.TagCode;
             }
 
-            var duplicate = await _uow.CatalogTopicTags.Query().AnyAsync(x =>
-                x.CatalogTopicID == nextCatalogTopicId &&
-                x.TagID == nextTagId &&
-                !(x.CatalogTopicID == catalogTopicId && x.TagID == tagId));
+            var duplicate = await _uow.CatalogTopicTags.Query()
+                .Where(x =>
+                    x.CatalogTopicID == nextCatalogTopicId &&
+                    x.TagID == nextTagId &&
+                    !(x.CatalogTopicID == catalogTopicId && x.TagID == tagId))
+                .Select(x => (int?)x.CatalogTopicID)
+                .FirstOrDefaultAsync() != null;
 
             if (duplicate)
                 return OperationResult<CatalogTopicTagReadDto>.Failed("This catalog topic-tag relationship already exists", 400);

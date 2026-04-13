@@ -19,6 +19,7 @@ import {
   Edit,
 } from "lucide-react";
 import {
+  type DefensePeriodId,
   type WorkflowDetailResponse,
   type DefenseTermOption,
   type WorkflowResubmitRequest,
@@ -120,7 +121,7 @@ const TopicRegistration: React.FC = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [defenseTerms, setDefenseTerms] = useState<DefenseTermOption[]>([]);
   const [selectedDefenseTermId, setSelectedDefenseTermId] = useState<
-    number | null
+    DefensePeriodId | null
   >(null);
   const [selectedTagInfo, setSelectedTagInfo] = useState<Tag | null>(null);
   const [selectedTagIDs, setSelectedTagIDs] = useState<number[]>([]);
@@ -220,7 +221,10 @@ const TopicRegistration: React.FC = () => {
       setTags((tagRes as ApiResponse<Tag[]>)?.data || []);
       setDefenseTerms(defenseTermRes || []);
       setSelectedDefenseTermId((prev) =>
-        prev && defenseTermRes.some((term) => term.defenseTermId === prev)
+        prev &&
+        defenseTermRes.some(
+          (term) => String(term.defenseTermId) === String(prev),
+        )
           ? prev
           : null,
       );
@@ -1375,11 +1379,12 @@ const TopicRegistration: React.FC = () => {
             </label>
             <select
               value={selectedDefenseTermId ?? ""}
-              onChange={(e) =>
-                setSelectedDefenseTermId(
-                  e.target.value ? Number(e.target.value) : null,
-                )
-              }
+              onChange={(e) => {
+                const picked = defenseTerms.find(
+                  (term) => String(term.defenseTermId) === e.target.value,
+                );
+                setSelectedDefenseTermId(picked ? picked.defenseTermId : null);
+              }}
               required
               style={{
                 width: "100%",
@@ -2844,11 +2849,12 @@ const TopicRegistration: React.FC = () => {
           </label>
           <select
             value={selectedDefenseTermId ?? ""}
-            onChange={(e) =>
-              setSelectedDefenseTermId(
-                e.target.value ? Number(e.target.value) : null,
-              )
-            }
+            onChange={(e) => {
+              const picked = defenseTerms.find(
+                (term) => String(term.defenseTermId) === e.target.value,
+              );
+              setSelectedDefenseTermId(picked ? picked.defenseTermId : null);
+            }}
             required
             style={{
               width: "100%",

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   createConcurrencyToken,
   createIdempotencyKey,
@@ -9,6 +10,13 @@ import {
 import { useToast } from "../../context/useToast";
 import { fetchData } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
+import { readEnvelopeData } from "../../utils/api-envelope";
+import {
+  extractDefensePeriodId,
+  getActiveDefensePeriodId,
+  normalizeDefensePeriodId,
+  setActiveDefensePeriodId,
+} from "../../utils/defensePeriod";
 
 import {
   Bell,
@@ -62,25 +70,31 @@ const EMPTY_DEFENSE = {
 
 const cardStyle: React.CSSProperties = {
   background: "#ffffff",
-  border: "1px solid #e6e9ef",
-  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  borderRadius: 12,
   padding: 18,
-  boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
 };
 
 const StudentDefenseInfo: React.FC = () => {
   const { addToast } = useToast();
-  const periodId = "2026.1";
-  const studentBase = `/v1/defense-periods/${encodeURIComponent(periodId)}/student`;
+  const [searchParams] = useSearchParams();
+  const queryPeriodId = normalizeDefensePeriodId(searchParams.get("periodId"));
+  const [periodId, setPeriodId] = useState<number | null>(
+    () => queryPeriodId ?? getActiveDefensePeriodId(),
+  );
+  const periodIdText = String(periodId ?? "");
+  const studentBase = periodId ? `/defense-periods/${periodId}/student` : "";
   const studentApi = {
-    getDefenseInfo: () => fetchData<ApiResponse<Record<string, unknown>>>(`${studentBase}/defense-info`, { method: "GET" }),
-    getNotifications: () => fetchData<ApiResponse<Array<Record<string, unknown>>>>(`${studentBase}/notifications`, { method: "GET" }),
-    submitRevisionSubmission: (formData: FormData, idempotencyKey?: string) => fetchData<ApiResponse<boolean>>(`${studentBase}/revision-submissions`, {
+    getSnapshot: () =>
+      fetchData<ApiResponse<Record<string, unknown>>>(`${studentBase}/snapshot`, {
+        method: "GET",
+      }),
+    submitRevisionSubmission: (formData: FormData, idempotencyKey?: string) => fetchData<ApiResponse<boolean>>(`${studentBase}/revisions`, {
       method: "POST",
       body: formData,
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     }),
-    getRevisionHistory: () => fetchData<ApiResponse<Array<Record<string, unknown>>>>(`${studentBase}/revision-submissions/history`, { method: "GET" }),
   };
   const [activePanel, setActivePanel] = useState<StudentPanel>("schedule");
   const [defenseInfo, setDefenseInfo] = useState(EMPTY_DEFENSE);
@@ -98,10 +112,51 @@ const StudentDefenseInfo: React.FC = () => {
   const [latestTrace, setLatestTrace] = useState<WorkflowActionTrace | null>(null);
   const [backendAllowedActions, setBackendAllowedActions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const missingPeriodWarningRef = useRef(false);
 
   const notifyError = (message: string) => addToast(message, "error");
   const notifySuccess = (message: string) => addToast(message, "success");
   const notifyInfo = (message: string) => addToast(message, "info");
+
+  useEffect(() => {
+    if (queryPeriodId && queryPeriodId !== periodId) {
+      setPeriodId(queryPeriodId);
+    }
+  }, [periodId, queryPeriodId]);
+
+  useEffect(() => {
+    setActiveDefensePeriodId(periodId);
+  }, [periodId]);
+
+  useEffect(() => {
+    if (periodId != null) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolvePeriod = async () => {
+      try {
+        const response = await fetchData<ApiResponse<unknown>>("/defense-periods", {
+          method: "GET",
+        });
+        const payload = readEnvelopeData<unknown>(response);
+        const fallbackPeriodId = extractDefensePeriodId(payload);
+        if (!cancelled && fallbackPeriodId != null) {
+          setPeriodId(fallbackPeriodId);
+          setActiveDefensePeriodId(fallbackPeriodId);
+        }
+      } catch {
+        // Keep explicit warning state when no period can be resolved.
+      }
+    };
+
+    void resolvePeriod();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [periodId]);
 
   const hasAllowedAction = (...actions: string[]) => {
     if (backendAllowedActions.length === 0) {
@@ -111,27 +166,43 @@ const StudentDefenseInfo: React.FC = () => {
   };
 
   const parseEnvelope = <T,>(response: ApiResponse<T> | null | undefined, fallback: string) => {
-    if (response?.allowedActions) {
-      setBackendAllowedActions(response.allowedActions);
+    const allowedActions = response?.allowedActions ?? response?.AllowedActions;
+    if (allowedActions) {
+      setBackendAllowedActions(allowedActions);
     }
-    if (response?.warnings?.length) {
-      notifyInfo(response.warnings.map((item) => item.message).join(" | "));
+
+    const warnings = (response?.warnings ?? response?.Warnings ?? [])
+      .map((item) =>
+        String(
+          (item as { message?: string }).message ??
+            (item as { Message?: string }).Message ??
+            "",
+        ),
+      )
+      .filter(Boolean);
+    if (warnings.length) {
+      notifyInfo(warnings.join(" | "));
     }
-    if (!response?.success) {
-      const errors = Object.values(response?.errors ?? {}).flat().filter(Boolean);
-      notifyError(errors[0] || response?.message || fallback);
+
+    const success = Boolean(response?.success ?? response?.Success);
+    const errors = Object.values(response?.errors ?? response?.Errors ?? {})
+      .flat()
+      .filter(Boolean);
+    const message = response?.message ?? response?.Message;
+    if (!success) {
+      notifyError(errors[0] || message || fallback);
       return { ok: false, data: null as T | null };
     }
-    if (response?.message) {
-      notifyInfo(response.message);
+
+    if (message) {
+      notifyInfo(message);
     }
-    return { ok: true, data: response.data ?? null };
+
+    return { ok: true, data: (response?.data ?? response?.Data ?? null) as T | null };
   };
 
-  const hydrateRevisionHistory = async () => {
-    const historyRes = await studentApi.getRevisionHistory();
-    const parsedHistory = parseEnvelope(historyRes, "Không tải được lịch sử chỉnh sửa.");
-    const history = ((parsedHistory.data as Array<Record<string, unknown>> | null) ?? []) as Array<{
+  const hydrateRevisionHistory = (historyRows: Array<Record<string, unknown>>) => {
+    const history = historyRows as Array<{
       version?: string;
       uploadedAt?: string;
       status?: string;
@@ -149,49 +220,86 @@ const StudentDefenseInfo: React.FC = () => {
 
   useEffect(() => {
     const hydrateStudentData = async () => {
+      if (!periodId) {
+        setLoadingData(false);
+        if (!missingPeriodWarningRef.current) {
+          notifyInfo("Chua chon dot bao ve. Vui long chon dot de tai du lieu.");
+          missingPeriodWarningRef.current = true;
+        }
+        return;
+      }
+
+      missingPeriodWarningRef.current = false;
       setLoadingData(true);
       try {
-        const [infoRes, notificationsRes] = await Promise.all([
-          studentApi.getDefenseInfo(),
-          studentApi.getNotifications(),
-        ]);
-
-        const parsedInfo = parseEnvelope(infoRes, "Không tải được thông tin bảo vệ.");
-        const parsedNoti = parseEnvelope(notificationsRes, "Không tải được thông báo.");
-        if (!parsedInfo.ok || !parsedNoti.ok) {
+        const snapshotRes = await studentApi.getSnapshot();
+        const parsedSnapshot = parseEnvelope(
+          snapshotRes,
+          "Không tải được snapshot sinh viên.",
+        );
+        if (!parsedSnapshot.ok || !parsedSnapshot.data) {
           return;
         }
 
-        const info = (parsedInfo.data ?? {}) as Partial<typeof EMPTY_DEFENSE> & {
+        const snapshot = parsedSnapshot.data as Record<string, unknown>;
+        const info = (snapshot.defenseInfo ?? snapshot.DefenseInfo ?? {}) as Partial<
+          typeof EMPTY_DEFENSE
+        >;
+        const infoRecord = info as Partial<typeof EMPTY_DEFENSE> & {
           members?: Array<{ role?: "CT" | "TK" | "PB" | "GVHD"; name?: string }>;
           comments?: string[];
         };
-        if (Object.keys(info).length > 0) {
+
+        if (Object.keys(infoRecord).length > 0) {
           setDefenseInfo((prev) => ({
             ...prev,
-            ...info,
-            periodId: String(info.periodId ?? prev.periodId),
-            assignmentId: String(info.assignmentId ?? prev.assignmentId),
-            session: info.session === "AFTERNOON" ? "AFTERNOON" : "MORNING",
-            score: Number(info.score ?? prev.score),
-            requiresRevision: Boolean(info.requiresRevision ?? prev.requiresRevision),
+            ...infoRecord,
+            periodId: String(infoRecord.periodId ?? prev.periodId),
+            assignmentId: String(infoRecord.assignmentId ?? prev.assignmentId),
+            session:
+              infoRecord.session === "AFTERNOON" ? "AFTERNOON" : "MORNING",
+            score: Number(infoRecord.score ?? prev.score),
+            requiresRevision: Boolean(
+              infoRecord.requiresRevision ?? prev.requiresRevision,
+            ),
           }));
-          setMembers(Array.isArray(info.members) ? info.members.map((m) => ({ role: m.role ?? "PB", name: m.name ?? "" })) : []);
-          setComments(Array.isArray(info.comments) ? info.comments.filter(Boolean) : []);
+          setMembers(
+            Array.isArray(infoRecord.members)
+              ? infoRecord.members.map((m) => ({
+                  role: m.role ?? "PB",
+                  name: m.name ?? "",
+                }))
+              : [],
+          );
+          setComments(
+            Array.isArray(infoRecord.comments)
+              ? infoRecord.comments.filter(Boolean)
+              : [],
+          );
         }
 
-        const noti = ((parsedNoti.data as Array<Record<string, unknown>> | null) ?? []) as Array<{ time?: string; title?: string; type?: string }>;
+        const noti = (snapshot.notifications ?? snapshot.Notifications ?? []) as Array<
+          Record<string, unknown>
+        >;
         if (noti.length) {
           setNotifications(
             noti.map((item) => ({
-              time: item.time ?? new Date().toLocaleString("vi-VN"),
-              title: item.title ?? "Thông báo hệ thống",
-              type: item.type === "warning" ? "warning" : item.type === "success" ? "success" : "info",
+              time: String(item.time ?? item.Time ?? new Date().toLocaleString("vi-VN")),
+              title: String(item.title ?? item.Title ?? "Thông báo hệ thống"),
+              type:
+                String(item.type ?? item.Type).toLowerCase() === "warning"
+                  ? "warning"
+                  : String(item.type ?? item.Type).toLowerCase() === "success"
+                    ? "success"
+                    : "info",
             }))
           );
         }
 
-        await hydrateRevisionHistory();
+        const revisionHistoryRows = (snapshot.revisionHistory ?? snapshot.RevisionHistory ?? []) as Array<
+          Record<string, unknown>
+        >;
+        hydrateRevisionHistory(revisionHistoryRows);
       } catch {
         notifyError("Không tải được dữ liệu sinh viên từ API.");
       } finally {
@@ -215,11 +323,16 @@ const StudentDefenseInfo: React.FC = () => {
   }, [defenseInfo.requiresRevision, latestSubmission]);
 
   const submitRevision = () => {
+    if (!periodId) {
+      notifyError("Chua chon dot bao ve. Vui long chon dot truoc khi nop chinh sua.");
+      return;
+    }
+
     if (!selectedFile || !selectedFileName || !revisedContent.trim()) {
       notifyError(ucError("UC4.1-REVISION_EMPTY"));
       return;
     }
-    const idempotencyKey = createIdempotencyKey(defenseInfo.periodId, "submit-revision");
+    const idempotencyKey = createIdempotencyKey(periodIdText || defenseInfo.periodId || "NA", "submit-revision");
     const assignmentId = Number(String(defenseInfo.assignmentId).replace(/\D+/g, "")) || 1;
 
     const formData = new FormData();
@@ -235,15 +348,27 @@ const StudentDefenseInfo: React.FC = () => {
         }
         setLatestTrace({
           action: "submit-revision",
-          periodId: defenseInfo.periodId,
+          periodId: periodIdText || defenseInfo.periodId || "NA",
           idempotencyKey,
           concurrencyToken: revisionConcurrencyToken,
           note: "[UC4.1] Đã gửi bản chỉnh sửa theo assignment.",
           at: new Date().toLocaleString("vi-VN"),
         });
         setRevisionConcurrencyToken(createConcurrencyToken("student-revision"));
-        await hydrateRevisionHistory();
-        if (response?.idempotencyReplay) {
+        const snapshotRes = await studentApi.getSnapshot();
+        const parsedSnapshot = parseEnvelope(
+          snapshotRes,
+          "Không tải được snapshot sau khi nộp chỉnh sửa.",
+        );
+        if (parsedSnapshot.ok && parsedSnapshot.data) {
+          const snapshot = parsedSnapshot.data as Record<string, unknown>;
+          hydrateRevisionHistory(
+            (snapshot.revisionHistory ?? snapshot.RevisionHistory ?? []) as Array<
+              Record<string, unknown>
+            >,
+          );
+        }
+        if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
           notifyInfo("Yêu cầu nộp chỉnh sửa đã được xử lý trước đó (idempotency replay).");
         } else {
           notifySuccess("Đã nộp bản chỉnh sửa, đang chờ duyệt.");
@@ -263,7 +388,7 @@ const StudentDefenseInfo: React.FC = () => {
         margin: "0 auto",
         padding: 24,
         position: "relative",
-        fontFamily: '"Be Vietnam Pro", "Segoe UI", system-ui, sans-serif',
+        fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
       }}
       className="student-revamp-root"
     >
@@ -272,13 +397,14 @@ const StudentDefenseInfo: React.FC = () => {
           .student-revamp-root {
             --stu-ink: #0f172a;
             --stu-muted: #64748b;
-            --stu-line: #d9dde5;
-            --stu-main: #f97316;
-            --stu-accent: #f97316;
-            font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+            --stu-line: #cbd5e1;
+            --stu-main: #f37021;
+            --stu-main-soft: #ffffff;
+            --stu-accent: #f37021;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             color: var(--stu-ink);
-            background: #ffffff;
-            border-radius: 12px;
+            background: radial-gradient(circle at top left, #ffffff 0%, #ffffff 38%);
+            border-radius: 14px;
           }
           .student-revamp-root h1,
           .student-revamp-root h2,
@@ -291,25 +417,26 @@ const StudentDefenseInfo: React.FC = () => {
             letter-spacing: 0.06em;
             text-transform: uppercase;
             font-weight: 700;
-            color: #64748b;
+            color: #0f172a;
             line-height: 1.35;
           }
           .student-revamp-root .stu-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.35;
             color: #0f172a;
+            letter-spacing: -0.01em;
           }
           .student-revamp-root .stu-meta {
             font-size: 13px;
-            line-height: 1.45;
-            color: #475569;
+            line-height: 1.6;
+            color: #0f172a;
           }
           .student-revamp-root .stu-control-bar {
             min-height: 56px;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
             padding: 10px;
             display: flex;
             align-items: center;
@@ -318,22 +445,22 @@ const StudentDefenseInfo: React.FC = () => {
           }
           .student-revamp-root .content { position:relative; z-index:1; }
           .student-revamp-root button {
-            font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             border-radius: 10px;
-            color: #111827;
+            color: #0f172a;
           }
-          .student-revamp-root input, .student-revamp-root textarea, .student-revamp-root select { border:1px solid var(--stu-line); border-radius:10px; padding:8px 10px; background:#fff; }
-          .student-revamp-root input:focus, .student-revamp-root textarea:focus, .student-revamp-root select:focus { outline:none; border-color:var(--stu-main); box-shadow:0 0 0 3px rgba(37,99,235,.14); }
+          .student-revamp-root input, .student-revamp-root textarea, .student-revamp-root select { border:1px solid var(--stu-line); border-radius:8px; padding:10px 12px; background:#ffffff; }
+          .student-revamp-root input:focus, .student-revamp-root textarea:focus, .student-revamp-root select:focus { outline:none; border-color:var(--stu-main); box-shadow:0 0 0 3px rgba(243, 112, 33, .16); }
           .stu-pill {
-            border: 1px solid #cfd8e3;
+            border: 1px solid #cbd5e1;
             border-radius:999px;
             min-height: 42px;
             padding:0 16px;
             font-weight:600;
             background:#ffffff;
-            color:#334155;
+            color:#0f172a;
             cursor:pointer;
             display:inline-flex;
             align-items:center;
@@ -342,7 +469,7 @@ const StudentDefenseInfo: React.FC = () => {
             line-height:1.15;
             position: relative;
             overflow: clip;
-            transition: border-color .22s ease, background-color .22s ease, color .22s ease;
+            transition: border-color .22s ease, background-color .22s ease, color .22s ease, transform .22s ease, box-shadow .22s ease;
           }
           .stu-pill::after {
             content: "";
@@ -352,7 +479,7 @@ const StudentDefenseInfo: React.FC = () => {
             bottom: 5px;
             height: 2px;
             border-radius: 999px;
-            background: #f97316;
+            background: #f37021;
             transform: scaleX(0);
             transform-origin: center;
             transition: transform .22s ease;
@@ -361,13 +488,13 @@ const StudentDefenseInfo: React.FC = () => {
           .stu-pill.active::after {
             transform: scaleX(1);
           }
-          .stu-pill.active { border-color:#1d4ed8; background:#eff6ff; color:#1e40af; }
-          .stu-pill:hover { border-color:#94a3b8; background:#ffffff; color:#0f172a; }
+          .stu-pill.active { border-color:#cbd5e1; background:#ffffff; color:#0f172a; box-shadow:none; }
+          .stu-pill:hover { border-color:#cbd5e1; background:#ffffff; color:#0f172a; transform: translateY(-1px); }
           .stu-primary {
-            border:1px solid #ea580c;
+            border:none;
             border-radius:12px;
-            background:#f97316;
-            color:#fff;
+            background:#f37021;
+            color:#ffffff;
             padding:8px 14px;
             font-weight:600;
             cursor:pointer;
@@ -375,12 +502,12 @@ const StudentDefenseInfo: React.FC = () => {
             line-height:1;
             min-height:40px;
           }
-          .stu-primary:hover:not(:disabled) { background:#ea580c; border-color:#ea580c; }
-          .stu-primary:disabled { background:#94A3B8; border-color:#94A3B8; cursor:not-allowed; }
+          .stu-primary:hover:not(:disabled) { background:#f37021; border-color:#f37021; }
+          .stu-primary:disabled { background:#f8fafc; border:1px solid #cbd5e1; color:#64748b; cursor:not-allowed; }
           .stu-soft {
-            border:1px solid #cfd8e3;
+            border:1px solid #cbd5e1;
             border-radius:12px;
-            background:#fff;
+            background:#ffffff;
             color:#0f172a;
             padding:8px 14px;
             font-weight:600;
@@ -388,20 +515,23 @@ const StudentDefenseInfo: React.FC = () => {
             font-size:13px;
             line-height:1;
             min-height:40px;
+            transition: border-color .22s ease, background-color .22s ease, transform .22s ease, box-shadow .22s ease;
           }
+          .stu-soft:hover { background:#ffffff; border-color:#cbd5e1; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
           .stu-upload {
-            border:1px dashed #f97316;
-            border-radius:12px;
+            border:1px dashed #cbd5e1;
+            border-radius:14px;
             padding:14px;
-            background:#fffaf5;
+            background:linear-gradient(180deg,#ffffff 0%,#ffffff 100%);
             cursor:pointer;
             display:flex;
             justify-content:space-between;
             align-items:center;
             gap:8px;
             font-weight: 600;
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
           }
-          .stu-soft:hover { background:#f8fafc; border-color:#94a3b8; }
+          .stu-upload:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); border-color:#cbd5e1; }
           .student-revamp-root textarea {
             line-height: 1.45;
           }
@@ -415,6 +545,65 @@ const StudentDefenseInfo: React.FC = () => {
           .student-revamp-root button {
             line-height: 1.15;
           }
+          .stu-panel {
+            border: 1px solid #cbd5e1;
+            border-radius: 14px;
+            padding: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          }
+          .stu-list {
+            display: grid;
+            gap: 10px;
+          }
+          .stu-list-item {
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background-color .22s ease;
+          }
+          .stu-list-item:hover {
+            transform: translateY(-1px);
+            border-color: #cbd5e1;
+            background: #ffffff;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+          }
+          .stu-list-item-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.45;
+          }
+          .stu-list-item-sub {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #0f172a;
+            line-height: 1.55;
+          }
+          .stu-list-empty {
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 14px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 13px;
+            line-height: 1.55;
+          }
+          .stu-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+          }
         `}
       </style>
 
@@ -424,24 +613,25 @@ const StudentDefenseInfo: React.FC = () => {
             borderRadius: 12,
             padding: 20,
             marginBottom: 16,
-            border: "1px solid #e6e9ef",
+            border: "1px solid #cbd5e1",
             background: "#ffffff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
         >
-          <h1 style={{ margin: 0, fontSize: 30, color: "#ea580c", display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
-            <GraduationCap size={30} color="#ea580c" /> Thông tin bảo vệ
+          <h1 style={{ margin: 0, fontSize: 30, color: "#f37021", display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+            <GraduationCap size={30} color="#f37021" /> Thông tin bảo vệ
           </h1>
           <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <span className="stu-pill active">Period: {defenseInfo.periodId}</span>
             <span className="stu-pill">Assignment: {defenseInfo.assignmentId}</span>
             <span className="stu-pill">Session: {sessionLabel}</span>
           </div>
-          <div style={{ marginTop: 12, border: "1px solid #e2e8f0", borderRadius: 10, padding: 10, background: "#f8fafc", fontSize: 13, color: "#475569" }}>
+          <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 10, padding: 10, background: "#ffffff", fontSize: 13, color: "#0f172a" }}>
             {loadingData ? "Đang tải dữ liệu từ API..." : `Cập nhật gần nhất: ${latestTrace?.at ?? "Chưa có"}`}
           </div>
         </section>
 
-        <section style={{ ...cardStyle, marginBottom: 16 }}>
+        <section className="stu-panel" style={{ marginBottom: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             <div>
               <div className="stu-kicker">MSSV</div>
@@ -453,16 +643,16 @@ const StudentDefenseInfo: React.FC = () => {
             </div>
             <div>
               <div className="stu-kicker">Trạng thái công bố</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#166534", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <CheckCircle2 size={18} /> {defenseInfo.status}
               </div>
             </div>
             <div>
               <div className="stu-kicker">Tiến độ hoàn tất hồ sơ</div>
-              <div style={{ marginTop: 8, height: 10, borderRadius: 999, background: "#FED7AA", overflow: "hidden" }}>
-                <div style={{ width: `${completionRate}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#EA580C 0%,#FB923C 100%)" }} />
+              <div style={{ marginTop: 8, height: 10, borderRadius: 999, background: "#f37021", overflow: "hidden" }}>
+                <div style={{ width: `${completionRate}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#f37021 0%,#f37021 100%)" }} />
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: "#9A3412" }}>{completionRate}%</div>
+              <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{completionRate}%</div>
             </div>
           </div>
         </section>
@@ -483,39 +673,39 @@ const StudentDefenseInfo: React.FC = () => {
 
         {activePanel === "schedule" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section style={cardStyle}>
+            <section className="stu-panel">
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Calendar size={18} color="#2563EB" /> Lịch bảo vệ
+                <Calendar size={18} color="#0f172a" /> Lịch bảo vệ
               </h2>
               <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #DBEAFE", background: "#F8FAFF" }}>
+                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
                   <div className="stu-kicker">Sinh viên</div>
                   <div style={{ fontWeight: 700 }}>{defenseInfo.studentName}</div>
                 </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #E2E8F0", background: "#FFFFFF" }}>
+                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
                   <div className="stu-kicker">Đề tài</div>
                   <div style={{ fontWeight: 700 }}>{defenseInfo.topic}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #DBEAFE", background: "#F8FAFF" }}>
-                    <div style={{ fontSize: 12, color: "#64748B" }}>Ngày</div>
+                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
+                    <div style={{ fontSize: 12, color: "#0f172a" }}>Ngày</div>
                     <div style={{ fontWeight: 700 }}>{new Date(defenseInfo.defenseDate).toLocaleDateString("vi-VN")}</div>
                   </div>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #FED7AA", background: "#FFF7ED" }}>
-                    <div style={{ fontSize: 12, color: "#9A3412" }}>Thời gian</div>
+                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
+                    <div style={{ fontSize: 12, color: "#0f172a" }}>Thời gian</div>
                     <div style={{ fontWeight: 700 }}>{defenseInfo.startTime} - {defenseInfo.endTime}</div>
                   </div>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #E2E8F0", background: "#FFFFFF" }}>
-                    <div style={{ fontSize: 12, color: "#64748B" }}>Phòng</div>
+                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
+                    <div style={{ fontSize: 12, color: "#0f172a" }}>Phòng</div>
                     <div style={{ fontWeight: 700 }}>{defenseInfo.room}</div>
                   </div>
                 </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #FED7AA", background: "#FFF7ED" }}>
-                  <div style={{ fontSize: 12, color: "#9A3412" }}>Mã hội đồng</div>
+                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
+                  <div style={{ fontSize: 12, color: "#0f172a" }}>Mã hội đồng</div>
                   <div style={{ fontWeight: 700 }}>{defenseInfo.committeeCode}</div>
                 </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #DBEAFE", background: "#F8FAFF" }}>
-                  <div style={{ fontSize: 12, color: "#1E3A8A" }}>Mã assignment</div>
+                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
+                  <div style={{ fontSize: 12, color: "#0f172a" }}>Mã assignment</div>
                   <div style={{ fontWeight: 700 }}>{defenseInfo.assignmentId}</div>
                 </div>
               </div>
@@ -523,16 +713,16 @@ const StudentDefenseInfo: React.FC = () => {
 
             <section style={cardStyle}>
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Users size={18} color="#2563EB" /> Thành viên
+                <Users size={18} color="#0f172a" /> Thành viên
               </h2>
-              <div style={{ display: "grid", gap: 8 }}>
+              <div className="stu-list">
                 {members.map((member) => (
-                  <div key={`${member.role}-${member.name}`} style={{ border: "1px solid #DBEAFE", borderRadius: 12, padding: 10, background: "#FFFFFF" }}>
-                    <div style={{ color: "#64748B", fontSize: 12 }}>{member.role}</div>
-                    <div style={{ fontWeight: 700 }}>{member.name}</div>
+                  <div key={`${member.role}-${member.name}`} className="stu-list-item">
+                    <div className="stu-badge">{member.role}</div>
+                    <div className="stu-list-item-title">{member.name}</div>
                   </div>
                 ))}
-                {members.length === 0 && <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có danh sách thành viên từ API.</div>}
+                {members.length === 0 && <div className="stu-list-empty">Chưa có danh sách thành viên từ API.</div>}
               </div>
             </section>
           </div>
@@ -540,39 +730,40 @@ const StudentDefenseInfo: React.FC = () => {
 
         {activePanel === "result" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section style={cardStyle}>
+            <section className="stu-panel">
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <FileText size={18} color="#2563EB" /> Kết luận hội đồng
+                <FileText size={18} color="#0f172a" /> Kết luận hội đồng
               </h2>
               <div style={{ marginBottom: 8 }}>Điểm = (GVHD + CT + TK + PB) / 4</div>
-              <div style={{ marginBottom: 10, color: "#334155" }}>
+              <div style={{ marginBottom: 10, color: "#0f172a" }}>
                 Điểm đã làm tròn: <strong>{averageScore}</strong> · Điểm chữ: <strong>{defenseInfo.letter}</strong>
               </div>
-              <div style={{ display: "grid", gap: 8 }}>
+              <div className="stu-list">
                 {comments.map((item, idx) => (
-                  <div key={idx} style={{ border: "1px solid #DBEAFE", borderRadius: 10, padding: 10, color: "#334155" }}>
-                    {item}
+                  <div key={idx} className="stu-list-item">
+                    <div className="stu-list-item-title">Nhận xét {idx + 1}</div>
+                    <div className="stu-list-item-sub">{item}</div>
                   </div>
                 ))}
-                {comments.length === 0 && <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có nhận xét hội đồng từ API.</div>}
+                {comments.length === 0 && <div className="stu-list-empty">Chưa có nhận xét hội đồng từ API.</div>}
               </div>
             </section>
 
-            <section style={cardStyle}>
+            <section className="stu-panel">
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Clock3 size={18} color="#2563EB" /> Thông báo nghiệp vụ
+                <Clock3 size={18} color="#0f172a" /> Thông báo nghiệp vụ
               </h2>
-              <div style={{ display: "grid", gap: 8 }}>
+              <div className="stu-list">
                 {notifications.map((item: StudentNotification) => (
-                  <div key={`${item.time}-${item.title}`} style={{ border: "1px solid #DBEAFE", borderRadius: 10, padding: 10 }}>
+                  <div key={`${item.time}-${item.title}`} className="stu-list-item">
                     <div className="stu-kicker" style={{ textTransform: "none", letterSpacing: 0 }}>{item.time}</div>
-                    <div style={{ fontWeight: 600 }}>{item.title}</div>
-                    <div className="stu-meta" style={{ color: item.type === "success" ? "#166534" : item.type === "warning" ? "#B45309" : "#1D4ED8", fontWeight: 600 }}>
+                    <div className="stu-list-item-title">{item.title}</div>
+                    <div className="stu-list-item-sub" style={{ color: item.type === "success" ? "#0f172a" : item.type === "warning" ? "#f37021" : "#0f172a", fontWeight: 600 }}>
                       {item.type.toUpperCase()}
                     </div>
                   </div>
                 ))}
-                {notifications.length === 0 && <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có thông báo nghiệp vụ.</div>}
+                {notifications.length === 0 && <div className="stu-list-empty">Chưa có thông báo nghiệp vụ.</div>}
               </div>
             </section>
           </div>
@@ -580,14 +771,14 @@ const StudentDefenseInfo: React.FC = () => {
 
         {activePanel === "revision" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section style={cardStyle}>
+            <section className="stu-panel">
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Upload size={18} color="#2563EB" /> Nộp bản chỉnh sửa
+                <Upload size={18} color="#0f172a" /> Nộp bản chỉnh sửa
               </h2>
               {defenseInfo.requiresRevision ? (
                 <>
                   <label style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, color: "#64748B" }}>Nội dung chỉnh sửa</span>
+                    <span style={{ fontSize: 12, color: "#0f172a" }}>Nội dung chỉnh sửa</span>
                     <textarea value={revisedContent} onChange={(event) => setRevisedContent(event.target.value)} rows={4} />
                   </label>
 
@@ -608,10 +799,10 @@ const StudentDefenseInfo: React.FC = () => {
                   />
 
                   <button type="button" className="stu-upload" onClick={() => fileInputRef.current?.click()}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#1E3A8A", fontWeight: 700 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#0f172a", fontWeight: 700 }}>
                       <Upload size={15} /> Chọn file đính kèm
                     </span>
-                    <span style={{ color: "#334155", fontSize: 13 }}>
+                    <span style={{ color: "#0f172a", fontSize: 13 }}>
                       {selectedFileName || "Chưa có file nào được chọn"}
                     </span>
                   </button>
@@ -624,26 +815,26 @@ const StudentDefenseInfo: React.FC = () => {
 
                   <div style={{ marginTop: 12 }}>
                     {!latestSubmission && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#475569" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
                         <Clock3 size={16} /> Trạng thái: Chưa nộp bản chỉnh sửa.
                       </div>
                     )}
                     {latestSubmission?.status === "Pending" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#1D4ED8" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
                         <Clock3 size={16} /> Trạng thái: Đã nộp, đang chờ duyệt.
                       </div>
                     )}
                     {latestSubmission?.status === "Approved" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#166534" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
                         <CheckCircle2 size={16} /> Trạng thái: Hoàn thành 100%.
                       </div>
                     )}
                     {latestSubmission?.status === "Rejected" && (
-                      <div style={{ display: "grid", gap: 6, color: "#B91C1C" }}>
+                      <div style={{ display: "grid", gap: 6, color: "#0f172a" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <XCircle size={16} /> Trạng thái: Bị từ chối, vui lòng nộp lại.
                         </div>
-                        <div style={{ fontSize: 13, border: "1px solid #FECACA", background: "#FEF2F2", borderRadius: 8, padding: 8 }}>
+                        <div style={{ fontSize: 13, border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: 8, padding: 8 }}>
                           Lý do: {latestSubmission.note || "Vui lòng cập nhật bản chỉnh sửa theo phản hồi hội đồng."}
                         </div>
                       </div>
@@ -651,27 +842,28 @@ const StudentDefenseInfo: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div style={{ color: "#166534" }}>Không yêu cầu chỉnh sửa sau bảo vệ.</div>
+                <div style={{ color: "#0f172a" }}>Không yêu cầu chỉnh sửa sau bảo vệ.</div>
               )}
             </section>
 
-            <section style={cardStyle}>
+            <section className="stu-panel">
               <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <CheckCircle2 size={18} color="#2563EB" /> Lịch sử nộp bản chỉnh sửa
+                <CheckCircle2 size={18} color="#0f172a" /> Lịch sử nộp bản chỉnh sửa
               </h2>
-              <div style={{ display: "grid", gap: 6 }}>
+              <div className="stu-list">
                 {submissionHistory.map((item: SubmissionHistory) => (
-                  <div key={`${item.version}-${item.uploadedAt}`} style={{ border: "1px solid #DBEAFE", borderRadius: 10, padding: 10, fontSize: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>{item.version} · {item.uploadedAt}</span>
-                      <span style={{ color: item.status === "Approved" ? "#166534" : item.status === "Rejected" ? "#B91C1C" : "#1D4ED8" }}>
+                  <div key={`${item.version}-${item.uploadedAt}`} className="stu-list-item">
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                      <span className="stu-list-item-title">{item.version}</span>
+                      <span className="stu-badge" style={{ color: item.status === "Approved" ? "#0f172a" : item.status === "Rejected" ? "#0f172a" : "#0f172a", background: item.status === "Approved" ? "#ffffff" : item.status === "Rejected" ? "#ffffff" : "#ffffff", borderColor: item.status === "Approved" ? "#0f172a" : item.status === "Rejected" ? "#0f172a" : "#0f172a" }}>
                         {item.status}
                       </span>
                     </div>
-                    {item.note && <div style={{ color: "#B91C1C", marginTop: 4 }}>Ghi chú: {item.note}</div>}
+                    <div className="stu-list-item-sub">{item.uploadedAt}</div>
+                    {item.note && <div className="stu-list-item-sub" style={{ color: "#0f172a" }}>Ghi chú: {item.note}</div>}
                   </div>
                 ))}
-                {submissionHistory.length === 0 && <div style={{ color: "#64748B", fontSize: 13 }}>Chưa có lịch sử nộp bản chỉnh sửa.</div>}
+                {submissionHistory.length === 0 && <div className="stu-list-empty">Chưa có lịch sử nộp bản chỉnh sửa.</div>}
               </div>
             </section>
           </div>
