@@ -8,6 +8,7 @@ using ThesisManagement.Api.DTOs.Messages.Query;
 using ThesisManagement.Api.Hubs;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.MessageAttachments
 {
@@ -93,12 +94,14 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IFileStorageService _storageService;
 
-        public UploadMessageAttachmentCommand(IUnitOfWork uow, IMapper mapper, IHubContext<ChatHub> hubContext)
+        public UploadMessageAttachmentCommand(IUnitOfWork uow, IMapper mapper, IHubContext<ChatHub> hubContext, IFileStorageService storageService)
         {
             _uow = uow;
             _mapper = mapper;
             _hubContext = hubContext;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<MessageAttachmentReadDto>> ExecuteAsync(IFormFile? file, int messageId, string? thumbnailUrl)
@@ -117,20 +120,12 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
             if (conversation == null)
                 return OperationResult<MessageAttachmentReadDto>.Failed("Conversation not found", 404);
 
-            var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
-            if (!Directory.Exists(uploadsRoot))
-                Directory.CreateDirectory(uploadsRoot);
+            var uploadResult = await _storageService.UploadAsync(file, "uploads/chat");
+            if (!uploadResult.Success)
+                return OperationResult<MessageAttachmentReadDto>.Failed(uploadResult.ErrorMessage ?? "Upload file failed", uploadResult.StatusCode);
 
             var originalFileName = Path.GetFileName(file.FileName);
-            var uniqueName = $"{Guid.NewGuid():N}_{originalFileName}";
-            var savePath = Path.Combine(uploadsRoot, uniqueName);
-
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var fileUrl = $"/uploads/chat/{uniqueName}";
+            var fileUrl = uploadResult.Data!;
 
             var entity = new MessageAttachment
             {
@@ -165,12 +160,14 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IFileStorageService _storageService;
 
-        public UpdateMessageAttachmentCommand(IUnitOfWork uow, IMapper mapper, IHubContext<ChatHub> hubContext)
+        public UpdateMessageAttachmentCommand(IUnitOfWork uow, IMapper mapper, IHubContext<ChatHub> hubContext, IFileStorageService storageService)
         {
             _uow = uow;
             _mapper = mapper;
             _hubContext = hubContext;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<MessageAttachmentReadDto>> ExecuteAsync(int id, MessageAttachmentUpdateDto dto)
@@ -179,6 +176,7 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
             if (entity == null)
                 return OperationResult<MessageAttachmentReadDto>.Failed("Message attachment not found", 404);
 
+            var oldFileUrl = entity.FileUrl;
             if (!string.IsNullOrWhiteSpace(dto.FileUrl))
                 entity.FileUrl = dto.FileUrl;
             if (dto.FileName is not null)
@@ -201,6 +199,11 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
             _uow.MessageAttachments.Update(entity);
             await _uow.SaveChangesAsync();
 
+            if (!string.IsNullOrWhiteSpace(oldFileUrl) && !string.Equals(oldFileUrl, entity.FileUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                await _storageService.DeleteAsync(oldFileUrl);
+            }
+
             var payload = _mapper.Map<MessageAttachmentReadDto>(entity);
             await _hubContext.Clients
                 .Group(ChatHubGroups.Conversation(conversation.ConversationCode))
@@ -220,12 +223,14 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
         private readonly IUnitOfWork _uow;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IMapper _mapper;
+        private readonly IFileStorageService _storageService;
 
-        public DeleteMessageAttachmentCommand(IUnitOfWork uow, IHubContext<ChatHub> hubContext, IMapper mapper)
+        public DeleteMessageAttachmentCommand(IUnitOfWork uow, IHubContext<ChatHub> hubContext, IMapper mapper, IFileStorageService storageService)
         {
             _uow = uow;
             _hubContext = hubContext;
             _mapper = mapper;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<object?>> ExecuteAsync(int id)
@@ -248,6 +253,7 @@ namespace ThesisManagement.Api.Application.Command.MessageAttachments
                 entity.MessageID
             };
 
+            await _storageService.DeleteAsync(entity.FileUrl);
             _uow.MessageAttachments.Remove(entity);
             await _uow.SaveChangesAsync();
 

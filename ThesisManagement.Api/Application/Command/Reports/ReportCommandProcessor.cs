@@ -9,6 +9,7 @@ using ThesisManagement.Api.DTOs.Reports.Command;
 using ThesisManagement.Api.DTOs.Reports.Query;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.Reports
 {
@@ -24,17 +25,20 @@ namespace ThesisManagement.Api.Application.Command.Reports
         private readonly ApplicationDbContext _db;
         private readonly IUpdateProgressSubmissionCommand _updateProgressSubmissionCommand;
         private readonly INotificationEventPublisher _notificationEventPublisher;
+        private readonly IFileStorageService _storageService;
 
         public ReportCommandProcessor(
             IUnitOfWork uow,
             ApplicationDbContext db,
             IUpdateProgressSubmissionCommand updateProgressSubmissionCommand,
-            INotificationEventPublisher notificationEventPublisher)
+            INotificationEventPublisher notificationEventPublisher,
+            IFileStorageService storageService)
         {
             _uow = uow;
             _db = db;
             _updateProgressSubmissionCommand = updateProgressSubmissionCommand;
             _notificationEventPublisher = notificationEventPublisher;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<StudentProgressSubmitResultDto>> SubmitStudentProgressAsync(StudentProgressSubmitFormDto payload, IReadOnlyList<IFormFile> files)
@@ -95,6 +99,7 @@ namespace ThesisManagement.Api.Application.Command.Reports
             await using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
+                var uploadedUrls = new List<string>();
                 var submission = new ProgressSubmission
                 {
                     SubmissionCode = await GenerateSubmissionCodeAsync(),
@@ -122,24 +127,26 @@ namespace ThesisManagement.Api.Application.Command.Reports
                 {
                     if (file.Length <= 0) continue;
 
-                    var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    if (!Directory.Exists(uploadsRoot))
-                        Directory.CreateDirectory(uploadsRoot);
+                    var uploadResult = await _storageService.UploadAsync(file, "uploads", allowLocalFallback: false);
+                    if (!uploadResult.Success)
+                    {
+                        foreach (var uploadedUrl in uploadedUrls)
+                        {
+                            await _storageService.DeleteAsync(uploadedUrl);
+                        }
+
+                        await transaction.RollbackAsync();
+                        return OperationResult<StudentProgressSubmitResultDto>.Failed(uploadResult.ErrorMessage ?? "Upload file failed", uploadResult.StatusCode);
+                    }
 
                     var originalFileName = Path.GetFileName(file.FileName);
-                    var uniqueName = $"{Guid.NewGuid():N}_{originalFileName}";
-                    var savePath = Path.Combine(uploadsRoot, uniqueName);
-
-                    await using (var stream = new FileStream(savePath, FileMode.Create))
-                    {
-                        await file.CopyToAsync(stream);
-                    }
+                    uploadedUrls.Add(uploadResult.Data!);
 
                     attachedFiles.Add(new SubmissionFile
                     {
                         SubmissionID = submission.SubmissionID,
                         SubmissionCode = submission.SubmissionCode,
-                        FileURL = $"/uploads/{uniqueName}",
+                        FileURL = uploadResult.Data!,
                         FileName = originalFileName,
                         FileSizeBytes = file.Length,
                         MimeType = file.ContentType,

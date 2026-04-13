@@ -13,8 +13,9 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, normalizeUrl } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import ManagementSectionedFormBody from "../../components/admin/ManagementSectionedFormBody";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
@@ -231,6 +232,16 @@ const createFields = fields;
 const editFields = fields.filter((field) => field.name !== "topicCode");
 const updateFields = [...editFields, ...hiddenSystemFields];
 
+function getFieldDefinition(name: string): FieldDef {
+  return (
+    fields.find((field) => field.name === name) ?? {
+      name,
+      label: name,
+      type: "text",
+    }
+  );
+}
+
 const editFieldSections: Array<{
   title: string;
   description: string;
@@ -309,6 +320,16 @@ const columns: ColumnDef[] = [
   },
   { key: "status", label: "Trạng thái", aliases: ["topicStatus", "isActive"] },
 ];
+
+const topicTableColumnWidths: Record<string, string> = {
+  topicCode: "12%",
+  title: "20%",
+  departmentCode: "10%",
+  proposerUserCode: "10%",
+  supervisorLecturerCode: "10%",
+  status: "8%",
+  action: "12%",
+};
 
 function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -1048,12 +1069,28 @@ const TopicsManagement: React.FC = () => {
 
       <div className="topics-table-wrap">
         <table className="topics-table">
+          <colgroup>
+            {columns.map((column) => (
+              <col
+                key={column.key}
+                style={{ width: topicTableColumnWidths[column.key] ?? "12%" }}
+              />
+            ))}
+            <col style={{ width: topicTableColumnWidths.action }} />
+          </colgroup>
           <thead>
             <tr>
               {columns.map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
-              <th style={{ textAlign: "center" }}>Thao tác</th>
+              <th
+                style={{
+                  textAlign: "center",
+                  width: topicTableColumnWidths.action,
+                }}
+              >
+                Thao tác
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1069,7 +1106,18 @@ const TopicsManagement: React.FC = () => {
               rows.map((row, index) => (
                 <tr key={`topics-${index}-${String(row.topicCode ?? "")}`}>
                   {columns.map((column) => (
-                    <td key={`${column.key}-${index}`}>
+                    <td
+                      key={`${column.key}-${index}`}
+                      style={
+                        column.key === "title"
+                          ? { whiteSpace: "normal" }
+                          : {
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }
+                      }
+                    >
                       {toDisplay(getColumnValue(row, column))}
                     </td>
                   ))}
@@ -1319,7 +1367,7 @@ const TopicsManagement: React.FC = () => {
                             <div className="topics-student-header">
                               {detailStudent.studentImage ? (
                                 <img
-                                  src={detailStudent.studentImage}
+                                  src={normalizeUrl(detailStudent.studentImage)}
                                   alt={detailStudent.fullName}
                                   className="topics-avatar-lg"
                                 />
@@ -1585,7 +1633,7 @@ const TopicsManagement: React.FC = () => {
                                       submission.files.map((file) => (
                                         <a
                                           key={file.fileID}
-                                          href={file.fileURL}
+                                          href={normalizeUrl(file.fileURL)}
                                           target="_blank"
                                           rel="noreferrer"
                                         >
@@ -1647,77 +1695,20 @@ const TopicsManagement: React.FC = () => {
                 </p>
               </div>
 
-              <div className="topics-form-layout">
-                {editFieldSections.map((section) => {
-                  const availableFields = (
-                    activeModal === "create" ? createFields : editFields
-                  ).filter((field) => section.fields.includes(field.name));
-
-                  if (availableFields.length === 0) return null;
-
-                  return (
-                    <section
-                      key={section.title}
-                      className="topics-form-section"
-                    >
-                      <div className="topics-form-section-header">
-                        <h4>{section.title}</h4>
-                        <p>{section.description}</p>
-                      </div>
-
-                      <div className="topics-form-grid">
-                        {availableFields.map((field) => {
-                          const value = formValues[field.name] ?? "";
-                          const fullWidth =
-                            field.type === "textarea" ||
-                            field.name === "summary" ||
-                            field.name === "lecturerComment";
-                          return (
-                            <label
-                              key={field.name}
-                              className={`topics-form-field ${fullWidth ? "topics-form-field-full" : ""}`}
-                            >
-                              <span>
-                                {field.label}
-                                {field.required ? " *" : ""}
-                              </span>
-                              {field.type === "textarea" ? (
-                                <textarea
-                                  value={value}
-                                  onChange={(event) =>
-                                    setFormValues((prev) => ({
-                                      ...prev,
-                                      [field.name]: event.target.value,
-                                    }))
-                                  }
-                                  rows={4}
-                                />
-                              ) : (
-                                <input
-                                  type={
-                                    field.type === "number"
-                                      ? "number"
-                                      : field.type === "date"
-                                        ? "date"
-                                        : "text"
-                                  }
-                                  value={value}
-                                  onChange={(event) =>
-                                    setFormValues((prev) => ({
-                                      ...prev,
-                                      [field.name]: event.target.value,
-                                    }))
-                                  }
-                                />
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
+              <ManagementSectionedFormBody
+                sections={editFieldSections}
+                values={formValues}
+                getFieldDefinition={getFieldDefinition}
+                onFieldChange={(name, value) =>
+                  setFormValues((prev) => ({ ...prev, [name]: value }))
+                }
+                visibleFieldNames={
+                  activeModal === "create"
+                    ? createFields.map((field) => field.name)
+                    : editFields.map((field) => field.name)
+                }
+                fullWidthFieldNames={["summary", "lecturerComment"]}
+              />
 
               <div className="topics-form-actions">
                 <button

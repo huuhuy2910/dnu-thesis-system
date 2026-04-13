@@ -1,5 +1,6 @@
 using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.SubmissionFiles
 {
@@ -11,10 +12,12 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
     public class DeleteSubmissionFileCommand : IDeleteSubmissionFileCommand
     {
         private readonly IUnitOfWork _uow;
+        private readonly IFileStorageService _storageService;
 
-        public DeleteSubmissionFileCommand(IUnitOfWork uow)
+        public DeleteSubmissionFileCommand(IUnitOfWork uow, IFileStorageService storageService)
         {
             _uow = uow;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<object?>> ExecuteAsync(int id)
@@ -23,6 +26,7 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
             if (entity == null)
                 return OperationResult<object?>.Failed("Submission file not found", 404);
 
+            await _storageService.DeleteAsync(entity.FileURL);
             _uow.SubmissionFiles.Remove(entity);
             await _uow.SaveChangesAsync();
 

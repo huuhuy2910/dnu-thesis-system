@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import ManagementSectionedFormBody from "../../components/admin/ManagementSectionedFormBody";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
@@ -1453,71 +1454,14 @@ const LecturerProfilesManagement: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="lecturer-edit-layout">
-                {editFieldSections.map((section) => (
-                  <section
-                    key={section.title}
-                    className="lecturer-edit-section"
-                  >
-                    <header className="lecturer-edit-section-header">
-                      <h4>{section.title}</h4>
-                      <p>{section.description}</p>
-                    </header>
-                    <div className="lecturer-form-grid">
-                      {section.fields.map((fieldName) => {
-                        const field = getFieldDefinition(fieldName);
-                        const value = formValues[field.name] ?? "";
-                        const isTextarea = field.type === "textarea";
-
-                        return (
-                          <label
-                            key={field.name}
-                            className={
-                              isTextarea
-                                ? "lecturer-form-field lecturer-form-field-full"
-                                : "lecturer-form-field"
-                            }
-                          >
-                            <span>
-                              {field.label}
-                              {field.required ? " *" : ""}
-                            </span>
-                            {isTextarea ? (
-                              <textarea
-                                value={value}
-                                onChange={(event) =>
-                                  setFormValues((prev) => ({
-                                    ...prev,
-                                    [field.name]: event.target.value,
-                                  }))
-                                }
-                                rows={4}
-                              />
-                            ) : (
-                              <input
-                                type={
-                                  field.type === "number"
-                                    ? "number"
-                                    : field.type === "date"
-                                      ? "date"
-                                      : "text"
-                                }
-                                value={value}
-                                onChange={(event) =>
-                                  setFormValues((prev) => ({
-                                    ...prev,
-                                    [field.name]: event.target.value,
-                                  }))
-                                }
-                              />
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-              </div>
+              <ManagementSectionedFormBody
+                sections={editFieldSections}
+                values={formValues}
+                getFieldDefinition={getFieldDefinition}
+                onFieldChange={(name, value) =>
+                  setFormValues((prev) => ({ ...prev, [name]: value }))
+                }
+              />
             )}
 
             {activeModal !== "detail" && (

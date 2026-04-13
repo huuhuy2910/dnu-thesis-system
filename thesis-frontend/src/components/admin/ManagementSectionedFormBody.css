@@ -1,0 +1,101 @@
+.management-sectioned-form-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(90vh - 180px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.management-sectioned-form-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.management-sectioned-form-section-header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.management-sectioned-form-section-header h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.management-sectioned-form-section-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.management-sectioned-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.management-sectioned-form-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.management-sectioned-form-field-full {
+  grid-column: 1 / -1;
+}
+
+.management-sectioned-form-field > span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.management-sectioned-form-input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fff;
+  font: inherit;
+  color: #0f172a;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.management-sectioned-form-input:focus {
+  outline: none;
+  border-color: #f37021;
+  box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.12);
+}
+
+.management-sectioned-form-input:disabled {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.management-sectioned-form-input[type="textarea"],
+.management-sectioned-form-field textarea.management-sectioned-form-input {
+  resize: vertical;
+  min-height: 120px;
+}
+
+@media (max-width: 768px) {
+  .management-sectioned-form-body {
+    padding: 14px;
+  }
+
+  .management-sectioned-form-section {
+    padding: 14px;
+  }
+}

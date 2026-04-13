@@ -2,7 +2,9 @@ export type ManagementModule =
   | "students"
   | "lecturers"
   | "departments"
-  | "topics";
+  | "topics"
+  | "tags"
+  | "catalogtopics";
 
 export type RecordData = Record<string, unknown>;
 
@@ -25,6 +27,15 @@ export interface ModuleApiConfig {
   deletePath: (token: string | number) => string;
 }
 
+export interface DataExchangeConfig {
+  importPath: string;
+  exportPath?: string;
+  previewPath?: string;
+  importUsesFormatQuery?: boolean;
+  exportUsesFormatQuery?: boolean;
+  importNotes?: string[];
+}
+
 export interface EntityConfig {
   moduleName: ManagementModule;
   title: string;
@@ -33,6 +44,7 @@ export interface EntityConfig {
   fields: EntityField[];
   advancedFilters: EntityField[];
   api: ModuleApiConfig;
+  exchange: DataExchangeConfig;
   getDetailCode: (row: RecordData) => string;
   getUpdateToken: (row: RecordData) => string | number;
   getDeleteToken: (row: RecordData) => string | number;
@@ -153,6 +165,13 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       deletePath: (token) =>
         `/StudentProfiles/delete/${encodeURIComponent(String(token))}`,
     },
+    exchange: {
+      importPath: "/DataExchange/import/students",
+      exportPath: "/DataExchange/export/students",
+      previewPath: "/StudentProfiles/get-list?page=1&pageSize=5",
+      importUsesFormatQuery: true,
+      exportUsesFormatQuery: true,
+    },
     getDetailCode: (row) => String(row.studentCode ?? ""),
     getUpdateToken: (row) => String(row.studentCode ?? ""),
     getDeleteToken: (row) => String(row.studentCode ?? ""),
@@ -191,6 +210,13 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       deletePath: (token) =>
         `/LecturerProfiles/delete/${encodeURIComponent(String(token))}`,
     },
+    exchange: {
+      importPath: "/DataExchange/import/lecturers",
+      exportPath: "/DataExchange/export/lecturers",
+      previewPath: "/LecturerProfiles/get-list?page=1&pageSize=5",
+      importUsesFormatQuery: true,
+      exportUsesFormatQuery: true,
+    },
     getDetailCode: (row) => String(row.lecturerCode ?? ""),
     getUpdateToken: (row) => String(row.lecturerCode ?? ""),
     getDeleteToken: (row) => String(row.lecturerCode ?? ""),
@@ -221,6 +247,13 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
         `/Departments/update/${encodeURIComponent(String(token))}`,
       deletePath: (token) =>
         `/Departments/delete/${encodeURIComponent(String(token))}`,
+    },
+    exchange: {
+      importPath: "/DataExchange/import/departments",
+      exportPath: "/DataExchange/export/departments",
+      previewPath: "/Departments/get-list?page=1&pageSize=5",
+      importUsesFormatQuery: true,
+      exportUsesFormatQuery: true,
     },
     getDetailCode: (row) => String(row.departmentCode ?? ""),
     getUpdateToken: (row) => String(row.departmentCode ?? ""),
@@ -260,6 +293,13 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       deletePath: (token) =>
         `/Topics/delete/${encodeURIComponent(String(token))}`,
     },
+    exchange: {
+      importPath: "/DataExchange/import/topics",
+      exportPath: "/DataExchange/export/topics",
+      previewPath: "/Topics/get-list?page=1&pageSize=5",
+      importUsesFormatQuery: true,
+      exportUsesFormatQuery: true,
+    },
     getDetailCode: (row) => String(row.topicCode ?? ""),
     getUpdateToken: (row) => String(row.topicCode ?? ""),
     getDeleteToken: (row) => String(row.topicCode ?? ""),
@@ -271,5 +311,108 @@ export const academicModuleConfig: Record<ManagementModule, EntityConfig> = {
       }
       return null;
     },
+  },
+  tags: {
+    moduleName: "tags",
+    title: "Quản lý tags",
+    description: "CRUD tag và import/export dữ liệu.",
+    tableColumns: [
+      { key: "tagCode", label: "Mã tag" },
+      { key: "tagName", label: "Tên tag" },
+      { key: "description", label: "Mô tả" },
+    ],
+    fields: [
+      { name: "tagCode", label: "tagCode" },
+      { name: "tagName", label: "tagName", required: true },
+      { name: "description", label: "description", type: "textarea" },
+    ],
+    advancedFilters: [
+      { name: "tagCode", label: "Mã tag" },
+      { name: "tagName", label: "Tên tag" },
+    ],
+    api: {
+      listPath: "/Tags/list",
+      detailPath: (code) => `/Tags/get-by-code/${encodeURIComponent(code)}`,
+      createTemplatePath: "/Tags/get-create",
+      createPath: "/Tags/create",
+      updateTemplatePath: (token) =>
+        `/Tags/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/Tags/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/Tags/delete/${encodeURIComponent(String(token))}`,
+    },
+    exchange: {
+      importPath: "/Tags/import",
+      exportPath: "/Tags/export",
+      previewPath: "/Tags/list?page=1&pageSize=5",
+      importUsesFormatQuery: false,
+      exportUsesFormatQuery: false,
+      importNotes: [
+        "tagName là bắt buộc.",
+        "tagCode có thể để trống để hệ thống tự sinh hoặc map theo backend.",
+        "description là tùy chọn.",
+      ],
+    },
+    getDetailCode: (row) => String(row.tagCode ?? ""),
+    getUpdateToken: (row) => String(row.tagID ?? row.tagCode ?? ""),
+    getDeleteToken: (row) => String(row.tagID ?? row.tagCode ?? ""),
+  },
+  catalogtopics: {
+    moduleName: "catalogtopics",
+    title: "Kho đề tài có sẵn",
+    description: "Quản trị kho đề tài có sẵn và import/export dữ liệu.",
+    tableColumns: [
+      { key: "catalogTopicCode", label: "Mã kho" },
+      { key: "title", label: "Tiêu đề" },
+      { key: "departmentCode", label: "Khoa/Bộ môn" },
+      { key: "assignedStatus", label: "Trạng thái" },
+      { key: "tagCodes", label: "Tags" },
+    ],
+    fields: [
+      { name: "catalogTopicCode", label: "catalogTopicCode" },
+      { name: "title", label: "title", required: true },
+      { name: "summary", label: "summary", type: "textarea" },
+      { name: "departmentCode", label: "departmentCode" },
+      { name: "assignedStatus", label: "assignedStatus" },
+      { name: "assignedAt", label: "assignedAt", type: "date" },
+      { name: "tagCodes", label: "tagCodes" },
+    ],
+    advancedFilters: [
+      { name: "catalogTopicCode", label: "Mã kho" },
+      { name: "title", label: "Tiêu đề" },
+      { name: "departmentCode", label: "Khoa/Bộ môn" },
+      { name: "assignedStatus", label: "Trạng thái" },
+      { name: "tagCode", label: "Mã tag" },
+      { name: "tagName", label: "Tên tag" },
+    ],
+    api: {
+      listPath: "/CatalogTopics/get-list-with-tags",
+      detailPath: (code) =>
+        `/CatalogTopics/get-detail/${encodeURIComponent(code)}`,
+      createTemplatePath: "/CatalogTopics/get-create",
+      createPath: "/CatalogTopics/create",
+      updateTemplatePath: (token) =>
+        `/CatalogTopics/get-update/${encodeURIComponent(String(token))}`,
+      updatePath: (token) =>
+        `/CatalogTopics/update/${encodeURIComponent(String(token))}`,
+      deletePath: (token) =>
+        `/CatalogTopics/delete/${encodeURIComponent(String(token))}`,
+    },
+    exchange: {
+      importPath: "/DataExchange/import/catalogtopics",
+      exportPath: "/DataExchange/export/catalogtopics",
+      previewPath: "/CatalogTopics/get-list-with-tags?Page=1&PageSize=5",
+      importUsesFormatQuery: false,
+      exportUsesFormatQuery: true,
+      importNotes: [
+        "title là bắt buộc.",
+        "tagCodes là danh sách phân tách bằng dấu ; hoặc ,.",
+        "Nếu tagCodes để trống, backend sẽ giữ hoặc xóa tag theo quy ước của API.",
+      ],
+    },
+    getDetailCode: (row) => String(row.catalogTopicCode ?? ""),
+    getUpdateToken: (row) => String(row.catalogTopicCode ?? ""),
+    getDeleteToken: (row) => String(row.catalogTopicCode ?? ""),
   },
 };

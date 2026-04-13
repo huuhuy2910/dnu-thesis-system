@@ -6,6 +6,7 @@ using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.SubmissionFiles.Query;
 using ThesisManagement.Api.Models;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.SubmissionFiles
 {
@@ -34,11 +35,13 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
     {
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
+        private readonly IFileStorageService _storageService;
 
-        public UploadSubmissionFileCommand(IUnitOfWork uow, IMapper mapper)
+        public UploadSubmissionFileCommand(IUnitOfWork uow, IMapper mapper, IFileStorageService storageService)
         {
             _uow = uow;
             _mapper = mapper;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<SubmissionFileReadDto>> ExecuteAsync(IFormFile? file, int submissionID, string? submissionCode, string? uploadedByUserCode, int? uploadedByUserID)
@@ -47,20 +50,12 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
             if (!string.IsNullOrWhiteSpace(validationError))
                 return OperationResult<SubmissionFileReadDto>.Failed(validationError, 400);
 
-            var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-            if (!Directory.Exists(uploadsRoot))
-                Directory.CreateDirectory(uploadsRoot);
+            var storageResult = await _storageService.UploadAsync(file!, "uploads");
+            if (!storageResult.Success)
+                return OperationResult<SubmissionFileReadDto>.Failed(storageResult.ErrorMessage ?? "Upload file failed", storageResult.StatusCode);
 
             var originalFileName = Path.GetFileName(file!.FileName);
-            var uniqueName = $"{Guid.NewGuid():N}_{originalFileName}";
-            var savePath = Path.Combine(uploadsRoot, uniqueName);
-
-            using (var stream = new FileStream(savePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var fileUrl = $"/uploads/{uniqueName}";
+            var fileUrl = storageResult.Data!;
 
             var entity = new SubmissionFile
             {
@@ -84,10 +79,12 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
     public class DownloadSubmissionFileCommand : IDownloadSubmissionFileCommand
     {
         private readonly IUnitOfWork _uow;
+        private readonly IFileStorageService _storageService;
 
-        public DownloadSubmissionFileCommand(IUnitOfWork uow)
+        public DownloadSubmissionFileCommand(IUnitOfWork uow, IFileStorageService storageService)
         {
             _uow = uow;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<SubmissionFileDownloadResult>> ExecuteAsync(int id)
@@ -100,23 +97,15 @@ namespace ThesisManagement.Api.Application.Command.SubmissionFiles
             if (string.IsNullOrWhiteSpace(url))
                 return OperationResult<SubmissionFileDownloadResult>.Failed("File URL not set", 404);
 
-            var relative = url.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            var physical = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relative.Substring("uploads".Length).TrimStart(Path.DirectorySeparatorChar));
+            var fileResult = await _storageService.OpenReadAsync(url);
+            if (!fileResult.Success)
+                return OperationResult<SubmissionFileDownloadResult>.Failed(fileResult.ErrorMessage ?? "File not found", fileResult.StatusCode);
 
-            if (!physical.Contains("uploads"))
-            {
-                physical = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", url.TrimStart('/'));
-            }
-
-            if (!System.IO.File.Exists(physical))
-                return OperationResult<SubmissionFileDownloadResult>.Failed("File not found on disk", 404);
-
-            var stream = System.IO.File.OpenRead(physical);
-            var contentType = entity.MimeType ?? "application/octet-stream";
-            var fileName = entity.FileName ?? Path.GetFileName(physical);
+            var contentType = entity.MimeType ?? fileResult.Data!.ContentType;
+            var fileName = entity.FileName ?? fileResult.Data!.FileName;
 
             return OperationResult<SubmissionFileDownloadResult>.Succeeded(
-                new SubmissionFileDownloadResult(stream, contentType, fileName));
+                new SubmissionFileDownloadResult(fileResult.Data!.Stream, contentType, fileName));
         }
     }
 }
