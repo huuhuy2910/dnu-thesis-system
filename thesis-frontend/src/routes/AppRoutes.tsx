@@ -34,6 +34,7 @@ import CommitteeManagement from "../pages/admin/CommitteeManagement";
 import CommitteeOperationsManagement from "../pages/admin/CommitteeOperationsManagement";
 import SystemActivityLogs from "../pages/admin/SystemActivityLogs";
 import LecturerTopicReviewPage from "../pages/lecturer/LecturerTopicReview";
+import StudentServiceDashboard from "../pages/studentservices/StudentServiceDashboard";
 import StudentProfilesManagement from "../pages/studentservices/StudentProfilesManagement";
 import LecturerProfilesManagement from "../pages/studentservices/LecturerProfilesManagement";
 import DepartmentsManagement from "../pages/studentservices/DepartmentsManagement";
@@ -111,7 +112,10 @@ const AppRoutes: React.FC = () => {
           }
         >
           <Route index element={<AdminDashboard />} />
-          <Route path="academic-data" element={<AcademicDataManagementPage />} />
+          <Route
+            path="academic-data"
+            element={<AcademicDataManagementPage />}
+          />
           <Route path="users" element={<UsersManagement />} />
 
           <Route path="students" element={<StudentProfilesManagement />} />
@@ -165,7 +169,11 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         >
-          <Route index element={<AcademicDataManagementPage />} />
+          <Route index element={<StudentServiceDashboard />} />
+          <Route
+            path="academic-data"
+            element={<AcademicDataManagementPage />}
+          />
           <Route path="users" element={<UsersManagement />} />
           <Route path="students" element={<StudentProfilesManagement />} />
           <Route path="lecturers" element={<LecturerProfilesManagement />} />

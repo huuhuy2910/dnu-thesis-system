@@ -14,5 +14,7 @@ namespace ThesisManagement.Api.DTOs.CatalogTopics.Command
         string? Summary,
         string? DepartmentCode,
         string? AssignedStatus,
-        DateTime? AssignedAt);
+        DateTime? AssignedAt,
+        IEnumerable<int>? TagIDs,
+        IEnumerable<string>? TagCodes);
 }

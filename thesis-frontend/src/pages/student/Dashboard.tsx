@@ -46,7 +46,7 @@ const Dashboard: React.FC = () => {
       try {
         // Fetch profile
         const profileResponse = await fetchData<{ data: StudentProfile[] }>(
-          `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`
+          `/StudentProfiles/get-list?UserCode=${auth.user.userCode}`,
         );
         if (profileResponse.data && profileResponse.data.length > 0) {
           setProfile(profileResponse.data[0]);
@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
         const topicsResponse = await fetchData<{ data: Topic[] }>(
           `/Topics/get-list?ProposerStudentCode=${
             profileResponse.data[0]?.studentCode || auth.user.userCode
-          }`
+          }`,
         );
         const fetchedTopics = topicsResponse.data || [];
         setTopics(fetchedTopics);
@@ -68,8 +68,8 @@ const Dashboard: React.FC = () => {
           new Set(
             fetchedTopics
               .map((t) => t.supervisorUserCode)
-              .filter((code): code is string => code !== null)
-          )
+              .filter((code): code is string => code !== null),
+          ),
         );
         const names: Record<string, string> = {};
         for (const code of uniqueCodes) {
@@ -95,7 +95,7 @@ const Dashboard: React.FC = () => {
         for (const topic of fetchedTopics) {
           try {
             const topicTagResponse = await fetchData<{ data: TopicTag[] }>(
-              `/TopicTags/list?TopicCode=${topic.topicCode}`
+              `/TopicTags/list?TopicCode=${topic.topicCode}`,
             );
             const topicTagsData = topicTagResponse.data || [];
             topicTagMap[topic.topicCode] = topicTagsData;
@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
         for (const tagCode of uniqueTagCodes) {
           try {
             const tagResponse = await fetchData<{ data: Tag[] }>(
-              `/Tags/list?TagCode=${tagCode}`
+              `/Tags/list?TagCode=${tagCode}`,
             );
             const tagData = tagResponse.data || [];
             if (tagData.length > 0) {
@@ -135,13 +135,13 @@ const Dashboard: React.FC = () => {
 
             // Fetch milestone templates
             const templatesRes = await fetchData(
-              "/MilestoneTemplates/get-list"
+              "/MilestoneTemplates/get-list",
             );
             const templates = (templatesRes as { data?: unknown[] }).data || [];
 
             // Fetch progress milestones
             const progressRes = await fetchData(
-              `/ProgressMilestones/get-list?TopicCode=${topicCode}`
+              `/ProgressMilestones/get-list?TopicCode=${topicCode}`,
             );
             const progressMilestones =
               (progressRes as { data?: unknown[] }).data || [];
@@ -154,10 +154,10 @@ const Dashboard: React.FC = () => {
                     (t as { milestoneTemplateCode?: string })
                       .milestoneTemplateCode ===
                     (pm as { milestoneTemplateCode?: string })
-                      .milestoneTemplateCode
+                      .milestoneTemplateCode,
                 );
                 return (template as { ordinal?: number })?.ordinal || 0;
-              })
+              }),
             );
 
             let completedCount = 0;
@@ -1092,7 +1092,7 @@ const Dashboard: React.FC = () => {
                             <strong>Tag:</strong>{" "}
                             {(topicTags[topic.topicCode] || [])
                               .map(
-                                (tt) => tags[tt.tagCode]?.tagName || tt.tagCode
+                                (tt) => tags[tt.tagCode]?.tagName || tt.tagCode,
                               )
                               .join(", ") || "N/A"}
                           </span>

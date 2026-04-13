@@ -76,6 +76,7 @@ using ThesisManagement.Api.Repositories;
 using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Services.Chat;
 using ThesisManagement.Api.Services.DataExchange;
+using ThesisManagement.Api.Services.FileStorage;
 using ThesisManagement.Api.Mappings;
 using ThesisManagement.Api.Helpers;
 using AutoMapper;
@@ -184,6 +185,8 @@ builder.Services.Configure<DefenseRevisionQuorumOptions>(
     builder.Configuration.GetSection("DefenseRevisionQuorum"));
 builder.Services.Configure<DefenseResiliencePolicyOptions>(
     builder.Configuration.GetSection("DefenseResiliencePolicy"));
+builder.Services.Configure<FileStorageOptions>(
+    builder.Configuration.GetSection("Mega"));
 
 // EF Core
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -198,6 +201,7 @@ builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
 // HTTP Context for current user
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 
 // Repositories / Services
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));

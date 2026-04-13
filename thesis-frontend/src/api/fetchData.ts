@@ -20,15 +20,33 @@ const apiBase = `${normalizedBase}/api`;
 const seenApiVersions = new Set<string>();
 const seenDeprecationWarnings = new Set<string>();
 
+const absoluteUrlPattern = /^(?:https?:|blob:|data:|\/\/)/i;
+
+function isAbsoluteLikeUrl(value: string): boolean {
+  return absoluteUrlPattern.test(value) || value.startsWith("//");
+}
+
+function isMegaProxyUrl(value: string): boolean {
+  return /^\/api\/storage\/mega(?:[/?#]|$)/i.test(value);
+}
+
+export function normalizeUrl(path: string | null | undefined): string {
+  if (!path) return "";
+
+  const value = String(path).trim();
+  if (!value) return "";
+
+  if (isAbsoluteLikeUrl(value) || isMegaProxyUrl(value)) {
+    return value;
+  }
+
+  const normalizedPath = value.startsWith("/") ? value : `/${value}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 // Helper function to get full avatar URL
 export function getAvatarUrl(path: string | null | undefined): string {
-  if (!path) return "";
-  if (/^https?:\/\//i.test(path)) {
-    return path; // Already absolute URL
-  }
-  // Relative path, prepend base URL
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${normalizedBase}${normalizedPath}`;
+  return normalizeUrl(path);
 }
 
 type BodyInitCompatible = BodyInit | object | undefined;

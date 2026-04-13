@@ -20,7 +20,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useToast } from "../../context/useToast";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, normalizeUrl } from "../../api/fetchData";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { getAccessToken } from "../../services/auth-session.service";
@@ -264,18 +264,6 @@ const Reports: React.FC = () => {
     }
   };
 
-  const getAbsoluteUrl = (url: string) => {
-    if (/^https?:\/\//i.test(url)) return url;
-    const envBase = (import.meta.env.VITE_API_BASE_URL || "").toString();
-    if (!envBase) return url.startsWith("/") ? url : `/${url}`;
-    const normalizedBase = envBase.endsWith("/")
-      ? envBase.slice(0, -1)
-      : envBase;
-    return url.startsWith("/")
-      ? `${normalizedBase}${url}`
-      : `${normalizedBase}/${url}`;
-  };
-
   const handleDownloadFile = async (
     file: SubmissionFile,
     e?: React.MouseEvent,
@@ -284,7 +272,7 @@ const Reports: React.FC = () => {
     try {
       // Use the correct API endpoint for downloading files
       const downloadUrl = `/api/SubmissionFiles/download/${file.fileID}`;
-      const url = getAbsoluteUrl(downloadUrl);
+      const url = normalizeUrl(downloadUrl);
 
       const token = getAccessToken();
       const resp = await fetch(url, {

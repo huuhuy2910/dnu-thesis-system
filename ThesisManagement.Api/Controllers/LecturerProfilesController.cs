@@ -112,7 +112,7 @@ namespace ThesisManagement.Api.Controllers
                 lecturerCode = code,
                 hasAvatar = avatar.HasAvatar,
                 imageUrl = avatar.ImageUrl,
-                fullImageUrl = avatar.ImageUrl != null ? $"{Request.Scheme}://{Request.Host}{avatar.ImageUrl}" : null
+                fullImageUrl = ToAbsoluteUrl(avatar.ImageUrl)
             }));
         }
 
@@ -144,6 +144,17 @@ namespace ThesisManagement.Api.Controllers
                 return StatusCode(result.StatusCode, ApiResponse<object>.Fail(result.ErrorMessage ?? "Request failed", result.StatusCode));
 
             return Ok(ApiResponse<object>.SuccessResponse(result.Data));
+        }
+
+        private string? ToAbsoluteUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            if (Uri.TryCreate(url, UriKind.Absolute, out _))
+                return url;
+
+            return $"{Request.Scheme}://{Request.Host}{url}";
         }
     }
 }

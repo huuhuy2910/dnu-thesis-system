@@ -1,0 +1,478 @@
+.student-service-dashboard {
+  min-height: calc(100vh - 80px);
+  padding: 28px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(243, 112, 33, 0.12),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(14, 165, 233, 0.1),
+      transparent 28%
+    ),
+    linear-gradient(180deg, #fffdf9 0%, #f7f8fc 56%, #f5f7fb 100%);
+  color: #0f172a;
+}
+
+.student-service-dashboard * {
+  box-sizing: border-box;
+}
+
+.ssd-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.ssd-hero {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.ssd-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(243, 112, 33, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ssd-hero__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.ssd-hero__title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+  font-weight: 800;
+  color: #111827;
+}
+
+.ssd-hero__desc {
+  max-width: 860px;
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.ssd-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  padding: 12px 16px;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ssd-refresh-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+}
+
+.ssd-stat-grid,
+.ssd-main-grid,
+.ssd-footer-grid {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.ssd-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ssd-main-grid {
+  grid-template-columns: 1.35fr 0.95fr;
+}
+
+.ssd-footer-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.ssd-stat-card,
+.ssd-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.ssd-stat-card {
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ssd-stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  border-radius: 22px 0 0 22px;
+  background: linear-gradient(180deg, #f37021, #fb923c);
+}
+
+.ssd-stat-card.orange::before {
+  background: linear-gradient(180deg, #f37021, #fb923c);
+}
+
+.ssd-stat-card.blue::before {
+  background: linear-gradient(180deg, #0284c7, #38bdf8);
+}
+
+.ssd-stat-card.green::before {
+  background: linear-gradient(180deg, #16a34a, #4ade80);
+}
+
+.ssd-stat-card.purple::before {
+  background: linear-gradient(180deg, #7c3aed, #a78bfa);
+}
+
+.ssd-stat-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #fff;
+  background: linear-gradient(135deg, #f37021, #fb923c);
+  box-shadow: 0 12px 24px rgba(243, 112, 33, 0.2);
+}
+
+.ssd-stat-card.blue .ssd-stat-card__icon {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  box-shadow: 0 12px 24px rgba(2, 132, 199, 0.18);
+}
+
+.ssd-stat-card.green .ssd-stat-card__icon {
+  background: linear-gradient(135deg, #16a34a, #4ade80);
+  box-shadow: 0 12px 24px rgba(22, 163, 74, 0.18);
+}
+
+.ssd-stat-card.purple .ssd-stat-card__icon {
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  box-shadow: 0 12px 24px rgba(124, 58, 237, 0.18);
+}
+
+.ssd-stat-card__body {
+  min-width: 0;
+}
+
+.ssd-stat-card__label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.ssd-stat-card__value {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.ssd-stat-card__hint {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ssd-panel {
+  padding: 22px;
+}
+
+.ssd-panel--wide {
+  min-height: 100%;
+}
+
+.ssd-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.ssd-panel__eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #f37021;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.ssd-panel__title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.ssd-panel__badge-icon {
+  color: #f37021;
+  flex-shrink: 0;
+}
+
+.ssd-issue-list,
+.ssd-action-list,
+.ssd-bar-list,
+.ssd-mini-summary,
+.ssd-notes {
+  display: grid;
+  gap: 12px;
+}
+
+.ssd-issue-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #fcfdff);
+}
+
+.ssd-issue-item.compact {
+  padding: 14px 16px;
+}
+
+.ssd-issue-item__main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ssd-issue-item__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ssd-issue-item__subtitle {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.ssd-issue-item__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ssd-issue-item__meta.stacked {
+  justify-content: space-between;
+}
+
+.ssd-issue-item__date {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.ssd-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.ssd-status-badge.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.ssd-status-badge.warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.ssd-status-badge.danger {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.ssd-status-badge.neutral {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.ssd-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  text-decoration: none;
+  font-weight: 700;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.ssd-action-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(243, 112, 33, 0.3);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.ssd-bar-row {
+  display: grid;
+  gap: 8px;
+}
+
+.ssd-bar-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.ssd-bar-row__head strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.ssd-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.ssd-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f37021, #fb923c);
+}
+
+.ssd-mini-summary {
+  gap: 14px;
+}
+
+.ssd-mini-summary__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.ssd-mini-summary__item span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.ssd-mini-summary__item strong {
+  color: #111827;
+  font-size: 20px;
+}
+
+.ssd-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  color: #7c2d12;
+  line-height: 1.5;
+}
+
+.ssd-empty-state {
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
+}
+
+@media (max-width: 1280px) {
+  .ssd-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ssd-main-grid,
+  .ssd-footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .student-service-dashboard {
+    padding: 16px;
+  }
+
+  .ssd-hero__content {
+    flex-direction: column;
+  }
+
+  .ssd-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ssd-panel {
+    padding: 18px;
+  }
+
+  .ssd-issue-item,
+  .ssd-mini-summary__item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ssd-issue-item__meta {
+    align-items: flex-start;
+  }
+}

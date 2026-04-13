@@ -1,5 +1,6 @@
 using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Services;
+using ThesisManagement.Api.Services.FileStorage;
 
 namespace ThesisManagement.Api.Application.Command.StudentProfiles
 {
@@ -11,10 +12,12 @@ namespace ThesisManagement.Api.Application.Command.StudentProfiles
     public class DeleteStudentProfileCommand : IDeleteStudentProfileCommand
     {
         private readonly IUnitOfWork _uow;
+        private readonly IFileStorageService _storageService;
 
-        public DeleteStudentProfileCommand(IUnitOfWork uow)
+        public DeleteStudentProfileCommand(IUnitOfWork uow, IFileStorageService storageService)
         {
             _uow = uow;
+            _storageService = storageService;
         }
 
         public async Task<OperationResult<object?>> ExecuteAsync(string code)
@@ -23,6 +26,7 @@ namespace ThesisManagement.Api.Application.Command.StudentProfiles
             if (entity == null)
                 return OperationResult<object?>.Failed("StudentProfile not found", 404);
 
+            await _storageService.DeleteAsync(entity.StudentImage);
             _uow.StudentProfiles.Remove(entity);
             await _uow.SaveChangesAsync();
 

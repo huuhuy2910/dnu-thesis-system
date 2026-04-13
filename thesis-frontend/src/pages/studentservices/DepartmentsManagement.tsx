@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, Eye, Filter, Plus, Search, Trash2 } from "lucide-react";
-import { fetchData } from "../../api/fetchData";
+import { fetchData, normalizeUrl } from "../../api/fetchData";
 import ImportExportActions from "../../components/admin/ImportExportActions.tsx";
+import ManagementFormSection from "../../components/admin/ManagementFormSection";
 import TablePagination from "../../components/TablePagination/TablePagination";
 import { useToast } from "../../context/useToast";
 import type { ApiResponse } from "../../types/api";
@@ -764,7 +765,9 @@ const DepartmentsManagement: React.FC = () => {
                                     <div className="departments-lecturer-table-avatar">
                                       {lecturer.profileImage ? (
                                         <img
-                                          src={lecturer.profileImage}
+                                          src={normalizeUrl(
+                                            lecturer.profileImage,
+                                          )}
                                           alt={lecturer.fullName}
                                         />
                                       ) : (
@@ -830,87 +833,25 @@ const DepartmentsManagement: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="departments-form-shell">
-                <div className="departments-modal-header">
-                  <h3>
-                    {activeModal === "create"
-                      ? "Tạo khoa/bộ môn"
-                      : "Cập nhật khoa/bộ môn"}
-                  </h3>
-                  <p>
-                    {activeModal === "create"
-                      ? "Nhập thông tin phòng ban mới theo schema Departments."
-                      : "Chỉnh sửa tên và mô tả phòng ban."}
-                  </p>
-                </div>
-
-                <div className="departments-form-grid">
-                  {(activeModal === "create" ? createFields : editFields).map(
-                    (field) => {
-                      const value = formValues[field.name] ?? "";
-                      return (
-                        <label
-                          key={field.name}
-                          className={`departments-form-field ${field.type === "textarea" ? "departments-form-field-full" : ""}`}
-                        >
-                          <span>
-                            {field.label}
-                            {field.required ? " *" : ""}
-                          </span>
-                          {field.type === "textarea" ? (
-                            <textarea
-                              value={value}
-                              onChange={(event) =>
-                                setFormValues((prev) => ({
-                                  ...prev,
-                                  [field.name]: event.target.value,
-                                }))
-                              }
-                              rows={4}
-                            />
-                          ) : (
-                            <input
-                              type={
-                                field.type === "number"
-                                  ? "number"
-                                  : field.type === "date"
-                                    ? "date"
-                                    : "text"
-                              }
-                              value={value}
-                              onChange={(event) =>
-                                setFormValues((prev) => ({
-                                  ...prev,
-                                  [field.name]: event.target.value,
-                                }))
-                              }
-                            />
-                          )}
-                        </label>
-                      );
-                    },
-                  )}
-                </div>
-
-                <div className="departments-form-actions">
-                  <button
-                    type="button"
-                    className="departments-cancel-btn"
-                    onClick={() => setActiveModal(null)}
-                    disabled={isSubmitting}
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="button"
-                    className="departments-save-btn"
-                    onClick={() => void handleSubmit()}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Đang lưu..." : "Lưu"}
-                  </button>
-                </div>
-              </div>
+              <ManagementFormSection
+                fields={activeModal === "create" ? createFields : editFields}
+                values={formValues}
+                onFieldChange={(name, value) =>
+                  setFormValues((prev) => ({ ...prev, [name]: value }))
+                }
+                onSubmit={() => void handleSubmit()}
+                onClose={() => setActiveModal(null)}
+                isSubmitting={isSubmitting}
+                note={
+                  activeModal === "create"
+                    ? "Nhập thông tin khoa/bộ môn mới theo schema Departments. Trường có dấu * là bắt buộc."
+                    : "Chỉnh sửa tên và mô tả khoa/bộ môn. Mã khoa/bộ môn được giữ nguyên khi cập nhật."
+                }
+                submitLabel={
+                  activeModal === "create" ? "Tạo khoa/bộ môn" : "Lưu cập nhật"
+                }
+                showCloseButton={false}
+              />
             )}
           </div>
         </div>

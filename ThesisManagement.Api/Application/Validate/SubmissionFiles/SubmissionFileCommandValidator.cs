@@ -24,6 +24,9 @@ namespace ThesisManagement.Api.Application.Validate.SubmissionFiles
             if (file == null || file.Length == 0)
                 return "File is required";
 
+            if (file.Length > 10 * 1024 * 1024)
+                return "Kích thước file không được vượt quá 10MB";
+
             return null;
         }
     }

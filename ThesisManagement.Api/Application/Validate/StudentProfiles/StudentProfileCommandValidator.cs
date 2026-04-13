@@ -26,8 +26,8 @@ namespace ThesisManagement.Api.Application.Validate.StudentProfiles
             if (string.IsNullOrWhiteSpace(extension) || !AllowedImageExtensions.Contains(extension))
                 return "Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif, bmp)";
 
-            if (file.Length > 5 * 1024 * 1024)
-                return "Kích thước file không được vượt quá 5MB";
+            if (file.Length > 10 * 1024 * 1024)
+                return "Kích thước file không được vượt quá 10MB";
 
             return null;
         }
