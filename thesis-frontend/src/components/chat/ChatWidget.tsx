@@ -152,6 +152,14 @@ function resolveReactionAvatar(path?: string | null): string {
   return normalizeUrl(path);
 }
 
+function getAvatarFallbackText(
+  fullName?: string | null,
+  userCode?: string | null,
+): string {
+  const text = String(fullName || userCode || "").trim();
+  return text ? text.slice(0, 1).toUpperCase() : "?";
+}
+
 const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
   const auth = useAuth();
   const {
@@ -939,6 +947,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                 const senderMember = message.senderUserCode
                   ? memberByCode.get(String(message.senderUserCode))
                   : undefined;
+                const senderAvatarUrl =
+                  senderMember?.avatarURL || otherMember?.avatarURL || "";
+                const senderAvatarLabel =
+                  senderMember?.fullName ||
+                  message.senderUserCode ||
+                  "Người dùng";
 
                 const reactionGroups = Object.values(
                   reactions.reduce<
@@ -1031,17 +1045,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                           justifyContent: "center",
                         }}
                       >
-                        {showSenderAvatar &&
-                        (senderMember?.avatarURL || otherMember?.avatarURL) ? (
+                        {showSenderAvatar && senderAvatarUrl ? (
                           <img
-                            src={getAvatarUrl(
-                              senderMember?.avatarURL || otherMember?.avatarURL,
-                            )}
-                            alt={
-                              senderMember?.fullName ||
-                              message.senderUserCode ||
-                              "chat-user"
-                            }
+                            src={getAvatarUrl(senderAvatarUrl)}
+                            alt={senderAvatarLabel}
                             style={{
                               width: 24,
                               height: 24,
@@ -1049,6 +1056,29 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                               objectFit: "cover",
                             }}
                           />
+                        ) : showSenderAvatar ? (
+                          <div
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "#e2e8f0",
+                              color: palette.titleColor,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                            }}
+                            aria-label={senderAvatarLabel}
+                            title={senderAvatarLabel}
+                          >
+                            {getAvatarFallbackText(
+                              senderMember?.fullName,
+                              message.senderUserCode,
+                            )}
+                          </div>
                         ) : null}
                       </div>
                     )}

@@ -9,7 +9,6 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  Edit,
   LayoutGrid,
   List,
   Search,
@@ -30,7 +29,7 @@ interface Student {
   topicTitle: string;
   topicCode: string;
   registrationDate: string;
-  status: "approved" | "pending" | "rejected" | "revision";
+  status: "approved" | "pending" | "defense-ready" | "committee-assigned";
   progress: number;
   lastActivity: string;
   topic: Topic;
@@ -66,12 +65,12 @@ const LecturerStudents: React.FC = () => {
 
     // Sort milestones by ordinal
     const sortedMilestones = milestones.sort(
-      (a, b) => (a.ordinal || 0) - (b.ordinal || 0)
+      (a, b) => (a.ordinal || 0) - (b.ordinal || 0),
     );
 
     // Find the first milestone that is not completed
     const currentMilestone = sortedMilestones.find(
-      (m) => m.state !== "completed"
+      (m) => m.state !== "completed",
     );
     return currentMilestone || sortedMilestones[sortedMilestones.length - 1];
   };
@@ -85,10 +84,15 @@ const LecturerStudents: React.FC = () => {
       case "đang chờ":
       case "chờ duyệt":
         return "pending";
-      case "từ chối":
-        return "rejected";
+      case "đủ điều kiện bảo vệ":
       case "cần sửa đổi":
-        return "revision";
+      case "revision":
+        return "defense-ready";
+      case "đã phân hội đồng":
+      case "phân hội đồng":
+      case "từ chối":
+      case "rejected":
+        return "committee-assigned";
       default:
         return "pending";
     }
@@ -112,7 +116,7 @@ const LecturerStudents: React.FC = () => {
         m.completedAt2 ||
         m.completedAt3 ||
         m.completedAt4 ||
-        m.completedAt5
+        m.completedAt5,
     ).length;
 
     return Math.round((completedMilestones / milestoneOrder.length) * 100);
@@ -128,7 +132,7 @@ const LecturerStudents: React.FC = () => {
 
         // Fetch topics supervised by lecturer
         const topicsResponse: { data: Topic[] } = await fetchData(
-          `/Topics/get-list?SupervisorUserCode=${user.userCode}`
+          `/Topics/get-list?SupervisorUserCode=${user.userCode}`,
         );
         const topics: Topic[] = topicsResponse.data || [];
 
@@ -139,14 +143,14 @@ const LecturerStudents: React.FC = () => {
               // Fetch student profile
               const studentResponse: { data: StudentProfile[] } =
                 await fetchData(
-                  `/StudentProfiles/get-list?StudentCode=${topic.proposerStudentCode}`
+                  `/StudentProfiles/get-list?StudentCode=${topic.proposerStudentCode}`,
                 );
               const studentProfile: StudentProfile = studentResponse.data?.[0];
 
               // Fetch progress milestones
               const progressResponse: { data: ProgressMilestone[] } =
                 await fetchData(
-                  `/ProgressMilestones/get-list?TopicID=${topic.topicID}`
+                  `/ProgressMilestones/get-list?TopicID=${topic.topicID}`,
                 );
               const milestones: ProgressMilestone[] =
                 progressResponse.data || [];
@@ -158,7 +162,7 @@ const LecturerStudents: React.FC = () => {
                   ? milestones.sort(
                       (a, b) =>
                         new Date(b.lastUpdated).getTime() -
-                        new Date(a.lastUpdated).getTime()
+                        new Date(a.lastUpdated).getTime(),
                     )[0].lastUpdated
                   : topic.lastUpdated;
 
@@ -181,7 +185,7 @@ const LecturerStudents: React.FC = () => {
             } catch (err) {
               console.error(
                 `Error fetching data for topic ${topic.topicCode}:`,
-                err
+                err,
               );
               // Return basic info if API calls fail
               return {
@@ -198,7 +202,7 @@ const LecturerStudents: React.FC = () => {
                 topic,
               };
             }
-          })
+          }),
         );
 
         setStudents(studentsData);
@@ -219,10 +223,10 @@ const LecturerStudents: React.FC = () => {
         return <CheckCircle size={16} color="#22C55E" />;
       case "pending":
         return <Clock size={16} color="#F59E0B" />;
-      case "rejected":
-        return <AlertCircle size={16} color="#EF4444" />;
-      case "revision":
-        return <Edit size={16} color="#F59E0B" />;
+      case "defense-ready":
+        return <CheckCircle size={16} color="#10B981" />;
+      case "committee-assigned":
+        return <BookOpen size={16} color="#3B82F6" />;
       default:
         return <Clock size={16} color="#6B7280" />;
     }
@@ -234,10 +238,10 @@ const LecturerStudents: React.FC = () => {
         return "Đã duyệt";
       case "pending":
         return "Chờ duyệt";
-      case "rejected":
-        return "Từ chối";
-      case "revision":
-        return "Cần sửa đổi";
+      case "defense-ready":
+        return "Đủ điều kiện bảo vệ";
+      case "committee-assigned":
+        return "Đã phân hội đồng";
       default:
         return "Không xác định";
     }
@@ -249,10 +253,10 @@ const LecturerStudents: React.FC = () => {
         return "#22C55E";
       case "pending":
         return "#F59E0B";
-      case "rejected":
-        return "#EF4444";
-      case "revision":
-        return "#F59E0B";
+      case "defense-ready":
+        return "#10B981";
+      case "committee-assigned":
+        return "#3B82F6";
       default:
         return "#6B7280";
     }
@@ -453,8 +457,8 @@ const LecturerStudents: React.FC = () => {
                     <option value="all">Tất cả trạng thái</option>
                     <option value="approved">Đã duyệt</option>
                     <option value="pending">Chờ duyệt</option>
-                    <option value="revision">Cần sửa đổi</option>
-                    <option value="rejected">Từ chối</option>
+                    <option value="defense-ready">Đủ điều kiện bảo vệ</option>
+                    <option value="committee-assigned">Đã phân hội đồng</option>
                   </select>
                 </div>
 
@@ -617,52 +621,63 @@ const LecturerStudents: React.FC = () => {
 
             <div
               style={{
-                background: "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
-                border: "1px solid #F59E0B",
+                background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)",
+                border: "1px solid #10B981",
                 borderRadius: "12px",
                 padding: "20px",
                 textAlign: "center",
               }}
             >
-              <Edit size={24} color="#F59E0B" style={{ marginBottom: "8px" }} />
-              <div
-                style={{
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  color: "#F59E0B",
-                  marginBottom: "4px",
-                }}
-              >
-                {students.filter((s) => s.status === "revision").length}
-              </div>
-              <div style={{ fontSize: "12px", color: "#666" }}>Cần sửa đổi</div>
-            </div>
-
-            <div
-              style={{
-                background: "linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)",
-                border: "1px solid #EF4444",
-                borderRadius: "12px",
-                padding: "20px",
-                textAlign: "center",
-              }}
-            >
-              <AlertCircle
+              <CheckCircle
                 size={24}
-                color="#EF4444"
+                color="#10B981"
                 style={{ marginBottom: "8px" }}
               />
               <div
                 style={{
                   fontSize: "24px",
                   fontWeight: "700",
-                  color: "#EF4444",
+                  color: "#10B981",
                   marginBottom: "4px",
                 }}
               >
-                {students.filter((s) => s.status === "rejected").length}
+                {students.filter((s) => s.status === "defense-ready").length}
               </div>
-              <div style={{ fontSize: "12px", color: "#666" }}>Từ chối</div>
+              <div style={{ fontSize: "12px", color: "#666" }}>
+                Đủ điều kiện bảo vệ
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
+                border: "1px solid #3B82F6",
+                borderRadius: "12px",
+                padding: "20px",
+                textAlign: "center",
+              }}
+            >
+              <BookOpen
+                size={24}
+                color="#3B82F6"
+                style={{ marginBottom: "8px" }}
+              />
+              <div
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3B82F6",
+                  marginBottom: "4px",
+                }}
+              >
+                {
+                  students.filter((s) => s.status === "committee-assigned")
+                    .length
+                }
+              </div>
+              <div style={{ fontSize: "12px", color: "#666" }}>
+                Đã phân hội đồng
+              </div>
             </div>
           </div>
 
@@ -720,7 +735,7 @@ const LecturerStudents: React.FC = () => {
                       {student.studentProfile?.studentImage ? (
                         <img
                           src={getAvatarUrl(
-                            student.studentProfile.studentImage
+                            student.studentProfile.studentImage,
                           )}
                           alt={student.studentName}
                           style={{
@@ -841,7 +856,7 @@ const LecturerStudents: React.FC = () => {
                           <span style={{ fontSize: "14px", color: "#666" }}>
                             Đăng ký:{" "}
                             {new Date(
-                              student.registrationDate
+                              student.registrationDate,
                             ).toLocaleDateString("vi-VN")}
                           </span>
                         </div>
@@ -1195,7 +1210,7 @@ const LecturerStudents: React.FC = () => {
                               {student.studentProfile?.studentImage ? (
                                 <img
                                   src={getAvatarUrl(
-                                    student.studentProfile.studentImage
+                                    student.studentProfile.studentImage,
                                   )}
                                   alt={student.studentName}
                                   style={{
@@ -1339,7 +1354,7 @@ const LecturerStudents: React.FC = () => {
                         <td style={{ padding: "16px", textAlign: "center" }}>
                           <div style={{ fontSize: "13px", color: "#4B5563" }}>
                             {new Date(
-                              student.registrationDate
+                              student.registrationDate,
                             ).toLocaleDateString("vi-VN")}
                           </div>
                         </td>
@@ -1536,7 +1551,7 @@ const LecturerStudents: React.FC = () => {
                   {detailModal.student.studentProfile?.studentImage ? (
                     <img
                       src={getAvatarUrl(
-                        detailModal.student.studentProfile.studentImage
+                        detailModal.student.studentProfile.studentImage,
                       )}
                       alt={detailModal.student.studentName}
                       style={{
@@ -1593,7 +1608,7 @@ const LecturerStudents: React.FC = () => {
                         getStatusColor(detailModal.student.status) + "30",
                       borderRadius: "20px",
                       border: `1px solid ${getStatusColor(
-                        detailModal.student.status
+                        detailModal.student.status,
                       )}50`,
                     }}
                   >
@@ -1945,7 +1960,7 @@ const LecturerStudents: React.FC = () => {
                             }}
                           >
                             {new Date(
-                              detailModal.student.registrationDate
+                              detailModal.student.registrationDate,
                             ).toLocaleDateString("vi-VN")}
                           </p>
                         </div>
@@ -2019,7 +2034,7 @@ const LecturerStudents: React.FC = () => {
                     getCurrentMilestone(detailModal.student.milestones) ? (
                       (() => {
                         const currentMilestone = getCurrentMilestone(
-                          detailModal.student.milestones
+                          detailModal.student.milestones,
                         );
                         const milestoneData: {
                           [key: string]: { name: string; description: string };
@@ -2224,7 +2239,7 @@ const LecturerStudents: React.FC = () => {
                       }}
                     >
                       {new Date(
-                        detailModal.student.lastActivity
+                        detailModal.student.lastActivity,
                       ).toLocaleDateString("vi-VN", {
                         year: "numeric",
                         month: "long",

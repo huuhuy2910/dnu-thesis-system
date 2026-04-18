@@ -18,6 +18,7 @@ import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import LecturerStudents from "../pages/lecturer/LecturerStudents";
 import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
+import LecturerTopicRenameRequests from "../pages/lecturer/TopicRenameRequests";
 import UsersManagement from "../pages/admin/UsersManagement";
 import SystemConfig from "../pages/admin/SystemConfig";
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -95,6 +96,14 @@ const AppRoutes: React.FC = () => {
           <Route path="committees" element={<LecturerCommittees />} />
           <Route path="reports" element={<LecturerReports />} />
           <Route path="topic-review" element={<LecturerTopicReviewPage />} />
+          <Route
+            path="topic-rename-requests"
+            element={
+              <RouteErrorBoundary pageTitle="Xin đổi tên đề tài">
+                <LecturerTopicRenameRequests />
+              </RouteErrorBoundary>
+            }
+          />
           <Route path="workflow-audits" element={<TopicWorkflowAudits />} />
           <Route path="profile" element={<LecturerProfilePage />} />
           <Route path="change-password" element={<ChangePasswordPage />} />
@@ -128,7 +137,10 @@ const AppRoutes: React.FC = () => {
             element={<CatalogTopicsWarehousePage />}
           />
           <Route path="topic-review" element={<LecturerTopicReview />} />
-          <Route path="defense-periods" element={<DefensePeriodsManagement />} />
+          <Route
+            path="defense-periods"
+            element={<DefensePeriodsManagement />}
+          />
           <Route path="rooms" element={<RoomsManagement />} />
           <Route
             path="committees"

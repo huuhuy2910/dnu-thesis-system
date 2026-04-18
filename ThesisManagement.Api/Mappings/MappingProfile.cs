@@ -17,6 +17,7 @@ using ThesisManagement.Api.DTOs.ProgressMilestones.Query;
 using ThesisManagement.Api.DTOs.ProgressSubmissions.Query;
 using ThesisManagement.Api.DTOs.DefenseTermLecturers.Query;
 using ThesisManagement.Api.DTOs.DefenseTermStudents.Query;
+using ThesisManagement.Api.DTOs.TopicRenameRequests.Query;
 using ThesisManagement.Api.DTOs.StudentProfiles.Query;
 using ThesisManagement.Api.DTOs.SubmissionFiles.Query;
 using ThesisManagement.Api.DTOs.SystemActivityLogs.Query;
@@ -70,6 +71,9 @@ namespace ThesisManagement.Api.Mappings
             CreateMap<DefenseTerm, DefenseTermReadDto>();
             CreateMap<DefenseTermStudent, DefenseTermStudentReadDto>();
             CreateMap<DefenseTermLecturer, DefenseTermLecturerReadDto>();
+            CreateMap<TopicRenameRequest, TopicRenameRequestReadDto>();
+            CreateMap<TopicRenameRequestFile, TopicRenameRequestFileReadDto>();
+            CreateMap<TopicTitleHistory, TopicTitleHistoryReadDto>();
             CreateMap<TopicLecturer, TopicLecturerReadDto>();
             CreateMap<LecturerTag, LecturerTagReadDto>();
             CreateMap<CatalogTopicTag, CatalogTopicTagReadDto>();
