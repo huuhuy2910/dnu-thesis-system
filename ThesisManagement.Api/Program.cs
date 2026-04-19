@@ -455,6 +455,8 @@ builder.Services.AddScoped<IUpdateDefensePeriodConfigCommand, UpdateDefensePerio
 builder.Services.AddScoped<ILockLecturerCapabilitiesCommand, LockLecturerCapabilitiesCommand>();
 builder.Services.AddScoped<IConfirmCouncilConfigCommand, ConfirmCouncilConfigCommand>();
 builder.Services.AddScoped<IGenerateCouncilsCommand, GenerateCouncilsCommand>();
+builder.Services.AddScoped<ILockCouncilsCommand, LockCouncilsCommand>();
+builder.Services.AddScoped<IReopenCouncilsCommand, ReopenCouncilsCommand>();
 builder.Services.AddScoped<ICreateCouncilCommand, CreateCouncilCommand>();
 builder.Services.AddScoped<IUpdateCouncilCommand, UpdateCouncilCommand>();
 builder.Services.AddScoped<IDeleteCouncilCommand, DeleteCouncilCommand>();
@@ -475,6 +477,7 @@ builder.Services.AddScoped<IPublishDefensePeriodScoresCommand, PublishDefensePer
 builder.Services.AddScoped<ISaveLecturerMinuteCommand, SaveLecturerMinuteCommand>();
 builder.Services.AddScoped<ISubmitLecturerIndependentScoreCommand, SubmitLecturerIndependentScoreCommand>();
 builder.Services.AddScoped<IRequestReopenScoreCommand, RequestReopenScoreCommand>();
+builder.Services.AddScoped<IOpenLecturerSessionCommand, OpenLecturerSessionCommand>();
 builder.Services.AddScoped<ILockLecturerSessionCommand, LockLecturerSessionCommand>();
 builder.Services.AddScoped<IApproveRevisionByLecturerCommand, ApproveRevisionByLecturerCommand>();
 builder.Services.AddScoped<IRejectRevisionByLecturerCommand, RejectRevisionByLecturerCommand>();

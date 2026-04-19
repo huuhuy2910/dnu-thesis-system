@@ -61,6 +61,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         public int SoftMaxCapacity { get; set; } = 4;
         public bool LecturerCapabilitiesLocked { get; set; }
         public bool CouncilConfigConfirmed { get; set; }
+        public bool CouncilListLocked { get; set; }
         public bool Finalized { get; set; }
         public bool ScoresPublished { get; set; }
         public ConfirmCouncilConfigDto CouncilConfig { get; set; } = new();
@@ -216,7 +217,13 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var readiness = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
             {
                 ["module2"] = config.CouncilConfigConfirmed && config.LecturerCapabilitiesLocked,
-                ["canFinalize"] = config.CouncilIds.Count > 0 && !config.Finalized,
+                ["canFinalize"] = config.CouncilIds.Count > 0 && config.CouncilListLocked && !config.Finalized,
+                ["canLockCouncils"] = config.CouncilIds.Count > 0
+                    && config.LecturerCapabilitiesLocked
+                    && config.CouncilConfigConfirmed
+                    && !config.CouncilListLocked
+                    && !config.Finalized,
+                ["canReopenCouncils"] = config.CouncilListLocked && !config.Finalized && !config.ScoresPublished,
                 ["canPublish"] = config.Finalized && !config.ScoresPublished,
                 ["canRollbackPublish"] = config.ScoresPublished,
                 ["canRollbackFinalize"] = config.Finalized && !config.ScoresPublished,
@@ -243,8 +250,20 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
                 if (!config.Finalized)
                 {
-                    allowedActions.Add("GENERATE_COUNCILS");
-                    allowedActions.Add("UPDATE_COUNCILS");
+                    if (!config.CouncilListLocked)
+                    {
+                        allowedActions.Add("GENERATE_COUNCILS");
+                        allowedActions.Add("UPDATE_COUNCILS");
+
+                        if (readiness["canLockCouncils"])
+                        {
+                            allowedActions.Add("LOCK_COUNCILS");
+                        }
+                    }
+                    else if (readiness["canReopenCouncils"])
+                    {
+                        allowedActions.Add("REOPEN_COUNCILS");
+                    }
                 }
 
                 if (readiness["canFinalize"])
@@ -289,12 +308,18 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 warnings.Add("UC2.READINESS.NO_COUNCILS");
             }
 
+            if (config.CouncilIds.Count > 0 && !config.CouncilListLocked)
+            {
+                warnings.Add("UC2.READINESS.COUNCIL_LIST_NOT_LOCKED");
+            }
+
             var dto = new DefensePeriodStateDto
             {
                 StartDate = period.StartDate,
                 EndDate = period.EndDate,
                 LecturerCapabilitiesLocked = config.LecturerCapabilitiesLocked,
                 CouncilConfigConfirmed = config.CouncilConfigConfirmed,
+                CouncilListLocked = config.CouncilListLocked,
                 Finalized = config.Finalized,
                 ScoresPublished = config.ScoresPublished,
                 CouncilCount = config.CouncilIds.Count,
@@ -778,10 +803,22 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         public async Task<ApiResponse<object>> GetLecturerCommitteesAsync(string lecturerCode, int? periodId = null, CancellationToken cancellationToken = default)
         {
             HashSet<int>? scopedCouncilIds = null;
+            DefensePeriodConfigSnapshot? periodConfig = null;
             if (periodId.HasValue)
             {
-                var config = await GetPeriodConfigAsync(periodId.Value, cancellationToken);
-                scopedCouncilIds = config.CouncilIds.ToHashSet();
+                periodConfig = await GetPeriodConfigAsync(periodId.Value, cancellationToken);
+                if (!periodConfig.CouncilListLocked)
+                {
+                    return ApiResponse<object>.SuccessResponse(new
+                    {
+                        LecturerCode = lecturerCode,
+                        CouncilListLocked = false,
+                        CouncilLockStatus = ToCouncilLockStatus(false),
+                        Committees = new List<object>()
+                    });
+                }
+
+                scopedCouncilIds = periodConfig.CouncilIds.ToHashSet();
             }
 
             var query = _db.CommitteeMembers.AsNoTracking()
@@ -804,7 +841,33 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var committees = await query.OrderBy(x => x.DefenseDate).ToListAsync(cancellationToken);
 
-            return ApiResponse<object>.SuccessResponse(new { LecturerCode = lecturerCode, Committees = committees });
+            var enrichedCommittees = committees.Select(x =>
+            {
+                var normalizedRole = NormalizeCommitteeRole(x.Role);
+                return new
+                {
+                    x.CommitteeID,
+                    x.CommitteeCode,
+                    x.Name,
+                    x.Room,
+                    x.DefenseDate,
+                    Role = x.Role,
+                    NormalizedRole = normalizedRole,
+                    AllowedScoringActions = BuildAllowedScoringActions(normalizedRole),
+                    AllowedMinuteActions = BuildAllowedMinuteActions(normalizedRole),
+                    AllowedRevisionActions = BuildAllowedRevisionActions(normalizedRole)
+                };
+            }).ToList();
+
+            var councilListLocked = periodConfig?.CouncilListLocked ?? true;
+
+            return ApiResponse<object>.SuccessResponse(new
+            {
+                LecturerCode = lecturerCode,
+                CouncilListLocked = councilListLocked,
+                CouncilLockStatus = ToCouncilLockStatus(councilListLocked),
+                Committees = enrichedCommittees
+            });
         }
 
         public async Task<ApiResponse<List<LecturerCommitteeMinuteDto>>> GetLecturerMinutesAsync(int committeeId, int? periodId = null, CancellationToken cancellationToken = default)
@@ -898,41 +961,181 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         public async Task<ApiResponse<StudentDefenseInfoDtoV2>> GetStudentDefenseInfoAsync(string studentCode, int? periodId = null, CancellationToken cancellationToken = default)
         {
-            HashSet<int>? scopedCouncilIds = null;
-            if (periodId.HasValue)
+            var normalizedStudentCode = string.IsNullOrWhiteSpace(studentCode) ? string.Empty : studentCode.Trim();
+            var (resolvedStudentCode, resolvedStudentName, candidateIdentityCodes) =
+                await ResolveStudentIdentityAsync(normalizedStudentCode, cancellationToken);
+
+            var studentName = string.IsNullOrWhiteSpace(resolvedStudentName)
+                ? resolvedStudentCode
+                : resolvedStudentName;
+
+            var normalizedStudentCodeSet = candidateIdentityCodes
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (normalizedStudentCodeSet.Count == 0 && !string.IsNullOrWhiteSpace(resolvedStudentCode))
             {
-                var config = await GetPeriodConfigAsync(periodId.Value, cancellationToken);
-                scopedCouncilIds = config.CouncilIds.ToHashSet();
+                normalizedStudentCodeSet.Add(resolvedStudentCode.ToUpperInvariant());
             }
 
-            var projection = await _db.Topics.AsNoTracking()
-                .Where(t => t.ProposerStudentCode == studentCode)
-                .Join(_db.DefenseAssignments.AsNoTracking(), t => t.TopicCode, a => a.TopicCode, (t, a) => new { t, a })
-                .Where(x => scopedCouncilIds == null || (x.a.CommitteeID.HasValue && scopedCouncilIds.Contains(x.a.CommitteeID.Value)))
-                .Join(_db.Committees.AsNoTracking(), ta => ta.a.CommitteeID, c => c.CommitteeID, (ta, c) => new { ta.t, ta.a, c })
-                .GroupJoin(_db.DefenseResults.AsNoTracking(), x => x.a.AssignmentID, r => r.AssignmentId, (x, r) => new { x, result = r.FirstOrDefault() })
-                .Select(x => new StudentDefenseInfoDtoV2
+            DefensePeriodConfigSnapshot? periodConfig = null;
+            if (periodId.HasValue)
+            {
+                var periodExists = await PeriodExistsAsync(periodId.Value, cancellationToken);
+                if (!periodExists)
                 {
-                    StudentCode = studentCode,
-                    StudentName = _db.StudentProfiles.Where(s => s.StudentCode == studentCode).Select(s => s.FullName).FirstOrDefault() ?? studentCode,
-                    TopicCode = x.x.t.TopicCode,
-                    TopicTitle = x.x.t.Title,
-                    CommitteeCode = x.x.c.CommitteeCode,
-                    Room = x.x.c.Room,
-                    ScheduledAt = x.x.a.ScheduledAt,
-                    Session = x.x.a.Session,
-                    SessionCode = ToSessionCode(x.x.a.Session),
-                    FinalScore = x.result != null ? x.result.FinalScoreNumeric : null,
-                    Grade = x.result != null ? x.result.FinalScoreText : null
-                })
+                    return ApiResponse<StudentDefenseInfoDtoV2>.Fail("Không tìm thấy đợt bảo vệ.", 404);
+                }
+
+                periodConfig = await GetPeriodConfigAsync(periodId.Value, cancellationToken);
+            }
+
+            var councilListLocked = periodConfig?.CouncilListLocked ?? true;
+
+            var topicQuery = _db.Topics.AsNoTracking()
+                .Where(t => t.ProposerStudentCode != null
+                    && normalizedStudentCodeSet.Contains(t.ProposerStudentCode.ToUpper()));
+
+            if (periodId.HasValue)
+            {
+                topicQuery = topicQuery.Where(t => t.DefenseTermId == periodId.Value);
+            }
+
+            var topic = await topicQuery
+                .OrderByDescending(t => t.LastUpdated ?? t.CreatedAt)
+                .ThenBy(t => t.TopicCode)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (projection == null)
+            if (topic == null)
             {
+                if (periodId.HasValue)
+                {
+                    return ApiResponse<StudentDefenseInfoDtoV2>.SuccessResponse(
+                        new StudentDefenseInfoDtoV2
+                        {
+                            StudentCode = resolvedStudentCode,
+                            StudentName = studentName,
+                            CouncilListLocked = councilListLocked,
+                            CouncilLockStatus = ToCouncilLockStatus(councilListLocked)
+                        },
+                        code: "DEFENSE_INFO_NOT_READY",
+                        warnings: new List<ApiWarning>
+                        {
+                            new()
+                            {
+                                Type = "soft",
+                                Code = "DEFENSE_INFO_NOT_READY",
+                                Message = "Chưa có thông tin bảo vệ chi tiết cho sinh viên trong đợt hiện tại."
+                            }
+                        });
+                }
+
                 return ApiResponse<StudentDefenseInfoDtoV2>.Fail("Chưa có thông tin bảo vệ.", 404);
             }
 
-            return ApiResponse<StudentDefenseInfoDtoV2>.SuccessResponse(projection);
+            var assignmentQuery = _db.DefenseAssignments.AsNoTracking()
+                .Where(a => a.TopicCode == topic.TopicCode);
+
+            if (periodId.HasValue)
+            {
+                assignmentQuery = assignmentQuery.Where(a => a.DefenseTermId == periodId.Value);
+            }
+
+            var assignment = await assignmentQuery
+                .OrderByDescending(a => a.LastUpdated)
+                .ThenByDescending(a => a.CreatedAt)
+                .ThenByDescending(a => a.AssignmentID)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (assignment == null && periodId.HasValue && periodConfig?.CouncilIds.Count > 0)
+            {
+                assignment = await _db.DefenseAssignments.AsNoTracking()
+                    .Where(a => a.TopicCode == topic.TopicCode
+                        && a.CommitteeID.HasValue
+                        && periodConfig.CouncilIds.Contains(a.CommitteeID.Value))
+                    .OrderByDescending(a => a.LastUpdated)
+                    .ThenByDescending(a => a.CreatedAt)
+                    .ThenByDescending(a => a.AssignmentID)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            Committee? committee = null;
+            if (assignment != null)
+            {
+                var committeeQuery = _db.Committees.AsNoTracking()
+                    .Where(c => (assignment.CommitteeID.HasValue && c.CommitteeID == assignment.CommitteeID.Value)
+                        || (!string.IsNullOrWhiteSpace(assignment.CommitteeCode) && c.CommitteeCode == assignment.CommitteeCode));
+
+                committee = await committeeQuery.FirstOrDefaultAsync(cancellationToken);
+            }
+
+            DefenseResult? result = null;
+            if (assignment != null)
+            {
+                result = await _db.DefenseResults.AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.AssignmentId == assignment.AssignmentID, cancellationToken);
+            }
+
+            var warnings = new List<ApiWarning>();
+            if (periodId.HasValue && periodConfig != null && !periodConfig.CouncilListLocked)
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "DEFENSE_INFO_NOT_READY",
+                    Message = "Danh sách hội đồng chưa chốt, một số thông tin bảo vệ có thể đang được cập nhật."
+                });
+            }
+
+            if (assignment == null)
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "DEFENSE_INFO_ASSIGNMENT_PENDING",
+                    Message = "Đã có đề tài nhưng lịch bảo vệ chưa được phân công đầy đủ."
+                });
+            }
+            else if (committee == null)
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "DEFENSE_INFO_COMMITTEE_PENDING",
+                    Message = "Lịch bảo vệ đã có nhưng thông tin hội đồng/phòng đang được cập nhật."
+                });
+            }
+
+            var scheduledAt = ResolveScheduledAt(
+                assignment?.ScheduledAt,
+                committee?.DefenseDate,
+                assignment?.StartTime,
+                assignment?.Session,
+                periodConfig);
+
+            var projection = new StudentDefenseInfoDtoV2
+            {
+                StudentCode = resolvedStudentCode,
+                StudentName = studentName,
+                TopicCode = topic.TopicCode,
+                TopicTitle = topic.Title,
+                CommitteeCode = committee?.CommitteeCode ?? assignment?.CommitteeCode,
+                Room = committee?.Room,
+                ScheduledAt = scheduledAt,
+                Session = assignment?.Session,
+                SessionCode = assignment?.Session.HasValue == true ? ToSessionCode(assignment.Session) : null,
+                FinalScore = result != null ? result.FinalScoreNumeric : null,
+                Grade = result != null ? result.FinalScoreText : null,
+                CouncilListLocked = councilListLocked,
+                CouncilLockStatus = ToCouncilLockStatus(councilListLocked)
+            };
+
+            return ApiResponse<StudentDefenseInfoDtoV2>.SuccessResponse(
+                projection,
+                code: warnings.Count > 0 ? "DEFENSE_INFO_PARTIAL" : null,
+                warnings: warnings);
         }
 
         public async Task<ApiResponse<List<StudentNotificationDto>>> GetStudentNotificationsAsync(string studentCode, int? periodId = null, CancellationToken cancellationToken = default)
@@ -962,6 +1165,25 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         public async Task<ApiResponse<List<object>>> GetStudentRevisionHistoryAsync(string studentCode, int? periodId = null, CancellationToken cancellationToken = default)
         {
+            var normalizedStudentCode = string.IsNullOrWhiteSpace(studentCode) ? string.Empty : studentCode.Trim();
+            var (_, _, candidateIdentityCodes) = await ResolveStudentIdentityAsync(normalizedStudentCode, cancellationToken);
+
+            var normalizedStudentCodeSet = candidateIdentityCodes
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (normalizedStudentCodeSet.Count == 0 && !string.IsNullOrWhiteSpace(normalizedStudentCode))
+            {
+                normalizedStudentCodeSet.Add(normalizedStudentCode.ToUpperInvariant());
+            }
+
+            if (normalizedStudentCodeSet.Count == 0)
+            {
+                return ApiResponse<List<object>>.SuccessResponse(new List<object>());
+            }
+
             HashSet<int>? scopedCouncilIds = null;
             if (periodId.HasValue)
             {
@@ -970,7 +1192,8 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
 
             var history = await _db.Topics.AsNoTracking()
-                .Where(t => t.ProposerStudentCode == studentCode)
+                .Where(t => t.ProposerStudentCode != null
+                    && normalizedStudentCodeSet.Contains(t.ProposerStudentCode.ToUpper()))
                 .Join(_db.DefenseAssignments.AsNoTracking(), t => t.TopicCode, a => a.TopicCode, (t, a) => a)
                 .Where(a => scopedCouncilIds == null || (a.CommitteeID.HasValue && scopedCouncilIds.Contains(a.CommitteeID.Value)))
                 .Join(_db.DefenseRevisions.AsNoTracking(), a => a.AssignmentID, r => r.AssignmentId, (a, r) => new
@@ -1065,6 +1288,24 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var assignmentIds = assignments.Select(x => x.AssignmentID).ToList();
             var committeeIds = assignments.Where(x => x.CommitteeID.HasValue).Select(x => x.CommitteeID!.Value).Distinct().ToList();
             var topicCodes = assignments.Where(x => !string.IsNullOrWhiteSpace(x.TopicCode)).Select(x => x.TopicCode!).Distinct().ToList();
+
+            var defenseDocuments = await _db.DefenseDocuments.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentId))
+                .OrderByDescending(x => x.GeneratedAt)
+                .ThenBy(x => x.DocumentId)
+                .Select(x => new DefenseDocumentDto
+                {
+                    DocumentId = x.DocumentId,
+                    AssignmentId = x.AssignmentId,
+                    DocumentType = x.DocumentType,
+                    FileUrl = x.FileUrl,
+                    GeneratedAt = x.GeneratedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            var defenseDocumentsByAssignment = defenseDocuments
+                .GroupBy(x => x.AssignmentId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             var committees = await _db.Committees.AsNoTracking()
                 .Where(x => committeeIds.Contains(x.CommitteeID))
@@ -1163,7 +1404,10 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         FinalScore = defenseResult?.FinalScoreNumeric,
                         FinalGrade = defenseResult?.FinalScoreText,
                         Variance = variance,
-                        Status = status
+                        Status = status,
+                        DefenseDocuments = defenseDocumentsByAssignment.TryGetValue(assignment.AssignmentID, out var documents)
+                            ? documents
+                            : new List<DefenseDocumentDto>()
                     };
                 })
                 .ToList();
@@ -1856,6 +2100,189 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 .ToList();
         }
 
+        private static string NormalizeCommitteeRole(string? role)
+        {
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                return string.Empty;
+            }
+
+            var upper = role.Trim().ToUpperInvariant();
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("THU") || upper == "TK") return "TK";
+            if (upper.Contains("PHAN") || upper == "PB") return "PB";
+            if (upper == "UV") return "UV";
+            if (upper.Contains("GVHD")) return "GVHD";
+            return upper;
+        }
+
+        private static string ToCouncilLockStatus(bool councilListLocked)
+        {
+            return councilListLocked ? "LOCKED" : "UNLOCKED";
+        }
+
+        private async Task<(string StudentCode, string StudentName, List<string> CandidateIdentityCodes)> ResolveStudentIdentityAsync(
+            string studentCodeOrUserCode,
+            CancellationToken cancellationToken)
+        {
+            var normalizedIdentityCode = string.IsNullOrWhiteSpace(studentCodeOrUserCode)
+                ? string.Empty
+                : studentCodeOrUserCode.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedIdentityCode))
+            {
+                return (string.Empty, string.Empty, new List<string>());
+            }
+
+            var identityCodeUpper = normalizedIdentityCode.ToUpperInvariant();
+            var profile = await _db.StudentProfiles.AsNoTracking()
+                .Where(x =>
+                    (x.StudentCode != null && x.StudentCode.ToUpper() == identityCodeUpper)
+                    || (x.UserCode != null && x.UserCode.ToUpper() == identityCodeUpper))
+                .OrderByDescending(x => x.LastUpdated ?? x.CreatedAt)
+                .Select(x => new
+                {
+                    x.StudentCode,
+                    x.UserCode,
+                    x.FullName
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (profile == null)
+            {
+                return (
+                    normalizedIdentityCode,
+                    normalizedIdentityCode,
+                    new List<string> { normalizedIdentityCode });
+            }
+
+            var candidateCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                normalizedIdentityCode
+            };
+
+            if (!string.IsNullOrWhiteSpace(profile.StudentCode))
+            {
+                candidateCodes.Add(profile.StudentCode.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(profile.UserCode))
+            {
+                candidateCodes.Add(profile.UserCode.Trim());
+            }
+
+            var resolvedStudentCode = string.IsNullOrWhiteSpace(profile.StudentCode)
+                ? normalizedIdentityCode
+                : profile.StudentCode.Trim();
+
+            var resolvedStudentName = string.IsNullOrWhiteSpace(profile.FullName)
+                ? resolvedStudentCode
+                : profile.FullName.Trim();
+
+            return (
+                resolvedStudentCode,
+                resolvedStudentName,
+                candidateCodes.ToList());
+        }
+
+        private static DateTime? ResolveScheduledAt(
+            DateTime? assignmentScheduledAt,
+            DateTime? committeeDefenseDate,
+            TimeSpan? assignmentStartTime,
+            int? assignmentSession,
+            DefensePeriodConfigSnapshot? periodConfig)
+        {
+            var datePart = assignmentScheduledAt ?? committeeDefenseDate;
+            if (!datePart.HasValue)
+            {
+                return null;
+            }
+
+            var timePart = ResolveScheduledTimeOfDay(assignmentScheduledAt, assignmentStartTime, assignmentSession, periodConfig);
+            if (!timePart.HasValue)
+            {
+                return datePart;
+            }
+
+            return datePart.Value.Date.Add(timePart.Value);
+        }
+
+        private static TimeSpan? ResolveScheduledTimeOfDay(
+            DateTime? assignmentScheduledAt,
+            TimeSpan? assignmentStartTime,
+            int? assignmentSession,
+            DefensePeriodConfigSnapshot? periodConfig)
+        {
+            if (assignmentStartTime.HasValue && assignmentStartTime.Value > TimeSpan.Zero)
+            {
+                return assignmentStartTime.Value;
+            }
+
+            if (assignmentScheduledAt.HasValue && assignmentScheduledAt.Value.TimeOfDay > TimeSpan.Zero)
+            {
+                return assignmentScheduledAt.Value.TimeOfDay;
+            }
+
+            return ResolveSessionStartTime(assignmentSession, periodConfig);
+        }
+
+        private static TimeSpan? ResolveSessionStartTime(int? assignmentSession, DefensePeriodConfigSnapshot? periodConfig)
+        {
+            if (!assignmentSession.HasValue)
+            {
+                return null;
+            }
+
+            return assignmentSession.Value == 1
+                ? ParseConfigTime(periodConfig?.MorningStart, new TimeSpan(7, 30, 0))
+                : ParseConfigTime(periodConfig?.AfternoonStart, new TimeSpan(13, 30, 0));
+        }
+
+        private static TimeSpan ParseConfigTime(string? raw, TimeSpan fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            return TimeSpan.TryParse(raw, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static List<string> BuildAllowedScoringActions(string normalizedRole)
+        {
+            var actions = new List<string> { "SUBMIT" };
+            if (normalizedRole == "CT")
+            {
+                actions.Add("OPEN_SESSION");
+                actions.Add("REOPEN_REQUEST");
+                actions.Add("LOCK_SESSION");
+            }
+
+            return actions;
+        }
+
+        private static List<string> BuildAllowedMinuteActions(string normalizedRole)
+        {
+            if (normalizedRole == "CT" || normalizedRole == "TK")
+            {
+                return new List<string> { "UPSERT_MINUTES" };
+            }
+
+            return new List<string>();
+        }
+
+        private static List<string> BuildAllowedRevisionActions(string normalizedRole)
+        {
+            if (normalizedRole == "CT" || normalizedRole == "TK")
+            {
+                return new List<string> { "APPROVE", "REJECT" };
+            }
+
+            return new List<string>();
+        }
+
         private static string EscapeCsv(string value)
         {
             if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
@@ -2216,6 +2643,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var lecturerNameMap = await _db.LecturerProfiles.AsNoTracking()
                 .Select(l => new { l.LecturerCode, Name = l.FullName ?? l.LecturerCode })
                 .ToDictionaryAsync(x => x.LecturerCode, x => x.Name, cancellationToken);
+            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var topicsPerSession = Math.Max(3, Math.Min(7, config.CouncilConfig.TopicsPerSessionConfig));
+            var membersPerCouncil = Math.Max(3, Math.Min(7, config.CouncilConfig.MembersPerCouncilConfig));
 
             var dto = new CouncilDraftDto
             {
@@ -2306,9 +2736,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 });
             }
 
-            if (dto.MorningStudents.Count != 4 || dto.AfternoonStudents.Count != 4 || dto.Members.Count != 4)
+            if (dto.MorningStudents.Count != topicsPerSession || dto.AfternoonStudents.Count != topicsPerSession || dto.Members.Count != membersPerCouncil)
             {
-                dto.Warning = "Vi phạm chuẩn cứng: 2 buổi x 4 đề tài + 4 thành viên.";
+                dto.Warning = $"Vi phạm chuẩn cứng: 2 buổi x {topicsPerSession} đề tài + {membersPerCouncil} thành viên.";
                 dto.Status = "Warning";
             }
 

@@ -34,6 +34,15 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public int Weak { get; set; }
     }
 
+    public class DefenseDocumentDto
+    {
+        public int DocumentId { get; set; }
+        public int AssignmentId { get; set; }
+        public string DocumentType { get; set; } = string.Empty;
+        public string FileUrl { get; set; } = string.Empty;
+        public DateTime GeneratedAt { get; set; }
+    }
+
     public class ScoringMatrixRowDto
     {
         public int CommitteeId { get; set; }
@@ -52,6 +61,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string? FinalGrade { get; set; }
         public decimal? Variance { get; set; }
         public string Status { get; set; } = string.Empty;
+        public List<DefenseDocumentDto> DefenseDocuments { get; set; } = new();
     }
 
     public class ScoringProgressDto

@@ -6,21 +6,21 @@ import {
   CalendarDays,
   CheckCircle2,
   Download,
-  X,
+  Eye,
   Gavel,
   GraduationCap,
   Layers3,
   Lock,
-  Eye,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Search,
-  RefreshCw,
   SlidersHorizontal,
   Sparkles,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { useToast } from "../../context/useToast";
 import { FetchDataError, fetchData } from "../../api/fetchData";
@@ -34,8 +34,8 @@ import {
   readEnvelopeErrorMessages,
   readEnvelopeIdempotencyReplay,
   readEnvelopeMessage,
-  readEnvelopeSuccess,
   readEnvelopeWarnings,
+  readEnvelopeSuccess,
   readEnvelopeWarningMessages,
   toCompatResponse,
 } from "../../utils/api-envelope";
@@ -45,6 +45,7 @@ import {
   normalizeDefensePeriodId,
   setActiveDefensePeriodId,
 } from "../../utils/defensePeriod";
+import { getRoleClaimFromAccessToken } from "../../services/auth-session.service";
 
 type AutoGenerateTopicDto = {
   topicId?: number | string;
@@ -53,6 +54,19 @@ type AutoGenerateTopicDto = {
   tagCodes?: string[];
   studentCode?: string | null;
   supervisorCode?: string | null;
+  lecturerId?: number | string;
+  lecturerProfileId?: number;
+  lecturerCode?: string;
+  lecturerName?: string;
+  degree?: string | null;
+  availability?: boolean;
+  guideQuota?: number | null;
+  currentGuidingCount?: number | null;
+};
+
+type TagCatalogEntry = {
+  tagCode: string;
+  tagName: string;
 };
 
 type AutoGenerateLecturerDto = {
@@ -67,11 +81,6 @@ type AutoGenerateLecturerDto = {
   currentGuidingCount?: number | null;
 };
 
-type TagCatalogEntry = {
-  tagCode: string;
-  tagName: string;
-};
-
 type AutoGenerateCommitteeApi = {
   committeeCode?: string;
   concurrencyToken?: string;
@@ -80,10 +89,20 @@ type AutoGenerateCommitteeApi = {
   tagCodes?: string[];
   members?: Array<{
     role?: string;
-    lecturerCode?: string;
     lecturerName?: string;
+    lecturerCode?: string;
+    degree?: string | null;
   }>;
-  assignments?: Array<{ studentCode?: string; session?: number | null }>;
+  session?: string;
+  sessionCode?: SessionCode;
+  startTime?: string;
+  endTime?: string;
+  councilTags?: string[];
+  morningStudents?: string[];
+  afternoonStudents?: string[];
+  assignments?: Array<Record<string, unknown>>;
+  forbiddenLecturers?: string[];
+  warning?: string;
 };
 
 type CouncilScheduleMode = "FULL_DAY" | "ONE_SESSION";
@@ -176,6 +195,22 @@ const buildDefaultManualMembers = (count: number): CouncilMember[] => {
 type ModalAlert = {
   type: "error" | "warning" | "info";
   message: string;
+};
+
+type ManualTopicRow = {
+  studentCode: string;
+  topicCode: string;
+  topicTitle: string;
+  studentName: string;
+  supervisorName: string;
+  topicTags: string[];
+  lecturerTags: string[];
+  sessionCode: SessionCode;
+  scheduledAt: string;
+  startTime: string;
+  endTime: string;
+  orderIndex: number;
+  assignmentId: number | undefined;
 };
 
 const FIXED_TOPICS_PER_SESSION = 4;
@@ -641,6 +676,29 @@ const normalizeTimeOnly = (value: string | null | undefined) => {
   }
 
   return composeTimeSelector(parseTimeSelector(text));
+};
+
+const timeToMinutes = (value: string | null | undefined) => {
+  const normalized = normalizeTimeOnly(value);
+  if (!normalized) {
+    return 0;
+  }
+
+  const [hourRaw = "0", minuteRaw = "0"] = normalized.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(hour) * 60 + Math.floor(minute));
+};
+
+const minutesToTime = (minutes: number) => {
+  const safeMinutes = Math.max(0, Math.floor(minutes));
+  const hour = Math.floor(safeMinutes / 60) % 24;
+  const minute = safeMinutes % 60;
+  return `${toTwoDigits(hour)}:${toTwoDigits(minute)}`;
 };
 
 const toPositiveInteger = (value: unknown) => {
@@ -1145,10 +1203,9 @@ const CommitteeManagement: React.FC = () => {
   const [manualRelatedStudents, setManualRelatedStudents] = useState<string[]>(
     [],
   );
-  const [manualUnrelatedStudents, setManualUnrelatedStudents] = useState<
-    string[]
-  >([]);
+  const [, setManualUnrelatedStudents] = useState<string[]>([]);
   const [manualAssignments, setManualAssignments] = useState<CouncilAssignment[]>([]);
+  const [manualTopicDragStudentCode, setManualTopicDragStudentCode] = useState("");
   const [manualMembers, setManualMembers] = useState<CouncilMember[]>(() =>
     buildDefaultManualMembers(FIXED_MEMBERS_PER_COUNCIL),
   );
@@ -1176,10 +1233,7 @@ const CommitteeManagement: React.FC = () => {
   const notifyWarning = useCallback((message: string) => addToast(message, "warning"), [addToast]);
   const notifyInfo = useCallback((message: string) => addToast(message, "info"), [addToast]);
 
-  const [allowFinalizeAfterWarning, setAllowFinalizeAfterWarning] =
-    useState(false);
-
-  const [isFinalized, setIsFinalized] = useState(false);
+  const [councilListLocked, setCouncilListLocked] = useState(false);
   const [backendAllowedActions, setBackendAllowedActions] = useState<string[]>(
     [],
   );
@@ -1199,6 +1253,7 @@ const CommitteeManagement: React.FC = () => {
   >([]);
   const selectedRoomsRef = useRef(selectedRooms);
   const autoStartDateRef = useRef(autoStartDate);
+  const lifecycleActionBusyRef = useRef(false);
   const missingEndpointWarningsRef = useRef(new Set<string>());
   const missingPeriodWarningsRef = useRef(false);
 
@@ -1253,6 +1308,20 @@ const CommitteeManagement: React.FC = () => {
   const defensePeriodBase = defensePeriodId
     ? `/defense-periods/${defensePeriodId}`
     : "";
+  const roleTokens = useMemo(() => {
+    const rawRole = (getRoleClaimFromAccessToken() ?? "").trim().toUpperCase();
+    if (!rawRole) {
+      return [] as string[];
+    }
+
+    return rawRole
+      .split(/[\s,;|]+/)
+      .map((role) => role.trim())
+      .filter(Boolean);
+  }, []);
+  const isAdminRole = roleTokens.some(
+    (role) => role === "ADMIN" || role === "ROLE_ADMIN" || role === "SYSTEM_ADMIN",
+  );
   const makeIdempotencyKey = (prefix: string) =>
     `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
   const adminApi = useMemo(() => {
@@ -1397,7 +1466,7 @@ const CommitteeManagement: React.FC = () => {
     };
 
     const runLifecycleAction = (
-      action: "SYNC" | "FINALIZE",
+      action: "SYNC" | "LOCK_COUNCILS" | "REOPEN_COUNCILS",
       payload?: Record<string, unknown>,
       idempotencyKey?: string,
     ) =>
@@ -1435,6 +1504,18 @@ const CommitteeManagement: React.FC = () => {
       getSetupSnapshot,
       sync: (idempotencyKey?: string) =>
         runLifecycleAction("SYNC", { retryOnFailure: true }, idempotencyKey ?? makeIdempotencyKey("SYNC")),
+      lockCouncils: (idempotencyKey?: string) =>
+        runLifecycleAction(
+          "LOCK_COUNCILS",
+          {},
+          idempotencyKey ?? makeIdempotencyKey("LOCK-COUNCILS"),
+        ),
+      reopenCouncils: (idempotencyKey?: string) =>
+        runLifecycleAction(
+          "REOPEN_COUNCILS",
+          {},
+          idempotencyKey ?? makeIdempotencyKey("REOPEN-COUNCILS"),
+        ),
       getStudents: async (eligible?: boolean) => {
         const response = await getSetupSnapshot();
         const setupRaw = readEnvelopeData<unknown>(response);
@@ -1556,15 +1637,36 @@ const CommitteeManagement: React.FC = () => {
         const response = await getSetupSnapshot();
         const snapshotRaw = readEnvelopeData<unknown>(response);
         const snapshot = unwrapCompactPayload(snapshotRaw);
+        const snapshotObject =
+          snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>)
+            : {};
+        const statePayload = pickSection<Record<string, unknown>>(
+          snapshotObject,
+          ["state", "State"],
+          {},
+        );
+        const hasStateSignals =
+          statePayload &&
+          typeof statePayload === "object" &&
+          (Object.prototype.hasOwnProperty.call(statePayload, "councilListLocked") ||
+            Object.prototype.hasOwnProperty.call(statePayload, "CouncilListLocked") ||
+            Object.prototype.hasOwnProperty.call(statePayload, "allowedActions") ||
+            Object.prototype.hasOwnProperty.call(statePayload, "AllowedActions"));
+
+        const snapshotLooksLikeState =
+          Object.prototype.hasOwnProperty.call(snapshotObject, "councilListLocked") ||
+          Object.prototype.hasOwnProperty.call(snapshotObject, "CouncilListLocked") ||
+          Object.prototype.hasOwnProperty.call(snapshotObject, "allowedActions") ||
+          Object.prototype.hasOwnProperty.call(snapshotObject, "AllowedActions");
+
         return toCompatResponse(
           response,
-          pickSection<Record<string, unknown>>(
-            snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
-              ? (snapshot as Record<string, unknown>)
+          hasStateSignals
+            ? statePayload
+            : snapshotLooksLikeState
+              ? snapshotObject
               : {},
-            ["state", "State"],
-            {},
-          ),
         );
       },
       getRoomCatalog: async () => {
@@ -1834,14 +1936,24 @@ const CommitteeManagement: React.FC = () => {
             },
           },
         ),
-      submitCouncilWorkflow: (body: Record<string, unknown>) =>
-        fetchData<ApiResponse<Record<string, unknown>>>(
+      submitCouncilWorkflow: async (body: Record<string, unknown>) => {
+        const response = await fetchData<ApiResponse<Record<string, unknown>>>(
           `${defensePeriodBase}/councils/upsert`,
           {
             method: "POST",
             body,
           },
-        ),
+        );
+        const payload = unwrapCompactPayload(
+          readEnvelopeData<Record<string, unknown>>(response),
+        );
+        return toCompatResponse(
+          response,
+          payload && typeof payload === "object" && !Array.isArray(payload)
+            ? (payload as Record<string, unknown>)
+            : {},
+        );
+      },
       deleteCouncil: (councilId: string, concurrencyToken?: string) =>
         fetchData<ApiResponse<boolean>>(
           `${defensePeriodBase}/councils/${encodeURIComponent(councilId)}${concurrencyToken ? `?concurrencyToken=${encodeURIComponent(concurrencyToken)}` : ""}`,
@@ -1949,27 +2061,6 @@ const CommitteeManagement: React.FC = () => {
             },
           },
         ),
-      finalize: (
-        allowFinalizeAfterWarning: boolean,
-        idempotencyKey?: string,
-      ) =>
-        (async () => {
-          const finalizeIdempotencyKey =
-            idempotencyKey ?? makeIdempotencyKey("FINALIZE");
-          const response = await runLifecycleAction(
-            "FINALIZE",
-            {
-              finalize: {
-                allowFinalizeAfterWarning,
-                idempotencyKey: finalizeIdempotencyKey,
-              },
-            },
-            finalizeIdempotencyKey,
-          );
-          const data = readEnvelopeData<unknown>(response);
-          const value = typeof data === "boolean" ? data : readEnvelopeSuccess(response);
-          return toCompatResponse(response, value);
-        })(),
     };
   }, [defensePeriodBase, defensePeriodId]);
   const parseApiEnvelope = useCallback(<T,>(
@@ -2159,6 +2250,11 @@ const CommitteeManagement: React.FC = () => {
   const hasAllowedAction = (action: string) =>
     backendAllowedActions.length === 0 ||
     backendAllowedActions.includes(action);
+
+  const canLockCouncils = backendAllowedActions.includes("LOCK_COUNCILS");
+  const canReopenCouncils = isAdminRole;
+  const showReopenCouncils = councilListLocked || canReopenCouncils;
+  const canModifyCouncils = !councilListLocked;
 
   const logMissingEndpoint = useCallback((label: string, url: string) => {
     const cacheKey = `${label}:${url}`;
@@ -2485,9 +2581,7 @@ const CommitteeManagement: React.FC = () => {
               .map((item) => String(item ?? "").trim())
               .filter(Boolean)
           : [];
-        if (normalizedAllowedActions.length > 0) {
-          setBackendAllowedActions(normalizedAllowedActions);
-        }
+        setBackendAllowedActions(normalizedAllowedActions);
 
         setCapabilitiesLocked(
           Boolean(
@@ -2507,11 +2601,11 @@ const CommitteeManagement: React.FC = () => {
             ),
           ),
         );
-        setIsFinalized(
+        setCouncilListLocked(
           Boolean(
             pickCaseInsensitiveValue(
               stateData,
-              ["finalized", "Finalized"],
+              ["councilListLocked", "CouncilListLocked"],
               false,
             ),
           ),
@@ -3135,6 +3229,7 @@ const CommitteeManagement: React.FC = () => {
   const canCreateCouncils =
     councilConfigConfirmed &&
     capabilitiesLocked &&
+    canModifyCouncils &&
     hasAllowedAction("GENERATE_COUNCILS");
 
   const councilRows = useMemo(
@@ -3150,7 +3245,7 @@ const CommitteeManagement: React.FC = () => {
           memberCount < FIXED_MEMBERS_PER_COUNCIL;
         const status: CommitteeStatus = hasWarning
           ? "Warning"
-          : isFinalized
+          : councilListLocked
             ? "Ready"
             : "Draft";
         return {
@@ -3159,7 +3254,7 @@ const CommitteeManagement: React.FC = () => {
           status,
         };
       }),
-    [drafts, isFinalized],
+    [drafts, councilListLocked],
   );
 
   const assignedTopicsCount = useMemo(
@@ -3270,11 +3365,6 @@ const CommitteeManagement: React.FC = () => {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [filteredCouncilRows]);
-
-  const hasUnresolvedWarning = useMemo(
-    () => councilRows.some((item) => item.status === "Warning"),
-    [councilRows],
-  );
 
   const councilTotalPages = useMemo(
     () => Math.max(1, Math.ceil(filteredCouncilRows.length / 10)),
@@ -3487,8 +3577,21 @@ const CommitteeManagement: React.FC = () => {
       warning?: string | null;
     }>;
     const mapped: CouncilDraft[] = rawItems.map((item, index) => {
+      const record = item as Record<string, unknown>;
+      const councilCode =
+        String(
+          pickCaseInsensitiveValue(
+            record,
+            ["committeeCode", "CommitteeCode", "councilCode", "CouncilCode", "id", "Id"],
+            `HD-${String(index + 1).padStart(2, "0")}`,
+          ),
+        ).trim() || `HD-${String(index + 1).padStart(2, "0")}`;
       const sessionCode = normalizeSessionCode(
-        item.sessionCode ?? item.session ?? "MORNING",
+        pickCaseInsensitiveValue(
+          record,
+          ["sessionCode", "SessionCode", "session", "Session"],
+          "MORNING",
+        ),
       );
       const assignmentRows: CouncilAssignment[] = (item.assignments ?? [])
         .map((assignment, assignmentIndex) => ({
@@ -3522,29 +3625,46 @@ const CommitteeManagement: React.FC = () => {
         .map((assignment) => assignment.studentCode);
 
       return {
-        id: item.committeeCode ?? `HD-${String(index + 1).padStart(2, "0")}`,
+        id: councilCode,
         councilId:
           Number(
-            (item as Record<string, unknown>).councilId ??
-              (item as Record<string, unknown>).committeeId ??
+            pickCaseInsensitiveValue(
+              record,
+              ["councilId", "CouncilId", "committeeId", "CommitteeId", "id", "Id"],
               0,
+            ),
           ) || undefined,
         name:
           String(
-            (item as Record<string, unknown>).name ??
-              (item as Record<string, unknown>).councilName ??
-              item.committeeCode ??
-              `HD-${String(index + 1).padStart(2, "0")}`,
+            pickCaseInsensitiveValue(
+              record,
+              ["name", "Name", "councilName", "CouncilName"],
+              councilCode,
+            ),
           ).trim() ||
-          item.committeeCode ||
+          councilCode ||
           `HD-${String(index + 1).padStart(2, "0")}`,
-        concurrencyToken: item.concurrencyToken
-          ? String(item.concurrencyToken)
-          : undefined,
-        room: normalizeRoomCode(item.room ?? selectedRooms[0] ?? ""),
+        concurrencyToken: String(
+          pickCaseInsensitiveValue(
+            record,
+            ["concurrencyToken", "ConcurrencyToken"],
+            "",
+          ),
+        ).trim() || undefined,
+        room: normalizeRoomCode(
+          String(
+            pickCaseInsensitiveValue(record, ["room", "Room"], ""),
+          ) || selectedRooms[0] || "",
+        ),
         defenseDate: normalizeDefenseDateOnly(
-          item.defenseDate
-            ? String(item.defenseDate).slice(0, 10)
+          pickCaseInsensitiveValue(record, ["defenseDate", "DefenseDate"], "")
+            ? String(
+                pickCaseInsensitiveValue(
+                  record,
+                  ["defenseDate", "DefenseDate"],
+                  "",
+                ),
+              ).slice(0, 10)
             : autoStartDate,
         ),
         session: sessionCode === "AFTERNOON" ? "Chieu" : "Sang",
@@ -3555,7 +3675,7 @@ const CommitteeManagement: React.FC = () => {
         endTime: normalizeTimeOnly(
           item.endTime ?? "",
         ) || undefined,
-        slotId: `${item.committeeCode ?? `HD-${index + 1}`}-${sessionCode === "AFTERNOON" ? "PM" : "AM"}`,
+        slotId: `${councilCode}-${sessionCode === "AFTERNOON" ? "PM" : "AM"}`,
         councilTags: item.councilTags ?? [],
         morningStudents:
           explicitMorning.length > 0 ? explicitMorning : derivedMorning,
@@ -3655,7 +3775,7 @@ const CommitteeManagement: React.FC = () => {
         const topicCode = String(
           assignment.topicCode ?? topicCodeByStudent.get(studentCode) ?? "",
         ).trim();
-        if (!topicCode) {
+        if (!topicCode || topicCode === "-") {
           if (studentCode) {
             missingTopicCodes.push(studentCode);
           }
@@ -3957,6 +4077,12 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const submitAutoGenerate = async () => {
+    if (!canModifyCouncils) {
+      showAutoGenerateModalError(
+        "Danh sách hội đồng đã chốt. Không thể thực hiện tạo hội đồng tự động.",
+      );
+      return;
+    }
     setAutoGenerateModalAlert(null);
     const normalizedSelectedRooms = normalizeRoomCodeList(
       selectedAutoRooms.length > 0 ? selectedAutoRooms : selectedRooms,
@@ -4244,33 +4370,6 @@ const CommitteeManagement: React.FC = () => {
     }
   };
 
-  const pickStudentsByTags = (tags: string[], excludedCodes?: Set<string>) => {
-    const excluded = excludedCodes ?? new Set<string>();
-    const matched = eligibleStudents.filter(
-      (item: EligibleStudent) =>
-        !excluded.has(item.studentCode) &&
-        (tags.length === 0 ||
-          item.tags.some((tag: string) => tags.includes(tag))),
-    );
-    const fallback = eligibleStudents.filter(
-      (item: EligibleStudent) =>
-        !excluded.has(item.studentCode) &&
-        !matched.some((picked) => picked.studentCode === item.studentCode),
-    );
-    const picked = [...matched, ...fallback].slice(
-      0,
-      FIXED_TOPICS_PER_SESSION * 2,
-    );
-    return {
-      morning: picked
-        .slice(0, FIXED_TOPICS_PER_SESSION)
-        .map((item: EligibleStudent) => item.studentCode),
-      afternoon: picked
-        .slice(FIXED_TOPICS_PER_SESSION, FIXED_TOPICS_PER_SESSION * 2)
-        .map((item: EligibleStudent) => item.studentCode),
-    };
-  };
-
   const refreshBackendState = async () => {
     const stateRes = await adminApi.getState();
     const parsed = parseApiEnvelope(stateRes);
@@ -4279,23 +4378,40 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
+    const hasAnyStateField = (...keys: string[]) =>
+      keys.some((key) => Object.prototype.hasOwnProperty.call(stateData, key));
+
     const allowedActionsRaw =
       (stateData.allowedActions ?? stateData.AllowedActions) as unknown;
-    const allowedActions = Array.isArray(allowedActionsRaw)
-      ? allowedActionsRaw.map((item) => String(item))
-      : [];
+    if (
+      hasAnyStateField("allowedActions", "AllowedActions") &&
+      Array.isArray(allowedActionsRaw)
+    ) {
+      setBackendAllowedActions(
+        allowedActionsRaw.map((item) => String(item ?? "").trim()).filter(Boolean),
+      );
+    }
 
-    setBackendAllowedActions(allowedActions);
-    setCapabilitiesLocked(
-      Boolean(
-        stateData.lecturerCapabilitiesLocked ??
-          stateData.LecturerCapabilitiesLocked,
-      ),
-    );
-    setCouncilConfigConfirmed(
-      Boolean(stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed),
-    );
-    setIsFinalized(Boolean(stateData.finalized ?? stateData.Finalized));
+    if (hasAnyStateField("lecturerCapabilitiesLocked", "LecturerCapabilitiesLocked")) {
+      setCapabilitiesLocked(
+        Boolean(
+          stateData.lecturerCapabilitiesLocked ??
+            stateData.LecturerCapabilitiesLocked,
+        ),
+      );
+    }
+
+    if (hasAnyStateField("councilConfigConfirmed", "CouncilConfigConfirmed")) {
+      setCouncilConfigConfirmed(
+        Boolean(stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed),
+      );
+    }
+
+    if (hasAnyStateField("councilListLocked", "CouncilListLocked")) {
+      setCouncilListLocked(
+        Boolean(stateData.councilListLocked ?? stateData.CouncilListLocked),
+      );
+    }
 
     hydrateReadinessState(stateData);
   };
@@ -4426,6 +4542,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const runAssignment = async () => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể tạo hội đồng tự động.");
+      return;
+    }
     if (!hasAllowedAction("GENERATE_COUNCILS")) {
       notifyWarning(
         "Backend chưa cho phép tạo hội đồng ở trạng thái hiện tại.",
@@ -4505,35 +4625,79 @@ const CommitteeManagement: React.FC = () => {
     notifySuccess("Đã xuất file danh sách hội đồng.");
   }, [filteredCouncilRows, getTagDisplayList, notifySuccess, notifyWarning]);
 
-  const finalize = async () => {
-    if (!drafts.length) {
-      notifyWarning("Chưa có hội đồng nháp để chốt.");
+  const lockCouncils = async () => {
+    if (councilListLocked || actionInFlight || lifecycleActionBusyRef.current) {
       return;
     }
+
+    if (!canLockCouncils) {
+      notifyWarning("Backend chưa cho phép chốt danh sách hội đồng ở trạng thái hiện tại.");
+      return;
+    }
+
     try {
-      setActionInFlight("Finalize kỳ bảo vệ");
-      const idempotencyKey = makeIdempotencyKey("FINALIZE");
-      const response = await adminApi.finalize(
-        allowFinalizeAfterWarning,
-        idempotencyKey,
-      );
+      lifecycleActionBusyRef.current = true;
+      setActionInFlight("Chốt danh sách hội đồng");
+      const idempotencyKey = makeIdempotencyKey("LOCK-COUNCILS");
+      const response = await adminApi.lockCouncils(idempotencyKey);
       const parsed = parseApiEnvelope(response);
       if (!parsed.ok) {
         return;
       }
+
+      setCouncilListLocked(true);
       await refreshBackendState();
+      await reloadCouncilsFromBackend();
       if (readEnvelopeIdempotencyReplay(response)) {
-        notifyInfo(
-          "Yêu cầu chốt danh sách đã được xử lý trước đó (idempotency replay).",
-        );
+        notifyInfo("Yêu cầu chốt hội đồng đã được xử lý trước đó (idempotency replay).");
       } else {
         notifySuccess("Đã chốt danh sách hội đồng.");
       }
     } catch {
-      notifyError(
-        "Chốt danh sách thất bại. Vui lòng kiểm tra điều kiện rồi thử lại.",
-      );
+      notifyError("Không chốt được danh sách hội đồng. Vui lòng thử lại.");
     } finally {
+      lifecycleActionBusyRef.current = false;
+      setActionInFlight(null);
+    }
+  };
+
+  const reopenCouncils = async () => {
+    if (!isAdminRole) {
+      notifyWarning("Chỉ tài khoản Admin mới được mở lại chốt hội đồng.");
+      return;
+    }
+
+    if (!councilListLocked) {
+      notifyWarning("Cần chốt danh sách hội đồng trước khi mở lại.");
+      return;
+    }
+
+    if (actionInFlight || lifecycleActionBusyRef.current) {
+      return;
+    }
+
+    try {
+      lifecycleActionBusyRef.current = true;
+      setActionInFlight("Mở lại chốt hội đồng");
+      const idempotencyKey = makeIdempotencyKey("REOPEN-COUNCILS");
+      const response = await adminApi.reopenCouncils(idempotencyKey);
+      const parsed = parseApiEnvelope(response);
+      if (!parsed.ok) {
+        return;
+      }
+
+      setCouncilListLocked(false);
+      await refreshBackendState();
+      await reloadCouncilsFromBackend();
+      if (readEnvelopeIdempotencyReplay(response)) {
+        notifyInfo("Yêu cầu mở lại chốt hội đồng đã được xử lý trước đó (idempotency replay).");
+      } else {
+        notifySuccess("Đã mở lại chốt danh sách hội đồng.");
+      }
+    } catch {
+      notifyError("Không mở lại được danh sách hội đồng. Vui lòng thử lại.");
+    } finally {
+      lifecycleActionBusyRef.current = false;
       setActionInFlight(null);
     }
   };
@@ -4752,6 +4916,65 @@ const CommitteeManagement: React.FC = () => {
     }));
   }, [lecturerCapabilities, lecturerDirectory]);
 
+  const manualEditingCouncilCode = useMemo(
+    () =>
+      manualMode === "edit"
+        ? String(manualSnapshot?.id ?? selectedCouncil?.id ?? "").trim()
+        : "",
+    [manualMode, manualSnapshot?.id, selectedCouncil?.id],
+  );
+
+  const occupiedLecturerCodesOnManualDate = useMemo(() => {
+    const normalizedManualDate = normalizeDefenseDateOnly(manualDefenseDate);
+    if (!normalizedManualDate) {
+      return new Set<string>();
+    }
+
+    const occupiedCodes = new Set<string>();
+    editableDrafts.forEach((item) => {
+      const itemDate = normalizeDefenseDateOnly(item.defenseDate);
+      if (!itemDate || itemDate !== normalizedManualDate) {
+        return;
+      }
+
+      const itemCouncilCode = String(item.id ?? "").trim();
+      if (
+        manualEditingCouncilCode &&
+        itemCouncilCode &&
+        itemCouncilCode === manualEditingCouncilCode
+      ) {
+        return;
+      }
+
+      item.members.forEach((member) => {
+        const lecturerCode = String(member.lecturerCode ?? "").trim();
+        if (lecturerCode) {
+          occupiedCodes.add(lecturerCode);
+        }
+      });
+    });
+
+    return occupiedCodes;
+  }, [
+    editableDrafts,
+    manualDefenseDate,
+    manualEditingCouncilCode,
+    normalizeDefenseDateOnly,
+  ]);
+
+  const manualTopicSupervisorCodes = useMemo(() => {
+    const codes = new Set<string>();
+    manualRelatedStudents.forEach((studentCode) => {
+      const supervisorCode = String(
+        students.find((item) => item.studentCode === studentCode)?.supervisorCode ?? "",
+      ).trim();
+      if (supervisorCode) {
+        codes.add(supervisorCode);
+      }
+    });
+    return codes;
+  }, [manualRelatedStudents, students]);
+
   const renderLecturerPickerOption = useCallback(
     (lecturer: ManualLecturerOption) => {
       const tagNames = getTagDisplayList(lecturer.tags);
@@ -4781,6 +5004,9 @@ const CommitteeManagement: React.FC = () => {
 
   const buildManualMemberLecturerOptions = useCallback(
     (memberIndex: number, role: string) => {
+      const currentMemberCode = String(
+        manualMembers[memberIndex]?.lecturerCode ?? "",
+      ).trim();
       const selectedByOthers = new Set(
         manualMembers
           .map((member, index) =>
@@ -4798,6 +5024,18 @@ const CommitteeManagement: React.FC = () => {
           if (!lecturerCode || selectedByOthers.has(lecturerCode)) {
             return false;
           }
+          if (
+            lecturerCode !== currentMemberCode &&
+            manualTopicSupervisorCodes.has(lecturerCode)
+          ) {
+            return false;
+          }
+          if (
+            lecturerCode !== currentMemberCode &&
+            occupiedLecturerCodesOnManualDate.has(lecturerCode)
+          ) {
+            return false;
+          }
           if (requiresDoctorDegree && !isDoctorDegree(lecturer.degree)) {
             return false;
           }
@@ -4809,7 +5047,13 @@ const CommitteeManagement: React.FC = () => {
           return leftLabel.localeCompare(rightLabel, "vi");
         });
     },
-    [formatLecturerOptionLabel, manualLecturerOptions, manualMembers],
+    [
+      formatLecturerOptionLabel,
+      manualLecturerOptions,
+      manualMembers,
+      manualTopicSupervisorCodes,
+      occupiedLecturerCodesOnManualDate,
+    ],
   );
 
   const expectedManualMemberCount = useMemo(
@@ -4819,6 +5063,11 @@ const CommitteeManagement: React.FC = () => {
         Number(membersPerCouncilConfig) || FIXED_MEMBERS_PER_COUNCIL,
       ),
     [membersPerCouncilConfig],
+  );
+
+  const expectedManualTopicCount = useMemo(
+    () => Math.max(1, Number(topicsPerSessionConfig) || 0),
+    [topicsPerSessionConfig],
   );
 
   const validateManualMemberSetup = useCallback(() => {
@@ -4845,7 +5094,7 @@ const CommitteeManagement: React.FC = () => {
       return !role.trim() || !String(item.lecturerCode ?? "").trim();
     });
     if (missingMemberInfo) {
-      return "Bước 2 chưa hoàn tất: mỗi slot phải có vai trò và giảng viên.";
+      return "Bước 3 chưa hoàn tất: mỗi slot phải có vai trò và giảng viên.";
     }
 
     const normalizedCodes = manualMembers
@@ -4853,6 +5102,22 @@ const CommitteeManagement: React.FC = () => {
       .filter(Boolean);
     if (new Set(normalizedCodes).size !== normalizedCodes.length) {
       return "Mỗi giảng viên chỉ được chọn 1 slot trong cùng hội đồng.";
+    }
+
+    const occupiedInSameDate = normalizedCodes.filter((code) =>
+      occupiedLecturerCodesOnManualDate.has(code),
+    );
+    if (occupiedInSameDate.length > 0) {
+      const normalizedManualDate =
+        normalizeDefenseDateOnly(manualDefenseDate) || manualDefenseDate;
+      return `Giảng viên ${Array.from(new Set(occupiedInSameDate)).join(", ")} đã có hội đồng khác trong ngày ${normalizedManualDate}. Mỗi giảng viên chỉ được tham gia 1 hội đồng/ngày.`;
+    }
+
+    const forbiddenSupervisorCodes = normalizedCodes.filter((code) =>
+      manualTopicSupervisorCodes.has(code),
+    );
+    if (forbiddenSupervisorCodes.length > 0) {
+      return `Giảng viên ${Array.from(new Set(forbiddenSupervisorCodes)).join(", ")} là giảng viên hướng dẫn của đề tài đã chọn và không thể tham gia hội đồng.`;
     }
 
     const chairMembers = manualMembers.filter((item, index) =>
@@ -4864,7 +5129,7 @@ const CommitteeManagement: React.FC = () => {
     );
 
     if (chairMembers.length !== 1 || secretaryMembers.length !== 1) {
-      return "Bước 2 chưa hợp lệ: phải có đúng 1 Chủ tịch (CT) và đúng 1 Thư ký (TK).";
+      return "Bước 3 chưa hợp lệ: phải có đúng 1 Chủ tịch (CT) và đúng 1 Thư ký (TK).";
     }
 
     const invalidChair = chairMembers.find((item) => {
@@ -4887,7 +5152,11 @@ const CommitteeManagement: React.FC = () => {
     expectedManualMemberCount,
     getLecturerDegreeByCode,
     getLecturerDisplayNameByCode,
+    manualDefenseDate,
     manualMembers,
+    manualTopicSupervisorCodes,
+    normalizeDefenseDateOnly,
+    occupiedLecturerCodesOnManualDate,
   ]);
 
   const eligibleTopicRows = useMemo(() => {
@@ -4897,6 +5166,14 @@ const CommitteeManagement: React.FC = () => {
         item.tags,
       ]),
     );
+    const topicCodeByStudentCode = new Map<string, string>();
+    availableAutoTopics.forEach((topic) => {
+      const studentCode = String(topic.studentCode ?? "").trim();
+      const topicCode = String(topic.topicCode ?? topic.topicId ?? "").trim();
+      if (studentCode && topicCode && !topicCodeByStudentCode.has(studentCode)) {
+        topicCodeByStudentCode.set(studentCode, topicCode);
+      }
+    });
     const topicTagMap = new Map<string, string[]>();
     availableAutoTopics.forEach((topic) => {
       const tags = mergeStringLists(topic.tagCodes);
@@ -4922,6 +5199,8 @@ const CommitteeManagement: React.FC = () => {
           item.tags,
           topicTagMap.get(topicCode),
         );
+        const resolvedTopicCode =
+          topicCode || topicCodeByStudentCode.get(String(item.studentCode ?? "").trim()) || "-";
         const lecturerTags = mergeStringLists(
           item.lecturerTags,
           lecturerTagMap.get(supervisorCode),
@@ -4929,10 +5208,12 @@ const CommitteeManagement: React.FC = () => {
         const statusValue = String(item.status ?? "").trim();
 
         return {
-          topicCode: topicCode || "-",
+          studentCode: String(item.studentCode ?? "").trim(),
+          topicCode: resolvedTopicCode,
           topicTitle: String(item.topicTitle ?? "").trim() || "-",
           studentName: String(item.studentName ?? "").trim() || "-",
           lecturerName,
+          supervisorName: lecturerName,
           topicTags,
           lecturerTags,
           status:
@@ -5086,6 +5367,66 @@ const CommitteeManagement: React.FC = () => {
           topicCodeByStudent.set(studentCode, topicCode);
         }
       });
+      availableAutoTopics.forEach((topic) => {
+        const studentCode = String(topic.studentCode ?? "").trim();
+        const topicCode = String(topic.topicCode ?? topic.topicId ?? "").trim();
+        if (studentCode && topicCode && !topicCodeByStudent.has(studentCode)) {
+          topicCodeByStudent.set(studentCode, topicCode);
+        }
+      });
+
+      const getSessionRange = (nextSessionCode: SessionCode) => {
+        if (scheduleMode === "ONE_SESSION") {
+          return {
+            startTime: normalizeTimeOnly(defaultStartTime) || defaultStartTime,
+            endTime: normalizeTimeOnly(defaultEndTime) || defaultEndTime,
+          };
+        }
+
+        return nextSessionCode === "AFTERNOON"
+          ? {
+              startTime: normalizeTimeOnly(afternoonStart) || afternoonStart,
+              endTime: normalizeTimeOnly(afternoonEnd) || afternoonEnd,
+            }
+          : {
+              startTime: normalizeTimeOnly(morningStart) || morningStart,
+              endTime: normalizeTimeOnly(morningEnd) || morningEnd,
+            };
+      };
+
+      const buildDistributedRange = (
+        startTime: string,
+        endTime: string,
+        slotIndex: number,
+        slotCount: number,
+      ) => {
+        const normalizedStart = normalizeTimeOnly(startTime) || startTime;
+        const normalizedEnd = normalizeTimeOnly(endTime) || endTime;
+        const startMinutes = timeToMinutes(normalizedStart);
+        const endMinutes = timeToMinutes(normalizedEnd);
+        if (slotCount <= 0 || endMinutes <= startMinutes) {
+          return {
+            startTime: normalizedStart,
+            endTime: normalizedEnd,
+          };
+        }
+
+        const totalMinutes = endMinutes - startMinutes;
+        const slotStartOffset = Math.floor((totalMinutes * slotIndex) / slotCount);
+        const rawSlotEndOffset =
+          slotIndex >= slotCount - 1
+            ? totalMinutes
+            : Math.floor((totalMinutes * (slotIndex + 1)) / slotCount);
+        const slotEndOffset = Math.min(
+          totalMinutes,
+          Math.max(slotStartOffset + 1, rawSlotEndOffset),
+        );
+
+        return {
+          startTime: minutesToTime(startMinutes + slotStartOffset),
+          endTime: minutesToTime(startMinutes + slotEndOffset),
+        };
+      };
 
       const normalizeCodes = (codes: string[]) =>
         Array.from(
@@ -5110,43 +5451,43 @@ const CommitteeManagement: React.FC = () => {
         studentCode: string,
         nextSessionCode: SessionCode,
         orderIndex: number,
+        sessionCount: number,
       ): CouncilAssignment => {
         const previous = existingAssignments.get(studentCode);
-        const defaultRange = resolveManualAssignmentRange(
-          scheduleMode,
-          nextSessionCode,
-          defaultStartTime,
-          defaultEndTime,
+        const sessionRange = getSessionRange(nextSessionCode);
+        const distributedRange = buildDistributedRange(
+          sessionRange.startTime,
+          sessionRange.endTime,
+          orderIndex - 1,
+          sessionCount,
         );
-        const topicCode = String(
-          previous?.topicCode ?? topicCodeByStudent.get(studentCode) ?? "",
+        const previousTopicCode = String(previous?.topicCode ?? "").trim();
+        const fallbackTopicCode = String(
+          topicCodeByStudent.get(studentCode) ?? "",
         ).trim();
+        const topicCode =
+          previousTopicCode && previousTopicCode !== "-"
+            ? previousTopicCode
+            : fallbackTopicCode;
 
         return {
           assignmentId: previous?.assignmentId,
           studentCode,
           topicCode: topicCode || undefined,
           sessionCode: nextSessionCode,
-          scheduledAt:
-            normalizeDefenseDateOnly(previous?.scheduledAt ?? defaultDefenseDate) ||
-            defaultDefenseDate,
-          startTime:
-            normalizeTimeOnly(previous?.startTime ?? defaultRange.startTime) ||
-            defaultRange.startTime,
-          endTime:
-            normalizeTimeOnly(previous?.endTime ?? defaultRange.endTime) ||
-            defaultRange.endTime,
-          orderIndex:
-            Number(previous?.orderIndex ?? orderIndex) || orderIndex,
+          scheduledAt: defaultDefenseDate,
+          startTime: distributedRange.startTime,
+          endTime: distributedRange.endTime,
+          orderIndex,
         };
       };
 
       return [
         ...selectedMorning.map((studentCode, index) =>
-          buildAssignment(studentCode, "MORNING", index + 1),
+          buildAssignment(studentCode, "MORNING", index + 1, selectedMorning.length),
         ),
         ...selectedAfternoon.map((studentCode, index) =>
-          buildAssignment(studentCode, "AFTERNOON", index + 1),
+          buildAssignment(studentCode, "AFTERNOON", index + 1, selectedAfternoon.length),
         ),
       ];
     },
@@ -5154,8 +5495,12 @@ const CommitteeManagement: React.FC = () => {
       manualDefenseDate,
       manualScheduleMode,
       manualSessionCode,
-      resolveManualAssignmentRange,
+      afternoonEnd,
+      afternoonStart,
+      morningEnd,
+      morningStart,
       students,
+      availableAutoTopics,
     ],
   );
 
@@ -5279,6 +5624,10 @@ const CommitteeManagement: React.FC = () => {
     studentCode: string,
     sessionCode: SessionCode,
   ) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể đổi buổi đề tài.");
+      return;
+    }
     if (!manualRelatedStudents.includes(studentCode)) {
       return;
     }
@@ -5298,20 +5647,6 @@ const CommitteeManagement: React.FC = () => {
         sessionCode,
       },
     );
-    const defaultRange = resolveManualAssignmentRange("FULL_DAY", sessionCode);
-    setManualAssignments((prev) =>
-      prev.map((assignment) =>
-        assignment.studentCode === studentCode
-          ? {
-              ...assignment,
-              sessionCode,
-              scheduledAt: normalizeDefenseDateOnly(manualDefenseDate) || manualDefenseDate,
-              startTime: defaultRange.startTime,
-              endTime: defaultRange.endTime,
-            }
-          : assignment,
-      ),
-    );
   };
 
   const updateManualAssignment = useCallback(
@@ -5319,13 +5654,17 @@ const CommitteeManagement: React.FC = () => {
       studentCode: string,
       updater: (assignment: CouncilAssignment) => CouncilAssignment,
     ) => {
+      if (!canModifyCouncils) {
+        notifyWarning("Danh sách hội đồng đã chốt. Không thể chỉnh sửa đề tài.");
+        return;
+      }
       setManualAssignments((prev) =>
         prev.map((assignment) =>
           assignment.studentCode === studentCode ? updater(assignment) : assignment,
         ),
       );
     },
-    [],
+    [canModifyCouncils, notifyWarning],
   );
 
   const resetManualForm = (defaultId?: string) => {
@@ -5340,10 +5679,6 @@ const CommitteeManagement: React.FC = () => {
                 .filter((tag) => tag.length > 0),
             ),
           );
-
-    const autoPicked = pickStudentsByTags(
-      preferredTags,
-    );
     setManualId(defaultId ?? nextGeneratedCouncilId);
     setManualName("Hội đồng mới");
     setManualDefenseDate("2026-04-24");
@@ -5352,13 +5687,10 @@ const CommitteeManagement: React.FC = () => {
     setManualSessionCode("MORNING");
     applyManualSchedulePreset("FULL_DAY", "MORNING");
     setManualCouncilTags(preferredTags);
-    const selectedCodes = Array.from(
-      new Set([...autoPicked.morning, ...autoPicked.afternoon]),
-    );
     applyManualTopicSelection(
-      selectedCodes,
-      autoPicked.morning,
-      autoPicked.afternoon,
+      [],
+      [],
+      [],
       {
         scheduleMode: "FULL_DAY",
         sessionCode: "MORNING",
@@ -5375,6 +5707,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const startCreateCouncil = () => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể thêm hội đồng mới.");
+      return;
+    }
     setManualMode("create");
     resetManualForm(nextGeneratedCouncilId);
     notifyInfo("Mở biểu mẫu thêm hội đồng mới.");
@@ -5402,31 +5738,8 @@ const CommitteeManagement: React.FC = () => {
       const next = prev.includes(normalizedTag)
         ? prev.filter((item: string) => item !== normalizedTag)
         : [...prev, normalizedTag];
-      const autoPicked = pickStudentsByTags(next);
-      const selectedCodes = Array.from(
-        new Set([...autoPicked.morning, ...autoPicked.afternoon]),
-      );
-      applyManualTopicSelection(selectedCodes, autoPicked.morning, autoPicked.afternoon);
       return next;
     });
-  };
-
-  const moveTopicToRelated = (studentCode: string) => {
-    const nextRelated = Array.from(
-      new Set([...manualRelatedStudents, studentCode]),
-    );
-    applyManualTopicSelection(nextRelated, manualMorningStudents, manualAfternoonStudents);
-  };
-
-  const moveTopicToUnrelated = (studentCode: string) => {
-    const nextRelated = manualRelatedStudents.filter(
-      (code) => code !== studentCode,
-    );
-    applyManualTopicSelection(
-      nextRelated,
-      manualMorningStudents.filter((code) => code !== studentCode),
-      manualAfternoonStudents.filter((code) => code !== studentCode),
-    );
   };
 
   const startEditCouncil = (councilId?: string, readOnly = false) => {
@@ -5438,6 +5751,13 @@ const CommitteeManagement: React.FC = () => {
       notifyWarning("Không tìm thấy hội đồng để thao tác.");
       return;
     }
+
+    let nextReadOnly = readOnly;
+    if (!canModifyCouncils && !readOnly) {
+      nextReadOnly = true;
+      notifyWarning("Danh sách hội đồng đã chốt. Chỉ có thể xem chi tiết hội đồng.");
+    }
+
     setManualMode("edit");
     setSelectedCouncilId(target.id);
     const normalizedCouncilTags = Array.from(
@@ -5457,6 +5777,24 @@ const CommitteeManagement: React.FC = () => {
           ? "AFTERNOON"
           : "MORNING"
         : target.sessionCode ?? normalizeSessionCode(target.session);
+    const derivedMorningStudents =
+      target.morningStudents.length > 0
+        ? target.morningStudents
+        : (target.assignments ?? [])
+            .filter(
+              (assignment) =>
+                normalizeSessionCode(assignment.sessionCode) === "MORNING",
+            )
+            .map((assignment) => assignment.studentCode);
+    const derivedAfternoonStudents =
+      target.afternoonStudents.length > 0
+        ? target.afternoonStudents
+        : (target.assignments ?? [])
+            .filter(
+              (assignment) =>
+                normalizeSessionCode(assignment.sessionCode) === "AFTERNOON",
+            )
+            .map((assignment) => assignment.studentCode);
     const normalizedMembers = target.members.map((member, index) => ({
       ...member,
       role: normalizeManualMemberRoleCode(member.role, index),
@@ -5469,7 +5807,7 @@ const CommitteeManagement: React.FC = () => {
       });
     }
     const selectedCodes = Array.from(
-      new Set([...target.morningStudents, ...target.afternoonStudents]),
+      new Set([...derivedMorningStudents, ...derivedAfternoonStudents]),
     );
     setManualId(target.id);
     setManualName(target.name ?? target.id);
@@ -5482,8 +5820,8 @@ const CommitteeManagement: React.FC = () => {
     setManualCouncilTags(normalizedCouncilTags);
     applyManualTopicSelection(
       selectedCodes,
-      target.morningStudents,
-      target.afternoonStudents,
+      derivedMorningStudents,
+      derivedAfternoonStudents,
       {
         scheduleMode: inferredScheduleMode,
         sessionCode: inferredSessionCode,
@@ -5532,20 +5870,24 @@ const CommitteeManagement: React.FC = () => {
       startTime: normalizeTimeOnly(target.startTime ?? morningStart),
       endTime: normalizeTimeOnly(target.endTime ?? afternoonEnd),
       tags: [...normalizedCouncilTags],
-      morning: [...target.morningStudents],
-      afternoon: [...target.afternoonStudents],
+      morning: [...derivedMorningStudents],
+      afternoon: [...derivedAfternoonStudents],
       assignments: target.assignments ? [...target.assignments] : [],
       members: [...normalizedMembers],
     });
-    setManualReadOnly(readOnly);
+    setManualReadOnly(nextReadOnly);
     notifyInfo(
-      readOnly
+      nextReadOnly
         ? "Đang ở chế độ xem chi tiết hội đồng."
         : "Đang ở chế độ chỉnh sửa hội đồng.",
     );
   };
 
   const deleteSelectedCouncil = async (councilId?: string) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể xóa hội đồng.");
+      return;
+    }
     const target = councilId
       ? (editableDrafts.find((item: CouncilDraft) => item.id === councilId) ??
         null)
@@ -5555,9 +5897,10 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
     try {
+      const apiCouncilId = target.councilId ?? toPositiveInteger(target.id) ?? target.id;
       setActionInFlight(`Xóa hội đồng ${target.id}`);
       const response = await adminApi.deleteCouncil(
-        target.id,
+        String(apiCouncilId),
         target.concurrencyToken,
       );
       const parsed = parseApiEnvelope(response);
@@ -5578,6 +5921,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const updateManualMember = (index: number, lecturerCode: string) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể chỉnh sửa thành viên.");
+      return;
+    }
     const normalizedCode = String(lecturerCode ?? "").trim();
     const selectedLecturer = manualLecturerOptions.find(
       (lecturer) => lecturer.lecturerCode === normalizedCode,
@@ -5599,6 +5946,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const updateManualMemberRole = (index: number, role: string) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể chỉnh sửa vai trò thành viên.");
+      return;
+    }
     setManualMembers((prev: CouncilMember[]) =>
       prev.map((member: CouncilMember, idx: number) => {
         if (idx !== index) {
@@ -5646,6 +5997,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const addManualMemberSlot = () => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể thêm slot thành viên.");
+      return;
+    }
     setManualMembers((prev) => {
       if (prev.length >= expectedManualMemberCount) {
         notifyWarning(
@@ -5665,6 +6020,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const removeManualMemberSlot = (index: number) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể xóa slot thành viên.");
+      return;
+    }
     if (index < FIXED_MANUAL_MEMBER_SLOT_COUNT) {
       return;
     }
@@ -5681,6 +6040,10 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const proceedCreateStep = (targetStep: 1 | 2 | 3) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể chỉnh sửa theo bước.");
+      return;
+    }
     const normalizedManualName = String(manualName ?? "").trim();
     const normalizedManualRoom = normalizeRoomCode(manualRoom);
 
@@ -5724,9 +6087,82 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
     if (targetStep === 3) {
-      const memberValidationMessage = validateManualMemberSetup();
-      if (memberValidationMessage) {
-        notifyError(memberValidationMessage);
+      const topicValidationAssignments = buildManualAssignments(
+        manualRelatedStudents,
+        manualMorningStudents,
+        manualAfternoonStudents,
+        {
+          scheduleMode: manualScheduleMode,
+          sessionCode: manualSessionCode,
+          existingAssignments: manualAssignments,
+          assignmentDefaults: {
+            defenseDate: manualDefenseDate,
+            startTime: manualStartTime,
+            endTime: manualEndTime,
+          },
+        },
+      );
+
+      if (manualRelatedStudents.length === 0) {
+        notifyError(
+          "Bước 2 chưa hoàn tất: vui lòng chọn ít nhất 1 đề tài liên quan cho hội đồng.",
+        );
+        return;
+      }
+
+      if (topicValidationAssignments.length === 0) {
+        notifyError(
+          "Bước 2 chưa hợp lệ: chưa có assignment đề tài để sang bước 3.",
+        );
+        return;
+      }
+
+      if (manualScheduleMode === "FULL_DAY") {
+        if (
+          manualMorningStudents.length !== expectedManualTopicCount ||
+          manualAfternoonStudents.length !== expectedManualTopicCount
+        ) {
+          notifyError(
+            `Bước 2 chưa hợp lệ: mỗi buổi cần đúng ${expectedManualTopicCount} đề tài theo cấu hình đợt.`,
+          );
+          return;
+        }
+      } else {
+        const selectedSessionTopicCount =
+          manualSessionCode === "AFTERNOON"
+            ? manualAfternoonStudents.length
+            : manualMorningStudents.length;
+        if (selectedSessionTopicCount !== expectedManualTopicCount) {
+          notifyError(
+            `Bước 2 chưa hợp lệ: buổi đã chọn cần đúng ${expectedManualTopicCount} đề tài theo cấu hình đợt.`,
+          );
+          return;
+        }
+      }
+
+      const allSelectedCodes = [...manualMorningStudents, ...manualAfternoonStudents];
+      if (new Set(allSelectedCodes).size !== allSelectedCodes.length) {
+        notifyError("Danh sách đề tài theo buổi đang bị trùng lặp.");
+        return;
+      }
+
+      const invalidAssignment = topicValidationAssignments.find((assignment) => {
+        const topicCode = String(assignment.topicCode ?? "").trim();
+        const scheduledAt = normalizeDefenseDateOnly(assignment.scheduledAt);
+        const startTime = normalizeTimeOnly(assignment.startTime);
+        const endTime = normalizeTimeOnly(assignment.endTime);
+        return (
+          !topicCode ||
+          !scheduledAt ||
+          !startTime ||
+          !endTime ||
+          Number(assignment.orderIndex ?? 0) <= 0
+        );
+      });
+      if (invalidAssignment) {
+        notifyError(
+          "Bước 2 chưa hợp lệ: mỗi đề tài phải có ngày, giờ bắt đầu, giờ kết thúc và thứ tự.",
+        );
         return;
       }
     }
@@ -5735,67 +6171,28 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const enableEditFromDetail = () => {
-    if (!window.confirm("Bật chế độ chỉnh sửa cho hội đồng này?")) return;
-    setManualReadOnly(false);
-    notifyInfo("Đã bật chỉnh sửa. Bạn có thể lưu hoặc hủy chỉnh sửa.");
-  };
-
-  const cancelManualEdit = () => {
-    if (!manualSnapshot) {
-      setManualMode(null);
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể chuyển sang chế độ chỉnh sửa.");
       return;
     }
-    if (
-      !window.confirm("Hủy các thay đổi chưa lưu và quay lại dữ liệu ban đầu?")
-    )
-      return;
-    setManualId(manualSnapshot.id);
-    setManualName(manualSnapshot.name);
-    setManualDefenseDate(manualSnapshot.defenseDate);
-    setManualRoom(normalizeRoomCode(manualSnapshot.room));
-    setManualScheduleMode(manualSnapshot.scheduleMode);
-    setManualSessionCode(manualSnapshot.sessionCode);
-    setManualStartTime(manualSnapshot.startTime);
-    setManualEndTime(manualSnapshot.endTime);
-    setManualCouncilTags([...manualSnapshot.tags]);
-    const selectedCodes = [
-      ...manualSnapshot.morning,
-      ...manualSnapshot.afternoon,
-    ];
-    applyManualTopicSelection(
-      selectedCodes,
-      manualSnapshot.morning,
-      manualSnapshot.afternoon,
-      {
-        scheduleMode: manualSnapshot.scheduleMode,
-        sessionCode: manualSnapshot.sessionCode,
-        existingAssignments: manualSnapshot.assignments,
-        assignmentDefaults:
-          manualSnapshot.scheduleMode === "ONE_SESSION"
-            ? {
-                defenseDate: manualSnapshot.defenseDate,
-                startTime: manualSnapshot.startTime,
-                endTime: manualSnapshot.endTime,
-              }
-            : {
-                defenseDate: manualSnapshot.defenseDate,
-              },
-      },
-    );
-    setManualAssignments([...manualSnapshot.assignments]);
-    setManualMembers(
-      manualSnapshot.members.map((member, index) => ({
-        ...member,
-        role: normalizeManualMemberRoleCode(member.role, index),
-      })),
-    );
-    setManualReadOnly(true);
-    notifyInfo("Đã hủy chỉnh sửa và khôi phục dữ liệu gốc.");
+    setManualReadOnly(false);
   };
 
-  const saveManualCouncil = async () => {
+  const saveManualCouncil = async (requestedStep?: 1 | 2 | 3) => {
+    if (!canModifyCouncils) {
+      notifyWarning("Danh sách hội đồng đã chốt. Không thể lưu thay đổi hội đồng.");
+      return;
+    }
     if (!manualMode) {
       notifyWarning("Không xác định được chế độ lưu hội đồng.");
+      return;
+    }
+
+    const activeStep =
+      requestedStep ?? (manualMode === "edit" ? 3 : createStep);
+
+    if (manualMode === "create" && activeStep < 3) {
+      notifyWarning("Vui lòng hoàn tất bước 3 rồi lưu toàn bộ hội đồng.");
       return;
     }
 
@@ -5818,20 +6215,47 @@ const CommitteeManagement: React.FC = () => {
     const currentConcurrencyToken =
       manualSnapshot?.concurrencyToken ?? selectedCouncil?.concurrencyToken;
     const workflowCouncilId = resolvedCouncilNumericId ?? null;
+    let createdCouncilIdForRollback: number | null = null;
+    let createdCouncilTokenForRollback: string | undefined;
+    let rollbackTriggered = false;
 
-    const draftAssignments =
-      manualAssignments.length > 0
-        ? manualAssignments
-        : buildManualAssignments(
-            manualRelatedStudents,
-            manualMorningStudents,
-            manualAfternoonStudents,
-            {
-              scheduleMode: manualScheduleMode,
-              sessionCode: manualSessionCode,
-              existingAssignments: [],
-            },
-          );
+    const tryRollbackCreatedCouncil = async () => {
+      if (
+        rollbackTriggered ||
+        manualMode !== "create" ||
+        !createdCouncilIdForRollback
+      ) {
+        return;
+      }
+
+      rollbackTriggered = true;
+      try {
+        await adminApi.deleteCouncil(
+          String(createdCouncilIdForRollback),
+          createdCouncilTokenForRollback,
+        );
+        setManualSnapshot(null);
+        notifyInfo("Đã thu hồi hội đồng nháp do lưu toàn bộ chưa thành công.");
+      } catch {
+        // Ignore rollback errors and keep the original validation error as primary context.
+      }
+    };
+
+    const draftAssignments = buildManualAssignments(
+      manualRelatedStudents,
+      manualMorningStudents,
+      manualAfternoonStudents,
+      {
+        scheduleMode: manualScheduleMode,
+        sessionCode: manualSessionCode,
+        existingAssignments: manualAssignments,
+        assignmentDefaults: {
+          defenseDate: manualDefenseDate,
+          startTime: manualStartTime,
+          endTime: manualEndTime,
+        },
+      },
+    );
 
     if (manualMode === "edit" && manualReadOnly) {
       notifyWarning("Hãy bật chế độ chỉnh sửa trước khi lưu.");
@@ -5875,63 +6299,69 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
-    if (createStep >= 2) {
-      const memberValidationMessage = validateManualMemberSetup();
-      if (memberValidationMessage) {
-        notifyError(memberValidationMessage);
+    const memberValidationMessage = validateManualMemberSetup();
+    if (memberValidationMessage) {
+      notifyError(memberValidationMessage);
+      return;
+    }
+
+    if (manualRelatedStudents.length === 0) {
+      notifyError("Vui lòng chọn ít nhất 1 đề tài liên quan cho hội đồng.");
+      return;
+    }
+
+    if (draftAssignments.length === 0) {
+      notifyError("Chưa có assignment hợp lệ để lưu bước 3.");
+      return;
+    }
+
+    if (manualScheduleMode === "FULL_DAY") {
+      if (
+        manualMorningStudents.length !== expectedManualTopicCount ||
+        manualAfternoonStudents.length !== expectedManualTopicCount
+      ) {
+        notifyError(
+          `Bước 3 chưa hợp lệ: mỗi buổi cần đúng ${expectedManualTopicCount} đề tài theo cấu hình đợt.`,
+        );
+        return;
+      }
+    } else {
+      const selectedSessionTopicCount =
+        manualSessionCode === "AFTERNOON"
+          ? manualAfternoonStudents.length
+          : manualMorningStudents.length;
+      if (selectedSessionTopicCount !== expectedManualTopicCount) {
+        notifyError(
+          `Bước 3 chưa hợp lệ: buổi đã chọn cần đúng ${expectedManualTopicCount} đề tài theo cấu hình đợt.`,
+        );
         return;
       }
     }
 
-    if (createStep >= 3) {
-      if (manualRelatedStudents.length === 0) {
-        notifyError("Vui lòng chọn ít nhất 1 đề tài liên quan cho hội đồng.");
-        return;
-      }
+    const allSelectedCodes = [...manualMorningStudents, ...manualAfternoonStudents];
+    if (new Set(allSelectedCodes).size !== allSelectedCodes.length) {
+      notifyError("Danh sách đề tài theo buổi đang bị trùng lặp.");
+      return;
+    }
 
-      if (draftAssignments.length === 0) {
-        notifyError("Chưa có assignment hợp lệ để lưu bước 3.");
-        return;
-      }
-
-      const allSelectedCodes = [
-        ...manualMorningStudents,
-        ...manualAfternoonStudents,
-      ];
-      if (new Set(allSelectedCodes).size !== allSelectedCodes.length) {
-        notifyError("Danh sách đề tài theo buổi đang bị trùng lặp.");
-        return;
-      }
-
-      if (
-        manualScheduleMode === "FULL_DAY" &&
-        (manualMorningStudents.length === 0 || manualAfternoonStudents.length === 0)
-      ) {
-        notifyError(
-          "Hội đồng cả ngày cần có đề tài cho cả buổi sáng và buổi chiều.",
-        );
-        return;
-      }
-
-      const invalidAssignment = draftAssignments.find((assignment) => {
-        const topicCode = String(assignment.topicCode ?? "").trim();
-        const scheduledAt = normalizeDefenseDateOnly(assignment.scheduledAt);
-        const startTime = normalizeTimeOnly(assignment.startTime);
-        const endTime = normalizeTimeOnly(assignment.endTime);
-        return (
-          !topicCode ||
-          !scheduledAt ||
-          !startTime ||
-          !endTime ||
-          Number(assignment.orderIndex ?? 0) <= 0
-        );
-      });
-      if (invalidAssignment) {
-        notifyError(
-          "Bước 3 chưa hợp lệ: mỗi đề tài phải có ngày, giờ bắt đầu, giờ kết thúc và thứ tự.",
-        );
-        return;
-      }
+    const invalidAssignment = draftAssignments.find((assignment) => {
+      const topicCode = String(assignment.topicCode ?? "").trim();
+      const scheduledAt = normalizeDefenseDateOnly(assignment.scheduledAt);
+      const startTime = normalizeTimeOnly(assignment.startTime);
+      const endTime = normalizeTimeOnly(assignment.endTime);
+      return (
+        !topicCode ||
+        !scheduledAt ||
+        !startTime ||
+        !endTime ||
+        Number(assignment.orderIndex ?? 0) <= 0
+      );
+    });
+    if (invalidAssignment) {
+      notifyError(
+        "Bước 3 chưa hợp lệ: mỗi đề tài phải có ngày, giờ bắt đầu, giờ kết thúc và thứ tự.",
+      );
+      return;
     }
 
     const draft: CouncilDraft = {
@@ -5972,14 +6402,35 @@ const CommitteeManagement: React.FC = () => {
       warning: undefined,
     };
 
+    const previewStep3Payload = buildCouncilStep3Payload(
+      draft,
+      currentConcurrencyToken ?? "__PENDING__",
+      manualScheduleMode,
+    );
+    if (previewStep3Payload.missingTopicCodes.length > 0) {
+      notifyError(
+        `Không tìm thấy topicCode cho các sinh viên: ${previewStep3Payload.missingTopicCodes.join(", ")}.`,
+      );
+      return;
+    }
+    if (previewStep3Payload.step3.assignments.length === 0) {
+      notifyError("Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.");
+      return;
+    }
+
     const extractSavedCouncilMeta = (
       response: ApiResponse<Record<string, unknown>>,
       parsedData: unknown,
     ) => {
+      const unwrappedData = unwrapCompactPayload(parsedData);
       const responseData =
-        parsedData && typeof parsedData === "object" && !Array.isArray(parsedData)
-          ? (parsedData as Record<string, unknown>)
-          : {};
+        unwrappedData &&
+        typeof unwrappedData === "object" &&
+        !Array.isArray(unwrappedData)
+          ? (unwrappedData as Record<string, unknown>)
+          : parsedData && typeof parsedData === "object" && !Array.isArray(parsedData)
+            ? (parsedData as Record<string, unknown>)
+            : {};
       const savedCouncilCode = String(
         pickCaseInsensitiveValue(
           responseData,
@@ -6028,173 +6479,274 @@ const CommitteeManagement: React.FC = () => {
       };
     };
 
-    try {
-      if (createStep === 1) {
-        if (manualMode === "edit" && !currentConcurrencyToken) {
-          notifyError(
-            "Thiếu concurrency token cho UPDATE_STEP1. Vui lòng tải lại dữ liệu hội đồng.",
-          );
-          return;
-        }
-
-        if (manualMode === "edit" && !workflowCouncilId) {
-          notifyError(
-            "Không xác định được councilId số nguyên cho UPDATE_STEP1.",
-          );
-          return;
-        }
-
-        setActionInFlight(`Lưu bước 1 hội đồng ${draft.id}`);
-        const response = await adminApi.submitCouncilWorkflow({
-          operation: manualMode === "create" ? "CREATE_STEP1" : "UPDATE_STEP1",
-          ...(manualMode === "edit" && workflowCouncilId
-            ? { councilId: workflowCouncilId }
-            : {}),
-          step1: buildCouncilStep1Payload(
-            draft,
-            manualMode === "edit" ? currentConcurrencyToken : undefined,
-          ),
-        });
-        const parsed = parseApiEnvelope(response);
-        if (!parsed.ok) {
-          return;
-        }
-
-        const meta = extractSavedCouncilMeta(
-          response,
-          parsed.data as Record<string, unknown> | null,
-        );
-        setManualId(meta.councilCode);
-        setManualName(meta.name);
-        setSelectedCouncilId(meta.councilCode);
-        setManualSnapshot({
-          id: meta.councilCode,
-          councilId: meta.councilId,
-          name: meta.name,
-          concurrencyToken: meta.concurrencyToken,
-          defenseDate: draft.defenseDate,
-          room: draft.room,
-          scheduleMode: manualScheduleMode,
-          sessionCode: draft.sessionCode ?? manualSessionCode,
-          startTime: draft.startTime ?? normalizedManualStartTime,
-          endTime: draft.endTime ?? normalizedManualEndTime,
-          tags: [...draft.councilTags],
-          morning: [...draft.morningStudents],
-          afternoon: [...draft.afternoonStudents],
-          assignments: draft.assignments ? [...draft.assignments] : [],
-          members: draft.members.map((member, index) => ({
-            ...member,
-            role: normalizeManualMemberRoleCode(member.role, index),
-          })),
-        });
-        setCreateStep(2);
-        notifySuccess(`Đã lưu bước 1 cho hội đồng ${meta.councilCode}.`);
-        return;
+    const conflictingCouncil = editableDrafts.find((item) => {
+      if (
+        manualMode === "edit" &&
+        (item.id === resolvedCouncilId ||
+          (workflowCouncilId && item.councilId === workflowCouncilId))
+      ) {
+        return false;
       }
 
-      if (createStep === 2) {
-        if (!currentConcurrencyToken) {
-          notifyError(
-            "Thiếu concurrency token cho SAVE_MEMBERS. Vui lòng lưu lại bước 1.",
-          );
-          return;
-        }
-
-        if (!workflowCouncilId) {
-          notifyError("Không xác định được councilId số nguyên để lưu thành viên.");
-          return;
-        }
-
-        setActionInFlight(`Lưu thành viên hội đồng ${draft.id}`);
-        const response = await adminApi.submitCouncilWorkflow({
-          councilId: workflowCouncilId,
-          operation: "SAVE_MEMBERS",
-          step2: buildCouncilStep2Payload(draft, currentConcurrencyToken),
-        });
-        const parsed = parseApiEnvelope(response);
-        if (!parsed.ok) {
-          return;
-        }
-
-        const meta = extractSavedCouncilMeta(
-          response,
-          parsed.data as Record<string, unknown> | null,
-        );
-
-        setManualSnapshot((prev) =>
-          prev
-            ? {
-                ...prev,
-                id: meta.councilCode,
-                councilId: meta.councilId ?? prev.councilId,
-                name: meta.name,
-                concurrencyToken: meta.concurrencyToken ?? prev.concurrencyToken,
-                assignments: draft.assignments ? [...draft.assignments] : [],
-                members: draft.members.map((member, index) => ({
-                  ...member,
-                  role: normalizeManualMemberRoleCode(member.role, index),
-                })),
-              }
-            : prev,
-        );
-        setCreateStep(3);
-        notifySuccess(`Đã lưu thành viên cho hội đồng ${draft.id}.`);
-        return;
-      }
-
-      if (createStep === 3) {
-        if (!currentConcurrencyToken) {
-          notifyError(
-            "Thiếu concurrency token cho SAVE_TOPICS. Vui lòng lưu lại bước trước.",
-          );
-          return;
-        }
-
-        if (!workflowCouncilId) {
-          notifyError("Không xác định được councilId số nguyên để lưu danh sách đề tài.");
-          return;
-        }
-
-        const step3Payload = buildCouncilStep3Payload(
-          draft,
-          currentConcurrencyToken,
-          manualScheduleMode,
-        );
-        if (step3Payload.missingTopicCodes.length > 0) {
-          notifyError(
-            `Không tìm thấy topicCode cho các sinh viên: ${step3Payload.missingTopicCodes.join(", ")}.`,
-          );
-          return;
-        }
-        if (step3Payload.step3.assignments.length === 0) {
-          notifyError("Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.");
-          return;
-        }
-
-        setActionInFlight(`Lưu đề tài hội đồng ${draft.id}`);
-        const response = await adminApi.submitCouncilWorkflow({
-          councilId: workflowCouncilId,
-          operation: "SAVE_TOPICS",
-          ...step3Payload,
-        });
-        const parsed = parseApiEnvelope(response);
-        if (!parsed.ok) {
-          return;
-        }
-
-        await reloadCouncilsFromBackend();
-        await refreshBackendState();
-        setManualMode(null);
-        setManualReadOnly(false);
-        notifySuccess(`Đã lưu hội đồng thủ công ${draft.id}.`);
-        return;
-      }
-
-      notifyWarning("Không xác định được chế độ lưu hội đồng.");
-    } catch {
-      notifyError(
-        "Không lưu được hội đồng. Vui lòng tải lại dữ liệu và thử lại.",
+      return (
+        normalizeRoomCode(item.room) === normalizeRoomCode(draft.room) &&
+        normalizeDefenseDateOnly(item.defenseDate) ===
+          normalizeDefenseDateOnly(draft.defenseDate)
       );
+    });
+
+    if (conflictingCouncil) {
+      notifyError(
+        `Phòng ${normalizeRoomCode(draft.room)} đã có hội đồng ${conflictingCouncil.id} trong ngày ${normalizeDefenseDateOnly(draft.defenseDate)}. Vui lòng chọn phòng hoặc ngày khác.`,
+      );
+      return;
+    }
+
+    if (manualMode === "edit" && !currentConcurrencyToken) {
+      notifyError(
+        "Thiếu concurrency token cho UPDATE_STEP1. Vui lòng tải lại dữ liệu hội đồng.",
+      );
+      return;
+    }
+
+    if (manualMode === "edit" && !workflowCouncilId) {
+      notifyError("Không xác định được councilId số nguyên cho UPDATE_STEP1.");
+      return;
+    }
+
+    let savedCouncilCode = draft.id;
+    let savedCouncilId = workflowCouncilId;
+    let savedConcurrencyToken = currentConcurrencyToken;
+    const isCreateMode = manualMode === "create";
+
+    try {
+      setActionInFlight(
+        isCreateMode
+          ? `Thêm hội đồng ${draft.id}`
+          : `Lưu toàn bộ hội đồng ${draft.id}`,
+      );
+
+      const step1Response = await adminApi.submitCouncilWorkflow({
+        operation: isCreateMode ? "CREATE_STEP1" : "UPDATE_STEP1",
+        ...(isCreateMode ? {} : { councilId: savedCouncilId }),
+        step1: buildCouncilStep1Payload(
+          draft,
+          isCreateMode ? undefined : savedConcurrencyToken,
+        ),
+      });
+      const step1Parsed = parseApiEnvelope(step1Response);
+      if (!step1Parsed.ok) {
+        return;
+      }
+
+      const step1Meta = extractSavedCouncilMeta(
+        step1Response,
+        step1Parsed.data as Record<string, unknown> | null,
+      );
+      savedCouncilCode = step1Meta.councilCode;
+      savedCouncilId = step1Meta.councilId ?? savedCouncilId;
+      savedConcurrencyToken = step1Meta.concurrencyToken ?? savedConcurrencyToken;
+
+      setManualId(step1Meta.councilCode);
+      setManualName(step1Meta.name);
+      setSelectedCouncilId(step1Meta.councilCode);
+      setManualSnapshot({
+        id: step1Meta.councilCode,
+        councilId: savedCouncilId ?? undefined,
+        name: step1Meta.name,
+        concurrencyToken: savedConcurrencyToken,
+        defenseDate: draft.defenseDate,
+        room: draft.room,
+        scheduleMode: manualScheduleMode,
+        sessionCode: draft.sessionCode ?? manualSessionCode,
+        startTime: draft.startTime ?? normalizedManualStartTime,
+        endTime: draft.endTime ?? normalizedManualEndTime,
+        tags: [...draft.councilTags],
+        morning: [...draft.morningStudents],
+        afternoon: [...draft.afternoonStudents],
+        assignments: draft.assignments ? [...draft.assignments] : [],
+        members: draft.members.map((member, index) => ({
+          ...member,
+          role: normalizeManualMemberRoleCode(member.role, index),
+        })),
+      });
+
+      if (!savedCouncilId || !savedConcurrencyToken) {
+        notifyError(
+          "Không lấy được councilId hoặc concurrency token sau bước 1.",
+        );
+        if (isCreateMode && savedCouncilId) {
+          createdCouncilIdForRollback = savedCouncilId;
+          createdCouncilTokenForRollback = savedConcurrencyToken;
+          await tryRollbackCreatedCouncil();
+        }
+        return;
+      }
+
+      if (isCreateMode) {
+        createdCouncilIdForRollback = savedCouncilId;
+        createdCouncilTokenForRollback = savedConcurrencyToken;
+      }
+
+      const step2Response = await adminApi.submitCouncilWorkflow({
+        councilId: savedCouncilId,
+        operation: "SAVE_MEMBERS",
+        step2: buildCouncilStep2Payload(draft, savedConcurrencyToken),
+      });
+      const step2Parsed = parseApiEnvelope(step2Response);
+      if (!step2Parsed.ok) {
+        await tryRollbackCreatedCouncil();
+        return;
+      }
+
+      const step2Meta = extractSavedCouncilMeta(
+        step2Response,
+        step2Parsed.data as Record<string, unknown> | null,
+      );
+      savedCouncilCode = step2Meta.councilCode || savedCouncilCode;
+      savedCouncilId = step2Meta.councilId ?? savedCouncilId;
+      savedConcurrencyToken = step2Meta.concurrencyToken ?? savedConcurrencyToken;
+
+      if (isCreateMode) {
+        createdCouncilTokenForRollback = savedConcurrencyToken;
+      }
+
+      setManualSnapshot((prev) =>
+        prev
+          ? {
+              ...prev,
+              id: savedCouncilCode,
+              councilId: savedCouncilId ?? prev.councilId,
+              name: step2Meta.name,
+              concurrencyToken: savedConcurrencyToken ?? prev.concurrencyToken,
+              assignments: draft.assignments ? [...draft.assignments] : [],
+              members: draft.members.map((member, index) => ({
+                ...member,
+                role: normalizeManualMemberRoleCode(member.role, index),
+              })),
+            }
+          : prev,
+      );
+
+      if (!savedCouncilId || !savedConcurrencyToken) {
+        notifyError(
+          "Không lấy được concurrency token sau bước lưu thành viên.",
+        );
+        await tryRollbackCreatedCouncil();
+        return;
+      }
+
+      const step3Payload = buildCouncilStep3Payload(
+        draft,
+        savedConcurrencyToken,
+        manualScheduleMode,
+      );
+      if (step3Payload.missingTopicCodes.length > 0) {
+        notifyError(
+          `Không tìm thấy topicCode cho các sinh viên: ${step3Payload.missingTopicCodes.join(", ")}.`,
+        );
+        await tryRollbackCreatedCouncil();
+        return;
+      }
+      if (step3Payload.step3.assignments.length === 0) {
+        notifyError("Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.");
+        await tryRollbackCreatedCouncil();
+        return;
+      }
+
+      let step3Response: ApiResponse<Record<string, unknown>>;
+      try {
+        step3Response = await adminApi.submitCouncilWorkflow({
+          councilId: savedCouncilId,
+          operation: "SAVE_TOPICS",
+          step3: step3Payload.step3,
+        });
+      } catch (error) {
+        if (
+          error instanceof FetchDataError &&
+          error.status === 409 &&
+          savedCouncilId
+        ) {
+          let refreshedToken = savedConcurrencyToken;
+          try {
+            const latestCouncilResponse = await adminApi.getCouncilById(
+              String(savedCouncilId),
+            );
+            const latestCouncilMeta = extractSavedCouncilMeta(
+              latestCouncilResponse,
+              readEnvelopeData<Record<string, unknown> | null>(
+                latestCouncilResponse,
+              ),
+            );
+            refreshedToken = latestCouncilMeta.concurrencyToken ?? refreshedToken;
+          } catch {
+            refreshedToken = savedConcurrencyToken;
+          }
+
+          if (!refreshedToken || refreshedToken === savedConcurrencyToken) {
+            throw error;
+          }
+
+          savedConcurrencyToken = refreshedToken;
+
+          const retryStep3Payload = buildCouncilStep3Payload(
+            draft,
+            savedConcurrencyToken,
+            manualScheduleMode,
+          );
+          if (retryStep3Payload.missingTopicCodes.length > 0) {
+            notifyError(
+              `Không tìm thấy topicCode cho các sinh viên: ${retryStep3Payload.missingTopicCodes.join(", ")}.`,
+            );
+            await tryRollbackCreatedCouncil();
+            return;
+          }
+          if (retryStep3Payload.step3.assignments.length === 0) {
+            notifyError(
+              "Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.",
+            );
+            await tryRollbackCreatedCouncil();
+            return;
+          }
+
+          step3Response = await adminApi.submitCouncilWorkflow({
+            councilId: savedCouncilId,
+            operation: "SAVE_TOPICS",
+            step3: retryStep3Payload.step3,
+          });
+        } else {
+          throw error;
+        }
+      }
+
+      const step3Parsed = parseApiEnvelope(step3Response);
+      if (!step3Parsed.ok) {
+        await tryRollbackCreatedCouncil();
+        return;
+      }
+
+      await reloadCouncilsFromBackend();
+      await refreshBackendState();
+      setManualMode(null);
+      setManualReadOnly(false);
+      notifySuccess(
+        isCreateMode
+          ? `Đã thêm hội đồng ${savedCouncilCode}.`
+          : `Đã lưu thay đổi hội đồng ${savedCouncilCode}.`,
+      );
+    } catch (error) {
+      await tryRollbackCreatedCouncil();
+      if (error instanceof FetchDataError) {
+        const fallback =
+          error.status === 409
+            ? "Lưu đề tài hội đồng bị xung đột dữ liệu (HTTP 409). Vui lòng tải lại và thử lại."
+            : "Không lưu được hội đồng. Vui lòng tải lại dữ liệu và thử lại.";
+        notifyError(extractApiErrorMessage(error.data, fallback));
+      } else {
+        notifyError(
+          "Không lưu được hội đồng. Vui lòng tải lại dữ liệu và thử lại.",
+        );
+      }
     } finally {
       setActionInFlight(null);
     }
@@ -6213,7 +6765,6 @@ const CommitteeManagement: React.FC = () => {
   };
 
   const manualRelatedStudentView = buildStudentView(manualRelatedStudents);
-  const manualUnrelatedStudentView = buildStudentView(manualUnrelatedStudents);
   const manualAssignmentByStudentCode = useMemo(
     () =>
       new Map(
@@ -6221,6 +6772,305 @@ const CommitteeManagement: React.FC = () => {
       ),
     [manualAssignments],
   );
+  const manualTopicRowByStudentCode = useMemo(
+    () => new Map(eligibleTopicRows.map((row) => [row.studentCode, row] as const)),
+    [eligibleTopicRows],
+  );
+  const manualSelectedTopicCodes = useMemo(
+    () =>
+      new Set(
+        manualAssignments
+          .map((assignment) => String(assignment.studentCode ?? "").trim())
+          .filter(Boolean),
+      ),
+    [manualAssignments],
+  );
+  const manualSelectedTopicRows = useMemo<ManualTopicRow[]>(
+    () =>
+      manualAssignments
+        .map((assignment) => {
+          const studentCode = String(assignment.studentCode ?? "").trim();
+          if (!studentCode) {
+            return null;
+          }
+
+          const topicRow = manualTopicRowByStudentCode.get(studentCode);
+          const sessionCode = normalizeSessionCode(assignment.sessionCode);
+          const sessionRange = resolveManualAssignmentRange(
+            manualScheduleMode,
+            sessionCode,
+            assignment.startTime,
+            assignment.endTime,
+          );
+
+          return {
+            studentCode,
+            topicCode:
+              topicRow?.topicCode || String(assignment.topicCode ?? "").trim() || "-",
+            topicTitle: topicRow?.topicTitle || "-",
+            studentName: topicRow?.studentName || "-",
+            supervisorName: topicRow?.lecturerName || "-",
+            topicTags: topicRow?.topicTags ?? [],
+            lecturerTags: topicRow?.lecturerTags ?? [],
+            sessionCode,
+            scheduledAt:
+              normalizeDefenseDateOnly(assignment.scheduledAt ?? manualDefenseDate) ||
+              manualDefenseDate,
+            startTime: sessionRange.startTime,
+            endTime: sessionRange.endTime,
+            orderIndex: Number(assignment.orderIndex ?? 0) || 0,
+            assignmentId: assignment.assignmentId,
+          };
+        })
+        .filter((item): item is ManualTopicRow => Boolean(item)),
+    [
+      manualAssignments,
+      manualDefenseDate,
+      manualScheduleMode,
+      manualTopicRowByStudentCode,
+      resolveManualAssignmentRange,
+    ],
+  );
+  const manualMorningTopicRows = useMemo(
+    () =>
+      manualSelectedTopicRows
+        .filter((item) => item.sessionCode === "MORNING")
+        .sort((left, right) => left.orderIndex - right.orderIndex),
+    [manualSelectedTopicRows],
+  );
+  const manualAfternoonTopicRows = useMemo(
+    () =>
+      manualSelectedTopicRows
+        .filter((item) => item.sessionCode === "AFTERNOON")
+        .sort((left, right) => left.orderIndex - right.orderIndex),
+    [manualSelectedTopicRows],
+  );
+  const manualAvailableTopicRows = useMemo(
+    () =>
+      eligibleTopicRows.filter(
+        (row) => !manualSelectedTopicCodes.has(row.studentCode),
+      ),
+    [eligibleTopicRows, manualSelectedTopicCodes],
+  );
+  const getManualSessionTimeLabel = useCallback(
+    (sessionCode: SessionCode) => {
+      if (manualScheduleMode === "ONE_SESSION") {
+        return `${manualStartTime} - ${manualEndTime}`;
+      }
+
+      return sessionCode === "AFTERNOON"
+        ? `${normalizeTimeOnly(afternoonStart) || afternoonStart} - ${normalizeTimeOnly(afternoonEnd) || afternoonEnd}`
+        : `${normalizeTimeOnly(morningStart) || morningStart} - ${normalizeTimeOnly(morningEnd) || morningEnd}`;
+    },
+    [
+      afternoonEnd,
+      afternoonStart,
+      manualEndTime,
+      manualScheduleMode,
+      manualStartTime,
+      morningEnd,
+      morningStart,
+    ],
+  );
+  const moveManualTopicToSession = useCallback(
+    (
+      studentCode: string,
+      targetSessionCode: SessionCode,
+      beforeStudentCode?: string,
+    ) => {
+      if (!canModifyCouncils) {
+        notifyWarning("Danh sách hội đồng đã chốt. Không thể sắp xếp lại đề tài.");
+        return;
+      }
+      const normalizedStudentCode = String(studentCode ?? "").trim();
+      if (!normalizedStudentCode) {
+        return;
+      }
+
+      const resolvedTargetSessionCode =
+        manualScheduleMode === "ONE_SESSION"
+          ? manualSessionCode
+          : targetSessionCode;
+
+      const nextMorning = manualMorningStudents.filter(
+        (code) => code !== normalizedStudentCode,
+      );
+      const nextAfternoon = manualAfternoonStudents.filter(
+        (code) => code !== normalizedStudentCode,
+      );
+      const targetList =
+        resolvedTargetSessionCode === "AFTERNOON"
+          ? nextAfternoon
+          : nextMorning;
+      const insertionIndex = beforeStudentCode
+        ? targetList.indexOf(beforeStudentCode)
+        : -1;
+
+      if (insertionIndex >= 0) {
+        targetList.splice(insertionIndex, 0, normalizedStudentCode);
+      } else {
+        targetList.push(normalizedStudentCode);
+      }
+
+      const nextRelated = Array.from(
+        new Set([...nextMorning, ...nextAfternoon]),
+      );
+
+      applyManualTopicSelection(nextRelated, nextMorning, nextAfternoon, {
+        scheduleMode: manualScheduleMode,
+        sessionCode: manualSessionCode,
+        existingAssignments: manualAssignments.map((assignment) =>
+          assignment.studentCode === normalizedStudentCode
+            ? {
+                ...assignment,
+                sessionCode: resolvedTargetSessionCode,
+                startTime: "",
+                endTime: "",
+              }
+            : assignment,
+        ),
+        assignmentDefaults: {
+          defenseDate: manualDefenseDate,
+          startTime:
+            resolvedTargetSessionCode === "AFTERNOON"
+              ? manualScheduleMode === "ONE_SESSION"
+                ? manualStartTime
+                : normalizeTimeOnly(afternoonStart) || afternoonStart
+              : manualScheduleMode === "ONE_SESSION"
+                ? manualStartTime
+                : normalizeTimeOnly(morningStart) || morningStart,
+          endTime:
+            resolvedTargetSessionCode === "AFTERNOON"
+              ? manualScheduleMode === "ONE_SESSION"
+                ? manualEndTime
+                : normalizeTimeOnly(afternoonEnd) || afternoonEnd
+              : manualScheduleMode === "ONE_SESSION"
+                ? manualEndTime
+                : normalizeTimeOnly(morningEnd) || morningEnd,
+        },
+      });
+    },
+    [
+      applyManualTopicSelection,
+      canModifyCouncils,
+      manualAfternoonStudents,
+      manualAssignments,
+      manualDefenseDate,
+      manualEndTime,
+      manualMorningStudents,
+      manualScheduleMode,
+      manualSessionCode,
+      manualStartTime,
+      notifyWarning,
+      morningEnd,
+      morningStart,
+      afternoonEnd,
+      afternoonStart,
+    ],
+  );
+  const removeManualTopic = useCallback(
+    (studentCode: string) => {
+      if (!canModifyCouncils) {
+        notifyWarning("Danh sách hội đồng đã chốt. Không thể xóa đề tài khỏi hội đồng.");
+        return;
+      }
+      const normalizedStudentCode = String(studentCode ?? "").trim();
+      if (!normalizedStudentCode) {
+        return;
+      }
+
+      const nextMorning = manualMorningStudents.filter(
+        (code) => code !== normalizedStudentCode,
+      );
+      const nextAfternoon = manualAfternoonStudents.filter(
+        (code) => code !== normalizedStudentCode,
+      );
+      const nextRelated = Array.from(
+        new Set([...nextMorning, ...nextAfternoon]),
+      );
+
+      applyManualTopicSelection(nextRelated, nextMorning, nextAfternoon, {
+        scheduleMode: manualScheduleMode,
+        sessionCode: manualSessionCode,
+        existingAssignments: manualAssignments.filter(
+          (assignment) => assignment.studentCode !== normalizedStudentCode,
+        ),
+        assignmentDefaults: {
+          defenseDate: manualDefenseDate,
+        },
+      });
+    },
+    [
+      applyManualTopicSelection,
+      canModifyCouncils,
+      manualAfternoonStudents,
+      manualAssignments,
+      manualDefenseDate,
+      manualMorningStudents,
+      manualScheduleMode,
+      manualSessionCode,
+      notifyWarning,
+    ],
+  );
+  const clearManualTopicDrag = useCallback(() => {
+    setManualTopicDragStudentCode("");
+  }, []);
+  const handleManualTopicDrop = useCallback(
+    (targetSessionCode: SessionCode, beforeStudentCode?: string) => {
+      if (!manualTopicDragStudentCode) {
+        return;
+      }
+
+      moveManualTopicToSession(
+        manualTopicDragStudentCode,
+        targetSessionCode,
+        beforeStudentCode,
+      );
+      clearManualTopicDrag();
+    },
+    [
+      clearManualTopicDrag,
+      manualTopicDragStudentCode,
+      moveManualTopicToSession,
+    ],
+  );
+  const isManualDetailMode = manualMode === "edit";
+  const showManualWizardSteps = manualMode === "create" && !manualReadOnly;
+  const showManualTopicSelection =
+    manualMode === "create" && !manualReadOnly && createStep === 2;
+  const showManualEditableTopicSelection =
+    manualMode === "edit" && !manualReadOnly;
+  const showManualTopicWorkspace =
+    showManualTopicSelection || showManualEditableTopicSelection;
+
+  useEffect(() => {
+    if (!councilListLocked) {
+      return;
+    }
+
+    if (showAutoGenerateModal) {
+      setShowAutoGenerateModal(false);
+      notifyWarning("Danh sách hội đồng đã chốt. Đóng màn tạo tự động.");
+    }
+
+    if (manualMode === "create") {
+      setManualMode(null);
+      setManualReadOnly(false);
+      notifyWarning("Danh sách hội đồng đã chốt. Đóng biểu mẫu thêm hội đồng.");
+      return;
+    }
+
+    if (manualMode === "edit" && !manualReadOnly) {
+      setManualReadOnly(true);
+      notifyWarning("Danh sách hội đồng đã chốt. Chuyển sang chế độ chỉ xem.");
+    }
+  }, [
+    councilListLocked,
+    manualMode,
+    manualReadOnly,
+    notifyWarning,
+    showAutoGenerateModal,
+  ]);
 
   return (
     <div
@@ -6558,10 +7408,10 @@ const CommitteeManagement: React.FC = () => {
           .committee-member-slot-card {
             border: 1px solid #cbd5e1;
             border-radius: 12px;
-            padding: 10px;
+            padding: 8px;
             background: #ffffff;
             display: grid;
-            gap: 8px;
+            gap: 6px;
           }
           .committee-member-slot-head {
             display: flex;
@@ -6614,95 +7464,235 @@ const CommitteeManagement: React.FC = () => {
             font-weight: 700;
             line-height: 1.35;
           }
+          .committee-member-slot-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 28px;
+            padding: 2px 8px;
+            font-size: 12px;
+            line-height: 1;
+            white-space: nowrap;
+          }
           .committee-member-remove-btn {
-            width: 100%;
-            margin-top: 2px;
+            width: fit-content;
+            margin-top: 0;
           }
           .committee-manual-topic-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-            gap: 10px;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+          }
+          .committee-manual-topic-grid > .committee-topic-panel {
+            min-width: 0;
+          }
+          .committee-manual-topic-grid > .committee-topic-panel:last-child {
+            width: 100%;
+            max-width: none;
+            justify-self: end;
+          }
+          @media (max-width: 900px) {
+            .committee-manual-topic-grid {
+              grid-template-columns: 1fr;
+            }
+            .committee-manual-topic-grid > .committee-topic-panel:last-child {
+              max-width: none;
+              justify-self: stretch;
+            }
           }
           .committee-topic-panel {
             border: 1px solid #cbd5e1;
             border-radius: 12px;
             background: #ffffff;
-            padding: 10px;
+            padding: 6px;
             display: grid;
+            gap: 5px;
+            min-height: 0;
+          }
+          .committee-session-stack {
+            display: grid;
+            gap: 6px;
+          }
+          .committee-session-box {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            padding: 6px;
+            display: grid;
+            gap: 5px;
+          }
+          .committee-session-box-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 8px;
-            min-height: 320px;
+            flex-wrap: wrap;
+            font-size: 11px;
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .committee-session-box-time {
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+          }
+          .committee-session-box .committee-topic-panel-list {
+            max-height: 220px;
+            overflow: auto;
+            padding-right: 2px;
           }
           .committee-topic-panel-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             color: #0f172a;
           }
           .committee-topic-panel-list {
             display: grid;
-            gap: 8px;
-            max-height: 430px;
+            gap: 5px;
+            max-height: 380px;
             overflow: auto;
             padding-right: 2px;
           }
           .committee-topic-item {
             border: 1px solid #dbeafe;
-            border-radius: 10px;
+            border-radius: 9px;
             background: #ffffff;
-            padding: 10px;
+            padding: 8px;
             display: grid;
-            gap: 6px;
+            gap: 5px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
           }
           .committee-topic-item--selected {
             border-color: #fdba74;
-            background: #fff7ed;
+            background: linear-gradient(180deg, #fff9f2 0%, #fffaf6 100%);
+            position: relative;
+          }
+          .committee-topic-item--interactive {
+            padding-top: 26px;
+          }
+          .committee-topic-remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 22px;
+            height: 22px;
+            min-height: 22px;
+            border-radius: 999px;
+            padding: 0;
+            border: 1px solid #fca5a5;
+            background: #ffffff;
+            color: #b91c1c;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+            z-index: 1;
+          }
+          .committee-topic-remove-btn svg {
+            flex-shrink: 0;
           }
           .committee-topic-item-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: start;
             gap: 6px;
           }
           .committee-topic-item-code {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 800;
             color: #1e293b;
+            line-height: 1.2;
+            word-break: break-word;
           }
           .committee-topic-item-student-code {
             border: 1px solid #cbd5e1;
-            border-radius: 999px;
-            padding: 2px 8px;
+            border-radius: 8px;
+            padding: 2px 7px;
             font-size: 10px;
             font-weight: 700;
-            color: #334155;
-            background: #ffffff;
+            color: #0f172a;
+            background: #f8fafc;
+            line-height: 1.2;
+            white-space: nowrap;
           }
           .committee-topic-item-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: #0f172a;
-            line-height: 1.4;
+            line-height: 1.35;
+            word-break: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
           }
           .committee-topic-item-meta {
             font-size: 11px;
             color: #475569;
-            line-height: 1.35;
+            line-height: 1.3;
+          }
+          .committee-topic-item .committee-member-meta {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 6px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            background: #ffffff;
+            font-size: 10px;
+            line-height: 1.3;
+          }
+          .committee-topic-item .committee-member-meta > div {
+            min-width: 0;
+          }
+          .committee-topic-card-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+            align-items: center;
+            justify-content: stretch;
           }
           .committee-topic-item-action {
-            margin-top: 2px;
-            width: fit-content;
+            margin-top: 0;
+            width: 100%;
             min-height: 28px;
             padding: 2px 8px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
+            line-height: 1;
+          }
+          .committee-topic-card-action {
+            width: 100%;
+            min-height: 24px;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
+            line-height: 1;
           }
           .committee-topic-empty {
             border: 1px dashed #cbd5e1;
             border-radius: 10px;
-            padding: 12px;
+            padding: 10px;
             text-align: center;
-            font-size: 12px;
+            font-size: 11px;
             color: #64748b;
             background: #f8fafc;
           }
@@ -6724,9 +7714,9 @@ const CommitteeManagement: React.FC = () => {
           .committee-inline-icon-label {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             white-space: nowrap;
-            line-height: 1.15;
+            line-height: 1;
             min-width: 0;
           }
           .committee-inline-icon-label svg {
@@ -6742,13 +7732,13 @@ const CommitteeManagement: React.FC = () => {
             display: flex;
             align-items: flex-start;
             justify-content: center;
-            padding: 24px 16px;
+            padding: 12px 16px;
             overflow-y: auto;
             z-index: 2600;
           }
           .committee-modal {
-            width: min(1180px, calc(100vw - 32px));
-            max-height: calc(100vh - 48px);
+            width: min(1320px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
             overflow-y: auto;
             overflow-x: hidden;
             border-radius: 12px;
@@ -6798,6 +7788,7 @@ const CommitteeManagement: React.FC = () => {
             padding: 10px;
             display: grid;
             gap: 6px;
+            min-width: 0;
           }
           .committee-modal input,
           .committee-modal select {
@@ -6964,18 +7955,18 @@ const CommitteeManagement: React.FC = () => {
           .committee-modal-chip-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 4px;
             min-width: 0;
           }
           .committee-modal-chip {
             border: 1px solid #cbd5e1;
-            border-radius: 999px;
+            border-radius: 6px;
             background: #ffffff;
             color: #0f172a;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             line-height: 1.2;
-            padding: 4px 8px;
+            padding: 3px 7px;
             white-space: nowrap;
           }
           .committee-modal-chip--status {
@@ -7683,6 +8674,77 @@ const CommitteeManagement: React.FC = () => {
 
               <div
                 style={{
+                  position: "sticky",
+                  top: 10,
+                  zIndex: 6,
+                  marginBottom: 12,
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 12,
+                  background: "#ffffff",
+                  padding: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontSize: 12, color: "#0f172a" }}>
+                    Danh sách hội đồng: {councilListLocked ? "Đã chốt" : "Đang mở chỉnh sửa"}
+                  </div>
+                  {!councilListLocked && (
+                    <div style={{ fontSize: 12, color: "#b45309" }}>
+                      Cần chốt danh sách hội đồng trước khi CT mở phiên chấm.
+                    </div>
+                  )}
+                  {councilListLocked && !isAdminRole && (
+                    <div style={{ fontSize: 12, color: "#1d4ed8" }}>
+                      Danh sách đã chốt: chỉ tài khoản Admin mới có quyền mở lại.
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {canLockCouncils && (
+                    <button
+                      type="button"
+                      onClick={lockCouncils}
+                      disabled={
+                        !stateHydrated ||
+                        councilListLocked ||
+                        Boolean(actionInFlight)
+                      }
+                      className="committee-primary-btn"
+                    >
+                      <Lock size={14} /> Chốt danh sách hội đồng
+                    </button>
+                  )}
+                  {showReopenCouncils && (
+                    <button
+                      type="button"
+                      onClick={reopenCouncils}
+                      title={
+                        !canReopenCouncils
+                          ? "Chỉ tài khoản Admin mới được mở lại chốt hội đồng."
+                          : undefined
+                      }
+                      disabled={
+                        !stateHydrated ||
+                        !councilListLocked ||
+                        Boolean(actionInFlight) ||
+                        !canReopenCouncils
+                      }
+                      className="committee-ghost-btn"
+                    >
+                      <RefreshCw size={14} /> Mở lại chốt hội đồng
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div
+                style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                   gap: 10,
@@ -7877,6 +8939,7 @@ const CommitteeManagement: React.FC = () => {
                     className="committee-primary-btn"
                     onClick={runAssignment}
                     disabled={
+                      councilListLocked ||
                       !stateHydrated ||
                       !hasAllowedAction("GENERATE_COUNCILS") ||
                       assignmentLoading ||
@@ -7893,6 +8956,7 @@ const CommitteeManagement: React.FC = () => {
                     type="button"
                     className="committee-primary-btn"
                     onClick={startCreateCouncil}
+                    disabled={councilListLocked || Boolean(actionInFlight)}
                   >
                     <Plus size={14} /> Thêm hội đồng thủ công
                   </button>
@@ -8024,6 +9088,7 @@ const CommitteeManagement: React.FC = () => {
                                 event.stopPropagation();
                                 startEditCouncil(row.id, false);
                               }}
+                              disabled={councilListLocked || Boolean(actionInFlight)}
                               style={{ minHeight: 34, padding: 0 }}
                             >
                               <Pencil size={14} />
@@ -8037,7 +9102,7 @@ const CommitteeManagement: React.FC = () => {
                                 event.stopPropagation();
                                 deleteSelectedCouncil(row.id);
                               }}
-                              disabled={Boolean(actionInFlight)}
+                              disabled={councilListLocked || Boolean(actionInFlight)}
                               style={{ minHeight: 34, padding: 0 }}
                             >
                               <Trash2 size={14} />
@@ -8108,54 +9173,9 @@ const CommitteeManagement: React.FC = () => {
                 </div>
               )}
 
-              <div
-                style={{
-                  marginTop: 12,
-                  borderTop: "1px solid #e2e8f0",
-                  paddingTop: 12,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "grid", gap: 6 }}>
-                  {hasUnresolvedWarning && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={allowFinalizeAfterWarning}
-                        onChange={(event) =>
-                          setAllowFinalizeAfterWarning(event.target.checked)
-                        }
-                      />
-                      Cho phép chốt khi còn cảnh báo
-                    </label>
-                  )}
-                  <div style={{ fontSize: 12, color: "#0f172a" }}>
-                    Trạng thái chốt: {isFinalized ? "Đã chốt" : "Chưa chốt"}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={finalize}
-                  disabled={
-                    !stateHydrated ||
-                    !hasAllowedAction("FINALIZE") ||
-                    !drafts.length ||
-                    Boolean(actionInFlight)
-                  }
-                  className="committee-primary-btn"
-                >
-                  <Lock size={14} /> Chốt hội đồng
-                </button>
-              </div>
             </section>
 
           </div>
-
-        {/* Finalize block moved to table footer actions */}
 
         {showEligibleTopicsModal &&
           typeof document !== "undefined" &&
@@ -8428,6 +9448,7 @@ const CommitteeManagement: React.FC = () => {
                   }
                   style={{ minHeight: 34, padding: "6px 12px" }}
                   onClick={() => setAutoGenerateStep(1)}
+                  disabled={councilListLocked}
                 >
                   <span className="committee-inline-icon-label">
                     <Search size={14} />
@@ -8443,6 +9464,7 @@ const CommitteeManagement: React.FC = () => {
                   }
                   style={{ minHeight: 34, padding: "6px 12px" }}
                   onClick={proceedAutoGenerateStep2}
+                  disabled={councilListLocked}
                 >
                   <span className="committee-inline-icon-label">
                     <Layers3 size={14} />
@@ -8495,7 +9517,7 @@ const CommitteeManagement: React.FC = () => {
                             className="committee-ghost-btn committee-modal-step-btn"
                             style={{ minHeight: 30, padding: "4px 10px" }}
                             onClick={() => void syncData()}
-                            disabled={syncing || Boolean(actionInFlight)}
+                            disabled={councilListLocked || syncing || Boolean(actionInFlight)}
                           >
                             <span className="committee-inline-icon-label">
                               <RefreshCw size={13} />
@@ -8516,6 +9538,7 @@ const CommitteeManagement: React.FC = () => {
                                   ),
                               )
                             }
+                            disabled={councilListLocked}
                           >
                             <span className="committee-inline-icon-label">
                               <CheckCircle2 size={13} />
@@ -8527,6 +9550,7 @@ const CommitteeManagement: React.FC = () => {
                             className="committee-ghost-btn committee-modal-step-btn"
                             style={{ minHeight: 30, padding: "4px 10px" }}
                             onClick={() => setSelectedAutoTopicIds([])}
+                            disabled={councilListLocked}
                           >
                             <span className="committee-inline-icon-label">
                               <X size={13} />
@@ -8583,6 +9607,7 @@ const CommitteeManagement: React.FC = () => {
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleAutoTopic(id)}
+                                disabled={councilListLocked}
                               />
                               <div>
                                 <div style={{ fontSize: 12, fontWeight: 700 }}>
@@ -8650,6 +9675,7 @@ const CommitteeManagement: React.FC = () => {
                                   ),
                               )
                             }
+                            disabled={councilListLocked}
                           >
                             <span className="committee-inline-icon-label">
                               <CheckCircle2 size={13} />
@@ -8661,6 +9687,7 @@ const CommitteeManagement: React.FC = () => {
                             className="committee-ghost-btn committee-modal-step-btn"
                             style={{ minHeight: 30, padding: "4px 10px" }}
                             onClick={() => setSelectedAutoLecturerIds([])}
+                            disabled={councilListLocked}
                           >
                             <span className="committee-inline-icon-label">
                               <X size={13} />
@@ -8724,7 +9751,7 @@ const CommitteeManagement: React.FC = () => {
                           className="committee-ghost-btn committee-modal-step-btn"
                           style={{ minHeight: 36, padding: "0 12px" }}
                           onClick={() => void loadAutoGenerateConfig()}
-                          disabled={loadingAutoGenerateConfig || Boolean(actionInFlight)}
+                          disabled={councilListLocked || loadingAutoGenerateConfig || Boolean(actionInFlight)}
                         >
                           <span className="committee-inline-icon-label">
                             <RefreshCw size={13} />
@@ -8769,6 +9796,7 @@ const CommitteeManagement: React.FC = () => {
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleAutoLecturer(id)}
+                                disabled={councilListLocked}
                               />
                               <div>
                                 <div style={{ fontSize: 12, fontWeight: 700 }}>
@@ -9081,7 +10109,7 @@ const CommitteeManagement: React.FC = () => {
                     type="button"
                     className="committee-primary-btn committee-modal-step-btn"
                     onClick={proceedAutoGenerateStep2}
-                    disabled={loadingAutoGenerateConfig || Boolean(actionInFlight)}
+                    disabled={councilListLocked || loadingAutoGenerateConfig || Boolean(actionInFlight)}
                   >
                     <span className="committee-inline-icon-label">
                       <Layers3 size={14} />
@@ -9094,6 +10122,7 @@ const CommitteeManagement: React.FC = () => {
                     className="committee-primary-btn committee-modal-step-btn"
                     onClick={submitAutoGenerate}
                     disabled={
+                      councilListLocked ||
                       assignmentLoading ||
                       loadingAutoGenerateConfig ||
                       !stateHydrated ||
@@ -9138,8 +10167,10 @@ const CommitteeManagement: React.FC = () => {
                   </div>
                   <div className="committee-modal-sub">
                     {manualMode === "create"
-                      ? "Lưu từng bước để hoàn tất hội đồng: thông tin cơ bản, thành viên, rồi đề tài."
-                      : "Xem chi tiết, xác nhận chỉnh sửa, hủy hoặc lưu thay đổi."}
+                      ? "Hoàn tất đủ 3 bước rồi bấm Thêm hội đồng ở góc dưới bên phải để tạo hội đồng thật."
+                      : manualReadOnly
+                        ? "Xem chi tiết, xác nhận chỉnh sửa, hủy hoặc lưu thay đổi."
+                        : "Chỉnh sửa thông tin hội đồng, đề tài và thành viên rồi lưu thay đổi."}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -9160,43 +10191,28 @@ const CommitteeManagement: React.FC = () => {
                       onClick={enableEditFromDetail}
                       title="Chuyển sang chỉnh sửa"
                       aria-label="Chuyển sang chỉnh sửa"
+                      disabled={councilListLocked || Boolean(actionInFlight)}
                     >
                       <Pencil size={16} />
                     </button>
-                  ) : (
-                    <>
-                      {manualMode === "edit" && (
-                        <button
-                          type="button"
-                          className="committee-danger-btn committee-icon-btn"
-                          onClick={cancelManualEdit}
-                          title="Hủy chỉnh sửa"
-                          aria-label="Hủy chỉnh sửa"
-                          disabled={Boolean(actionInFlight)}
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="committee-accent-btn committee-icon-btn"
-                        onClick={saveManualCouncil}
-                        title={
-                          `Lưu bước ${createStep}`
-                        }
-                        aria-label={
-                          `Lưu bước ${createStep}`
-                        }
-                        disabled={Boolean(actionInFlight)}
-                      >
-                        <Save size={16} />
-                      </button>
-                    </>
-                  )}
+                  ) : manualMode === "edit" ? (
+                    <button
+                      type="button"
+                      className="committee-accent-btn committee-icon-btn"
+                      onClick={() => {
+                        void saveManualCouncil(3);
+                      }}
+                      disabled={Boolean(actionInFlight)}
+                      title="Lưu toàn bộ thay đổi"
+                      aria-label="Lưu toàn bộ thay đổi"
+                    >
+                      <Save size={16} />
+                    </button>
+                    ) : null}
                 </div>
               </div>
 
-              {!manualReadOnly && (
+              {showManualWizardSteps && (
                 <div
                   style={{
                     display: "flex",
@@ -9216,6 +10232,7 @@ const CommitteeManagement: React.FC = () => {
                       }
                       style={{ minHeight: 34, padding: "6px 10px" }}
                       onClick={() => proceedCreateStep(step as 1 | 2 | 3)}
+                      disabled={councilListLocked}
                     >
                       Bước {step}
                     </button>
@@ -9224,7 +10241,7 @@ const CommitteeManagement: React.FC = () => {
               )}
 
               <div className="committee-modal-body">
-                {(manualReadOnly || createStep === 1) && (
+                {(manualReadOnly || createStep === 1 || isManualDetailMode) && (
                   <>
                     <div
                       style={{ fontSize: 12, color: "#0f172a", marginBottom: 8 }}
@@ -9236,7 +10253,7 @@ const CommitteeManagement: React.FC = () => {
                         <span className="committee-modal-label">Mã hội đồng</span>
                         <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
                           {manualMode === "create"
-                            ? "Mã sẽ được hệ thống sinh khi lưu bước 1."
+                            ? "Mã sẽ được hệ thống sinh sau khi lưu toàn bộ 3 bước."
                             : "Mã chỉ dùng để tham chiếu, không chỉnh sửa trực tiếp."}
                         </div>
                         <input
@@ -9560,7 +10577,7 @@ const CommitteeManagement: React.FC = () => {
                   </div>
                 )}
 
-                {!manualReadOnly && createStep === 1 && (
+                {manualMode === "create" && !manualReadOnly && createStep === 1 && (
                   <div
                     style={{
                       display: "flex",
@@ -9573,16 +10590,17 @@ const CommitteeManagement: React.FC = () => {
                     <button
                       type="button"
                       className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
+                      onClick={() => {
+                        proceedCreateStep(2);
+                      }}
+                      disabled={councilListLocked}
                     >
-                      {manualMode === "create"
-                        ? "Lưu bước 1 & sang bước 2"
-                        : "Cập nhật bước 1 & sang bước 2"}
+                      Tiếp tục bước 2
                     </button>
                   </div>
                 )}
 
-                {(manualReadOnly || createStep === 2) && (
+                {(manualReadOnly || createStep === 3 || isManualDetailMode) && (
                   <div className="committee-modal-card">
                     <div
                       style={{
@@ -9601,14 +10619,18 @@ const CommitteeManagement: React.FC = () => {
                         <span className="committee-member-caption">
                           Chủ tịch và Thư ký được khóa cứng. Tổng số thành viên phải đúng {expectedManualMemberCount} theo cấu hình đợt.
                         </span>
+                        {!manualReadOnly && occupiedLecturerCodesOnManualDate.size > 0 && (
+                          <span className="committee-member-caption">
+                            Ngày {normalizeDefenseDateOnly(manualDefenseDate)} đã có {occupiedLecturerCodesOnManualDate.size} giảng viên thuộc hội đồng khác, hệ thống đã ẩn khỏi danh sách chọn.
+                          </span>
+                        )}
                       </div>
                       {!manualReadOnly && (
                         <button
                           type="button"
-                          className="committee-ghost-btn"
-                          style={{ minHeight: 30, padding: "4px 10px" }}
+                          className="committee-ghost-btn committee-member-slot-action"
                           onClick={addManualMemberSlot}
-                          disabled={manualMembers.length >= expectedManualMemberCount}
+                          disabled={councilListLocked || manualMembers.length >= expectedManualMemberCount}
                         >
                           <Plus size={13} /> Thêm slot thành viên
                         </button>
@@ -9765,11 +10787,7 @@ const CommitteeManagement: React.FC = () => {
                                   {!isFixedRoleSlot && manualMembers.length > expectedManualMemberCount && (
                                     <button
                                       type="button"
-                                      className="committee-danger-btn committee-member-remove-btn"
-                                      style={{
-                                        minHeight: 30,
-                                        padding: "4px 10px",
-                                      }}
+                                      className="committee-danger-btn committee-member-remove-btn committee-member-slot-action"
                                       onClick={() =>
                                         removeManualMemberSlot(idx)
                                       }
@@ -9787,7 +10805,7 @@ const CommitteeManagement: React.FC = () => {
                   </div>
                 )}
 
-                {!manualReadOnly && createStep === 2 && (
+                {manualMode === "create" && !manualReadOnly && createStep === 3 && (
                   <div
                     style={{
                       display: "flex",
@@ -9800,41 +10818,538 @@ const CommitteeManagement: React.FC = () => {
                     <button
                       type="button"
                       className="committee-ghost-btn"
-                      onClick={() => setCreateStep(1)}
+                      onClick={() => setCreateStep(2)}
+                      disabled={councilListLocked}
                     >
-                      Quay lại bước 1
+                      Quay lại bước 2
                     </button>
                     <button
                       type="button"
-                      className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
+                      className="committee-primary-btn committee-modal-step-btn"
+                      onClick={() => {
+                        const councilLabel = String(manualName ?? manualId).trim() || manualId;
+                        if (!window.confirm(`Xác nhận thêm hội đồng ${councilLabel}?`)) {
+                          return;
+                        }
+                        void saveManualCouncil(3);
+                      }}
+                      disabled={councilListLocked}
                     >
-                      {manualMode === "create"
-                        ? "Lưu bước 2 & sang bước 3"
-                        : "Cập nhật bước 2 & sang bước 3"}
+                      Thêm hội đồng
                     </button>
                   </div>
                 )}
 
-                {(manualReadOnly || createStep === 3) && (
+                {(manualReadOnly || createStep === 2 || isManualDetailMode) && (
                   <div className="committee-modal-card">
                     <span className="committee-modal-label">
-                      Danh sách đề tài
+                      Danh sách đề tài của hội đồng
                     </span>
                     <span className="committee-member-caption">
-                      Chọn đề tài liên quan để xếp vào hội đồng. Danh sách hiển thị đầy đủ mã, GVHD và tags.
+                      {showManualTopicWorkspace
+                        ? "Chọn đề tài liên quan để xếp vào hội đồng. Danh sách hiển thị đầy đủ mã, GVHD và tags."
+                        : "Chỉ hiển thị các đề tài thuộc hội đồng, gồm tên đề tài, sinh viên, giảng viên hướng dẫn, tags và buổi."}
                     </span>
-                    <div
-                      className="committee-manual-topic-grid"
-                    >
-                      <div className="committee-topic-panel">
+                    {showManualTopicWorkspace ? (
+                      <div className="committee-manual-topic-grid">
+                        <div className="committee-topic-panel">
+                          <div className="committee-topic-panel-head">
+                            <span>Danh sách đề tài</span>
+                            <span>{manualSelectedTopicRows.length}</span>
+                          </div>
+                          <div className="committee-session-stack">
+                            <div
+                              className="committee-session-box"
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                handleManualTopicDrop("MORNING");
+                              }}
+                            >
+                              <div className="committee-session-box-head">
+                                <span className="committee-inline-icon-label">
+                                  <span>Buổi sáng</span>
+                                </span>
+                                <span className="committee-session-box-time">
+                                  {getManualSessionTimeLabel("MORNING")}
+                                </span>
+                              </div>
+                              <div className="committee-topic-panel-list">
+                                {manualMorningTopicRows.length > 0 ? (
+                                  manualMorningTopicRows.map((item, index) => (
+                                    <article
+                                      key={`morning-${item.studentCode}`}
+                                      className="committee-topic-item committee-topic-item--selected committee-topic-item--interactive"
+                                      draggable={!manualReadOnly}
+                                      onDragStart={() => {
+                                        if (!manualReadOnly) {
+                                          setManualTopicDragStudentCode(item.studentCode);
+                                        }
+                                      }}
+                                      onDragEnd={() => {
+                                        setManualTopicDragStudentCode("");
+                                      }}
+                                      onDragOver={(event) => {
+                                        if (!manualReadOnly) {
+                                          event.preventDefault();
+                                        }
+                                      }}
+                                      onDrop={(event) => {
+                                        if (manualReadOnly) {
+                                          return;
+                                        }
+                                        event.preventDefault();
+                                        handleManualTopicDrop("MORNING", item.studentCode);
+                                      }}
+                                    >
+                                      {!manualReadOnly && (
+                                        <button
+                                          type="button"
+                                          className="committee-topic-remove-btn"
+                                          onClick={() => removeManualTopic(item.studentCode)}
+                                          title="Bỏ đề tài khỏi hội đồng"
+                                          aria-label="Bỏ đề tài khỏi hội đồng"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      )}
+                                      <div className="committee-topic-item-head">
+                                        <span className="committee-topic-item-code">
+                                          {item.topicCode}
+                                        </span>
+                                        <span className="committee-topic-item-student-code">
+                                          {item.studentCode}
+                                        </span>
+                                      </div>
+                                      <div className="committee-topic-item-title">
+                                        {item.topicTitle}
+                                      </div>
+                                      <div className="committee-topic-item-meta">
+                                        Sinh viên: {item.studentName}
+                                      </div>
+                                      <div className="committee-topic-item-meta">
+                                        GVHD: {item.supervisorName}
+                                      </div>
+                                      <div className="committee-modal-chip-list">
+                                        <span className="committee-modal-chip committee-modal-chip--muted">
+                                          #{item.orderIndex || index + 1}
+                                        </span>
+                                      </div>
+                                      <div className="committee-modal-chip-list">
+                                        {item.topicTags.length > 0 ? (
+                                          item.topicTags.map((tag) => (
+                                            <span
+                                              key={`morning-${item.studentCode}-${tag}`}
+                                              className="committee-modal-chip"
+                                            >
+                                              {getTagDisplayName(tag)}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="committee-modal-chip committee-modal-chip--muted">
+                                            -
+                                          </span>
+                                        )}
+                                      </div>
+                                    </article>
+                                  ))
+                                ) : (
+                                  <div className="committee-topic-empty">
+                                    Chưa có đề tài buổi sáng.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div
+                              className="committee-session-box"
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                handleManualTopicDrop("AFTERNOON");
+                              }}
+                            >
+                              <div className="committee-session-box-head">
+                                <span className="committee-inline-icon-label">
+                                  <span>Buổi chiều</span>
+                                </span>
+                                <span className="committee-session-box-time">
+                                  {getManualSessionTimeLabel("AFTERNOON")}
+                                </span>
+                              </div>
+                              <div className="committee-topic-panel-list">
+                                {manualAfternoonTopicRows.length > 0 ? (
+                                  manualAfternoonTopicRows.map((item, index) => (
+                                    <article
+                                      key={`afternoon-${item.studentCode}`}
+                                      className="committee-topic-item committee-topic-item--selected committee-topic-item--interactive"
+                                      draggable={!manualReadOnly}
+                                      onDragStart={() => {
+                                        if (!manualReadOnly) {
+                                          setManualTopicDragStudentCode(item.studentCode);
+                                        }
+                                      }}
+                                      onDragEnd={() => {
+                                        setManualTopicDragStudentCode("");
+                                      }}
+                                      onDragOver={(event) => {
+                                        if (!manualReadOnly) {
+                                          event.preventDefault();
+                                        }
+                                      }}
+                                      onDrop={(event) => {
+                                        if (manualReadOnly) {
+                                          return;
+                                        }
+                                        event.preventDefault();
+                                        handleManualTopicDrop("AFTERNOON", item.studentCode);
+                                      }}
+                                    >
+                                      {!manualReadOnly && (
+                                        <button
+                                          type="button"
+                                          className="committee-topic-remove-btn"
+                                          onClick={() => removeManualTopic(item.studentCode)}
+                                          title="Bỏ đề tài khỏi hội đồng"
+                                          aria-label="Bỏ đề tài khỏi hội đồng"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      )}
+                                      <div className="committee-topic-item-head">
+                                        <span className="committee-topic-item-code">
+                                          {item.topicCode}
+                                        </span>
+                                        <span className="committee-topic-item-student-code">
+                                          {item.studentCode}
+                                        </span>
+                                      </div>
+                                      <div className="committee-topic-item-title">
+                                        {item.topicTitle}
+                                      </div>
+                                      <div className="committee-topic-item-meta">
+                                        Sinh viên: {item.studentName}
+                                      </div>
+                                      <div className="committee-topic-item-meta">
+                                        GVHD: {item.supervisorName}
+                                      </div>
+                                      <div className="committee-modal-chip-list">
+                                        <span className="committee-modal-chip committee-modal-chip--muted">
+                                          #{item.orderIndex || index + 1}
+                                        </span>
+                                      </div>
+                                      <div className="committee-modal-chip-list">
+                                        {item.topicTags.length > 0 ? (
+                                          item.topicTags.map((tag) => (
+                                            <span
+                                              key={`afternoon-${item.studentCode}-${tag}`}
+                                              className="committee-modal-chip"
+                                            >
+                                              {getTagDisplayName(tag)}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="committee-modal-chip committee-modal-chip--muted">
+                                            -
+                                          </span>
+                                        )}
+                                      </div>
+                                    </article>
+                                  ))
+                                ) : (
+                                  <div className="committee-topic-empty">
+                                    Chưa có đề tài buổi chiều.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="committee-topic-panel-list" style={{ display: "none" }}>
+                            {manualRelatedStudentView.map((item) => {
+                              const topicSession = getManualTopicSessionCode(item.studentCode);
+                              const currentAssignment =
+                                manualAssignmentByStudentCode.get(item.studentCode);
+                              return (
+                                <article
+                                  key={`related-${item.studentCode}`}
+                                  className="committee-topic-item committee-topic-item--selected"
+                                >
+                                  <div className="committee-topic-item-head">
+                                    <span className="committee-topic-item-code">
+                                      {item.topicCode}
+                                    </span>
+                                    <span className="committee-topic-item-student-code">
+                                      {item.studentCode}
+                                    </span>
+                                  </div>
+                                  <div className="committee-topic-item-title">
+                                    {item.topicTitle}
+                                  </div>
+                                  <div className="committee-topic-item-meta">
+                                    Sinh viên: {item.studentName}
+                                  </div>
+                                  <div className="committee-topic-item-meta">
+                                    GVHD: {item.supervisorName}
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    {!manualReadOnly && manualScheduleMode === "FULL_DAY" && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className={topicSession === "MORNING" ? "committee-primary-btn" : "committee-ghost-btn"}
+                                          style={{ minHeight: 28, padding: "2px 8px" }}
+                                          onClick={() =>
+                                            assignTopicToSession(item.studentCode, "MORNING")
+                                          }
+                                        >
+                                          Sáng
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={topicSession === "AFTERNOON" ? "committee-primary-btn" : "committee-ghost-btn"}
+                                          style={{ minHeight: 28, padding: "2px 8px" }}
+                                          onClick={() =>
+                                            assignTopicToSession(item.studentCode, "AFTERNOON")
+                                          }
+                                        >
+                                          Chiều
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="committee-modal-chip-list">
+                                    {item.topicTags.length > 0 ? (
+                                      item.topicTags.map((tag) => (
+                                        <span
+                                          key={`related-${item.studentCode}-${tag}`}
+                                          className="committee-modal-chip"
+                                        >
+                                          {getTagDisplayName(tag)}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="committee-modal-chip committee-modal-chip--muted">
+                                        -
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="committee-member-meta">
+                                    <div>
+                                      Ngày: {formatDateLabel(currentAssignment?.scheduledAt ?? manualDefenseDate)}
+                                    </div>
+                                    <div>
+                                      Khung giờ: {currentAssignment?.startTime ?? manualStartTime} - {currentAssignment?.endTime ?? manualEndTime}
+                                    </div>
+                                    <div>
+                                      Thứ tự: {currentAssignment?.orderIndex ?? 1}
+                                    </div>
+                                  </div>
+
+                                  {!manualReadOnly && (
+                                    <div style={{ display: "grid", gap: 8 }}>
+                                      <label className="committee-member-field">
+                                        <span className="committee-member-field-label">Ngày</span>
+                                        <input
+                                          type="date"
+                                          value={currentAssignment?.scheduledAt ?? manualDefenseDate}
+                                          onChange={(event) => {
+                                            const nextDate =
+                                              normalizeDefenseDateOnly(event.target.value) ||
+                                              manualDefenseDate;
+                                            updateManualAssignment(item.studentCode, (assignment) => ({
+                                              ...assignment,
+                                              scheduledAt: nextDate,
+                                            }));
+                                          }}
+                                        />
+                                      </label>
+                                      <div className="prepare-time-grid">
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">Giờ bắt đầu</span>
+                                          <input
+                                            type="time"
+                                            value={currentAssignment?.startTime ?? manualStartTime}
+                                            onChange={(event) => {
+                                              const nextTime =
+                                                normalizeTimeOnly(event.target.value) ||
+                                                currentAssignment?.startTime ||
+                                                manualStartTime;
+                                              updateManualAssignment(item.studentCode, (assignment) => ({
+                                                ...assignment,
+                                                startTime: nextTime,
+                                              }));
+                                            }}
+                                          />
+                                        </label>
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">Giờ kết thúc</span>
+                                          <input
+                                            type="time"
+                                            value={currentAssignment?.endTime ?? manualEndTime}
+                                            onChange={(event) => {
+                                              const nextTime =
+                                                normalizeTimeOnly(event.target.value) ||
+                                                currentAssignment?.endTime ||
+                                                manualEndTime;
+                                              updateManualAssignment(item.studentCode, (assignment) => ({
+                                                ...assignment,
+                                                endTime: nextTime,
+                                              }));
+                                            }}
+                                          />
+                                        </label>
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">Thứ tự</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            step={1}
+                                            value={currentAssignment?.orderIndex ?? 1}
+                                            onChange={(event) => {
+                                              const nextOrder = Math.max(
+                                                1,
+                                                Math.floor(Number(event.target.value) || 1),
+                                              );
+                                              updateManualAssignment(item.studentCode, (assignment) => ({
+                                                ...assignment,
+                                                orderIndex: nextOrder,
+                                              }));
+                                            }}
+                                          />
+                                        </label>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {!manualReadOnly && (
+                                    <button
+                                      type="button"
+                                      className="committee-danger-btn committee-topic-item-action"
+                                      onClick={() => removeManualTopic(item.studentCode)}
+                                    >
+                                      <X size={12} /> Bỏ liên quan
+                                    </button>
+                                  )}
+                                </article>
+                              );
+                            })}
+
+                          {manualRelatedStudentView.length === 0 && (
+                            <div className="committee-topic-empty">
+                              Chưa có đề tài liên quan được chọn.
+                            </div>
+                          )}
+                        </div>
+                        </div>
+
+                        <div className="committee-topic-panel">
+                          <div className="committee-topic-panel-head">
+                            <span>Danh sách đề tài đề xuất</span>
+                          <span>{manualAvailableTopicRows.length}</span>
+                          </div>
+                        <div className="committee-topic-panel-list">
+                          {manualAvailableTopicRows.map((item) => (
+                              <article
+                              key={`available-${item.studentCode}`}
+                                className="committee-topic-item"
+                              draggable={!manualReadOnly}
+                              onDragStart={() => {
+                                if (!manualReadOnly) {
+                                  setManualTopicDragStudentCode(item.studentCode);
+                                }
+                              }}
+                              onDragEnd={() => {
+                                setManualTopicDragStudentCode("");
+                              }}
+                              >
+                                <div className="committee-topic-item-head">
+                                  <span className="committee-topic-item-code">
+                                    {item.topicCode}
+                                  </span>
+                                  <span className="committee-topic-item-student-code">
+                                    {item.studentCode}
+                                  </span>
+                                </div>
+                                <div className="committee-topic-item-title">
+                                  {item.topicTitle}
+                                </div>
+                                <div className="committee-topic-item-meta">
+                                  Sinh viên: {item.studentName}
+                                </div>
+                                <div className="committee-topic-item-meta">
+                                  GVHD: {item.supervisorName}
+                                </div>
+                                <div className="committee-modal-chip-list">
+                                  {item.topicTags.length > 0 ? (
+                                    item.topicTags.map((tag) => (
+                                      <span
+                                        key={`available-${item.studentCode}-${tag}`}
+                                        className="committee-modal-chip"
+                                      >
+                                        {getTagDisplayName(tag)}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="committee-modal-chip committee-modal-chip--muted">
+                                      -
+                                    </span>
+                                  )}
+                                </div>
+
+                                {!manualReadOnly && (
+                                  <div className="committee-topic-card-actions">
+                                    <button
+                                      type="button"
+                                      className="committee-primary-btn committee-topic-card-action"
+                                      onClick={() => moveManualTopicToSession(item.studentCode, "MORNING")}
+                                    >
+                                      <span className="committee-inline-icon-label">
+                                        <Plus size={12} />
+                                        <span>Thêm sáng</span>
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="committee-primary-btn committee-topic-card-action"
+                                      onClick={() => moveManualTopicToSession(item.studentCode, "AFTERNOON")}
+                                    >
+                                      <span className="committee-inline-icon-label">
+                                        <Plus size={12} />
+                                        <span>Thêm chiều</span>
+                                      </span>
+                                    </button>
+                                  </div>
+                                )}
+                              </article>
+                            ))}
+
+                            {manualAvailableTopicRows.length === 0 && (
+                              <div className="committee-topic-empty">
+                                Không còn đề tài khả dụng.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className="committee-topic-panel"
+                        style={isManualDetailMode ? { minHeight: "auto", padding: 8 } : undefined}
+                      >
                         <div className="committee-topic-panel-head">
-                          <span>Đề tài liên quan</span>
+                          <span>Danh sách đề tài của hội đồng</span>
                           <span>{manualRelatedStudentView.length}</span>
                         </div>
                         <div className="committee-topic-panel-list">
                           {manualRelatedStudentView.map((item) => {
-                            const topicSession = getManualTopicSessionCode(item.studentCode);
                             const currentAssignment =
                               manualAssignmentByStudentCode.get(item.studentCode);
                             return (
@@ -9859,47 +11374,11 @@ const CommitteeManagement: React.FC = () => {
                                 <div className="committee-topic-item-meta">
                                   GVHD: {item.supervisorName}
                                 </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <span className="committee-modal-chip committee-modal-chip--status">
-                                    {topicSession === "AFTERNOON" ? "Buổi chiều" : "Buổi sáng"}
-                                  </span>
-                                  {!manualReadOnly && manualScheduleMode === "FULL_DAY" && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className={topicSession === "MORNING" ? "committee-primary-btn" : "committee-ghost-btn"}
-                                        style={{ minHeight: 28, padding: "2px 8px" }}
-                                        onClick={() =>
-                                          assignTopicToSession(item.studentCode, "MORNING")
-                                        }
-                                      >
-                                        Sáng
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={topicSession === "AFTERNOON" ? "committee-primary-btn" : "committee-ghost-btn"}
-                                        style={{ minHeight: 28, padding: "2px 8px" }}
-                                        onClick={() =>
-                                          assignTopicToSession(item.studentCode, "AFTERNOON")
-                                        }
-                                      >
-                                        Chiều
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
                                 <div className="committee-modal-chip-list">
                                   {item.topicTags.length > 0 ? (
                                     item.topicTags.map((tag) => (
                                       <span
-                                        key={`related-${item.studentCode}-${tag}`}
+                                        key={`related-only-${item.studentCode}-${tag}`}
                                         className="committee-modal-chip"
                                       >
                                         {getTagDisplayName(tag)}
@@ -9999,93 +11478,18 @@ const CommitteeManagement: React.FC = () => {
                                     </div>
                                   </div>
                                 )}
-
-                                {!manualReadOnly && (
-                                  <button
-                                    type="button"
-                                    className="committee-danger-btn committee-topic-item-action"
-                                    onClick={() => moveTopicToUnrelated(item.studentCode)}
-                                  >
-                                    <X size={12} /> Bỏ liên quan
-                                  </button>
-                                )}
                               </article>
                             );
                           })}
 
                           {manualRelatedStudentView.length === 0 && (
                             <div className="committee-topic-empty">
-                              Chưa có đề tài liên quan được chọn.
+                              Chưa có đề tài thuộc hội đồng.
                             </div>
                           )}
                         </div>
                       </div>
-
-                      <div className="committee-topic-panel">
-                        <div className="committee-topic-panel-head">
-                          <span>Đề tài chưa chọn</span>
-                          <span>{manualUnrelatedStudentView.length}</span>
-                        </div>
-                        <div className="committee-topic-panel-list">
-                          {manualUnrelatedStudentView.map((item) => (
-                            <article
-                              key={`unrelated-${item.studentCode}`}
-                              className="committee-topic-item"
-                            >
-                              <div className="committee-topic-item-head">
-                                <span className="committee-topic-item-code">
-                                  {item.topicCode}
-                                </span>
-                                <span className="committee-topic-item-student-code">
-                                  {item.studentCode}
-                                </span>
-                              </div>
-                              <div className="committee-topic-item-title">
-                                {item.topicTitle}
-                              </div>
-                              <div className="committee-topic-item-meta">
-                                Sinh viên: {item.studentName}
-                              </div>
-                              <div className="committee-topic-item-meta">
-                                GVHD: {item.supervisorName}
-                              </div>
-                              <div className="committee-modal-chip-list">
-                                {item.topicTags.length > 0 ? (
-                                  item.topicTags.map((tag) => (
-                                    <span
-                                      key={`unrelated-${item.studentCode}-${tag}`}
-                                      className="committee-modal-chip"
-                                    >
-                                      {getTagDisplayName(tag)}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="committee-modal-chip committee-modal-chip--muted">
-                                    -
-                                  </span>
-                                )}
-                              </div>
-
-                              {!manualReadOnly && (
-                                <button
-                                  type="button"
-                                  className="committee-ghost-btn committee-topic-item-action"
-                                  onClick={() => moveTopicToRelated(item.studentCode)}
-                                >
-                                  <Plus size={12} /> Thêm liên quan
-                                </button>
-                              )}
-                            </article>
-                          ))}
-
-                          {manualUnrelatedStudentView.length === 0 && (
-                            <div className="committee-topic-empty">
-                              Tất cả đề tài hiện đã được chọn liên quan.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    )}
                     {!manualReadOnly && (
                       <div
                         style={{
@@ -10094,15 +11498,17 @@ const CommitteeManagement: React.FC = () => {
                           color: "#0f172a",
                         }}
                       >
-                        {manualScheduleMode === "ONE_SESSION"
-                          ? `Đề tài đã chọn: ${manualRelatedStudents.length} · Tất cả thuộc ${manualSessionCode === "AFTERNOON" ? "buổi chiều" : "buổi sáng"}`
-                          : `Đề tài đã chọn: ${manualRelatedStudents.length} · Buổi sáng: ${manualMorningStudents.length} · Buổi chiều: ${manualAfternoonStudents.length}`}
+                        {showManualTopicWorkspace
+                          ? manualScheduleMode === "ONE_SESSION"
+                            ? `Đề tài đã chọn: ${manualRelatedStudents.length}/${expectedManualTopicCount} · ${manualSessionCode === "AFTERNOON" ? "Chiều" : "Sáng"}`
+                            : `Đề tài đã chọn: ${manualRelatedStudents.length} · Sáng: ${manualMorningStudents.length}/${expectedManualTopicCount} · Chiều: ${manualAfternoonStudents.length}/${expectedManualTopicCount}`
+                          : `Đã có ${manualRelatedStudents.length} đề tài thuộc hội đồng.`}
                       </div>
                     )}
                   </div>
                 )}
 
-                {!manualReadOnly && createStep === 3 && (
+                {manualMode === "create" && !manualReadOnly && createStep === 2 && (
                   <div
                     style={{
                       display: "flex",
@@ -10115,17 +11521,20 @@ const CommitteeManagement: React.FC = () => {
                     <button
                       type="button"
                       className="committee-ghost-btn"
-                      onClick={() => setCreateStep(2)}
+                      onClick={() => setCreateStep(1)}
+                      disabled={councilListLocked}
                     >
-                      Quay lại bước 2
+                      Quay lại bước 1
                     </button>
                     <button
                       type="button"
-                      className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
-                      disabled={Boolean(actionInFlight)}
+                      className="committee-primary-btn committee-modal-step-btn"
+                      onClick={() => {
+                        proceedCreateStep(3);
+                      }}
+                      disabled={councilListLocked}
                     >
-                      {manualMode === "create" ? "Lưu hội đồng" : "Hoàn tất cập nhật"}
+                      Tiếp tục bước 3
                     </button>
                   </div>
                 )}

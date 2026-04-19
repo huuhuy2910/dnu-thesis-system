@@ -120,6 +120,8 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string? SessionCode { get; set; }
         public decimal? FinalScore { get; set; }
         public string? Grade { get; set; }
+        public bool CouncilListLocked { get; set; }
+        public string CouncilLockStatus { get; set; } = "UNLOCKED";
     }
 
     public class StudentNotificationDto

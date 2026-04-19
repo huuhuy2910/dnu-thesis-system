@@ -31,6 +31,9 @@ public class DefensePeriodScoringQueriesTests
         completed.Variance.Should().Be(3m);
         completed.StudentCode.Should().Be("S001");
         completed.StudentName.Should().Be("Nguyen Van A");
+        completed.DefenseDocuments.Should().ContainSingle();
+        completed.DefenseDocuments.Single().DocumentType.Should().Be("REPORT");
+        completed.DefenseDocuments.Single().FileUrl.Should().Be("/files/defense/T001-report.pdf");
 
         result.Data.Should().NotContain(x => x.AssignmentCode == "ASG-OUT");
     }
@@ -94,6 +97,8 @@ public class DefensePeriodScoringQueriesTests
 
     private static void SeedScoringScenario(ApplicationDbContext db)
     {
+        var now = DateTime.UtcNow;
+
         db.DefenseTerms.Add(new DefenseTerm
         {
             DefenseTermId = 1,
@@ -278,6 +283,24 @@ public class DefensePeriodScoringQueriesTests
                 MemberLecturerCode = "L002",
                 Score = 0m,
                 IsSubmitted = false
+            });
+
+        db.DefenseDocuments.AddRange(
+            new DefenseDocument
+            {
+                DocumentId = 201,
+                AssignmentId = 101,
+                DocumentType = "REPORT",
+                FileUrl = "/files/defense/T001-report.pdf",
+                GeneratedAt = now.AddMinutes(-10)
+            },
+            new DefenseDocument
+            {
+                DocumentId = 202,
+                AssignmentId = 102,
+                DocumentType = "REPORT",
+                FileUrl = "/files/defense/T002-report.pdf",
+                GeneratedAt = now.AddMinutes(-9)
             });
 
         db.SaveChanges();

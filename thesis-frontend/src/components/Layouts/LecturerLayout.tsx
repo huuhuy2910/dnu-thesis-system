@@ -16,6 +16,11 @@ import type { ApiResponse } from "../../types/api";
 import type { LecturerProfile } from "../../types/lecturer-profile";
 import ChatWidget from "../chat/ChatWidget.tsx";
 import NotificationBell from "../notifications/NotificationBell";
+import {
+  getActiveDefensePeriodId,
+  setActiveDefensePeriodId,
+} from "../../utils/defensePeriod";
+import { fetchCurrentDefensePeriod } from "../../services/current-defense-period.service";
 
 const LecturerLayout: React.FC = () => {
   const auth = useAuth();
@@ -25,6 +30,26 @@ const LecturerLayout: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [headerPeriod, setHeaderPeriod] = useState<{
+    label: string;
+    tone: "normal" | "warning" | "error";
+    tooltip: string;
+  }>(() => {
+    const cachedPeriodId = getActiveDefensePeriodId();
+    if (cachedPeriodId) {
+      return {
+        label: `Đợt #${cachedPeriodId}`,
+        tone: "normal",
+        tooltip: `Đợt đang dùng: #${cachedPeriodId}`,
+      };
+    }
+
+    return {
+      label: "Đang xác định đợt",
+      tone: "normal",
+      tooltip: "Hệ thống đang tự động xác định đợt bảo vệ hiện tại.",
+    };
+  });
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -73,6 +98,92 @@ const LecturerLayout: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showDropdown]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapCurrentPeriod = async () => {
+      const result = await fetchCurrentDefensePeriod("lecturer");
+      if (cancelled) {
+        return;
+      }
+
+      if (result.ok) {
+        const periodName = result.period.name || `Đợt ${result.period.periodId}`;
+        setActiveDefensePeriodId(result.period.periodId);
+        setHeaderPeriod({
+          label: `${periodName} (#${result.period.periodId})`,
+          tone: "normal",
+          tooltip: `Đợt hiện tại: ${periodName} (#${result.period.periodId})`,
+        });
+        return;
+      }
+
+      if (result.code === "NOT_MAPPED") {
+        setActiveDefensePeriodId(null);
+        setHeaderPeriod({
+          label: "Chưa có mapping đợt",
+          tone: "warning",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      if (result.code === "AMBIGUOUS" || result.code === "INVALID_CONTRACT") {
+        setActiveDefensePeriodId(null);
+        setHeaderPeriod({
+          label: result.code === "AMBIGUOUS" ? "Dữ liệu đợt mơ hồ" : "Snapshot đợt không hợp lệ",
+          tone: "error",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      const cachedPeriodId = getActiveDefensePeriodId();
+      if (cachedPeriodId) {
+        setHeaderPeriod({
+          label: `Đợt #${cachedPeriodId} (cache)`,
+          tone: "warning",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      setHeaderPeriod({
+        label: "Không xác định đợt",
+        tone: "error",
+        tooltip: result.message,
+      });
+    };
+
+    void bootstrapCurrentPeriod();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const headerPeriodStyle =
+    headerPeriod.tone === "error"
+      ? {
+          borderColor: "rgba(248, 113, 113, 0.45)",
+          backgroundColor: "rgba(127, 29, 29, 0.45)",
+          textColor: "#fecaca",
+          dotColor: "#f87171",
+        }
+      : headerPeriod.tone === "warning"
+        ? {
+            borderColor: "rgba(251, 191, 36, 0.5)",
+            backgroundColor: "rgba(146, 64, 14, 0.35)",
+            textColor: "#fde68a",
+            dotColor: "#fbbf24",
+          }
+        : {
+            borderColor: "rgba(243, 112, 33, 0.5)",
+            backgroundColor: "rgba(243, 112, 33, 0.2)",
+            textColor: "#ffedd5",
+            dotColor: "#fdba74",
+          };
 
   return (
     <div
@@ -126,6 +237,15 @@ const LecturerLayout: React.FC = () => {
             .lecturer-status-badge {
               display: none !important;
             }
+
+            .lecturer-period-badge {
+              max-width: 150px !important;
+              padding: 6px 10px !important;
+            }
+
+            .lecturer-period-badge .period-text {
+              font-size: 11px !important;
+            }
             
             .lecturer-header h3 {
               font-size: 14px !important;
@@ -168,6 +288,18 @@ const LecturerLayout: React.FC = () => {
             .lecturer-avatar-section .user-code {
               display: none !important;
             }
+          }
+
+          .lecturer-period-badge {
+            max-width: 320px;
+            min-width: 0;
+          }
+
+          .lecturer-period-badge .period-text {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
           
           @media (min-width: 769px) and (max-width: 1024px) {
@@ -420,6 +552,41 @@ const LecturerLayout: React.FC = () => {
                 }}
               >
                 Giảng viên
+              </span>
+            </div>
+
+            <div
+              className="lecturer-period-badge"
+              title={headerPeriod.tooltip}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 14px",
+                borderRadius: "20px",
+                backgroundColor: headerPeriodStyle.backgroundColor,
+                border: `1px solid ${headerPeriodStyle.borderColor}`,
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: headerPeriodStyle.dotColor,
+                }}
+              />
+              <span
+                className="period-text"
+                style={{
+                  fontSize: 12,
+                  color: headerPeriodStyle.textColor,
+                  fontWeight: 600,
+                  letterSpacing: "0.2px",
+                }}
+              >
+                {headerPeriod.label}
               </span>
             </div>
 

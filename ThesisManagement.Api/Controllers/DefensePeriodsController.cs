@@ -43,6 +43,8 @@ namespace ThesisManagement.Api.Controllers
         private readonly ILockLecturerCapabilitiesCommand _lockCapabilitiesCommand;
         private readonly IConfirmCouncilConfigCommand _confirmCouncilConfigCommand;
         private readonly IGenerateCouncilsCommand _generateCouncilsCommand;
+        private readonly ILockCouncilsCommand _lockCouncilsCommand;
+        private readonly IReopenCouncilsCommand _reopenCouncilsCommand;
         private readonly IGetCouncilsQueryV2 _getCouncilsQuery;
         private readonly IGetCouncilDetailQueryV2 _getCouncilDetailQuery;
         private readonly IGetTopicTagsQueryV2 _getTopicTagsQuery;
@@ -102,6 +104,8 @@ namespace ThesisManagement.Api.Controllers
             ILockLecturerCapabilitiesCommand lockCapabilitiesCommand,
             IConfirmCouncilConfigCommand confirmCouncilConfigCommand,
             IGenerateCouncilsCommand generateCouncilsCommand,
+            ILockCouncilsCommand lockCouncilsCommand,
+            IReopenCouncilsCommand reopenCouncilsCommand,
             IGetCouncilsQueryV2 getCouncilsQuery,
             IGetCouncilDetailQueryV2 getCouncilDetailQuery,
             IGetTopicTagsQueryV2 getTopicTagsQuery,
@@ -157,6 +161,8 @@ namespace ThesisManagement.Api.Controllers
             _lockCapabilitiesCommand = lockCapabilitiesCommand;
             _confirmCouncilConfigCommand = confirmCouncilConfigCommand;
             _generateCouncilsCommand = generateCouncilsCommand;
+            _lockCouncilsCommand = lockCouncilsCommand;
+            _reopenCouncilsCommand = reopenCouncilsCommand;
             _getCouncilsQuery = getCouncilsQuery;
             _getCouncilDetailQuery = getCouncilDetailQuery;
             _getTopicTagsQuery = getTopicTagsQuery;
@@ -304,6 +310,12 @@ namespace ThesisManagement.Api.Controllers
         public async Task<ActionResult<ApiResponse<object>>> HandleLifecycleAction(int periodId, [FromBody] DefensePeriodLifecycleActionRequestDto request)
         {
             var action = (request.Action ?? string.Empty).Trim().ToUpperInvariant();
+            if (string.Equals(action, "REOPEN_COUNCILS", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(GetRequestRole(), "Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.Fail("Chỉ tài khoản Admin mới được mở lại chốt danh sách hội đồng.", 403));
+            }
+
             var syncRequest = request.Sync ?? new SyncDefensePeriodRequestDto();
             syncRequest.IdempotencyKey ??= request.IdempotencyKey;
             if (request.RetryOnFailure.HasValue)
@@ -379,13 +391,19 @@ namespace ThesisManagement.Api.Controllers
                         rollbackRequest,
                         request.IdempotencyKey),
                     action),
+                "LOCK_COUNCILS" => WrapAsObject(
+                    await LockCouncils(periodId, request.IdempotencyKey),
+                    action),
+                "REOPEN_COUNCILS" => WrapAsObject(
+                    await ReopenCouncils(periodId, request.IdempotencyKey),
+                    action),
                 "ARCHIVE" => WrapAsObject(
                     await ArchivePeriod(periodId, archiveRequest),
                     action),
                 "REOPEN" => WrapAsObject(
                     await ReopenPeriod(periodId, reopenRequest),
                     action),
-                _ => BadRequest(ApiResponse<object>.Fail("Action không hợp lệ. Hỗ trợ: SYNC, FINALIZE, PUBLISH, ROLLBACK, ARCHIVE, REOPEN.", 400))
+                _ => BadRequest(ApiResponse<object>.Fail("Action không hợp lệ. Hỗ trợ: SYNC, FINALIZE, PUBLISH, ROLLBACK, LOCK_COUNCILS, REOPEN_COUNCILS, ARCHIVE, REOPEN.", 400))
             };
         }
 
@@ -3609,6 +3627,22 @@ namespace ThesisManagement.Api.Controllers
         {
             request.IdempotencyKey ??= idempotencyKey;
             var result = await _finalizeCommand.ExecuteAsync(periodId, request, CurrentUserId);
+            await AttachPeriodStateMetadataAsync(periodId, result);
+            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+        }
+
+
+        private async Task<ActionResult<ApiResponse<bool>>> LockCouncils(int periodId, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
+        {
+            var result = await _lockCouncilsCommand.ExecuteAsync(periodId, CurrentUserId, idempotencyKey);
+            await AttachPeriodStateMetadataAsync(periodId, result);
+            return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
+        }
+
+
+        private async Task<ActionResult<ApiResponse<bool>>> ReopenCouncils(int periodId, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
+        {
+            var result = await _reopenCouncilsCommand.ExecuteAsync(periodId, CurrentUserId, idempotencyKey);
             await AttachPeriodStateMetadataAsync(periodId, result);
             return StatusCode(result.HttpStatusCode == 0 ? (result.Success ? 200 : 400) : result.HttpStatusCode, result);
         }

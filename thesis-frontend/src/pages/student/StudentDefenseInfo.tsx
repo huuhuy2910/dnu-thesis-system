@@ -1,874 +1,2560 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  createConcurrencyToken,
-  createIdempotencyKey,
-  ucError,
-  type SessionCode,
-  type WorkflowActionTrace,
-} from "../../types/defense-workflow-contract";
+import { createIdempotencyKey } from "../../types/defense-workflow-contract";
 import { useToast } from "../../context/useToast";
-import { fetchData } from "../../api/fetchData";
+import { FetchDataError, fetchData } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
-import { readEnvelopeData } from "../../utils/api-envelope";
 import {
-  extractDefensePeriodId,
+  pickCaseInsensitiveValue,
+  readEnvelopeAllowedActions,
+  readEnvelopeData,
+  readEnvelopeErrorMessages,
+  readEnvelopeIdempotencyReplay,
+  readEnvelopeMessage,
+  readEnvelopeSuccess,
+  readEnvelopeWarningMessages,
+} from "../../utils/api-envelope";
+import {
   getActiveDefensePeriodId,
   normalizeDefensePeriodId,
   setActiveDefensePeriodId,
 } from "../../utils/defensePeriod";
-
 import {
+  AlertCircle,
   Bell,
-  Calendar,
+  CalendarClock,
   CheckCircle2,
   Clock3,
   FileText,
   GraduationCap,
+  Hash,
+  MapPin,
+  User,
   Upload,
   Users,
-  XCircle,
 } from "lucide-react";
 
-type Member = {
-  role: "CT" | "TK" | "PB" | "GVHD";
-  name: string;
+type SessionCode = "MORNING" | "AFTERNOON";
+type StudentPanel = "overview" | "notifications" | "revision";
+type RevisionStatusCode = 1 | 2 | 3;
+
+type DefenseInfoView = {
+  studentCode: string;
+  studentName: string;
+  topicCode: string;
+  topicTitle: string;
+  committeeCode: string | null;
+  room: string | null;
+  scheduledAt: string | null;
+  session: number | null;
+  sessionCode: SessionCode | null;
+  finalScore: number | null;
+  grade: string | null;
+  councilListLocked: boolean;
+  councilLockStatus: "LOCKED" | "UNLOCKED";
 };
 
 type StudentNotification = {
-  time: string;
-  title: string;
-  type: "info" | "warning" | "success";
+  type: string;
+  message: string;
+  timestamp: string;
 };
 
-type SubmissionHistory = {
-  version: string;
-  uploadedAt: string;
-  status: "Pending" | "Approved" | "Rejected";
-  note?: string;
+type NotificationScheduleHint = {
+  committeeCode: string | null;
+  room: string | null;
+  scheduledAt: string | null;
 };
 
-type StudentPanel = "schedule" | "result" | "revision";
+type RevisionHistoryView = {
+  id: number;
+  assignmentId: number | null;
+  revisionFileUrl: string | null;
+  finalStatus: RevisionStatusCode;
+  isCtApproved: boolean;
+  isUvtkApproved: boolean;
+  isGvhdApproved: boolean;
+  createdAt: string;
+  lastUpdated: string;
+};
 
-const EMPTY_DEFENSE = {
-  periodId: "",
-  assignmentId: "",
+type CurrentDefensePeriodView = {
+  periodId: number;
+  name: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+};
+
+const DEFAULT_DEFENSE_INFO: DefenseInfoView = {
   studentCode: "",
   studentName: "",
-  topic: "",
-  defenseDate: "",
-  startTime: "",
-  endTime: "",
-  session: "MORNING" as SessionCode,
-  room: "",
-  committeeCode: "",
-  status: "",
-  score: 0,
-  letter: "",
-  requiresRevision: false,
+  topicCode: "",
+  topicTitle: "",
+  committeeCode: null,
+  room: null,
+  scheduledAt: null,
+  session: null,
+  sessionCode: null,
+  finalScore: null,
+  grade: null,
+  councilListLocked: false,
+  councilLockStatus: "UNLOCKED",
 };
 
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: 18,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+const toRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+};
+
+const toRecordArray = (value: unknown): Array<Record<string, unknown>> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => toRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+};
+
+const toStringOrNull = (value: unknown): string | null => {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
+};
+
+const toDisplayText = (value: unknown, fallback = ""): string => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+const readBooleanLike = (value: unknown, fallback = false): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return fallback;
+};
+
+const readNumberLike = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseRevisionStatus = (value: unknown): RevisionStatusCode => {
+  const asNumber = readNumberLike(value);
+  if (asNumber === 2) {
+    return 2;
+  }
+  if (asNumber === 3) {
+    return 3;
+  }
+
+  const text = String(value ?? "").trim().toUpperCase();
+  if (text.includes("APPROVED") || text.includes("PASSED")) {
+    return 2;
+  }
+  if (text.includes("REJECTED") || text.includes("FAILED")) {
+    return 3;
+  }
+
+  return 1;
+};
+
+const toIsoDateOrNull = (value: unknown): string | null => {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
+};
+
+const mapCurrentPeriodView = (
+  periodRecord: Record<string, unknown> | null,
+): CurrentDefensePeriodView | null => {
+  if (!periodRecord) {
+    return null;
+  }
+
+  const periodId = normalizeDefensePeriodId(
+    pickCaseInsensitiveValue(
+      periodRecord,
+      ["defenseTermId", "DefenseTermId", "periodId", "PeriodId", "id", "Id"],
+      null,
+    ),
+  );
+
+  if (periodId == null || periodId <= 0) {
+    return null;
+  }
+
+  return {
+    periodId,
+    name: toDisplayText(
+      pickCaseInsensitiveValue(periodRecord, ["name", "Name", "title", "Title"], ""),
+      `Đợt ${periodId}`,
+    ),
+    status: toDisplayText(
+      pickCaseInsensitiveValue(periodRecord, ["status", "Status", "state", "State"], "UNKNOWN"),
+      "UNKNOWN",
+    ),
+    startDate: toIsoDateOrNull(
+      pickCaseInsensitiveValue(periodRecord, ["startDate", "StartDate", "startedAt", "StartedAt"], null),
+    ),
+    endDate: toIsoDateOrNull(
+      pickCaseInsensitiveValue(periodRecord, ["endDate", "EndDate", "endedAt", "EndedAt"], null),
+    ),
+  };
+};
+
+const readApiErrorMessage = (payload: unknown): string | null => {
+  const record = toRecord(payload);
+  if (!record) {
+    return null;
+  }
+
+  const directMessage = toStringOrNull(
+    pickCaseInsensitiveValue(record, ["message", "Message", "title", "Title"], null),
+  );
+  if (directMessage) {
+    return directMessage;
+  }
+
+  const errorRecord = toRecord(
+    pickCaseInsensitiveValue(record, ["errors", "Errors"], null),
+  );
+  if (!errorRecord) {
+    return null;
+  }
+
+  for (const value of Object.values(errorRecord)) {
+    if (Array.isArray(value) && value.length > 0) {
+      const first = toStringOrNull(value[0]);
+      if (first) {
+        return first;
+      }
+    }
+  }
+
+  return null;
+};
+
+const hasSnapshotKeys = (record: Record<string, unknown>): boolean => {
+  const keyGroups: string[][] = [
+    ["defenseInfo", "DefenseInfo"],
+    ["studentDefenseInfo", "StudentDefenseInfo"],
+    ["committeeAssignment", "CommitteeAssignment"],
+    ["assignment", "Assignment"],
+    ["committee", "Committee"],
+    ["notifications", "Notifications"],
+    ["alerts", "Alerts"],
+    ["messages", "Messages"],
+    ["revisionHistory", "RevisionHistory"],
+    ["revisionQueue", "RevisionQueue"],
+    ["revisions", "Revisions"],
+  ];
+
+  return keyGroups.some(
+    (keys) => pickCaseInsensitiveValue(record, keys, undefined) !== undefined,
+  );
+};
+
+const extractSnapshotRecord = (payload: unknown): Record<string, unknown> | null => {
+  const queue: unknown[] = [payload];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current == null || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        queue.push(item);
+      }
+      continue;
+    }
+
+    const record = toRecord(current);
+    if (!record) {
+      continue;
+    }
+
+    if (hasSnapshotKeys(record)) {
+      return record;
+    }
+
+    const nestedKeys = [
+      "snapshot",
+      "Snapshot",
+      "data",
+      "Data",
+      "result",
+      "Result",
+      "payload",
+      "Payload",
+      "item",
+      "Item",
+      "value",
+      "Value",
+    ];
+
+    for (const key of nestedKeys) {
+      if (record[key] !== undefined) {
+        queue.push(record[key]);
+      }
+    }
+  }
+
+  return toRecord(payload);
+};
+
+const pickFirstRecord = (
+  source: Record<string, unknown>,
+  keyGroups: string[][],
+): Record<string, unknown> | null => {
+  for (const keys of keyGroups) {
+    const value = pickCaseInsensitiveValue(source, keys, undefined);
+    const record = toRecord(value);
+    if (record) {
+      return record;
+    }
+  }
+  return null;
+};
+
+const pickFirstRecordArray = (
+  source: Record<string, unknown>,
+  keyGroups: string[][],
+): Array<Record<string, unknown>> => {
+  for (const keys of keyGroups) {
+    const value = pickCaseInsensitiveValue(source, keys, undefined);
+    if (value === undefined) {
+      continue;
+    }
+    return toRecordArray(value);
+  }
+  return [];
+};
+
+const hasMeaningfulDefenseInfo = (value: DefenseInfoView): boolean => {
+  return Boolean(
+    value.studentCode ||
+      value.studentName ||
+      value.topicCode ||
+      value.topicTitle ||
+      value.committeeCode ||
+      value.room ||
+      value.scheduledAt ||
+      value.finalScore != null ||
+      value.grade,
+  );
+};
+
+const normalizeSessionCode = (
+  sessionCodeValue: unknown,
+  sessionValue: unknown,
+): SessionCode | null => {
+  const normalizedCode = String(sessionCodeValue ?? "").trim().toUpperCase();
+  if (normalizedCode === "MORNING" || normalizedCode === "AFTERNOON") {
+    return normalizedCode;
+  }
+
+  const session = readNumberLike(sessionValue);
+  if (session === 1) {
+    return "MORNING";
+  }
+  if (session !== null) {
+    return "AFTERNOON";
+  }
+
+  return null;
+};
+
+const formatSessionLabel = (sessionCode: SessionCode | null): string => {
+  if (sessionCode === "MORNING") {
+    return "Sáng";
+  }
+
+  if (sessionCode === "AFTERNOON") {
+    return "Chiều";
+  }
+
+  return "Đang cập nhật";
+};
+
+const formatDateTime = (value: string | null, includeTime = true): string => {
+  if (!value) {
+    return "Chưa có lịch cụ thể";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const dateText = parsed.toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  if (!includeTime) {
+    return dateText;
+  }
+
+  const timeText = parsed.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  if (timeText === "00:00") {
+    return `${dateText} (giờ cụ thể sẽ được thông báo sau)`;
+  }
+
+  return `${dateText} lúc ${timeText}`;
+};
+
+const getDefaultTimeBySessionCode = (sessionCode: SessionCode | null): string | null => {
+  if (sessionCode === "MORNING") {
+    return "07:30";
+  }
+
+  if (sessionCode === "AFTERNOON") {
+    return "13:30";
+  }
+
+  return null;
+};
+
+const applySessionDefaultTime = (
+  value: string | null,
+  sessionCode: SessionCode | null,
+): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  if (parsed.getHours() !== 0 || parsed.getMinutes() !== 0) {
+    return value;
+  }
+
+  const fallbackTime = getDefaultTimeBySessionCode(sessionCode);
+  if (!fallbackTime) {
+    return value;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}T${fallbackTime}:00`;
+};
+
+const buildIsoDateTimeFromVnDate = (
+  dateValue: string,
+  timeValue: string,
+): string | null => {
+  const chunks = dateValue.split("/").map((item) => item.trim());
+  if (chunks.length !== 3) {
+    return null;
+  }
+
+  const [day, month, year] = chunks;
+  if (
+    day.length !== 2 ||
+    month.length !== 2 ||
+    year.length !== 4 ||
+    !/^\d{2}$/.test(day) ||
+    !/^\d{2}$/.test(month) ||
+    !/^\d{4}$/.test(year)
+  ) {
+    return null;
+  }
+
+  return `${year}-${month}-${day}T${timeValue}:00`;
+};
+
+const parseNotificationScheduleHint = (
+  message: string,
+  sessionCode: SessionCode | null,
+): NotificationScheduleHint | null => {
+  const normalizedMessage = String(message ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedMessage) {
+    return null;
+  }
+
+  const schedulePattern =
+    /Hội đồng\s+([A-Za-z0-9._\/-]+)\s*-\s*[^|]*\|\s*Phòng:\s*([^|]+)\|\s*[^,]+,\s*(\d{2}\/\d{2}\/\d{4})\s*lúc\s*([0-2]?\d:[0-5]\d|Chưa xác định|Đang cập nhật)/i;
+
+  const matches = normalizedMessage.match(schedulePattern);
+  if (!matches) {
+    return null;
+  }
+
+  const committeeCode = toStringOrNull(matches[1]);
+  const room = toStringOrNull(matches[2]);
+  const vnDate = toStringOrNull(matches[3]);
+  const rawTime = toStringOrNull(matches[4]);
+
+  if (!vnDate) {
+    return {
+      committeeCode,
+      room,
+      scheduledAt: null,
+    };
+  }
+
+  const explicitTime = rawTime && /^([01]?\d|2[0-3]):([0-5]\d)$/.test(rawTime)
+    ? rawTime
+    : null;
+  const fallbackTime = explicitTime ?? getDefaultTimeBySessionCode(sessionCode);
+  const scheduledAt = fallbackTime
+    ? buildIsoDateTimeFromVnDate(vnDate, fallbackTime)
+    : null;
+
+  return {
+    committeeCode,
+    room,
+    scheduledAt,
+  };
+};
+
+const mergeDefenseInfoFromNotifications = (
+  source: DefenseInfoView,
+  notifications: StudentNotification[],
+): DefenseInfoView => {
+  let merged: DefenseInfoView = {
+    ...source,
+    scheduledAt: applySessionDefaultTime(source.scheduledAt, source.sessionCode),
+  };
+
+  if (merged.committeeCode && merged.room && merged.scheduledAt) {
+    return merged;
+  }
+
+  for (const item of notifications) {
+    const hint = parseNotificationScheduleHint(item.message, merged.sessionCode);
+    if (!hint) {
+      continue;
+    }
+
+    merged = {
+      ...merged,
+      committeeCode: merged.committeeCode ?? hint.committeeCode,
+      room: merged.room ?? hint.room,
+      scheduledAt: merged.scheduledAt ?? hint.scheduledAt,
+    };
+
+    if (merged.committeeCode && merged.room && merged.scheduledAt) {
+      break;
+    }
+  }
+
+  merged = {
+    ...merged,
+    scheduledAt: applySessionDefaultTime(merged.scheduledAt, merged.sessionCode),
+  };
+
+  return merged;
+};
+
+const formatRevisionStatus = (status: RevisionStatusCode) => {
+  switch (status) {
+    case 2:
+      return { label: "Đã duyệt", className: "sd-status sd-status--approved" };
+    case 3:
+      return { label: "Từ chối", className: "sd-status sd-status--rejected" };
+    default:
+      return { label: "Chờ duyệt", className: "sd-status sd-status--pending" };
+  }
+};
+
+const formatNotificationType = (type: string): string => {
+  const normalized = String(type ?? "").trim().toUpperCase();
+  if (normalized.includes("ERROR") || normalized.includes("FAIL")) {
+    return "Lỗi";
+  }
+  if (normalized.includes("WARN")) {
+    return "Cảnh báo";
+  }
+  if (normalized.includes("SUCCESS") || normalized.includes("OK")) {
+    return "Thành công";
+  }
+  if (normalized.includes("INFO")) {
+    return "Thông tin";
+  }
+  return normalized || "Thông tin";
 };
 
 const StudentDefenseInfo: React.FC = () => {
   const { addToast } = useToast();
-  const [searchParams] = useSearchParams();
-  const queryPeriodId = normalizeDefensePeriodId(searchParams.get("periodId"));
-  const [periodId, setPeriodId] = useState<number | null>(
-    () => queryPeriodId ?? getActiveDefensePeriodId(),
-  );
-  const periodIdText = String(periodId ?? "");
-  const studentBase = periodId ? `/defense-periods/${periodId}/student` : "";
-  const studentApi = {
-    getSnapshot: () =>
-      fetchData<ApiResponse<Record<string, unknown>>>(`${studentBase}/snapshot`, {
-        method: "GET",
-      }),
-    submitRevisionSubmission: (formData: FormData, idempotencyKey?: string) => fetchData<ApiResponse<boolean>>(`${studentBase}/revisions`, {
-      method: "POST",
-      body: formData,
-      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-    }),
-  };
-  const [activePanel, setActivePanel] = useState<StudentPanel>("schedule");
-  const [defenseInfo, setDefenseInfo] = useState(EMPTY_DEFENSE);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [comments, setComments] = useState<string[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [periodId, setPeriodId] = useState<number | null>(() => getActiveDefensePeriodId());
+
+  const [activePanel, setActivePanel] = useState<StudentPanel>("overview");
+  const [currentPeriod, setCurrentPeriod] = useState<CurrentDefensePeriodView | null>(null);
+  const [currentSnapshotError, setCurrentSnapshotError] = useState<string | null>(null);
+  const [defenseInfo, setDefenseInfo] = useState<DefenseInfoView>(DEFAULT_DEFENSE_INFO);
   const [notifications, setNotifications] = useState<StudentNotification[]>([]);
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistory[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
-  const [selectedFileName, setSelectedFileName] = useState<string>("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [revisedContent, setRevisedContent] = useState<string>("Em đã bổ sung phụ lục benchmark và đối sánh mô hình.");
-  const [revisionConcurrencyToken, setRevisionConcurrencyToken] = useState(
-    createConcurrencyToken("student-revision")
-  );
-  const [latestTrace, setLatestTrace] = useState<WorkflowActionTrace | null>(null);
+  const [revisionHistory, setRevisionHistory] = useState<RevisionHistoryView[]>([]);
   const [backendAllowedActions, setBackendAllowedActions] = useState<string[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [submittingRevision, setSubmittingRevision] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [revisedContent, setRevisedContent] = useState("");
+  const [snapshotFetchedAt, setSnapshotFetchedAt] = useState<string>("Chưa có");
+  const [latestTrace, setLatestTrace] = useState<string>("");
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const missingPeriodWarningRef = useRef(false);
 
-  const notifyError = (message: string) => addToast(message, "error");
-  const notifySuccess = (message: string) => addToast(message, "success");
-  const notifyInfo = (message: string) => addToast(message, "info");
+  const notifyError = useCallback(
+    (message: string) => addToast(message, "error"),
+    [addToast],
+  );
+  const notifySuccess = useCallback(
+    (message: string) => addToast(message, "success"),
+    [addToast],
+  );
+  const notifyInfo = useCallback(
+    (message: string) => addToast(message, "info"),
+    [addToast],
+  );
+  const notifyWarning = useCallback(
+    (message: string) => addToast(message, "warning"),
+    [addToast],
+  );
 
-  useEffect(() => {
-    if (queryPeriodId && queryPeriodId !== periodId) {
-      setPeriodId(queryPeriodId);
-    }
-  }, [periodId, queryPeriodId]);
+  const syncPeriodToUrl = useCallback(
+    (nextPeriodId: number | null) => {
+      const currentPeriodId = normalizeDefensePeriodId(searchParams.get("periodId"));
+      if (currentPeriodId === nextPeriodId) {
+        return;
+      }
+
+      const nextParams = new URLSearchParams(searchParams);
+      if (nextPeriodId != null) {
+        nextParams.set("periodId", String(nextPeriodId));
+      } else {
+        nextParams.delete("periodId");
+      }
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   useEffect(() => {
     setActiveDefensePeriodId(periodId);
   }, [periodId]);
 
-  useEffect(() => {
-    if (periodId != null) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const resolvePeriod = async () => {
-      try {
-        const response = await fetchData<ApiResponse<unknown>>("/defense-periods", {
-          method: "GET",
-        });
-        const payload = readEnvelopeData<unknown>(response);
-        const fallbackPeriodId = extractDefensePeriodId(payload);
-        if (!cancelled && fallbackPeriodId != null) {
-          setPeriodId(fallbackPeriodId);
-          setActiveDefensePeriodId(fallbackPeriodId);
-        }
-      } catch {
-        // Keep explicit warning state when no period can be resolved.
-      }
-    };
-
-    void resolvePeriod();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [periodId]);
-
-  const hasAllowedAction = (...actions: string[]) => {
-    if (backendAllowedActions.length === 0) {
-      return true;
-    }
-    return actions.some((action) => backendAllowedActions.includes(action));
-  };
-
-  const parseEnvelope = <T,>(response: ApiResponse<T> | null | undefined, fallback: string) => {
-    const allowedActions = response?.allowedActions ?? response?.AllowedActions;
-    if (allowedActions) {
+  const parseApiEnvelope = useCallback(
+    <T,>(
+      response: ApiResponse<T> | null | undefined,
+      fallback: string,
+      options: { emitSuccessMessage?: boolean } = {},
+    ) => {
+      const allowedActions = readEnvelopeAllowedActions(response)
+        .map((action) => String(action ?? "").trim())
+        .filter(Boolean);
       setBackendAllowedActions(allowedActions);
-    }
 
-    const warnings = (response?.warnings ?? response?.Warnings ?? [])
-      .map((item) =>
-        String(
-          (item as { message?: string }).message ??
-            (item as { Message?: string }).Message ??
-            "",
-        ),
-      )
-      .filter(Boolean);
-    if (warnings.length) {
-      notifyInfo(warnings.join(" | "));
-    }
+      const warningMessages = readEnvelopeWarningMessages(response);
+      if (warningMessages.length) {
+        notifyInfo(warningMessages.join(" | "));
+      }
 
-    const success = Boolean(response?.success ?? response?.Success);
-    const errors = Object.values(response?.errors ?? response?.Errors ?? {})
-      .flat()
-      .filter(Boolean);
-    const message = response?.message ?? response?.Message;
-    if (!success) {
-      notifyError(errors[0] || message || fallback);
-      return { ok: false, data: null as T | null };
-    }
+      if (!readEnvelopeSuccess(response)) {
+        const message =
+          readEnvelopeErrorMessages(response)[0] ||
+          readEnvelopeMessage(response) ||
+          fallback;
+        notifyError(message);
+        return { ok: false, data: null as T | null };
+      }
 
-    if (message) {
-      notifyInfo(message);
-    }
-
-    return { ok: true, data: (response?.data ?? response?.Data ?? null) as T | null };
-  };
-
-  const hydrateRevisionHistory = (historyRows: Array<Record<string, unknown>>) => {
-    const history = historyRows as Array<{
-      version?: string;
-      uploadedAt?: string;
-      status?: string;
-      note?: string;
-    }>;
-    setSubmissionHistory(
-      history.map((item) => ({
-        version: item.version ?? "v1.0",
-        uploadedAt: item.uploadedAt ?? new Date().toLocaleString("vi-VN"),
-        status: item.status === "Approved" ? "Approved" : item.status === "Rejected" ? "Rejected" : "Pending",
-        note: item.note,
-      }))
-    );
-  };
-
-  useEffect(() => {
-    const hydrateStudentData = async () => {
-      if (!periodId) {
-        setLoadingData(false);
-        if (!missingPeriodWarningRef.current) {
-          notifyInfo("Chua chon dot bao ve. Vui long chon dot de tai du lieu.");
-          missingPeriodWarningRef.current = true;
+      if (options.emitSuccessMessage) {
+        const message = readEnvelopeMessage(response);
+        if (message) {
+          notifyInfo(message);
         }
+      }
+
+      return {
+        ok: true,
+        data: readEnvelopeData<T>(response),
+      };
+    },
+    [notifyError, notifyInfo],
+  );
+
+  const mapDefenseInfo = useCallback((raw: Record<string, unknown> | null): DefenseInfoView => {
+    if (!raw) {
+      return DEFAULT_DEFENSE_INFO;
+    }
+
+    const committeeRecord = pickFirstRecord(raw, [
+      ["committee", "Committee"],
+      ["council", "Council"],
+    ]);
+    const assignmentRecord = pickFirstRecord(raw, [
+      ["committeeAssignment", "CommitteeAssignment"],
+      ["assignment", "Assignment"],
+      ["defenseInfo", "DefenseInfo"],
+      ["studentDefenseInfo", "StudentDefenseInfo"],
+    ]);
+    const source = assignmentRecord ?? raw;
+
+    const committeeCode = toStringOrNull(
+      pickCaseInsensitiveValue(
+        source,
+        ["committeeCode", "CommitteeCode", "councilCode", "CouncilCode"],
+        pickCaseInsensitiveValue(
+          committeeRecord ?? {},
+          ["committeeCode", "CommitteeCode", "councilCode", "CouncilCode", "name", "Name"],
+          null,
+        ),
+      ),
+    );
+
+    const room = toStringOrNull(
+      pickCaseInsensitiveValue(
+        source,
+        ["room", "Room", "location", "Location"],
+        pickCaseInsensitiveValue(committeeRecord ?? {}, ["room", "Room", "location", "Location"], null),
+      ),
+    );
+
+    const defenseDate = pickCaseInsensitiveValue(
+      committeeRecord ?? {},
+      ["defenseDate", "DefenseDate", "scheduledAt", "ScheduledAt"],
+      null,
+    );
+    const startTime = toStringOrNull(
+      pickCaseInsensitiveValue(committeeRecord ?? {}, ["startTime", "StartTime"], null),
+    );
+
+    let scheduledAt = toStringOrNull(
+      pickCaseInsensitiveValue(
+        source,
+        ["scheduledAt", "ScheduledAt", "defenseDate", "DefenseDate", "defenseAt", "DefenseAt"],
+        defenseDate,
+      ),
+    );
+    if (scheduledAt && startTime && !scheduledAt.includes("T")) {
+      scheduledAt = `${scheduledAt}T${startTime}`;
+    }
+
+    const councilLockStatusRaw = toDisplayText(
+      pickCaseInsensitiveValue(
+        source,
+        ["councilLockStatus", "CouncilLockStatus", "lockStatus", "LockStatus"],
+        pickCaseInsensitiveValue(
+          raw,
+          ["councilLockStatus", "CouncilLockStatus", "lockStatus", "LockStatus"],
+          "",
+        ),
+      ),
+      "",
+    )
+      .trim()
+      .toUpperCase();
+
+    const explicitLockValue = pickCaseInsensitiveValue(
+      source,
+      [
+        "councilListLocked",
+        "CouncilListLocked",
+        "isCouncilListLocked",
+        "IsCouncilListLocked",
+      ],
+      pickCaseInsensitiveValue(
+        raw,
+        [
+          "councilListLocked",
+          "CouncilListLocked",
+          "isCouncilListLocked",
+          "IsCouncilListLocked",
+        ],
+        undefined,
+      ),
+    );
+    const inferredLocked =
+      councilLockStatusRaw === "LOCKED" ||
+      Boolean(committeeCode) ||
+      Boolean(scheduledAt);
+
+    const councilListLocked =
+      explicitLockValue === undefined
+        ? inferredLocked
+        : readBooleanLike(explicitLockValue, inferredLocked);
+
+    const sessionCode = normalizeSessionCode(
+      pickCaseInsensitiveValue(source, ["sessionCode", "SessionCode"], null),
+      pickCaseInsensitiveValue(
+        source,
+        ["session", "Session", "sessionIndex", "SessionIndex"],
+        pickCaseInsensitiveValue(committeeRecord ?? {}, ["session", "Session"], null),
+      ),
+    );
+
+    const session = readNumberLike(
+      pickCaseInsensitiveValue(
+        source,
+        ["session", "Session", "sessionIndex", "SessionIndex"],
+        pickCaseInsensitiveValue(committeeRecord ?? {}, ["session", "Session"], null),
+      ),
+    );
+
+
+    scheduledAt = applySessionDefaultTime(scheduledAt, sessionCode);
+    const finalScore = readNumberLike(
+      pickCaseInsensitiveValue(
+        source,
+        ["finalScore", "FinalScore", "score", "Score"],
+        pickCaseInsensitiveValue(raw, ["finalScore", "FinalScore", "score", "Score"], null),
+      ),
+    );
+
+    return {
+      studentCode: String(
+        pickCaseInsensitiveValue(
+          source,
+          ["studentCode", "StudentCode", "studentId", "StudentId", "proposerStudentCode", "ProposerStudentCode"],
+          pickCaseInsensitiveValue(
+            raw,
+            ["studentCode", "StudentCode", "studentId", "StudentId", "proposerStudentCode", "ProposerStudentCode"],
+            "",
+          ),
+        ),
+      ).trim(),
+      studentName: String(
+        pickCaseInsensitiveValue(
+          source,
+          ["studentName", "StudentName", "fullName", "FullName", "proposerStudentName", "ProposerStudentName"],
+          pickCaseInsensitiveValue(
+            raw,
+            ["studentName", "StudentName", "fullName", "FullName", "proposerStudentName", "ProposerStudentName"],
+            "",
+          ),
+        ),
+      ).trim(),
+      topicCode: String(
+        pickCaseInsensitiveValue(
+          source,
+          ["topicCode", "TopicCode", "assignmentCode", "AssignmentCode"],
+          pickCaseInsensitiveValue(raw, ["topicCode", "TopicCode", "assignmentCode", "AssignmentCode"], ""),
+        ),
+      ).trim(),
+      topicTitle: String(
+        pickCaseInsensitiveValue(
+          source,
+          ["topicTitle", "TopicTitle", "topicName", "TopicName", "title", "Title"],
+          pickCaseInsensitiveValue(
+            raw,
+            ["topicTitle", "TopicTitle", "topicName", "TopicName", "title", "Title"],
+            "",
+          ),
+        ),
+      ).trim(),
+      committeeCode,
+      room,
+      scheduledAt,
+      session,
+      sessionCode,
+      finalScore,
+      grade: toStringOrNull(
+        pickCaseInsensitiveValue(
+          source,
+          ["grade", "Grade", "finalGrade", "FinalGrade"],
+          pickCaseInsensitiveValue(raw, ["grade", "Grade", "finalGrade", "FinalGrade"], null),
+        ),
+      ),
+      councilListLocked,
+      councilLockStatus:
+        councilLockStatusRaw === "LOCKED" || councilListLocked ? "LOCKED" : "UNLOCKED",
+    };
+  }, []);
+
+  const mapNotifications = useCallback(
+    (rows: Array<Record<string, unknown>>): StudentNotification[] =>
+      rows
+        .map((item) => {
+          const type = String(
+            pickCaseInsensitiveValue(
+              item,
+              ["type", "Type", "notifCategory", "NotifCategory", "category", "Category"],
+              "INFO",
+            ),
+          )
+            .trim()
+            .toUpperCase();
+          const title = toDisplayText(
+            pickCaseInsensitiveValue(
+              item,
+              ["title", "Title", "notifTitle", "NotifTitle", "subject", "Subject"],
+              "",
+            ),
+            "",
+          );
+          const body = toDisplayText(
+            pickCaseInsensitiveValue(
+              item,
+              ["message", "Message", "notifBody", "NotifBody", "body", "Body", "content", "Content"],
+              "",
+            ),
+            "",
+          );
+          const message =
+            title && body && !body.startsWith(title) ? `${title}: ${body}` : body || title;
+
+          return {
+            type,
+            message: message || "Thông báo hệ thống",
+            timestamp: toDisplayText(
+              pickCaseInsensitiveValue(
+                item,
+                [
+                  "timestamp",
+                  "Timestamp",
+                  "createdAt",
+                  "CreatedAt",
+                  "createdDate",
+                  "CreatedDate",
+                  "sentAt",
+                  "SentAt",
+                ],
+                new Date().toISOString(),
+              ),
+              new Date().toISOString(),
+            ),
+          };
+        })
+        .filter((item) => item.message.length > 0)
+        .sort((a, b) => {
+          const left = new Date(a.timestamp).getTime();
+          const right = new Date(b.timestamp).getTime();
+          return right - left;
+        }),
+    [],
+  );
+
+  const mapRevisionHistory = useCallback(
+    (rows: Array<Record<string, unknown>>): RevisionHistoryView[] =>
+      rows
+        .map((item, index) => {
+          const finalStatus = parseRevisionStatus(
+            pickCaseInsensitiveValue(item, ["finalStatus", "FinalStatus", "status", "Status"], 1),
+          );
+
+          return {
+            id:
+              readNumberLike(
+                pickCaseInsensitiveValue(item, ["id", "Id", "revisionId", "RevisionId"], 0),
+              ) ??
+              Date.now() + index,
+            assignmentId: readNumberLike(
+              pickCaseInsensitiveValue(item, ["assignmentId", "AssignmentId", "thesisAssignmentId", "ThesisAssignmentId"], null),
+            ),
+            revisionFileUrl: toStringOrNull(
+              pickCaseInsensitiveValue(
+                item,
+                [
+                  "revisionFileUrl",
+                  "RevisionFileUrl",
+                  "fileUrl",
+                  "FileUrl",
+                  "documentUrl",
+                  "DocumentUrl",
+                ],
+                null,
+              ),
+            ),
+            finalStatus,
+            isCtApproved: readBooleanLike(
+              pickCaseInsensitiveValue(item, ["isCtApproved", "IsCtApproved"], false),
+            ),
+            isUvtkApproved: readBooleanLike(
+              pickCaseInsensitiveValue(
+                item,
+                ["isUvtkApproved", "IsUvtkApproved"],
+                false,
+              ),
+            ),
+            isGvhdApproved: readBooleanLike(
+              pickCaseInsensitiveValue(
+                item,
+                ["isGvhdApproved", "IsGvhdApproved"],
+                false,
+              ),
+            ),
+            createdAt: String(
+              pickCaseInsensitiveValue(
+                item,
+                ["createdAt", "CreatedAt", "submittedAt", "SubmittedAt", "createdDate", "CreatedDate"],
+                "",
+              ),
+            ).trim(),
+            lastUpdated: String(
+              pickCaseInsensitiveValue(
+                item,
+                ["lastUpdated", "LastUpdated", "updatedAt", "UpdatedAt", "modifiedAt", "ModifiedAt"],
+                "",
+              ),
+            ).trim(),
+          };
+        })
+        .sort((a, b) => {
+          const left = new Date(a.lastUpdated || a.createdAt).getTime();
+          const right = new Date(b.lastUpdated || b.createdAt).getTime();
+          return right - left;
+        }),
+    [],
+  );
+
+  const hydrateSnapshot = useCallback(
+    (payload: unknown): boolean => {
+      const snapshot = extractSnapshotRecord(payload);
+      if (!snapshot) {
+        setDefenseInfo(DEFAULT_DEFENSE_INFO);
+        setNotifications([]);
+        setRevisionHistory([]);
+        return false;
+      }
+
+      const defenseInfoRaw =
+        pickFirstRecord(snapshot, [
+          ["defenseInfo", "DefenseInfo"],
+          ["studentDefenseInfo", "StudentDefenseInfo"],
+          ["committeeAssignment", "CommitteeAssignment"],
+          ["assignment", "Assignment"],
+        ]) ?? snapshot;
+
+      const notificationsRaw = pickFirstRecordArray(snapshot, [
+        ["notifications", "Notifications"],
+        ["alerts", "Alerts"],
+        ["messages", "Messages"],
+        ["notificationFeed", "NotificationFeed"],
+      ]);
+
+      const revisionHistoryRaw = pickFirstRecordArray(snapshot, [
+        ["revisionHistory", "RevisionHistory"],
+        ["revisionQueue", "RevisionQueue"],
+        ["revisions", "Revisions"],
+      ]);
+
+      const mappedDefenseInfo = mapDefenseInfo(defenseInfoRaw);
+      const mappedNotifications = mapNotifications(notificationsRaw);
+      const mappedRevisionHistory = mapRevisionHistory(revisionHistoryRaw);
+
+      setDefenseInfo(mappedDefenseInfo);
+      setNotifications(mappedNotifications);
+      setRevisionHistory(mappedRevisionHistory);
+      setSnapshotFetchedAt(new Date().toLocaleString("vi-VN"));
+
+      return (
+        hasMeaningfulDefenseInfo(mappedDefenseInfo) ||
+        mappedNotifications.length > 0 ||
+        mappedRevisionHistory.length > 0
+      );
+    },
+    [mapDefenseInfo, mapNotifications, mapRevisionHistory],
+  );
+
+  const clearSnapshotData = useCallback(() => {
+    setDefenseInfo(DEFAULT_DEFENSE_INFO);
+    setNotifications([]);
+    setRevisionHistory([]);
+  }, []);
+
+  const loadSnapshot = useCallback(async () => {
+    setLoadingData(true);
+
+    try {
+      const response = await fetchData<ApiResponse<Record<string, unknown>>>(
+        "/student-defense/current/snapshot",
+        {
+          method: "GET",
+        },
+      );
+
+      const parsed = parseApiEnvelope(
+        response,
+        "Không tải được thông tin bảo vệ của sinh viên.",
+      );
+      if (!parsed.ok || !parsed.data) {
+        setCurrentPeriod(null);
+        setCurrentSnapshotError("Không tải được thông tin bảo vệ của sinh viên.");
+        clearSnapshotData();
         return;
       }
 
-      missingPeriodWarningRef.current = false;
-      setLoadingData(true);
-      try {
-        const snapshotRes = await studentApi.getSnapshot();
-        const parsedSnapshot = parseEnvelope(
-          snapshotRes,
-          "Không tải được snapshot sinh viên.",
-        );
-        if (!parsedSnapshot.ok || !parsedSnapshot.data) {
+      const payload = toRecord(parsed.data) ?? {};
+      const periodView = mapCurrentPeriodView(
+        toRecord(
+          pickCaseInsensitiveValue(payload, ["period", "Period"], null),
+        ),
+      );
+
+      if (!periodView) {
+        const message = "Dữ liệu snapshot không có thông tin đợt bảo vệ hợp lệ.";
+        setCurrentPeriod(null);
+        setCurrentSnapshotError(message);
+        clearSnapshotData();
+        notifyError(message);
+        return;
+      }
+
+      const resolvedPeriodId = periodView.periodId;
+      setPeriodId(resolvedPeriodId);
+      setActiveDefensePeriodId(resolvedPeriodId);
+      syncPeriodToUrl(resolvedPeriodId);
+      setCurrentPeriod(periodView);
+      setCurrentSnapshotError(null);
+
+      const snapshotPayload = pickCaseInsensitiveValue(
+        payload,
+        ["snapshot", "Snapshot"],
+        parsed.data,
+      );
+
+      let hasMeaningfulData = hydrateSnapshot(snapshotPayload);
+
+      if (!hasMeaningfulData) {
+        try {
+          const scopedResponse = await fetchData<ApiResponse<Record<string, unknown>>>(
+            `/defense-periods/${resolvedPeriodId}/student/snapshot`,
+            {
+              method: "GET",
+            },
+          );
+
+          if (readEnvelopeSuccess(scopedResponse)) {
+            const scopedPayload = readEnvelopeData<Record<string, unknown>>(scopedResponse);
+            hasMeaningfulData = hydrateSnapshot(scopedPayload);
+          }
+        } catch {
+          // Keep current snapshot view if period-scoped fallback fails.
+        }
+      }
+
+      if (!hasMeaningfulData) {
+        clearSnapshotData();
+      }
+    } catch (error) {
+      clearSnapshotData();
+
+      if (error instanceof FetchDataError) {
+        const apiMessage = readApiErrorMessage(error.data);
+
+        if (error.status === 404) {
+          const message =
+            apiMessage ??
+            "Bạn chưa được gán vào đợt bảo vệ đang hoạt động. Vui lòng liên hệ quản trị viên.";
+          setCurrentSnapshotError(message);
+          setCurrentPeriod(null);
+          notifyWarning(message);
           return;
         }
 
-        const snapshot = parsedSnapshot.data as Record<string, unknown>;
-        const info = (snapshot.defenseInfo ?? snapshot.DefenseInfo ?? {}) as Partial<
-          typeof EMPTY_DEFENSE
-        >;
-        const infoRecord = info as Partial<typeof EMPTY_DEFENSE> & {
-          members?: Array<{ role?: "CT" | "TK" | "PB" | "GVHD"; name?: string }>;
-          comments?: string[];
-        };
-
-        if (Object.keys(infoRecord).length > 0) {
-          setDefenseInfo((prev) => ({
-            ...prev,
-            ...infoRecord,
-            periodId: String(infoRecord.periodId ?? prev.periodId),
-            assignmentId: String(infoRecord.assignmentId ?? prev.assignmentId),
-            session:
-              infoRecord.session === "AFTERNOON" ? "AFTERNOON" : "MORNING",
-            score: Number(infoRecord.score ?? prev.score),
-            requiresRevision: Boolean(
-              infoRecord.requiresRevision ?? prev.requiresRevision,
-            ),
-          }));
-          setMembers(
-            Array.isArray(infoRecord.members)
-              ? infoRecord.members.map((m) => ({
-                  role: m.role ?? "PB",
-                  name: m.name ?? "",
-                }))
-              : [],
-          );
-          setComments(
-            Array.isArray(infoRecord.comments)
-              ? infoRecord.comments.filter(Boolean)
-              : [],
-          );
+        if (error.status === 409) {
+          const message =
+            apiMessage ??
+            "Tài khoản hiện tại đang gắn với nhiều đợt bảo vệ hoạt động. Vui lòng liên hệ quản trị viên để xử lý dữ liệu.";
+          setCurrentSnapshotError(message);
+          setCurrentPeriod(null);
+          notifyError(message);
+          return;
         }
-
-        const noti = (snapshot.notifications ?? snapshot.Notifications ?? []) as Array<
-          Record<string, unknown>
-        >;
-        if (noti.length) {
-          setNotifications(
-            noti.map((item) => ({
-              time: String(item.time ?? item.Time ?? new Date().toLocaleString("vi-VN")),
-              title: String(item.title ?? item.Title ?? "Thông báo hệ thống"),
-              type:
-                String(item.type ?? item.Type).toLowerCase() === "warning"
-                  ? "warning"
-                  : String(item.type ?? item.Type).toLowerCase() === "success"
-                    ? "success"
-                    : "info",
-            }))
-          );
-        }
-
-        const revisionHistoryRows = (snapshot.revisionHistory ?? snapshot.RevisionHistory ?? []) as Array<
-          Record<string, unknown>
-        >;
-        hydrateRevisionHistory(revisionHistoryRows);
-      } catch {
-        notifyError("Không tải được dữ liệu sinh viên từ API.");
-      } finally {
-        setLoadingData(false);
       }
-    };
 
-    void hydrateStudentData();
-  }, [periodId]);
+      setCurrentSnapshotError("Không thể kết nối đến hệ thống để lấy dữ liệu bảo vệ.");
+      setCurrentPeriod(null);
+      notifyError("Không thể kết nối đến hệ thống để lấy dữ liệu bảo vệ.");
+    } finally {
+      setLoadingData(false);
+    }
+  }, [
+    clearSnapshotData,
+    hydrateSnapshot,
+    notifyError,
+    notifyWarning,
+    parseApiEnvelope,
+    syncPeriodToUrl,
+  ]);
 
-  const averageScore = useMemo(() => defenseInfo.score.toFixed(1), [defenseInfo.score]);
+  useEffect(() => {
+    void loadSnapshot();
+  }, [loadSnapshot]);
 
-  const latestSubmission = useMemo(() => submissionHistory[0] ?? null, [submissionHistory]);
+  const hasAllowedAction = useCallback(
+    (...actions: string[]) => {
+      if (backendAllowedActions.length === 0) {
+        return true;
+      }
+
+      return actions.some((action) => backendAllowedActions.includes(action));
+    },
+    [backendAllowedActions],
+  );
+
+  const assignmentIdForRevision = useMemo(() => {
+    for (const item of revisionHistory) {
+      if (item.assignmentId && item.assignmentId > 0) {
+        return item.assignmentId;
+      }
+    }
+    return null;
+  }, [revisionHistory]);
+
+  const latestSubmission = useMemo(
+    () => revisionHistory[0] ?? null,
+    [revisionHistory],
+  );
 
   const completionRate = useMemo(() => {
-    if (!defenseInfo.requiresRevision) return 100;
-    if (!latestSubmission) return 30;
-    if (latestSubmission.status === "Approved") return 100;
-    if (latestSubmission.status === "Rejected") return 55;
-    return 80;
-  }, [defenseInfo.requiresRevision, latestSubmission]);
+    if (!defenseInfo.councilListLocked) {
+      return 20;
+    }
 
-  const submitRevision = () => {
+    if (!latestSubmission) {
+      return 65;
+    }
+
+    if (latestSubmission.finalStatus === 2) {
+      return 100;
+    }
+
+    if (latestSubmission.finalStatus === 3) {
+      return 70;
+    }
+
+    return 85;
+  }, [defenseInfo.councilListLocked, latestSubmission]);
+
+  const scoreText =
+    defenseInfo.finalScore == null ? "Đang chấm" : defenseInfo.finalScore.toFixed(2);
+  const gradeText = defenseInfo.grade ?? "Đang chấm";
+  const waitingState = !currentSnapshotError && !defenseInfo.councilListLocked;
+  const periodDisplay = currentPeriod
+    ? `${currentPeriod.name} (#${currentPeriod.periodId})`
+    : periodId
+      ? `Đợt #${periodId}`
+      : "Chưa xác định";
+  const latestNotice = notifications[0] ?? null;
+  const displayDefenseInfo = useMemo(
+    () => mergeDefenseInfoFromNotifications(defenseInfo, notifications),
+    [defenseInfo, notifications],
+  );
+
+  const submitRevision = async () => {
     if (!periodId) {
-      notifyError("Chua chon dot bao ve. Vui long chon dot truoc khi nop chinh sua.");
+      notifyError("Chưa chọn đợt bảo vệ. Vui lòng chọn đợt trước khi nộp chỉnh sửa.");
       return;
     }
 
-    if (!selectedFile || !selectedFileName || !revisedContent.trim()) {
-      notifyError(ucError("UC4.1-REVISION_EMPTY"));
+    if (!defenseInfo.councilListLocked) {
+      notifyWarning("Danh sách hội đồng chưa chốt. Tạm thời chưa thể nộp bản chỉnh sửa.");
       return;
     }
-    const idempotencyKey = createIdempotencyKey(periodIdText || defenseInfo.periodId || "NA", "submit-revision");
-    const assignmentId = Number(String(defenseInfo.assignmentId).replace(/\D+/g, "")) || 1;
+
+    if (!assignmentIdForRevision) {
+      notifyWarning(
+        "Chưa tìm thấy mã phân công để nộp chỉnh sửa. Vui lòng thử lại sau hoặc liên hệ giảng viên.",
+      );
+      return;
+    }
+
+    if (!selectedFile || !selectedFileName) {
+      notifyError("Vui lòng chọn tệp PDF để nộp chỉnh sửa.");
+      return;
+    }
+
+    if (!selectedFileName.toLowerCase().endsWith(".pdf")) {
+      notifyWarning("Tệp nộp chỉnh sửa bắt buộc phải là định dạng PDF.");
+      return;
+    }
+
+    if (!hasAllowedAction("SUBMIT_REVISION", "UC4.1.SUBMIT")) {
+      notifyWarning("Bạn hiện chưa có quyền nộp chỉnh sửa ở trạng thái hiện tại.");
+      return;
+    }
 
     const formData = new FormData();
-    formData.append("assignmentId", String(assignmentId));
-    formData.append("revisedContent", revisedContent.trim());
+    formData.append("assignmentId", String(assignmentIdForRevision));
+    if (revisedContent.trim()) {
+      formData.append("revisedContent", revisedContent.trim());
+    }
     formData.append("file", selectedFile);
 
-    studentApi.submitRevisionSubmission(formData, idempotencyKey)
-      .then(async (response) => {
-        const parsed = parseEnvelope(response, "Nộp bản chỉnh sửa thất bại.");
-        if (!parsed.ok) {
-          return;
-        }
-        setLatestTrace({
-          action: "submit-revision",
-          periodId: periodIdText || defenseInfo.periodId || "NA",
-          idempotencyKey,
-          concurrencyToken: revisionConcurrencyToken,
-          note: "[UC4.1] Đã gửi bản chỉnh sửa theo assignment.",
-          at: new Date().toLocaleString("vi-VN"),
-        });
-        setRevisionConcurrencyToken(createConcurrencyToken("student-revision"));
-        const snapshotRes = await studentApi.getSnapshot();
-        const parsedSnapshot = parseEnvelope(
-          snapshotRes,
-          "Không tải được snapshot sau khi nộp chỉnh sửa.",
-        );
-        if (parsedSnapshot.ok && parsedSnapshot.data) {
-          const snapshot = parsedSnapshot.data as Record<string, unknown>;
-          hydrateRevisionHistory(
-            (snapshot.revisionHistory ?? snapshot.RevisionHistory ?? []) as Array<
-              Record<string, unknown>
-            >,
-          );
-        }
-        if (response?.idempotencyReplay ?? response?.IdempotencyReplay) {
-          notifyInfo("Yêu cầu nộp chỉnh sửa đã được xử lý trước đó (idempotency replay).");
-        } else {
-          notifySuccess("Đã nộp bản chỉnh sửa, đang chờ duyệt.");
-        }
-      })
-      .catch(() => {
-        notifyError("Nộp bản chỉnh sửa thất bại. Vui lòng thử lại.");
+    const idempotencyKey = createIdempotencyKey(String(periodId), "submit-revision");
+
+    try {
+      setSubmittingRevision(true);
+      const response = await fetchData<ApiResponse<boolean>>(
+        `/defense-periods/${periodId}/student/revisions`,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            "Idempotency-Key": idempotencyKey,
+          },
+        },
+      );
+
+      const parsed = parseApiEnvelope(response, "Nộp bản chỉnh sửa thất bại.", {
+        emitSuccessMessage: false,
       });
+      if (!parsed.ok) {
+        return;
+      }
+
+      if (readEnvelopeIdempotencyReplay(response)) {
+        notifyInfo("Yêu cầu nộp chỉnh sửa đã được xử lý trước đó.");
+      } else {
+        notifySuccess("Đã nộp bản chỉnh sửa. Hệ thống đang chờ duyệt.");
+      }
+
+      setLatestTrace(`[UC4.1] submit-revision at ${new Date().toLocaleString("vi-VN")}`);
+      setSelectedFile(null);
+      setSelectedFileName("");
+      setRevisedContent("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      await loadSnapshot();
+    } catch {
+      notifyError("Nộp bản chỉnh sửa thất bại. Vui lòng thử lại.");
+    } finally {
+      setSubmittingRevision(false);
+    }
   };
 
-  const sessionLabel = defenseInfo.session === "MORNING" ? "MORNING (Sáng)" : "AFTERNOON (Chiều)";
-
   return (
-    <div
-      style={{
-        maxWidth: 1320,
-        margin: "0 auto",
-        padding: 24,
-        position: "relative",
-        fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-      }}
-      className="student-revamp-root"
-    >
+    <div className="sd-root">
       <style>
         {`
-          .student-revamp-root {
-            --stu-ink: #0f172a;
-            --stu-muted: #64748b;
-            --stu-line: #cbd5e1;
-            --stu-main: #f37021;
-            --stu-main-soft: #ffffff;
-            --stu-accent: #f37021;
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            color: var(--stu-ink);
-            background: radial-gradient(circle at top left, #ffffff 0%, #ffffff 38%);
-            border-radius: 14px;
+          .sd-root {
+            --sd-ink: #0f172a;
+            --sd-muted: #475569;
+            --sd-line: #cbd5e1;
+            --sd-main: #f37021;
+            --sd-soft: #fff7ed;
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 18px;
+            color: var(--sd-ink);
+            font-family: "Be Vietnam Pro", "Segoe UI", Tahoma, sans-serif;
           }
-          .student-revamp-root h1,
-          .student-revamp-root h2,
-          .student-revamp-root h3 {
-            line-height: 1.25;
-            letter-spacing: -0.01em;
-          }
-          .student-revamp-root .stu-kicker {
-            font-size: 11px;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            font-weight: 700;
-            color: #0f172a;
-            line-height: 1.35;
-          }
-          .student-revamp-root .stu-value {
-            font-size: 22px;
-            font-weight: 700;
-            line-height: 1.35;
-            color: #0f172a;
-            letter-spacing: -0.01em;
-          }
-          .student-revamp-root .stu-meta {
-            font-size: 13px;
-            line-height: 1.6;
-            color: #0f172a;
-          }
-          .student-revamp-root .stu-control-bar {
-            min-height: 56px;
-            border: 1px solid #cbd5e1;
-            border-radius: 12px;
+          .sd-card {
             background: #ffffff;
-            padding: 10px;
+            border: 1px solid var(--sd-line);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+          }
+          .sd-header {
+            margin-bottom: 14px;
+            background: linear-gradient(140deg, #ffffff 0%, #fff8f3 100%);
+          }
+          .sd-hero-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            flex-wrap: wrap;
+          }
+          .sd-title {
             display: flex;
             align-items: center;
             gap: 10px;
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+            color: #c2410c;
+            line-height: 1.2;
+          }
+          .sd-sub {
+            margin: 8px 0 0;
+            color: var(--sd-muted);
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 760px;
+          }
+          .sd-top-actions {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
             flex-wrap: wrap;
           }
-          .student-revamp-root .content { position:relative; z-index:1; }
-          .student-revamp-root button {
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            font-weight: 600;
-            font-size: 13px;
-            border-radius: 10px;
-            color: #0f172a;
-          }
-          .student-revamp-root input, .student-revamp-root textarea, .student-revamp-root select { border:1px solid var(--stu-line); border-radius:8px; padding:10px 12px; background:#ffffff; }
-          .student-revamp-root input:focus, .student-revamp-root textarea:focus, .student-revamp-root select:focus { outline:none; border-color:var(--stu-main); box-shadow:0 0 0 3px rgba(243, 112, 33, .16); }
-          .stu-pill {
-            border: 1px solid #cbd5e1;
-            border-radius:999px;
-            min-height: 42px;
-            padding:0 16px;
-            font-weight:600;
-            background:#ffffff;
-            color:#0f172a;
-            cursor:pointer;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            gap:6px;
-            line-height:1.15;
-            position: relative;
-            overflow: clip;
-            transition: border-color .22s ease, background-color .22s ease, color .22s ease, transform .22s ease, box-shadow .22s ease;
-          }
-          .stu-pill::after {
-            content: "";
-            position: absolute;
-            left: 14px;
-            right: 14px;
-            bottom: 5px;
-            height: 2px;
-            border-radius: 999px;
-            background: #f37021;
-            transform: scaleX(0);
-            transform-origin: center;
-            transition: transform .22s ease;
-          }
-          .stu-pill:hover::after,
-          .stu-pill.active::after {
-            transform: scaleX(1);
-          }
-          .stu-pill.active { border-color:#cbd5e1; background:#ffffff; color:#0f172a; box-shadow:none; }
-          .stu-pill:hover { border-color:#cbd5e1; background:#ffffff; color:#0f172a; transform: translateY(-1px); }
-          .stu-primary {
-            border:none;
-            border-radius:12px;
-            background:#f37021;
-            color:#ffffff;
-            padding:8px 14px;
-            font-weight:600;
-            cursor:pointer;
-            font-size:13px;
-            line-height:1;
-            min-height:40px;
-          }
-          .stu-primary:hover:not(:disabled) { background:#f37021; border-color:#f37021; }
-          .stu-primary:disabled { background:#f8fafc; border:1px solid #cbd5e1; color:#64748b; cursor:not-allowed; }
-          .stu-soft {
-            border:1px solid #cbd5e1;
-            border-radius:12px;
-            background:#ffffff;
-            color:#0f172a;
-            padding:8px 14px;
-            font-weight:600;
-            cursor:pointer;
-            font-size:13px;
-            line-height:1;
-            min-height:40px;
-            transition: border-color .22s ease, background-color .22s ease, transform .22s ease, box-shadow .22s ease;
-          }
-          .stu-soft:hover { background:#ffffff; border-color:#cbd5e1; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
-          .stu-upload {
-            border:1px dashed #cbd5e1;
-            border-radius:14px;
-            padding:14px;
-            background:linear-gradient(180deg,#ffffff 0%,#ffffff 100%);
-            cursor:pointer;
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            gap:8px;
-            font-weight: 600;
-            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
-          }
-          .stu-upload:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); border-color:#cbd5e1; }
-          .student-revamp-root textarea {
-            line-height: 1.45;
-          }
-          .stu-primary svg,
-          .stu-soft svg,
-          .stu-upload svg {
-            width: 14px;
-            height: 14px;
-            flex: 0 0 14px;
-          }
-          .student-revamp-root button {
-            line-height: 1.15;
-          }
-          .stu-panel {
-            border: 1px solid #cbd5e1;
-            border-radius: 14px;
-            padding: 18px;
-            background: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          }
-          .stu-list {
+          .sd-period-wrap {
             display: grid;
-            gap: 10px;
+            gap: 5px;
+            min-width: 290px;
           }
-          .stu-list-item {
-            border: 1px solid #cbd5e1;
-            border-radius: 12px;
-            padding: 12px 14px;
+          .sd-period-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--sd-muted);
+            font-weight: 700;
+          }
+          .sd-period-select {
+            height: 38px;
+            border: 1px solid var(--sd-line);
+            border-radius: 10px;
+            padding: 0 11px;
+            font-size: 13px;
+            color: var(--sd-ink);
             background: #ffffff;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background-color .22s ease;
           }
-          .stu-list-item:hover {
-            transform: translateY(-1px);
-            border-color: #cbd5e1;
-            background: #ffffff;
-            box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+          .sd-period-select:focus {
+            outline: none;
+            border-color: var(--sd-main);
+            box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.12);
           }
-          .stu-list-item-title {
+          .sd-refresh {
+            min-height: 38px;
+            border-radius: 10px;
+            border: 1px solid #f37021;
+            background: #f37021;
+            color: #fff;
             font-size: 13px;
             font-weight: 700;
-            color: #0f172a;
-            line-height: 1.45;
-          }
-          .stu-list-item-sub {
-            margin-top: 4px;
-            font-size: 12px;
-            color: #0f172a;
-            line-height: 1.55;
-          }
-          .stu-list-empty {
-            border: 1px dashed #cbd5e1;
-            border-radius: 12px;
-            padding: 14px;
-            background: #ffffff;
-            color: #0f172a;
-            font-size: 13px;
-            line-height: 1.55;
-          }
-          .stu-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 10px;
+            padding: 0 12px;
+            cursor: pointer;
+          }
+          .sd-refresh:disabled {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+            color: #94a3b8;
+            cursor: not-allowed;
+          }
+          .sd-refresh--loading svg {
+            animation: sd-spin 1s linear infinite;
+          }
+          @keyframes sd-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .sd-chip-row {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-chip {
+            border: 1px solid var(--sd-line);
             border-radius: 999px;
-            border: 1px solid #cbd5e1;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 700;
             background: #ffffff;
-            color: #0f172a;
+            color: var(--sd-ink);
+          }
+          .sd-chip--locked {
+            border-color: #16a34a;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          .sd-chip--waiting {
+            border-color: #f59e0b;
+            color: #92400e;
+            background: #fffbeb;
+          }
+          .sd-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+          .sd-kicker {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--sd-muted);
+          }
+          .sd-value {
+            font-size: 21px;
+            font-weight: 700;
+            color: var(--sd-ink);
+            margin-top: 4px;
+            line-height: 1.3;
+          }
+          .sd-meta {
+            font-size: 13px;
+            color: var(--sd-muted);
+            line-height: 1.5;
+            margin-top: 6px;
+          }
+          .sd-progress {
+            margin-top: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            overflow: hidden;
+          }
+          .sd-progress > div {
+            height: 100%;
+            background: linear-gradient(90deg, #f37021 0%, #fb923c 100%);
+          }
+          .sd-toolbar {
+            margin-bottom: 14px;
+            border: 1px solid var(--sd-line);
+            border-radius: 14px;
+            background: #ffffff;
+            padding: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-pill {
+            border: 1px solid var(--sd-line);
+            border-radius: 999px;
+            background: #ffffff;
+            padding: 8px 13px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--sd-ink);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .sd-pill:hover {
+            border-color: #94a3b8;
+          }
+          .sd-pill.active {
+            border-color: var(--sd-main);
+            background: #fff7ed;
+            color: #9a3412;
+          }
+          .sd-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 14px;
+          }
+          .sd-panel-title {
+            margin: 0 0 10px;
+            font-size: 20px;
+            line-height: 1.3;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .sd-list {
+            display: grid;
+            gap: 10px;
+          }
+          .sd-list-item {
+            border: 1px solid var(--sd-line);
+            border-radius: 12px;
+            padding: 12px;
+            background: #ffffff;
+          }
+          .sd-list-title {
+            font-weight: 700;
+            line-height: 1.4;
+            font-size: 15px;
+          }
+          .sd-list-sub {
+            margin-top: 4px;
+            color: var(--sd-muted);
+            font-size: 13px;
+            line-height: 1.5;
+          }
+          .sd-empty {
+            border: 1px dashed var(--sd-line);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 13px;
+            color: var(--sd-muted);
+            background: #f8fafc;
+          }
+          .sd-warning-card {
+            border-color: #f59e0b;
+            background: #fffbeb;
+          }
+          .sd-note-list {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+            padding-left: 18px;
+            color: var(--sd-ink);
+            line-height: 1.55;
+            font-size: 14px;
+          }
+          .sd-upload {
+            margin-top: 10px;
+            border: 1px dashed var(--sd-line);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            cursor: pointer;
+            font-weight: 600;
+          }
+          .sd-upload:hover {
+            border-color: #94a3b8;
+            background: #f8fafc;
+          }
+          .sd-textarea {
+            width: 100%;
+            border: 1px solid var(--sd-line);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            background: #ffffff;
+            resize: vertical;
+            min-height: 110px;
+            font-family: inherit;
+          }
+          .sd-textarea:focus {
+            outline: none;
+            border-color: var(--sd-main);
+            box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.16);
+          }
+          .sd-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+          }
+          .sd-btn-primary,
+          .sd-btn-soft {
+            border-radius: 10px;
+            min-height: 38px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+          .sd-btn-primary {
+            border: 1px solid #f37021;
+            background: #f37021;
+            color: #ffffff;
+          }
+          .sd-btn-primary:disabled {
+            border-color: var(--sd-line);
+            background: #f8fafc;
+            color: #94a3b8;
+            cursor: not-allowed;
+          }
+          .sd-btn-soft {
+            border: 1px solid var(--sd-line);
+            background: #ffffff;
+            color: var(--sd-ink);
+          }
+          .sd-status {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--sd-line);
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .sd-status--approved {
+            border-color: #22c55e;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          .sd-status--rejected {
+            border-color: #ef4444;
+            color: #991b1b;
+            background: #fef2f2;
+          }
+          .sd-status--pending {
+            border-color: #f59e0b;
+            color: #92400e;
+            background: #fffbeb;
+          }
+          .sd-approval-row {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-approval {
+            border: 1px solid var(--sd-line);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #ffffff;
+            color: var(--sd-muted);
+          }
+          .sd-approval.done {
+            border-color: #22c55e;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          @media (max-width: 900px) {
+            .sd-root {
+              padding: 12px;
+            }
+            .sd-title {
+              font-size: 22px;
+            }
+            .sd-top-actions {
+              width: 100%;
+            }
+            .sd-period-wrap {
+              min-width: 100%;
+            }
+          }
+
+          .sd-root {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px;
+            color: #111827;
+            font-family: "Be Vietnam Pro", "Segoe UI", Tahoma, sans-serif;
+          }
+          .sd-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: none;
+          }
+          .sd-header {
+            margin-bottom: 18px;
+            background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+          }
+          .sd-hero-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+          }
+          .sd-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            font-size: 30px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.25;
+          }
+          .sd-sub {
+            margin: 10px 0 0;
+            color: #4b5563;
+            font-size: 15px;
+            line-height: 1.6;
+            max-width: 760px;
+          }
+          .sd-top-actions {
+            display: grid;
+            gap: 10px;
+            min-width: 320px;
+            align-items: end;
+          }
+          .sd-period-wrap {
+            display: grid;
+            gap: 6px;
+            min-width: 320px;
+          }
+          .sd-period-label {
+            font-size: 12px;
+            letter-spacing: 0.02em;
+            color: #6b7280;
+            font-weight: 700;
+            text-transform: none;
+          }
+          .sd-period-select {
+            min-height: 42px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            padding: 0 12px;
+            font-size: 14px;
+            color: #111827;
+            background: #ffffff;
+          }
+          .sd-refresh {
+            min-height: 42px;
+            border-radius: 10px;
+            border: 1px solid #f37021;
+            background: #f37021;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 14px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+          }
+          .sd-refresh:hover:enabled {
+            background: #ea580c;
+            border-color: #ea580c;
+          }
+          .sd-refresh:disabled {
+            border-color: #e5e7eb;
+            background: #f9fafb;
+            color: #9ca3af;
+            cursor: not-allowed;
+          }
+          .sd-chip-row {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-chip {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            padding: 7px 11px;
             font-size: 12px;
             font-weight: 700;
-            line-height: 1;
+            background: #f9fafb;
+            color: #374151;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .sd-chip--locked {
+            border-color: #22c55e;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          .sd-chip--waiting {
+            border-color: #f59e0b;
+            color: #92400e;
+            background: #fffbeb;
+          }
+          .sd-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+          }
+          .sd-kicker {
+            font-size: 13px;
+            font-weight: 700;
+            color: #6b7280;
+            letter-spacing: 0;
+            text-transform: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .sd-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin-top: 8px;
+            line-height: 1.35;
+          }
+          .sd-meta {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.55;
+            margin-top: 8px;
+          }
+          .sd-progress {
+            margin-top: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: #e5e7eb;
+            overflow: hidden;
+          }
+          .sd-progress > div {
+            height: 100%;
+            background: linear-gradient(90deg, #f37021 0%, #fb923c 100%);
+          }
+          .sd-toolbar {
+            margin-bottom: 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            background: #ffffff;
+            padding: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-pill {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #ffffff;
+            padding: 9px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #374151;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .sd-pill:hover {
+            border-color: #f37021;
+            color: #9a3412;
+          }
+          .sd-pill.active {
+            border-color: #f37021;
+            background: #fff7ed;
+            color: #9a3412;
+          }
+          .sd-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 14px;
+          }
+          .sd-panel-title {
+            margin: 0 0 12px;
+            font-size: 22px;
+            line-height: 1.3;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #111827;
+          }
+          .sd-list {
+            display: grid;
+            gap: 10px;
+          }
+          .sd-list-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 14px;
+            background: #ffffff;
+          }
+          .sd-list-title {
+            font-weight: 700;
+            line-height: 1.45;
+            font-size: 16px;
+            color: #111827;
+          }
+          .sd-list-sub {
+            margin-top: 6px;
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          .sd-empty {
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            color: #64748b;
+            background: #f8fafc;
+          }
+          .sd-warning-card {
+            border-color: #fdba74;
+            background: #fffbeb;
+          }
+          .sd-note-list {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+            padding-left: 20px;
+            color: #1f2937;
+            line-height: 1.6;
+            font-size: 14px;
+          }
+          .sd-upload {
+            margin-top: 12px;
+            border: 1px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+          }
+          .sd-upload:hover {
+            border-color: #f37021;
+            background: #fff7ed;
+          }
+          .sd-textarea {
+            width: 100%;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            padding: 11px 12px;
+            font-size: 14px;
+            background: #ffffff;
+            resize: vertical;
+            min-height: 110px;
+            font-family: inherit;
+            color: #111827;
+          }
+          .sd-textarea:focus {
+            outline: none;
+            border-color: #f37021;
+            box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.16);
+          }
+          .sd-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+          }
+          .sd-btn-primary,
+          .sd-btn-soft {
+            border-radius: 10px;
+            min-height: 40px;
+            padding: 8px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+          .sd-btn-primary {
+            border: 1px solid #f37021;
+            background: #f37021;
+            color: #ffffff;
+          }
+          .sd-btn-primary:hover:enabled {
+            border-color: #ea580c;
+            background: #ea580c;
+          }
+          .sd-btn-primary:disabled {
+            border-color: #e5e7eb;
+            background: #f8fafc;
+            color: #9ca3af;
+            cursor: not-allowed;
+          }
+          .sd-btn-soft {
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+            color: #374151;
+          }
+          .sd-btn-soft:hover {
+            background: #f9fafb;
+          }
+          .sd-status {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .sd-status--approved {
+            border-color: #22c55e;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          .sd-status--rejected {
+            border-color: #ef4444;
+            color: #991b1b;
+            background: #fef2f2;
+          }
+          .sd-status--pending {
+            border-color: #f59e0b;
+            color: #92400e;
+            background: #fffbeb;
+          }
+          .sd-approval-row {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .sd-approval {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #ffffff;
+            color: #4b5563;
+          }
+          .sd-approval.done {
+            border-color: #22c55e;
+            color: #166534;
+            background: #f0fdf4;
+          }
+          @media (max-width: 1080px) {
+            .sd-root {
+              padding: 20px;
+            }
+            .sd-top-actions {
+              width: 100%;
+              min-width: 100%;
+            }
+            .sd-period-wrap {
+              min-width: 100%;
+            }
+          }
+          @media (max-width: 760px) {
+            .sd-root {
+              padding: 14px;
+            }
+            .sd-title {
+              font-size: 24px;
+            }
+            .sd-card {
+              padding: 14px;
+            }
+            .sd-panel-title {
+              font-size: 19px;
+            }
           }
         `}
       </style>
 
-      <div className="content">
-        <section
-          style={{
-            borderRadius: 12,
-            padding: 20,
-            marginBottom: 16,
-            border: "1px solid #cbd5e1",
-            background: "#ffffff",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: 30, color: "#f37021", display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
-            <GraduationCap size={30} color="#f37021" /> Thông tin bảo vệ
-          </h1>
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span className="stu-pill active">Period: {defenseInfo.periodId}</span>
-            <span className="stu-pill">Assignment: {defenseInfo.assignmentId}</span>
-            <span className="stu-pill">Session: {sessionLabel}</span>
+      <section className="sd-card sd-header">
+        <div className="sd-hero-head">
+          <div>
+            <h1 className="sd-title">
+              <GraduationCap size={26} /> Thông tin bảo vệ
+            </h1>
+            <p className="sd-sub">
+              Theo dõi lịch bảo vệ, kết quả và hồ sơ chỉnh sửa trong cùng một màn hình.
+            </p>
           </div>
-          <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 10, padding: 10, background: "#ffffff", fontSize: 13, color: "#0f172a" }}>
-            {loadingData ? "Đang tải dữ liệu từ API..." : `Cập nhật gần nhất: ${latestTrace?.at ?? "Chưa có"}`}
-          </div>
-        </section>
 
-        <section className="stu-panel" style={{ marginBottom: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            <div>
-              <div className="stu-kicker">MSSV</div>
-              <div className="stu-value">{defenseInfo.studentCode}</div>
-            </div>
-            <div>
-              <div className="stu-kicker">Điểm tổng kết</div>
-              <div className="stu-value">{averageScore} ({defenseInfo.letter})</div>
-            </div>
-            <div>
-              <div className="stu-kicker">Trạng thái công bố</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <CheckCircle2 size={18} /> {defenseInfo.status}
+          <div className="sd-top-actions">
+            <div className="sd-period-wrap">
+              <span className="sd-period-label">Đợt bảo vệ hiện tại</span>
+              <div
+                className="sd-period-select"
+                style={{ display: "flex", alignItems: "center", fontWeight: 700 }}
+              >
+                {periodDisplay}
               </div>
             </div>
-            <div>
-              <div className="stu-kicker">Tiến độ hoàn tất hồ sơ</div>
-              <div style={{ marginTop: 8, height: 10, borderRadius: 999, background: "#f37021", overflow: "hidden" }}>
-                <div style={{ width: `${completionRate}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#f37021 0%,#f37021 100%)" }} />
+          </div>
+        </div>
+
+        <div className="sd-chip-row">
+          <span className="sd-chip">
+            <CalendarClock size={14} /> Đợt: {periodDisplay}
+          </span>
+          <span className={`sd-chip ${waitingState ? "sd-chip--waiting" : "sd-chip--locked"}`}>
+            <Users size={14} /> {waitingState ? "Hội đồng: Chưa chốt" : "Hội đồng: Đã chốt"}
+          </span>
+          <span className="sd-chip">
+            <AlertCircle size={14} /> Trạng thái khóa: {defenseInfo.councilLockStatus === "LOCKED" ? "Đã khóa" : "Chưa khóa"}
+          </span>
+          {currentPeriod && (
+            <span className="sd-chip">
+              <Bell size={14} /> Trạng thái đợt: {currentPeriod.status}
+            </span>
+          )}
+          {defenseInfo.councilListLocked && (
+            <span className="sd-chip">
+              <Clock3 size={14} /> Buổi: {formatSessionLabel(displayDefenseInfo.sessionCode)}
+            </span>
+          )}
+        </div>
+
+        <div className="sd-meta">
+          {loadingData
+            ? "Đang tải dữ liệu mới nhất..."
+            : `Cập nhật lần gần nhất: ${snapshotFetchedAt}${latestTrace ? ` · ${latestTrace}` : ""}`}
+        </div>
+      </section>
+
+      <section className="sd-card sd-grid-4">
+        <div>
+          <div className="sd-kicker">
+            <User size={14} /> Mã sinh viên
+          </div>
+          <div className="sd-value">{defenseInfo.studentCode || "Đang cập nhật"}</div>
+          <div className="sd-meta">Sinh viên: {defenseInfo.studentName || "Đang cập nhật"}</div>
+        </div>
+
+        <div>
+          <div className="sd-kicker">
+            <FileText size={14} /> Đề tài
+          </div>
+          <div className="sd-value" style={{ fontSize: 18 }}>
+            {defenseInfo.topicCode || "Đang cập nhật"}
+          </div>
+          <div className="sd-meta">
+            {defenseInfo.topicTitle || "Thông tin đề tài sẽ hiển thị đầy đủ sau khi hội đồng chốt."}
+          </div>
+        </div>
+
+        <div>
+          <div className="sd-kicker">
+            <CheckCircle2 size={14} /> Kết quả hiện tại
+          </div>
+          <div className="sd-value">{scoreText}</div>
+          <div className="sd-meta">Xếp loại: {gradeText}</div>
+        </div>
+
+        <div>
+          <div className="sd-kicker">
+            <Hash size={14} /> Tiến độ hồ sơ
+          </div>
+          <div className="sd-progress">
+            <div style={{ width: `${completionRate}%` }} />
+          </div>
+          <div className="sd-meta" style={{ fontWeight: 700 }}>
+            {completionRate}%
+          </div>
+        </div>
+      </section>
+
+      {currentSnapshotError ? (
+        <section className="sd-card sd-warning-card">
+          <h2 className="sd-panel-title">
+            <AlertCircle size={18} /> Trạng thái dữ liệu đợt bảo vệ
+          </h2>
+          <div className="sd-list">
+            <div className="sd-list-item">
+              <div className="sd-list-title">Không thể xác định snapshot hiện tại</div>
+              <div className="sd-list-sub">{currentSnapshotError}</div>
+            </div>
+            <div className="sd-list-item">
+              <div className="sd-list-title">Gợi ý xử lý</div>
+              <div className="sd-list-sub">
+                Nếu thông tin mapping vừa được cập nhật, vui lòng tải lại trang. Nếu lỗi tiếp diễn,
+                vui lòng liên hệ quản trị viên để kiểm tra mapping đợt bảo vệ.
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{completionRate}%</div>
             </div>
           </div>
         </section>
+      ) : waitingState ? (
+        <>
+          <div className="sd-grid-2">
+            <section className="sd-card sd-warning-card">
+              <h2 className="sd-panel-title">
+                <AlertCircle size={18} /> Trạng thái chờ chốt hội đồng
+              </h2>
+              <div className="sd-list">
+                <div className="sd-list-item">
+                  <div className="sd-list-title">Thông tin lịch bảo vệ đang được cập nhật</div>
+                  <div className="sd-list-sub">
+                    Khi hội đồng chưa chốt, phòng và lịch có thể chưa xuất hiện đầy đủ.
+                  </div>
+                </div>
+                <div className="sd-list-item">
+                  <div className="sd-list-title">Nếu hệ thống đã gửi thông báo chốt hội đồng</div>
+                  <div className="sd-list-sub">
+                    Vui lòng tải lại trang để đồng bộ dữ liệu mới nhất.
+                  </div>
+                </div>
+              </div>
+            </section>
 
-        <section style={{ ...cardStyle, marginBottom: 16 }}>
-          <div className="stu-control-bar">
-            <button type="button" className={`stu-pill ${activePanel === "schedule" ? "active" : ""}`} onClick={() => setActivePanel("schedule")}>
-              <Calendar size={15} /> Lịch & hội đồng
+            <section className="sd-card">
+              <h2 className="sd-panel-title">
+                <Bell size={18} /> Lưu ý trước ngày bảo vệ
+              </h2>
+              <ul className="sd-note-list">
+                <li>Nên có mặt trước giờ hẹn khoảng 20-30 phút để ổn định tâm lý và kiểm tra thiết bị.</li>
+                <li>Trang phục gọn gàng, lịch sự; ưu tiên sự thoải mái để tự tin khi trình bày.</li>
+                <li>Khi hồi hộp, hãy thở chậm 3-5 nhịp trước khi vào phòng và tập trung vào ý chính.</li>
+                <li>Mang theo bản dự phòng tệp PDF trong USB hoặc cloud để phòng sự cố kỹ thuật.</li>
+              </ul>
+            </section>
+          </div>
+
+          <section className="sd-card" style={{ marginTop: 14 }}>
+            <h2 className="sd-panel-title">
+              <Clock3 size={18} /> Thông báo gần đây
+            </h2>
+            <div className="sd-list">
+              {notifications.slice(0, 3).map((item, index) => (
+                <div key={`${item.timestamp}-${index}`} className="sd-list-item">
+                  <div className="sd-kicker" style={{ textTransform: "none", letterSpacing: 0 }}>
+                    {formatDateTime(item.timestamp, true)}
+                  </div>
+                  <div className="sd-list-title">{item.message}</div>
+                  <div className="sd-list-sub">Loại: {formatNotificationType(item.type)}</div>
+                </div>
+              ))}
+              {!latestNotice && (
+                <div className="sd-empty">Chưa có thông báo nghiệp vụ trong đợt hiện tại.</div>
+              )}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="sd-toolbar">
+            <button
+              type="button"
+              className={`sd-pill ${activePanel === "overview" ? "active" : ""}`}
+              onClick={() => setActivePanel("overview")}
+            >
+              <CalendarClock size={15} /> Lịch và hội đồng
             </button>
-            <button type="button" className={`stu-pill ${activePanel === "result" ? "active" : ""}`} onClick={() => setActivePanel("result")}>
-              <Bell size={15} /> Kết quả & thông báo
+            <button
+              type="button"
+              className={`sd-pill ${activePanel === "notifications" ? "active" : ""}`}
+              onClick={() => setActivePanel("notifications")}
+            >
+              <Bell size={15} /> Thông báo
             </button>
-            <button type="button" className={`stu-pill ${activePanel === "revision" ? "active" : ""}`} onClick={() => setActivePanel("revision")}>
+            <button
+              type="button"
+              className={`sd-pill ${activePanel === "revision" ? "active" : ""}`}
+              onClick={() => setActivePanel("revision")}
+            >
               <Upload size={15} /> Nộp chỉnh sửa
             </button>
-          </div>
-        </section>
+          </section>
 
-        {activePanel === "schedule" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section className="stu-panel">
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Calendar size={18} color="#0f172a" /> Lịch bảo vệ
-              </h2>
-              <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                  <div className="stu-kicker">Sinh viên</div>
-                  <div style={{ fontWeight: 700 }}>{defenseInfo.studentName}</div>
-                </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                  <div className="stu-kicker">Đề tài</div>
-                  <div style={{ fontWeight: 700 }}>{defenseInfo.topic}</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                    <div style={{ fontSize: 12, color: "#0f172a" }}>Ngày</div>
-                    <div style={{ fontWeight: 700 }}>{new Date(defenseInfo.defenseDate).toLocaleDateString("vi-VN")}</div>
+          {activePanel === "overview" && (
+            <div className="sd-grid-2">
+              <section className="sd-card">
+                <h2 className="sd-panel-title">
+                  <CalendarClock size={18} /> Lịch bảo vệ
+                </h2>
+                <div className="sd-list">
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">
+                      <Users size={14} /> Hội đồng
+                    </div>
+                    <div className="sd-list-title">{displayDefenseInfo.committeeCode || "Đang cập nhật"}</div>
                   </div>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                    <div style={{ fontSize: 12, color: "#0f172a" }}>Thời gian</div>
-                    <div style={{ fontWeight: 700 }}>{defenseInfo.startTime} - {defenseInfo.endTime}</div>
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">
+                      <MapPin size={14} /> Phòng bảo vệ
+                    </div>
+                    <div className="sd-list-title">{displayDefenseInfo.room || "Đang cập nhật"}</div>
                   </div>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                    <div style={{ fontSize: 12, color: "#0f172a" }}>Phòng</div>
-                    <div style={{ fontWeight: 700 }}>{defenseInfo.room}</div>
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">
+                      <CalendarClock size={14} /> Ngày giờ
+                    </div>
+                    <div className="sd-list-title">{formatDateTime(displayDefenseInfo.scheduledAt, true)}</div>
+                    <div className="sd-list-sub">Buổi: {formatSessionLabel(displayDefenseInfo.sessionCode)}</div>
+                  </div>
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">
+                      <FileText size={14} /> Đề tài
+                    </div>
+                    <div className="sd-list-title">{defenseInfo.topicTitle || "Đang cập nhật"}</div>
+                    <div className="sd-list-sub">Mã đề tài: {defenseInfo.topicCode || "-"}</div>
                   </div>
                 </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                  <div style={{ fontSize: 12, color: "#0f172a" }}>Mã hội đồng</div>
-                  <div style={{ fontWeight: 700 }}>{defenseInfo.committeeCode}</div>
-                </div>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid #cbd5e1", background: "#ffffff" }}>
-                  <div style={{ fontSize: 12, color: "#0f172a" }}>Mã assignment</div>
-                  <div style={{ fontWeight: 700 }}>{defenseInfo.assignmentId}</div>
-                </div>
-              </div>
-            </section>
+              </section>
 
-            <section style={cardStyle}>
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Users size={18} color="#0f172a" /> Thành viên
+              <section className="sd-card">
+                <h2 className="sd-panel-title">
+                  <FileText size={18} /> Kết quả và nhắc nhở
+                </h2>
+                <div className="sd-list">
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">Điểm tổng kết</div>
+                    <div className="sd-list-title" style={{ fontSize: 20 }}>{scoreText}</div>
+                    <div className="sd-list-sub">Xếp loại: {gradeText}</div>
+                  </div>
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">Gợi ý trình bày hiệu quả</div>
+                    <ul className="sd-note-list" style={{ marginTop: 8 }}>
+                      <li>Mở đầu ngắn gọn, nêu ngay mục tiêu và kết quả chính trong 1-2 phút đầu.</li>
+                      <li>Dùng slide tối giản, tập trung dữ liệu chứng minh thay vì chữ quá dài.</li>
+                      <li>Khi nhận câu hỏi khó, xin 5-10 giây suy nghĩ để trả lời mạch lạc hơn.</li>
+                      <li>Giữ thái độ cầu thị và bình tĩnh, đó là điểm cộng lớn trong buổi bảo vệ.</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activePanel === "notifications" && (
+            <section className="sd-card">
+              <h2 className="sd-panel-title">
+                <Clock3 size={18} /> Dòng thông báo
               </h2>
-              <div className="stu-list">
-                {members.map((member) => (
-                  <div key={`${member.role}-${member.name}`} className="stu-list-item">
-                    <div className="stu-badge">{member.role}</div>
-                    <div className="stu-list-item-title">{member.name}</div>
+              <div className="sd-list">
+                {notifications.map((item, index) => (
+                  <div key={`${item.timestamp}-${item.message}-${index}`} className="sd-list-item">
+                    <div className="sd-kicker" style={{ textTransform: "none", letterSpacing: 0 }}>
+                      {formatDateTime(item.timestamp, true)}
+                    </div>
+                    <div className="sd-list-title">{item.message}</div>
+                    <div className="sd-list-sub">Loại sự kiện: {formatNotificationType(item.type)}</div>
                   </div>
                 ))}
-                {members.length === 0 && <div className="stu-list-empty">Chưa có danh sách thành viên từ API.</div>}
+                {notifications.length === 0 && (
+                  <div className="sd-empty">Chưa có thông báo nghiệp vụ trong đợt hiện tại.</div>
+                )}
               </div>
             </section>
-          </div>
-        )}
+          )}
 
-        {activePanel === "result" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section className="stu-panel">
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <FileText size={18} color="#0f172a" /> Kết luận hội đồng
-              </h2>
-              <div style={{ marginBottom: 8 }}>Điểm = (GVHD + CT + TK + PB) / 4</div>
-              <div style={{ marginBottom: 10, color: "#0f172a" }}>
-                Điểm đã làm tròn: <strong>{averageScore}</strong> · Điểm chữ: <strong>{defenseInfo.letter}</strong>
-              </div>
-              <div className="stu-list">
-                {comments.map((item, idx) => (
-                  <div key={idx} className="stu-list-item">
-                    <div className="stu-list-item-title">Nhận xét {idx + 1}</div>
-                    <div className="stu-list-item-sub">{item}</div>
-                  </div>
-                ))}
-                {comments.length === 0 && <div className="stu-list-empty">Chưa có nhận xét hội đồng từ API.</div>}
-              </div>
-            </section>
-
-            <section className="stu-panel">
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Clock3 size={18} color="#0f172a" /> Thông báo nghiệp vụ
-              </h2>
-              <div className="stu-list">
-                {notifications.map((item: StudentNotification) => (
-                  <div key={`${item.time}-${item.title}`} className="stu-list-item">
-                    <div className="stu-kicker" style={{ textTransform: "none", letterSpacing: 0 }}>{item.time}</div>
-                    <div className="stu-list-item-title">{item.title}</div>
-                    <div className="stu-list-item-sub" style={{ color: item.type === "success" ? "#0f172a" : item.type === "warning" ? "#f37021" : "#0f172a", fontWeight: 600 }}>
-                      {item.type.toUpperCase()}
+          {activePanel === "revision" && (
+            <div className="sd-grid-2">
+              <section className="sd-card">
+                <h2 className="sd-panel-title">
+                  <Upload size={18} /> Nộp bản chỉnh sửa
+                </h2>
+                <div className="sd-list">
+                  <div className="sd-list-item">
+                    <div className="sd-kicker">
+                      <Hash size={14} /> Mã phân công
+                    </div>
+                    <div className="sd-list-title">
+                      {assignmentIdForRevision ? `Phân công #${assignmentIdForRevision}` : "Chưa có mã phân công"}
+                    </div>
+                    <div className="sd-list-sub">
+                      Hệ thống đang tự động lấy mã phân công từ lịch sử chỉnh sửa gần nhất.
                     </div>
                   </div>
-                ))}
-                {notifications.length === 0 && <div className="stu-list-empty">Chưa có thông báo nghiệp vụ.</div>}
-              </div>
-            </section>
-          </div>
-        )}
+                </div>
 
-        {activePanel === "revision" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-            <section className="stu-panel">
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <Upload size={18} color="#0f172a" /> Nộp bản chỉnh sửa
-              </h2>
-              {defenseInfo.requiresRevision ? (
-                <>
-                  <label style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, color: "#0f172a" }}>Nội dung chỉnh sửa</span>
-                    <textarea value={revisedContent} onChange={(event) => setRevisedContent(event.target.value)} rows={4} />
-                  </label>
+                <label style={{ display: "grid", gap: 6, marginTop: 12 }}>
+                  <span className="sd-kicker" style={{ fontSize: 11 }}>Nội dung chỉnh sửa (không bắt buộc)</span>
+                  <textarea
+                    className="sd-textarea"
+                    value={revisedContent}
+                    onChange={(event) => setRevisedContent(event.target.value)}
+                    placeholder="Mô tả ngắn gọn những phần đã cập nhật..."
+                  />
+                </label>
 
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      const fileName = file?.name ?? "";
-                      setSelectedFile(file);
-                      setSelectedFileName(fileName);
-                      if (fileName) {
-                        notifyInfo(`Đã chọn tệp: ${fileName}`);
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    const fileName = file?.name ?? "";
+                    setSelectedFile(file);
+                    setSelectedFileName(fileName);
+                    if (fileName) {
+                      notifyInfo(`Đã chọn tệp: ${fileName}`);
+                    }
+                  }}
+                />
+
+                <button
+                  type="button"
+                  className="sd-upload"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <Upload size={15} /> Chọn tệp PDF
+                  </span>
+                  <span style={{ fontSize: 13, color: "#475569" }}>
+                    {selectedFileName || "Chưa có tệp nào được chọn"}
+                  </span>
+                </button>
+
+                <div className="sd-actions">
+                  <button
+                    type="button"
+                    className="sd-btn-primary"
+                    onClick={submitRevision}
+                    disabled={
+                      submittingRevision ||
+                      !selectedFile ||
+                      !assignmentIdForRevision ||
+                      !hasAllowedAction("SUBMIT_REVISION", "UC4.1.SUBMIT") ||
+                      latestSubmission?.finalStatus === 2
+                    }
+                  >
+                    {submittingRevision ? "Đang nộp..." : "Nộp bản chỉnh sửa"}
+                  </button>
+                  <button
+                    type="button"
+                    className="sd-btn-soft"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setSelectedFileName("");
+                      setRevisedContent("");
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
                       }
                     }}
-                    style={{ display: "none" }}
-                  />
-
-                  <button type="button" className="stu-upload" onClick={() => fileInputRef.current?.click()}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#0f172a", fontWeight: 700 }}>
-                      <Upload size={15} /> Chọn file đính kèm
-                    </span>
-                    <span style={{ color: "#0f172a", fontSize: 13 }}>
-                      {selectedFileName || "Chưa có file nào được chọn"}
-                    </span>
+                  >
+                    Xóa nội dung
                   </button>
+                </div>
+              </section>
 
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                    <button type="button" className="stu-primary" onClick={submitRevision} disabled={!selectedFileName || !revisedContent.trim() || latestSubmission?.status === "Approved" || !hasAllowedAction("SUBMIT_REVISION", "UC4.1.SUBMIT") }>
-                      Nộp bản chỉnh sửa
-                    </button>
-                  </div>
-
-                  <div style={{ marginTop: 12 }}>
-                    {!latestSubmission && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
-                        <Clock3 size={16} /> Trạng thái: Chưa nộp bản chỉnh sửa.
-                      </div>
-                    )}
-                    {latestSubmission?.status === "Pending" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
-                        <Clock3 size={16} /> Trạng thái: Đã nộp, đang chờ duyệt.
-                      </div>
-                    )}
-                    {latestSubmission?.status === "Approved" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0f172a" }}>
-                        <CheckCircle2 size={16} /> Trạng thái: Hoàn thành 100%.
-                      </div>
-                    )}
-                    {latestSubmission?.status === "Rejected" && (
-                      <div style={{ display: "grid", gap: 6, color: "#0f172a" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <XCircle size={16} /> Trạng thái: Bị từ chối, vui lòng nộp lại.
+              <section className="sd-card">
+                <h2 className="sd-panel-title">
+                  <CheckCircle2 size={18} /> Lịch sử chỉnh sửa
+                </h2>
+                <div className="sd-list">
+                  {revisionHistory.map((item) => {
+                    const statusMeta = formatRevisionStatus(item.finalStatus);
+                    return (
+                      <div key={`revision-${item.id}`} className="sd-list-item">
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <div className="sd-list-title">Lần chỉnh sửa #{item.id}</div>
+                          <span className={statusMeta.className}>{statusMeta.label}</span>
                         </div>
-                        <div style={{ fontSize: 13, border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: 8, padding: 8 }}>
-                          Lý do: {latestSubmission.note || "Vui lòng cập nhật bản chỉnh sửa theo phản hồi hội đồng."}
+                        <div className="sd-list-sub">
+                          Phân công: {item.assignmentId ?? "-"} · Tạo lúc: {formatDateTime(item.createdAt, true)}
+                        </div>
+                        <div className="sd-list-sub">
+                          Cập nhật cuối: {formatDateTime(item.lastUpdated || item.createdAt, true)}
+                        </div>
+                        {item.revisionFileUrl && (
+                          <div className="sd-list-sub">Tệp: {item.revisionFileUrl}</div>
+                        )}
+                        <div className="sd-approval-row">
+                          <span className={`sd-approval ${item.isCtApproved ? "done" : ""}`}>
+                            CT: {item.isCtApproved ? "Đã duyệt" : "Chưa duyệt"}
+                          </span>
+                          <span className={`sd-approval ${item.isUvtkApproved ? "done" : ""}`}>
+                            UV/TK: {item.isUvtkApproved ? "Đã duyệt" : "Chưa duyệt"}
+                          </span>
+                          <span className={`sd-approval ${item.isGvhdApproved ? "done" : ""}`}>
+                            GVHD: {item.isGvhdApproved ? "Đã duyệt" : "Chưa duyệt"}
+                          </span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div style={{ color: "#0f172a" }}>Không yêu cầu chỉnh sửa sau bảo vệ.</div>
-              )}
-            </section>
-
-            <section className="stu-panel">
-              <h2 style={{ marginTop: 0, fontSize: 19, display: "flex", gap: 8, alignItems: "center" }}>
-                <CheckCircle2 size={18} color="#0f172a" /> Lịch sử nộp bản chỉnh sửa
-              </h2>
-              <div className="stu-list">
-                {submissionHistory.map((item: SubmissionHistory) => (
-                  <div key={`${item.version}-${item.uploadedAt}`} className="stu-list-item">
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                      <span className="stu-list-item-title">{item.version}</span>
-                      <span className="stu-badge" style={{ color: item.status === "Approved" ? "#0f172a" : item.status === "Rejected" ? "#0f172a" : "#0f172a", background: item.status === "Approved" ? "#ffffff" : item.status === "Rejected" ? "#ffffff" : "#ffffff", borderColor: item.status === "Approved" ? "#0f172a" : item.status === "Rejected" ? "#0f172a" : "#0f172a" }}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div className="stu-list-item-sub">{item.uploadedAt}</div>
-                    {item.note && <div className="stu-list-item-sub" style={{ color: "#0f172a" }}>Ghi chú: {item.note}</div>}
-                  </div>
-                ))}
-                {submissionHistory.length === 0 && <div className="stu-list-empty">Chưa có lịch sử nộp bản chỉnh sửa.</div>}
-              </div>
-            </section>
-          </div>
-        )}
-      </div>
+                    );
+                  })}
+                  {revisionHistory.length === 0 && (
+                    <div className="sd-empty">Chưa có lịch sử nộp bản chỉnh sửa.</div>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

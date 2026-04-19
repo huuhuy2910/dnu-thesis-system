@@ -114,6 +114,60 @@ namespace ThesisManagement.Api.Controllers
             return FromResult(ApiResponse<object>.SuccessResponse(snapshot));
         }
 
+        [HttpGet("/api/student-defense/current/snapshot")]
+        [Authorize(Roles = "Student")]
+        public async Task<ActionResult<ApiResponse<object>>> GetCurrentStudentSnapshot()
+        {
+            var resolved = await ResolveCurrentStudentPeriodAsync(HttpContext.RequestAborted);
+            if (!resolved.Success || resolved.Period == null)
+            {
+                return StatusCode(resolved.StatusCode, ApiResponse<object>.Fail(
+                    resolved.Message ?? "Không thể xác định đợt bảo vệ hiện tại.",
+                    resolved.StatusCode,
+                    code: resolved.Code));
+            }
+
+            var snapshotResult = await GetStudentSnapshot(resolved.Period.DefenseTermId);
+            if (!TryExtractApiResponse(snapshotResult, out var snapshot, out var snapshotStatusCode) || snapshot == null)
+            {
+                return StatusCode(500, ApiResponse<object>.Fail("Không thể lấy snapshot sinh viên.", 500));
+            }
+
+            if (!snapshot.Success)
+            {
+                return StatusCode(snapshotStatusCode, ApiResponse<object>.Fail(
+                    snapshot.Message ?? "Không lấy được snapshot sinh viên.",
+                    snapshotStatusCode,
+                    snapshot.Errors,
+                    snapshot.Code,
+                    snapshot.Warnings,
+                    snapshot.AllowedActions));
+            }
+
+            var payload = new
+            {
+                Period = new
+                {
+                    resolved.Period.DefenseTermId,
+                    resolved.Period.Name,
+                    resolved.Period.Status,
+                    resolved.Period.StartDate,
+                    resolved.Period.EndDate
+                },
+                Snapshot = snapshot.Data
+            };
+
+            return StatusCode(snapshotStatusCode, ApiResponse<object>.SuccessResponse(
+                payload,
+                snapshot.TotalCount,
+                snapshotStatusCode,
+                snapshot.Code,
+                snapshot.Warnings,
+                snapshot.IdempotencyReplay,
+                snapshot.ConcurrencyToken,
+                snapshot.AllowedActions));
+        }
+
         [HttpPost("revisions")]
         [Consumes("multipart/form-data")]
         [Authorize(Roles = "Student")]
@@ -569,6 +623,84 @@ namespace ThesisManagement.Api.Controllers
             return period.HasValue;
         }
 
+        private async Task<(bool Success, int StatusCode, string? Message, string? Code, CurrentDefenseTermContextDto? Period)> ResolveCurrentStudentPeriodAsync(CancellationToken cancellationToken)
+        {
+            var requestUserCode = (GetRequestUserCode() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(requestUserCode) && CurrentUserId <= 0)
+            {
+                return (false, 401, "Không xác định được người dùng hiện tại.", "AUTH.USER_CONTEXT_MISSING", null);
+            }
+
+            var profile = await _uow.StudentProfiles.Query().AsNoTracking()
+                .Where(x =>
+                    (CurrentUserId > 0 && x.UserID == CurrentUserId)
+                    || (!string.IsNullOrWhiteSpace(requestUserCode)
+                        && ((x.UserCode != null && x.UserCode == requestUserCode)
+                            || x.StudentCode == requestUserCode)))
+                .OrderByDescending(x => x.LastUpdated ?? x.CreatedAt)
+                .Select(x => new
+                {
+                    x.StudentProfileID,
+                    x.StudentCode,
+                    x.UserCode
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (profile == null)
+            {
+                return (false, 404, "Không tìm thấy hồ sơ sinh viên tương ứng với tài khoản hiện tại.", "DEFENSE_PERIOD_PROFILE_NOT_FOUND", null);
+            }
+
+            var profileStudentCode = profile.StudentCode?.Trim() ?? string.Empty;
+            var profileUserCode = string.IsNullOrWhiteSpace(profile.UserCode) ? null : profile.UserCode.Trim();
+
+            var periodIds = await _uow.DefenseTermStudents.Query().AsNoTracking()
+                .Where(x =>
+                    x.StudentProfileID == profile.StudentProfileID
+                    || x.StudentCode == profileStudentCode
+                    || (!string.IsNullOrWhiteSpace(profileUserCode) && x.UserCode == profileUserCode)
+                    || (!string.IsNullOrWhiteSpace(requestUserCode) && (x.UserCode == requestUserCode || x.StudentCode == requestUserCode)))
+                .Select(x => x.DefenseTermId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (periodIds.Count == 0)
+            {
+                return (false, 404, "Sinh viên chưa được gán vào đợt bảo vệ nào.", "DEFENSE_PERIOD_MAPPING_NOT_FOUND", null);
+            }
+
+            var periods = await _uow.DefenseTerms.Query().AsNoTracking()
+                .Where(x => periodIds.Contains(x.DefenseTermId))
+                .OrderByDescending(x => x.StartDate)
+                .ThenByDescending(x => x.DefenseTermId)
+                .Select(x => new CurrentDefenseTermContextDto
+                {
+                    DefenseTermId = x.DefenseTermId,
+                    Name = x.Name,
+                    Status = x.Status,
+                    StartDate = x.StartDate,
+                    EndDate = x.EndDate
+                })
+                .ToListAsync(cancellationToken);
+
+            var activePeriods = periods
+                .Where(x => !string.Equals(x.Status, "Archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (activePeriods.Count == 0)
+            {
+                return (false, 404, "Sinh viên chưa được gán vào đợt bảo vệ đang hoạt động.", "DEFENSE_PERIOD_ACTIVE_MAPPING_NOT_FOUND", null);
+            }
+
+            if (activePeriods.Count > 1)
+            {
+                var activePeriodIds = string.Join(", ", activePeriods.Select(x => x.DefenseTermId));
+                return (false, 409, $"Phát hiện nhiều đợt bảo vệ đang hoạt động cho sinh viên hiện tại ({activePeriodIds}).", "DEFENSE_PERIOD_AMBIGUOUS", null);
+            }
+
+            return (true, 200, null, null, activePeriods[0]);
+        }
+
         private ActionResult<ApiResponse<DefenseTermStudentReadDto>> MapStudentResult(OperationResult<DefenseTermStudentReadDto> result)
         {
             if (!result.Success)
@@ -582,16 +714,46 @@ namespace ThesisManagement.Api.Controllers
                 ApiResponse<DefenseTermStudentReadDto>.SuccessResponse(result.Data, result.Data == null ? 0 : 1));
         }
 
+        private async Task<string> ResolveRequestStudentCodeAsync(CancellationToken cancellationToken)
+        {
+            var requestUserCode = (GetRequestUserCode() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(requestUserCode) && CurrentUserId <= 0)
+            {
+                return string.Empty;
+            }
+
+            var requestUserCodeUpper = requestUserCode.ToUpperInvariant();
+            var profile = await _uow.StudentProfiles.Query().AsNoTracking()
+                .Where(x =>
+                    (CurrentUserId > 0 && x.UserID == CurrentUserId)
+                    || (!string.IsNullOrWhiteSpace(requestUserCode)
+                        && ((x.UserCode != null && x.UserCode.ToUpper() == requestUserCodeUpper)
+                            || x.StudentCode.ToUpper() == requestUserCodeUpper)))
+                .OrderByDescending(x => x.LastUpdated ?? x.CreatedAt)
+                .Select(x => new
+                {
+                    x.StudentCode
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (profile == null || string.IsNullOrWhiteSpace(profile.StudentCode))
+            {
+                return requestUserCode;
+            }
+
+            return profile.StudentCode.Trim();
+        }
+
         private async Task<ActionResult<ApiResponse<StudentDefenseInfoDtoV2>>> GetDefenseInfo(int periodId)
         {
-            var studentCode = GetRequestUserCode() ?? string.Empty;
+            var studentCode = await ResolveRequestStudentCodeAsync(HttpContext.RequestAborted);
             var result = await _getDefenseInfoQuery.ExecuteAsync(studentCode, periodId);
             return FromResult(result);
         }
 
         private async Task<ActionResult<ApiResponse<List<StudentNotificationDto>>>> GetNotifications(int periodId)
         {
-            var studentCode = GetRequestUserCode() ?? string.Empty;
+            var studentCode = await ResolveRequestStudentCodeAsync(HttpContext.RequestAborted);
             var result = await _getNotificationsQuery.ExecuteAsync(studentCode, periodId);
             return FromResult(result);
         }
@@ -605,14 +767,14 @@ namespace ThesisManagement.Api.Controllers
                 return FromResult(fail);
             }
 
-            var studentCode = GetRequestUserCode() ?? string.Empty;
+            var studentCode = await ResolveRequestStudentCodeAsync(HttpContext.RequestAborted);
             var result = await _submitRevisionCommand.ExecuteAsync(request, studentCode, CurrentUserId, idempotencyKey);
             return FromResult(result);
         }
 
         private async Task<ActionResult<ApiResponse<List<object>>>> GetRevisionHistory(int periodId)
         {
-            var studentCode = GetRequestUserCode() ?? string.Empty;
+            var studentCode = await ResolveRequestStudentCodeAsync(HttpContext.RequestAborted);
             var result = await _revisionHistoryQuery.ExecuteAsync(studentCode, periodId);
             return FromResult(result);
         }
@@ -783,6 +945,15 @@ namespace ThesisManagement.Api.Controllers
             response = null;
             statusCode = 500;
             return false;
+        }
+
+        private sealed class CurrentDefenseTermContextDto
+        {
+            public int DefenseTermId { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string Status { get; set; } = string.Empty;
+            public DateTime StartDate { get; set; }
+            public DateTime? EndDate { get; set; }
         }
     }
 }

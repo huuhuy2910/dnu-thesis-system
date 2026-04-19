@@ -24,6 +24,7 @@ namespace ThesisManagement.Api.Controllers
         private readonly ISaveLecturerMinuteCommand _saveMinuteCommand;
         private readonly ISubmitLecturerIndependentScoreCommand _submitScoreCommand;
         private readonly IRequestReopenScoreCommand _reopenScoreCommand;
+        private readonly IOpenLecturerSessionCommand _openSessionCommand;
         private readonly ILockLecturerSessionCommand _lockSessionCommand;
         private readonly IGetLecturerRevisionQueueQuery _revisionQueueQuery;
         private readonly IApproveRevisionByLecturerCommand _approveRevisionCommand;
@@ -44,6 +45,7 @@ namespace ThesisManagement.Api.Controllers
             ISaveLecturerMinuteCommand saveMinuteCommand,
             ISubmitLecturerIndependentScoreCommand submitScoreCommand,
             IRequestReopenScoreCommand reopenScoreCommand,
+            IOpenLecturerSessionCommand openSessionCommand,
             ILockLecturerSessionCommand lockSessionCommand,
             IGetLecturerRevisionQueueQuery revisionQueueQuery,
             IApproveRevisionByLecturerCommand approveRevisionCommand,
@@ -60,6 +62,7 @@ namespace ThesisManagement.Api.Controllers
             _saveMinuteCommand = saveMinuteCommand;
             _submitScoreCommand = submitScoreCommand;
             _reopenScoreCommand = reopenScoreCommand;
+            _openSessionCommand = openSessionCommand;
             _lockSessionCommand = lockSessionCommand;
             _revisionQueueQuery = revisionQueueQuery;
             _approveRevisionCommand = approveRevisionCommand;
@@ -173,6 +176,60 @@ namespace ThesisManagement.Api.Controllers
             return FromResult(ApiResponse<object>.SuccessResponse(snapshot));
         }
 
+        [HttpGet("/api/lecturer-defense/current/snapshot")]
+        [Authorize(Roles = "Lecturer,Head,Secretary")]
+        public async Task<ActionResult<ApiResponse<object>>> GetCurrentLecturerSnapshot([FromQuery] int? committeeId = null)
+        {
+            var resolved = await ResolveCurrentLecturerPeriodAsync(HttpContext.RequestAborted);
+            if (!resolved.Success || resolved.Period == null)
+            {
+                return StatusCode(resolved.StatusCode, ApiResponse<object>.Fail(
+                    resolved.Message ?? "Không thể xác định đợt bảo vệ hiện tại.",
+                    resolved.StatusCode,
+                    code: resolved.Code));
+            }
+
+            var snapshotResult = await GetLecturerSnapshot(resolved.Period.DefenseTermId, committeeId);
+            if (!TryExtractApiResponse(snapshotResult, out var snapshot, out var snapshotStatusCode) || snapshot == null)
+            {
+                return StatusCode(500, ApiResponse<object>.Fail("Không thể lấy snapshot giảng viên.", 500));
+            }
+
+            if (!snapshot.Success)
+            {
+                return StatusCode(snapshotStatusCode, ApiResponse<object>.Fail(
+                    snapshot.Message ?? "Không lấy được snapshot giảng viên.",
+                    snapshotStatusCode,
+                    snapshot.Errors,
+                    snapshot.Code,
+                    snapshot.Warnings,
+                    snapshot.AllowedActions));
+            }
+
+            var payload = new
+            {
+                Period = new
+                {
+                    resolved.Period.DefenseTermId,
+                    resolved.Period.Name,
+                    resolved.Period.Status,
+                    resolved.Period.StartDate,
+                    resolved.Period.EndDate
+                },
+                Snapshot = snapshot.Data
+            };
+
+            return StatusCode(snapshotStatusCode, ApiResponse<object>.SuccessResponse(
+                payload,
+                snapshot.TotalCount,
+                snapshotStatusCode,
+                snapshot.Code,
+                snapshot.Warnings,
+                snapshot.IdempotencyReplay,
+                snapshot.ConcurrencyToken,
+                snapshot.AllowedActions));
+        }
+
         [HttpPost("minutes/upsert")]
         [Authorize(Roles = "Lecturer,Head,Secretary")]
         public async Task<ActionResult<ApiResponse<object>>> UpsertMinutes(int periodId, [FromBody] LecturerMinutesUpsertRequestDto request)
@@ -226,7 +283,14 @@ namespace ThesisManagement.Api.Controllers
                     action);
             }
 
-            return BadRequest(ApiResponse<object>.Fail("Action không hợp lệ. Hỗ trợ: SUBMIT, REOPEN_REQUEST, LOCK_SESSION.", 400));
+            if (action == "OPEN_SESSION")
+            {
+                return WrapAsObject(
+                    await OpenSession(periodId, request.CommitteeId, request.IdempotencyKey),
+                    action);
+            }
+
+            return BadRequest(ApiResponse<object>.Fail("Action không hợp lệ. Hỗ trợ: SUBMIT, REOPEN_REQUEST, OPEN_SESSION, LOCK_SESSION.", 400));
         }
 
         [HttpPost("revisions/actions")]
@@ -652,6 +716,84 @@ namespace ThesisManagement.Api.Controllers
             return period.HasValue;
         }
 
+        private async Task<(bool Success, int StatusCode, string? Message, string? Code, CurrentDefenseTermContextDto? Period)> ResolveCurrentLecturerPeriodAsync(CancellationToken cancellationToken)
+        {
+            var requestUserCode = (GetRequestUserCode() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(requestUserCode) && CurrentUserId <= 0)
+            {
+                return (false, 401, "Không xác định được người dùng hiện tại.", "AUTH.USER_CONTEXT_MISSING", null);
+            }
+
+            var profile = await _uow.LecturerProfiles.Query().AsNoTracking()
+                .Where(x =>
+                    (CurrentUserId > 0 && x.UserID == CurrentUserId)
+                    || (!string.IsNullOrWhiteSpace(requestUserCode)
+                        && ((x.UserCode != null && x.UserCode == requestUserCode)
+                            || x.LecturerCode == requestUserCode)))
+                .OrderByDescending(x => x.LastUpdated ?? x.CreatedAt)
+                .Select(x => new
+                {
+                    x.LecturerProfileID,
+                    x.LecturerCode,
+                    x.UserCode
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (profile == null)
+            {
+                return (false, 404, "Không tìm thấy hồ sơ giảng viên tương ứng với tài khoản hiện tại.", "DEFENSE_PERIOD_PROFILE_NOT_FOUND", null);
+            }
+
+            var profileLecturerCode = profile.LecturerCode?.Trim() ?? string.Empty;
+            var profileUserCode = string.IsNullOrWhiteSpace(profile.UserCode) ? null : profile.UserCode.Trim();
+
+            var periodIds = await _uow.DefenseTermLecturers.Query().AsNoTracking()
+                .Where(x =>
+                    x.LecturerProfileID == profile.LecturerProfileID
+                    || x.LecturerCode == profileLecturerCode
+                    || (!string.IsNullOrWhiteSpace(profileUserCode) && x.UserCode == profileUserCode)
+                    || (!string.IsNullOrWhiteSpace(requestUserCode) && (x.UserCode == requestUserCode || x.LecturerCode == requestUserCode)))
+                .Select(x => x.DefenseTermId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (periodIds.Count == 0)
+            {
+                return (false, 404, "Giảng viên chưa được gán vào đợt bảo vệ nào.", "DEFENSE_PERIOD_MAPPING_NOT_FOUND", null);
+            }
+
+            var periods = await _uow.DefenseTerms.Query().AsNoTracking()
+                .Where(x => periodIds.Contains(x.DefenseTermId))
+                .OrderByDescending(x => x.StartDate)
+                .ThenByDescending(x => x.DefenseTermId)
+                .Select(x => new CurrentDefenseTermContextDto
+                {
+                    DefenseTermId = x.DefenseTermId,
+                    Name = x.Name,
+                    Status = x.Status,
+                    StartDate = x.StartDate,
+                    EndDate = x.EndDate
+                })
+                .ToListAsync(cancellationToken);
+
+            var activePeriods = periods
+                .Where(x => !string.Equals(x.Status, "Archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (activePeriods.Count == 0)
+            {
+                return (false, 404, "Giảng viên chưa được gán vào đợt bảo vệ đang hoạt động.", "DEFENSE_PERIOD_ACTIVE_MAPPING_NOT_FOUND", null);
+            }
+
+            if (activePeriods.Count > 1)
+            {
+                var activePeriodIds = string.Join(", ", activePeriods.Select(x => x.DefenseTermId));
+                return (false, 409, $"Phát hiện nhiều đợt bảo vệ đang hoạt động cho giảng viên hiện tại ({activePeriodIds}).", "DEFENSE_PERIOD_AMBIGUOUS", null);
+            }
+
+            return (true, 200, null, null, activePeriods[0]);
+        }
+
         private ActionResult<ApiResponse<DefenseTermLecturerReadDto>> MapLecturerResult(OperationResult<DefenseTermLecturerReadDto> result)
         {
             if (!result.Success)
@@ -743,7 +885,21 @@ namespace ThesisManagement.Api.Controllers
                 return StatusCode(guard.HttpStatusCode == 0 ? 400 : guard.HttpStatusCode, ApiResponse<bool>.Fail(guard.Message ?? "Không thể truy vấn biên bản hội đồng.", guard.HttpStatusCode == 0 ? 400 : guard.HttpStatusCode, guard.Errors, guard.Code));
             }
 
-            var result = await _saveMinuteCommand.ExecuteAsync(id, request, CurrentUserId);
+            var lecturerCode = GetRequestUserCode() ?? string.Empty;
+            var result = await _saveMinuteCommand.ExecuteAsync(id, request, lecturerCode, CurrentUserId);
+            return FromResult(result);
+        }
+
+        private async Task<ActionResult<ApiResponse<bool>>> OpenSession(int periodId, int id, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
+        {
+            var guard = await _getMinutesQuery.ExecuteAsync(id, periodId);
+            if (!guard.Success)
+            {
+                return StatusCode(guard.HttpStatusCode == 0 ? 400 : guard.HttpStatusCode, ApiResponse<bool>.Fail(guard.Message ?? "Không thể truy vấn biên bản hội đồng.", guard.HttpStatusCode == 0 ? 400 : guard.HttpStatusCode, guard.Errors, guard.Code));
+            }
+
+            var lecturerCode = GetRequestUserCode() ?? string.Empty;
+            var result = await _openSessionCommand.ExecuteAsync(id, lecturerCode, CurrentUserId, idempotencyKey);
             return FromResult(result);
         }
 
@@ -877,6 +1033,15 @@ namespace ThesisManagement.Api.Controllers
             response = null;
             statusCode = 500;
             return false;
+        }
+
+        private sealed class CurrentDefenseTermContextDto
+        {
+            public int DefenseTermId { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string Status { get; set; } = string.Empty;
+            public DateTime StartDate { get; set; }
+            public DateTime? EndDate { get; set; }
         }
     }
 }
