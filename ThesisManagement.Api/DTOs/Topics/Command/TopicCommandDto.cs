@@ -24,7 +24,8 @@ namespace ThesisManagement.Api.DTOs.Topics.Command
         int? ResubmitCount,
         DateTime? CreatedAt,
         DateTime? LastUpdated,
-        string? LecturerComment
+        string? LecturerComment,
+        decimal? Score = null
     );
 
     public record TopicUpdateDto(
@@ -48,6 +49,7 @@ namespace ThesisManagement.Api.DTOs.Topics.Command
         int? ResubmitCount,
         DateTime? CreatedAt,
         DateTime? LastUpdated,
-        string? LecturerComment
+        string? LecturerComment,
+        decimal? Score = null
     );
 }

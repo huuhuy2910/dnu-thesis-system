@@ -23,6 +23,7 @@ namespace ThesisManagement.Api.Models
         public int? DepartmentID { get; set; } // Keep for internal use
         public string? DepartmentCode { get; set; } // New: reference by code
         public int? DefenseTermId { get; set; }
+        public decimal? Score { get; set; }
         public string Status { get; set; } = null!;
         public int? ResubmitCount { get; set; }
     public DateTime? CreatedAt { get; set; }
