@@ -104,6 +104,9 @@ namespace ThesisManagement.Api.Application.Command.Topics
                 }
             }
 
+            if (dto.Score.HasValue)
+                entity.Score = dto.Score.Value;
+
             if (dto.Status is not null)
                 entity.Status = dto.Status;
             if (dto.ResubmitCount.HasValue)
