@@ -2,11 +2,20 @@ import React, { useState } from "react";
 import AdminNav from "../SideNavs/AdminNav";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut, Bell, Menu, X } from "lucide-react";
+import {
+  LogOut,
+  Bell,
+  Menu,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 
 const AdminLayout: React.FC = () => {
   const auth = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const sidebarWidth = isSidebarCollapsed ? 84 : 260;
 
   return (
     <>
@@ -73,19 +82,40 @@ const AdminLayout: React.FC = () => {
             left: 220px !important;
           }
         }
+
+        .admin-sidebar,
+        .admin-main,
+        .admin-header,
+        .admin-sidebar img,
+        .admin-sidebar .sidebar-brand-text,
+        .admin-sidebar .sidebar-footer-text {
+          transition: width 0.28s ease, margin-left 0.28s ease, left 0.28s ease, opacity 0.24s ease, transform 0.24s ease, margin 0.28s ease;
+        }
+
+        .admin-sidebar .sidebar-brand-text,
+        .admin-sidebar .sidebar-footer-text {
+          will-change: opacity, transform;
+        }
+
+        .admin-sidebar.collapsed .sidebar-brand-text,
+        .admin-sidebar.collapsed .sidebar-footer-text {
+          opacity: 0;
+          transform: translateY(-8px) scale(0.96);
+          pointer-events: none;
+        }
       `}</style>
       <div
         style={{
           display: "flex",
           minHeight: "100vh",
           backgroundColor: "#FFFFFF",
-            fontFamily: '"Be Vietnam Pro", "Segoe UI", sans-serif',
+          fontFamily: '"Be Vietnam Pro", "Segoe UI", sans-serif',
         }}
       >
         <aside
-          className={`admin-sidebar ${isMobileMenuOpen ? "open" : ""}`}
+          className={`admin-sidebar ${isMobileMenuOpen ? "open" : ""} ${isSidebarCollapsed ? "collapsed" : ""}`}
           style={{
-            width: 260,
+            width: sidebarWidth,
             backgroundColor: "#001C3D",
             color: "#FFFFFF",
             display: "flex",
@@ -134,11 +164,12 @@ const AdminLayout: React.FC = () => {
               src="/dnu_logo.png"
               alt="Đại học Đại Nam"
               style={{
-                width: 90,
+                width: isSidebarCollapsed ? 52 : 90,
                 display: "block",
-                margin: "0 auto 14px",
+                margin: isSidebarCollapsed ? "16px auto 10px" : "0 auto 14px",
                 filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
-                transition: "transform 0.3s ease",
+                transition:
+                  "transform 0.3s ease, width 0.28s ease, margin 0.28s ease, opacity 0.24s ease",
               }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.transform = "scale(1.05)")
@@ -148,22 +179,40 @@ const AdminLayout: React.FC = () => {
               }
             />
             <h3
+              className="sidebar-brand-text"
               style={{
                 color: "#F37021",
                 fontSize: 18,
                 fontWeight: 700,
                 marginBottom: 4,
                 letterSpacing: "0.5px",
+                opacity: isSidebarCollapsed ? 0 : 1,
+                transform: isSidebarCollapsed
+                  ? "translateY(-8px) scale(0.96)"
+                  : "translateY(0) scale(1)",
+                maxHeight: isSidebarCollapsed ? 0 : 40,
+                overflow: "hidden",
+                transition:
+                  "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
               }}
             >
               Quản trị hệ thống
             </h3>
             <p
+              className="sidebar-brand-text"
               style={{
                 fontSize: 12,
                 color: "#6B7280",
                 margin: 0,
                 fontWeight: 500,
+                opacity: isSidebarCollapsed ? 0 : 1,
+                transform: isSidebarCollapsed
+                  ? "translateY(-8px) scale(0.96)"
+                  : "translateY(0) scale(1)",
+                maxHeight: isSidebarCollapsed ? 0 : 28,
+                overflow: "hidden",
+                transition:
+                  "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
               }}
             >
               Đại học Đại Nam
@@ -171,10 +220,14 @@ const AdminLayout: React.FC = () => {
           </div>
 
           <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
-            <AdminNav onNavigate={() => setIsMobileMenuOpen(false)} />
+            <AdminNav
+              collapsed={isSidebarCollapsed}
+              onNavigate={() => setIsMobileMenuOpen(false)}
+            />
           </div>
 
           <footer
+            className="sidebar-footer-text"
             style={{
               fontSize: 11,
               color: "#6B7280",
@@ -184,6 +237,14 @@ const AdminLayout: React.FC = () => {
               background:
                 "linear-gradient(180deg, #001C3D 0%, rgba(0, 28, 61, 0.8) 100%)",
               fontWeight: 500,
+              opacity: isSidebarCollapsed ? 0 : 1,
+              transform: isSidebarCollapsed
+                ? "translateY(8px)"
+                : "translateY(0)",
+              maxHeight: isSidebarCollapsed ? 0 : 80,
+              overflow: "hidden",
+              transition:
+                "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
             }}
           >
             <div style={{ marginBottom: 4, fontSize: 10, color: "#888" }}>
@@ -199,7 +260,8 @@ const AdminLayout: React.FC = () => {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            marginLeft: 260,
+            marginLeft: sidebarWidth,
+            transition: "margin-left 0.28s ease",
           }}
         >
           <header
@@ -214,11 +276,12 @@ const AdminLayout: React.FC = () => {
               alignItems: "center",
               color: "#FFFFFF",
               position: "fixed",
-              left: 260,
+              left: sidebarWidth,
               right: 0,
               top: 0,
               height: 72,
               zIndex: 20,
+              transition: "left 0.28s ease",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -238,6 +301,47 @@ const AdminLayout: React.FC = () => {
               >
                 {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                title={
+                  isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+                }
+                aria-label={
+                  isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+                }
+                style={{
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(255,255,255,0.08)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                {isSidebarCollapsed ? (
+                  <PanelLeftOpen size={18} />
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
+              </button>
+
+              <img
+                src="/logo-ios.png"
+                alt="Đại học Đại Nam"
+                style={{
+                  display: "block",
+                  height: "36px",
+                  width: "auto",
+                  filter: "brightness(0) invert(1)",
+                }}
+              />
 
               {/* Mobile Logo - Only visible on mobile */}
               <img

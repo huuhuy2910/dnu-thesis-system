@@ -1,4 +1,10 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -267,7 +273,9 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const selected = options.find((option) => String(option.value) === String(value)) ?? options[0];
+  const selected =
+    options.find((option) => String(option.value) === String(value)) ??
+    options[0];
   const selectedDisplayLabel = selected?.displayLabel ?? selected?.label ?? "-";
 
   useEffect(() => {
@@ -299,7 +307,11 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
         <span className="prepare-picker-caret">▾</span>
       </button>
       {open && !disabled && (
-        <div className="prepare-picker-menu" role="listbox" aria-label={ariaLabel}>
+        <div
+          className="prepare-picker-menu"
+          role="listbox"
+          aria-label={ariaLabel}
+        >
           {options.map((option) => {
             const active = String(option.value) === String(value);
             return (
@@ -381,7 +393,9 @@ const composeTimeSelector = (parts: TimeSelectorParts) => {
 
 const parseDateSelector = (value: string): DateSelectorParts => {
   const today = new Date();
-  const safeValue = String(value ?? "").trim().slice(0, 10);
+  const safeValue = String(value ?? "")
+    .trim()
+    .slice(0, 10);
   const [yearRaw, monthRaw, dayRaw] = safeValue.split("-");
 
   const parsedYear = Number(yearRaw);
@@ -425,10 +439,14 @@ const composeDateSelector = (parts: DateSelectorParts) => {
 };
 
 const normalizeRoomCode = (value: string | null | undefined) =>
-  String(value ?? "").trim().toUpperCase();
+  String(value ?? "")
+    .trim()
+    .toUpperCase();
 
 const normalizeTagCode = (value: unknown) =>
-  String(value ?? "").trim().toUpperCase();
+  String(value ?? "")
+    .trim()
+    .toUpperCase();
 
 const normalizeSearchText = (value: string | null | undefined) =>
   String(value ?? "")
@@ -533,7 +551,11 @@ const normalizeManualMemberRoleCode = (
 ) => {
   const normalized = normalizeSearchText(role).replace(/[^a-z0-9]+/g, " ");
 
-  if (slotIndex === 0 || normalized === "ct" || normalized.includes("chu tich")) {
+  if (
+    slotIndex === 0 ||
+    normalized === "ct" ||
+    normalized.includes("chu tich")
+  ) {
     return "CT";
   }
 
@@ -562,7 +584,11 @@ const getManualMemberSlotRoleLabel = (
   slotIndex: number,
   role: string | null | undefined,
 ) =>
-  slotIndex === 0 ? "Chủ tịch" : slotIndex === 1 ? "Thư ký" : getManualMemberRoleLabel(role);
+  slotIndex === 0
+    ? "Chủ tịch"
+    : slotIndex === 1
+      ? "Thư ký"
+      : getManualMemberRoleLabel(role);
 
 const getManualMemberRoleSelectOptions = (
   slotIndex: number,
@@ -612,7 +638,9 @@ const normalizeDefenseDateOnly = (value: string | null | undefined) => {
 };
 
 const normalizeSessionCode = (value: unknown): SessionCode => {
-  const text = String(value ?? "").trim().toUpperCase();
+  const text = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (!text) {
     return "MORNING";
   }
@@ -672,9 +700,8 @@ const extractCompactRows = (
   const payload = unwrapCompactPayload(raw);
 
   if (Array.isArray(payload)) {
-    return payload.filter(
-      (item): item is Record<string, unknown> =>
-        Boolean(item && typeof item === "object"),
+    return payload.filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object"),
     );
   }
 
@@ -683,9 +710,8 @@ const extractCompactRows = (
     for (const key of objectKeys) {
       const rows = pickCaseInsensitiveValue<unknown>(source, [key], undefined);
       if (Array.isArray(rows)) {
-        return rows.filter(
-          (item): item is Record<string, unknown> =>
-            Boolean(item && typeof item === "object"),
+        return rows.filter((item): item is Record<string, unknown> =>
+          Boolean(item && typeof item === "object"),
         );
       }
     }
@@ -719,9 +745,7 @@ const readStringList = (
 ): string[] => {
   const value = pickCaseInsensitiveValue<unknown>(item, keys, []);
   return Array.isArray(value)
-    ? value
-        .map((entry) => String(entry ?? "").trim())
-        .filter(Boolean)
+    ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
     : [];
 };
 
@@ -813,7 +837,11 @@ const mapStudentRecord = (item: Record<string, unknown>): EligibleStudent => {
       pickCaseInsensitiveValue(item, ["studentName", "StudentName"], ""),
     ).trim(),
     topicTitle: String(
-      pickCaseInsensitiveValue(item, ["topicTitle", "TopicTitle", "title", "Title"], ""),
+      pickCaseInsensitiveValue(
+        item,
+        ["topicTitle", "TopicTitle", "title", "Title"],
+        "",
+      ),
     ).trim(),
     supervisorCode: String(
       pickCaseInsensitiveValue(item, ["supervisorCode", "SupervisorCode"], ""),
@@ -853,9 +881,7 @@ const mapLecturerCapabilityRecord = (
     [],
   );
   const tags = Array.isArray(tagsValue)
-    ? tagsValue
-        .map((tag) => String(tag ?? "").trim())
-        .filter(Boolean)
+    ? tagsValue.map((tag) => String(tag ?? "").trim()).filter(Boolean)
     : [];
 
   const warningsListRaw = pickCaseInsensitiveValue<unknown>(
@@ -864,9 +890,7 @@ const mapLecturerCapabilityRecord = (
     [],
   );
   const warningsList = Array.isArray(warningsListRaw)
-    ? warningsListRaw
-        .map((entry) => String(entry ?? "").trim())
-        .filter(Boolean)
+    ? warningsListRaw.map((entry) => String(entry ?? "").trim()).filter(Boolean)
     : [];
 
   const warningRaw = pickCaseInsensitiveValue<unknown>(
@@ -971,14 +995,17 @@ const mapLecturerDefenseRecord = (
   const guideQuotaRaw = Number(
     pickCaseInsensitiveValue(item, ["guideQuota", "GuideQuota"], 0),
   );
-  const guideQuota = Number.isFinite(guideQuotaRaw)
-    ? guideQuotaRaw
-    : undefined;
+  const guideQuota = Number.isFinite(guideQuotaRaw) ? guideQuotaRaw : undefined;
 
   const currentGuidingCountRaw = Number(
     pickCaseInsensitiveValue(
       item,
-      ["currentGuidingCount", "CurrentGuidingCount", "guidedTopicCount", "GuidedTopicCount"],
+      [
+        "currentGuidingCount",
+        "CurrentGuidingCount",
+        "guidedTopicCount",
+        "GuidedTopicCount",
+      ],
       0,
     ),
   );
@@ -1001,7 +1028,12 @@ const mapLecturerDefenseRecord = (
     availability: readBooleanLike(
       pickCaseInsensitiveValue(
         item,
-        ["isInCapabilityPool", "IsInCapabilityPool", "availability", "Availability"],
+        [
+          "isInCapabilityPool",
+          "IsInCapabilityPool",
+          "availability",
+          "Availability",
+        ],
         true,
       ),
       true,
@@ -1034,12 +1066,14 @@ const mapTopicRecordToAutoTopic = (
       ),
     ).trim(),
     title: String(
-      pickCaseInsensitiveValue(item, ["topicTitle", "TopicTitle", "title", "Title"], ""),
+      pickCaseInsensitiveValue(
+        item,
+        ["topicTitle", "TopicTitle", "title", "Title"],
+        "",
+      ),
     ).trim(),
     tagCodes: Array.isArray(tagsValue)
-      ? tagsValue
-          .map((entry) => String(entry ?? "").trim())
-          .filter(Boolean)
+      ? tagsValue.map((entry) => String(entry ?? "").trim()).filter(Boolean)
       : [],
     studentCode: String(
       pickCaseInsensitiveValue(item, ["studentCode", "StudentCode"], ""),
@@ -1069,7 +1103,9 @@ const CommitteeManagement: React.FC = () => {
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [roomCatalog, setRoomCatalog] = useState<string[]>([]);
   const [tagCatalog, setTagCatalog] = useState<string[]>([]);
-  const [tagNameByCode, setTagNameByCode] = useState<Record<string, string>>({});
+  const [tagNameByCode, setTagNameByCode] = useState<Record<string, string>>(
+    {},
+  );
   const [morningStart, setMorningStart] = useState("08:00");
   const [morningEnd, setMorningEnd] = useState("11:30");
   const [afternoonStart, setAfternoonStart] = useState("13:30");
@@ -1127,12 +1163,10 @@ const CommitteeManagement: React.FC = () => {
   const [manualName, setManualName] = useState("Hội đồng mới");
   const [manualDefenseDate, setManualDefenseDate] = useState("2026-04-24");
   const [manualRoom, setManualRoom] = useState("");
-  const [manualScheduleMode, setManualScheduleMode] = useState<CouncilScheduleMode>(
-    "FULL_DAY",
-  );
-  const [manualSessionCode, setManualSessionCode] = useState<SessionCode>(
-    "MORNING",
-  );
+  const [manualScheduleMode, setManualScheduleMode] =
+    useState<CouncilScheduleMode>("FULL_DAY");
+  const [manualSessionCode, setManualSessionCode] =
+    useState<SessionCode>("MORNING");
   const [manualStartTime, setManualStartTime] = useState(morningStart);
   const [manualEndTime, setManualEndTime] = useState(afternoonEnd);
   const [manualCouncilTags, setManualCouncilTags] = useState<string[]>([]);
@@ -1148,7 +1182,9 @@ const CommitteeManagement: React.FC = () => {
   const [manualUnrelatedStudents, setManualUnrelatedStudents] = useState<
     string[]
   >([]);
-  const [manualAssignments, setManualAssignments] = useState<CouncilAssignment[]>([]);
+  const [manualAssignments, setManualAssignments] = useState<
+    CouncilAssignment[]
+  >([]);
   const [manualMembers, setManualMembers] = useState<CouncilMember[]>(() =>
     buildDefaultManualMembers(FIXED_MEMBERS_PER_COUNCIL),
   );
@@ -1171,10 +1207,22 @@ const CommitteeManagement: React.FC = () => {
   } | null>(null);
   const [manualReadOnly, setManualReadOnly] = useState(false);
 
-  const notifyError = useCallback((message: string) => addToast(message, "error"), [addToast]);
-  const notifySuccess = useCallback((message: string) => addToast(message, "success"), [addToast]);
-  const notifyWarning = useCallback((message: string) => addToast(message, "warning"), [addToast]);
-  const notifyInfo = useCallback((message: string) => addToast(message, "info"), [addToast]);
+  const notifyError = useCallback(
+    (message: string) => addToast(message, "error"),
+    [addToast],
+  );
+  const notifySuccess = useCallback(
+    (message: string) => addToast(message, "success"),
+    [addToast],
+  );
+  const notifyWarning = useCallback(
+    (message: string) => addToast(message, "warning"),
+    [addToast],
+  );
+  const notifyInfo = useCallback(
+    (message: string) => addToast(message, "info"),
+    [addToast],
+  );
 
   const [allowFinalizeAfterWarning, setAllowFinalizeAfterWarning] =
     useState(false);
@@ -1229,9 +1277,12 @@ const CommitteeManagement: React.FC = () => {
 
     const resolvePeriod = async () => {
       try {
-        const response = await fetchData<ApiResponse<unknown>>("/defense-periods", {
-          method: "GET",
-        });
+        const response = await fetchData<ApiResponse<unknown>>(
+          "/defense-periods",
+          {
+            method: "GET",
+          },
+        );
         const payload = readEnvelopeData<unknown>(response);
         const fallbackPeriodId = extractDefensePeriodId(payload);
         if (!cancelled && fallbackPeriodId != null) {
@@ -1305,7 +1356,10 @@ const CommitteeManagement: React.FC = () => {
         }
         const source = item as Record<string, unknown>;
         const lowered = new Map(
-          Object.entries(source).map(([key, value]) => [key.toLowerCase(), value]),
+          Object.entries(source).map(([key, value]) => [
+            key.toLowerCase(),
+            value,
+          ]),
         );
         for (const key of keys) {
           const value = normalizeText(lowered.get(key.toLowerCase()));
@@ -1334,7 +1388,9 @@ const CommitteeManagement: React.FC = () => {
       if (notFoundError) {
         throw notFoundError;
       }
-      throw new Error(`Không tìm thấy endpoint khả dụng trong danh sách: ${paths.join(", ")}`);
+      throw new Error(
+        `Không tìm thấy endpoint khả dụng trong danh sách: ${paths.join(", ")}`,
+      );
     };
 
     const getSetupSnapshot = async () => {
@@ -1410,7 +1466,9 @@ const CommitteeManagement: React.FC = () => {
             ...(payload ?? {}),
             ...(idempotencyKey ? { idempotencyKey } : {}),
           },
-          headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+          headers: idempotencyKey
+            ? { "Idempotency-Key": idempotencyKey }
+            : undefined,
         },
       );
 
@@ -1427,20 +1485,28 @@ const CommitteeManagement: React.FC = () => {
             mode,
             request: payload ?? {},
           },
-          headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+          headers: idempotencyKey
+            ? { "Idempotency-Key": idempotencyKey }
+            : undefined,
         },
       );
 
     return {
       getSetupSnapshot,
       sync: (idempotencyKey?: string) =>
-        runLifecycleAction("SYNC", { retryOnFailure: true }, idempotencyKey ?? makeIdempotencyKey("SYNC")),
+        runLifecycleAction(
+          "SYNC",
+          { retryOnFailure: true },
+          idempotencyKey ?? makeIdempotencyKey("SYNC"),
+        ),
       getStudents: async (eligible?: boolean) => {
         const response = await getSetupSnapshot();
         const setupRaw = readEnvelopeData<unknown>(response);
         const setupPayload = unwrapCompactPayload(setupRaw);
         const setupObject =
-          setupPayload && typeof setupPayload === "object" && !Array.isArray(setupPayload)
+          setupPayload &&
+          typeof setupPayload === "object" &&
+          !Array.isArray(setupPayload)
             ? (setupPayload as Record<string, unknown>)
             : {};
 
@@ -1465,7 +1531,9 @@ const CommitteeManagement: React.FC = () => {
             const topicRaw = readEnvelopeData<unknown>(topicResponse);
             const topicPayload = unwrapCompactPayload(topicRaw);
             const topicObject =
-              topicPayload && typeof topicPayload === "object" && !Array.isArray(topicPayload)
+              topicPayload &&
+              typeof topicPayload === "object" &&
+              !Array.isArray(topicPayload)
                 ? (topicPayload as Record<string, unknown>)
                 : {};
             const topicData = pickSection<unknown>(
@@ -1673,13 +1741,20 @@ const CommitteeManagement: React.FC = () => {
         const setupRaw = readEnvelopeData<unknown>(response);
         const setupPayload = unwrapCompactPayload(setupRaw);
         const setupObject =
-          setupPayload && typeof setupPayload === "object" && !Array.isArray(setupPayload)
+          setupPayload &&
+          typeof setupPayload === "object" &&
+          !Array.isArray(setupPayload)
             ? (setupPayload as Record<string, unknown>)
             : {};
 
         const lecturersSource = pickSection<unknown>(
           setupObject,
-          ["lecturers", "Lecturers", "lecturerCapabilities", "LecturerCapabilities"],
+          [
+            "lecturers",
+            "Lecturers",
+            "lecturerCapabilities",
+            "LecturerCapabilities",
+          ],
           setupPayload,
         );
         let rows = extractCompactRows(lecturersSource, [
@@ -1697,10 +1772,7 @@ const CommitteeManagement: React.FC = () => {
           rows = participantsSnapshot?.rows ?? [];
         }
 
-        return toCompatResponse(
-          response,
-          rows,
-        );
+        return toCompatResponse(response, rows);
       },
       updateConfig: (payload: {
         startDate: string;
@@ -1773,13 +1845,15 @@ const CommitteeManagement: React.FC = () => {
               Object.entries(query).map(([key, value]) => [key, String(value)]),
             ).toString()
           : "";
-        const response = await fetchData<ApiResponse<Record<string, unknown> | Array<Record<string, unknown>>>>(
+        const response = await fetchData<
+          ApiResponse<Record<string, unknown> | Array<Record<string, unknown>>>
+        >(
           `${defensePeriodBase}/councils${queryString ? `?${queryString}` : ""}`,
           { method: "GET" },
         );
         const data = unwrapCompactPayload(
           readEnvelopeData<
-          Record<string, unknown> | Array<Record<string, unknown>>
+            Record<string, unknown> | Array<Record<string, unknown>>
           >(response),
         );
         if (Array.isArray(data)) {
@@ -1792,24 +1866,41 @@ const CommitteeManagement: React.FC = () => {
             [],
           );
           if (Array.isArray(items) && items.length > 0) {
-            return toCompatResponse(response, { ...(data as Record<string, unknown>), items });
+            return toCompatResponse(response, {
+              ...(data as Record<string, unknown>),
+              items,
+            });
           }
-          return toCompatResponse(response, { items: [data as Record<string, unknown>] });
+          return toCompatResponse(response, {
+            items: [data as Record<string, unknown>],
+          });
         }
-        return toCompatResponse(response, { items: [] as Array<Record<string, unknown>> });
+        return toCompatResponse(response, {
+          items: [] as Array<Record<string, unknown>>,
+        });
       },
       getCouncilById: async (councilId: string) => {
-        const response = await fetchData<ApiResponse<Record<string, unknown> | Array<Record<string, unknown>>>>(
+        const response = await fetchData<
+          ApiResponse<Record<string, unknown> | Array<Record<string, unknown>>>
+        >(
           `${defensePeriodBase}/councils?councilId=${encodeURIComponent(councilId)}`,
           { method: "GET" },
         );
         const data = unwrapCompactPayload(
-          readEnvelopeData<Record<string, unknown> | Array<Record<string, unknown>>>(response),
+          readEnvelopeData<
+            Record<string, unknown> | Array<Record<string, unknown>>
+          >(response),
         );
         if (Array.isArray(data)) {
-          return toCompatResponse(response, (data[0] ?? {}) as Record<string, unknown>);
+          return toCompatResponse(
+            response,
+            (data[0] ?? {}) as Record<string, unknown>,
+          );
         }
-        return toCompatResponse(response, (data ?? {}) as Record<string, unknown>);
+        return toCompatResponse(
+          response,
+          (data ?? {}) as Record<string, unknown>,
+        );
       },
       createCouncil: (payload: Record<string, unknown>) =>
         fetchData<ApiResponse<Record<string, unknown>>>(
@@ -1949,10 +2040,7 @@ const CommitteeManagement: React.FC = () => {
             },
           },
         ),
-      finalize: (
-        allowFinalizeAfterWarning: boolean,
-        idempotencyKey?: string,
-      ) =>
+      finalize: (allowFinalizeAfterWarning: boolean, idempotencyKey?: string) =>
         (async () => {
           const finalizeIdempotencyKey =
             idempotencyKey ?? makeIdempotencyKey("FINALIZE");
@@ -1967,82 +2055,90 @@ const CommitteeManagement: React.FC = () => {
             finalizeIdempotencyKey,
           );
           const data = readEnvelopeData<unknown>(response);
-          const value = typeof data === "boolean" ? data : readEnvelopeSuccess(response);
+          const value =
+            typeof data === "boolean" ? data : readEnvelopeSuccess(response);
           return toCompatResponse(response, value);
         })(),
     };
   }, [defensePeriodBase, defensePeriodId]);
-  const parseApiEnvelope = useCallback(<T,>(
-    response: ApiResponse<T> | null | undefined,
-  ) => {
-    if (!response) {
-      return { ok: false, data: null as T | null };
-    }
+  const parseApiEnvelope = useCallback(
+    <T,>(response: ApiResponse<T> | null | undefined) => {
+      if (!response) {
+        return { ok: false, data: null as T | null };
+      }
 
-    const message = readEnvelopeMessage(response);
-    const allowedActions = readEnvelopeAllowedActions(response);
-    const warningMessages = Array.from(
-      new Set(
-        readEnvelopeWarnings(response)
-          .map((warning) => {
-            const rawMessage = String(warning.message ?? "").trim();
-            const rawCode = String(warning.code ?? "").trim().toUpperCase();
-            if (!rawMessage) {
-              return "";
-            }
+      const message = readEnvelopeMessage(response);
+      const allowedActions = readEnvelopeAllowedActions(response);
+      const warningMessages = Array.from(
+        new Set(
+          readEnvelopeWarnings(response)
+            .map((warning) => {
+              const rawMessage = String(warning.message ?? "").trim();
+              const rawCode = String(warning.code ?? "")
+                .trim()
+                .toUpperCase();
+              if (!rawMessage) {
+                return "";
+              }
 
-            // Do not spam toast for readiness soft warnings.
-            if (
-              rawCode.startsWith("UC2.READINESS.") ||
-              rawMessage.toUpperCase().startsWith("UC2.READINESS.")
-            ) {
-              return "";
-            }
+              // Do not spam toast for readiness soft warnings.
+              if (
+                rawCode.startsWith("UC2.READINESS.") ||
+                rawMessage.toUpperCase().startsWith("UC2.READINESS.")
+              ) {
+                return "";
+              }
 
-            const translated = translateBackendMessage(rawMessage);
-            return translated || rawMessage;
-          })
-          .filter((item): item is string => Boolean(item)),
-      ),
-    );
-    const success = readEnvelopeSuccess(response);
-    const errorMessages = readEnvelopeErrorMessages(response);
+              const translated = translateBackendMessage(rawMessage);
+              return translated || rawMessage;
+            })
+            .filter((item): item is string => Boolean(item)),
+        ),
+      );
+      const success = readEnvelopeSuccess(response);
+      const errorMessages = readEnvelopeErrorMessages(response);
 
-    setApiSignal({
-      at: new Date().toLocaleTimeString("vi-VN"),
-      traceId: response.traceId ?? response.TraceId,
-      concurrencyToken: readEnvelopeConcurrencyToken(response) ?? undefined,
-      idempotencyReplay: readEnvelopeIdempotencyReplay(response),
-      message: message ?? undefined,
-    });
+      setApiSignal({
+        at: new Date().toLocaleTimeString("vi-VN"),
+        traceId: response.traceId ?? response.TraceId,
+        concurrencyToken: readEnvelopeConcurrencyToken(response) ?? undefined,
+        idempotencyReplay: readEnvelopeIdempotencyReplay(response),
+        message: message ?? undefined,
+      });
 
-    if (allowedActions.length > 0) {
-      setBackendAllowedActions(allowedActions);
-    }
+      if (allowedActions.length > 0) {
+        setBackendAllowedActions(allowedActions);
+      }
 
-    if (success && message) {
-      notifyInfo(translateBackendMessage(message));
-    }
+      if (success && message) {
+        notifyInfo(translateBackendMessage(message));
+      }
 
-    if (warningMessages.length) {
-      notifyWarning(warningMessages.join(" | "));
-    }
+      if (warningMessages.length) {
+        notifyWarning(warningMessages.join(" | "));
+      }
 
-    if (!success) {
-      const translatedMessage = message ? translateBackendMessage(message) : "";
-      const messageGroup =
-        errorMessages.length > 0 ? errorMessages.join(" | ") : translatedMessage;
-      if (messageGroup) {
-        if (isNoDataMessage(messageGroup)) {
-          notifyInfo("Chưa có dữ liệu để hiển thị.");
-        } else {
-          notifyError(messageGroup);
+      if (!success) {
+        const translatedMessage = message
+          ? translateBackendMessage(message)
+          : "";
+        const messageGroup =
+          errorMessages.length > 0
+            ? errorMessages.join(" | ")
+            : translatedMessage;
+        if (messageGroup) {
+          if (isNoDataMessage(messageGroup)) {
+            notifyInfo("Chưa có dữ liệu để hiển thị.");
+          } else {
+            notifyError(messageGroup);
+          }
         }
       }
-    }
 
-    return { ok: success, data: readEnvelopeData<T>(response) };
-  }, [notifyError, notifyInfo, notifyWarning]);
+      return { ok: success, data: readEnvelopeData<T>(response) };
+    },
+    [notifyError, notifyInfo, notifyWarning],
+  );
 
   const extractApiErrorMessage = useCallback(
     (source: unknown, fallback: string) => {
@@ -2152,7 +2248,7 @@ const CommitteeManagement: React.FC = () => {
         ? String(payload.message)
         : readinessPayload?.message
           ? String(readinessPayload.message)
-          : warnings[0] ?? "",
+          : (warnings[0] ?? ""),
     );
   };
 
@@ -2201,16 +2297,20 @@ const CommitteeManagement: React.FC = () => {
       missingPeriodWarningsRef.current = false;
 
       try {
-        const [setupSnapshotRes, roomCatalogRes, tagCatalogRes, topicsRes, lecturerDefenseRes] = await Promise.all([
+        const [
+          setupSnapshotRes,
+          roomCatalogRes,
+          tagCatalogRes,
+          topicsRes,
+          lecturerDefenseRes,
+        ] = await Promise.all([
           loadOptionalResponse(
             "setup-snapshot",
             `${defensePeriodBase}/setup/snapshot`,
             () => adminApi.getSetupSnapshot(),
           ),
-          loadOptionalResponse(
-            "room-catalog",
-            "/rooms/get-list",
-            () => adminApi.getRoomCatalog(),
+          loadOptionalResponse("room-catalog", "/rooms/get-list", () =>
+            adminApi.getRoomCatalog(),
           ),
           loadOptionalResponse(
             "tag-catalog",
@@ -2280,18 +2380,18 @@ const CommitteeManagement: React.FC = () => {
         const topicsParsed =
           topicsRes != null ? parseApiEnvelope(topicsRes) : null;
         const topicsData = extractCompactRows(
-          ((topicsParsed?.data ?? {}) as Record<string, unknown>),
-          [
-          "items",
-          "Items",
-          "topics",
-          "Topics",
-          ],
+          (topicsParsed?.data ?? {}) as Record<string, unknown>,
+          ["items", "Items", "topics", "Topics"],
         );
 
         const lecturersSource = pickCaseInsensitiveValue<unknown>(
           setupObject,
-          ["lecturers", "Lecturers", "lecturerCapabilities", "LecturerCapabilities"],
+          [
+            "lecturers",
+            "Lecturers",
+            "lecturerCapabilities",
+            "LecturerCapabilities",
+          ],
           [],
         );
         const capabilityData = extractCompactRows(lecturersSource, [
@@ -2337,19 +2437,18 @@ const CommitteeManagement: React.FC = () => {
           ),
         ).sort((a, b) => a.localeCompare(b, "vi"));
 
-        const nextTagNameByCode = tagCatalogEntries.reduce<Record<string, string>>(
-          (accumulator, entry) => {
-            const normalizedCode = normalizeTagCode(entry.tagCode);
-            if (!normalizedCode) {
-              return accumulator;
-            }
-            accumulator[normalizedCode] = String(
-              entry.tagName ?? entry.tagCode ?? "",
-            ).trim() || String(entry.tagCode ?? "").trim();
+        const nextTagNameByCode = tagCatalogEntries.reduce<
+          Record<string, string>
+        >((accumulator, entry) => {
+          const normalizedCode = normalizeTagCode(entry.tagCode);
+          if (!normalizedCode) {
             return accumulator;
-          },
-          {},
-        );
+          }
+          accumulator[normalizedCode] =
+            String(entry.tagName ?? entry.tagCode ?? "").trim() ||
+            String(entry.tagCode ?? "").trim();
+          return accumulator;
+        }, {});
 
         if (Object.keys(nextTagNameByCode).length === 0) {
           tagCatalogData.forEach((tagCode) => {
@@ -2365,7 +2464,9 @@ const CommitteeManagement: React.FC = () => {
             ? parseApiEnvelope(lecturerDefenseRes)
             : null;
         const lecturerDefenseData = lecturerDefenseParsed?.ok
-          ? ((lecturerDefenseParsed.data ?? []) as Array<Record<string, unknown>>)
+          ? ((lecturerDefenseParsed.data ?? []) as Array<
+              Record<string, unknown>
+            >)
           : [];
         const mappedLecturerDefense = lecturerDefenseData
           .map((item) => mapLecturerDefenseRecord(item))
@@ -2385,7 +2486,9 @@ const CommitteeManagement: React.FC = () => {
           );
         }
 
-        const mappedStudents = (studentsData.length > 0 ? studentsData : topicsData)
+        const mappedStudents = (
+          studentsData.length > 0 ? studentsData : topicsData
+        )
           .map((item) => mapStudentRecord(item))
           .filter((item) => item.studentCode.length > 0);
         setStudents(mappedStudents);
@@ -2406,10 +2509,13 @@ const CommitteeManagement: React.FC = () => {
 
         const degreeByLecturerCode = new Map(
           mappedLecturerDefense
-            .map((lecturer) => [
-              String(lecturer.lecturerCode ?? "").trim(),
-              String(lecturer.degree ?? "").trim(),
-            ] as const)
+            .map(
+              (lecturer) =>
+                [
+                  String(lecturer.lecturerCode ?? "").trim(),
+                  String(lecturer.degree ?? "").trim(),
+                ] as const,
+            )
             .filter(([code]) => code.length > 0),
         );
 
@@ -2422,9 +2528,7 @@ const CommitteeManagement: React.FC = () => {
             }
             const fallbackDegree =
               degreeByLecturerCode.get(item.lecturerCode) ?? "";
-            return fallbackDegree
-              ? { ...item, degree: fallbackDegree }
-              : item;
+            return fallbackDegree ? { ...item, degree: fallbackDegree } : item;
           });
         setLecturerCapabilities(mappedCapabilities);
 
@@ -2543,11 +2647,7 @@ const CommitteeManagement: React.FC = () => {
           );
           const configuredEndDate = normalizeDefenseDateOnly(
             String(
-              pickCaseInsensitiveValue(
-                configData,
-                ["endDate", "EndDate"],
-                "",
-              ),
+              pickCaseInsensitiveValue(configData, ["endDate", "EndDate"], ""),
             ),
           );
           setSelectedRooms(
@@ -2625,7 +2725,9 @@ const CommitteeManagement: React.FC = () => {
           );
         }
 
-        const rawItems = (councilsData?.items ?? []) as Array<Record<string, unknown>>;
+        const rawItems = (councilsData?.items ?? []) as Array<
+          Record<string, unknown>
+        >;
 
         const extractStudentCodes = (value: unknown) => {
           if (!Array.isArray(value)) {
@@ -2659,17 +2761,23 @@ const CommitteeManagement: React.FC = () => {
                   ["committeeCode", "CommitteeCode"],
                   `HD-${String(index + 1).padStart(2, "0")}`,
                 ),
-              ) ?? `HD-${String(index + 1).padStart(2, "0")}`;
+              ).trim() || `HD-${String(index + 1).padStart(2, "0")}`;
 
-            const assignmentRows = (Array.isArray(
-              pickCaseInsensitiveValue(item, ["assignments", "Assignments"], []),
-            )
-              ? (pickCaseInsensitiveValue(
+            const assignmentRows = (
+              Array.isArray(
+                pickCaseInsensitiveValue(
                   item,
                   ["assignments", "Assignments"],
                   [],
-                ) as Array<Record<string, unknown>>)
-              : [])
+                ),
+              )
+                ? (pickCaseInsensitiveValue(
+                    item,
+                    ["assignments", "Assignments"],
+                    [],
+                  ) as Array<Record<string, unknown>>)
+                : []
+            )
               .map((assignment, assignmentIndex) => {
                 const sessionCode = normalizeSessionCode(
                   pickCaseInsensitiveValue(
@@ -2709,33 +2817,41 @@ const CommitteeManagement: React.FC = () => {
                       )
                     : undefined,
                   sessionCode,
-                  startTime: normalizeTimeOnly(
-                    String(
-                      pickCaseInsensitiveValue(
-                        assignment,
-                        ["startTime", "StartTime"],
-                        "",
+                  startTime:
+                    normalizeTimeOnly(
+                      String(
+                        pickCaseInsensitiveValue(
+                          assignment,
+                          ["startTime", "StartTime"],
+                          "",
+                        ),
                       ),
-                    ),
-                  ) || undefined,
-                  endTime: normalizeTimeOnly(
-                    String(
-                      pickCaseInsensitiveValue(
-                        assignment,
-                        ["endTime", "EndTime"],
-                        "",
+                    ) || undefined,
+                  endTime:
+                    normalizeTimeOnly(
+                      String(
+                        pickCaseInsensitiveValue(
+                          assignment,
+                          ["endTime", "EndTime"],
+                          "",
+                        ),
                       ),
-                    ),
-                  ) || undefined,
-                  scheduledAt: normalizeDefenseDateOnly(
-                    String(
-                      pickCaseInsensitiveValue(
-                        assignment,
-                        ["scheduledAt", "ScheduledAt", "defenseDate", "DefenseDate"],
-                        "",
+                    ) || undefined,
+                  scheduledAt:
+                    normalizeDefenseDateOnly(
+                      String(
+                        pickCaseInsensitiveValue(
+                          assignment,
+                          [
+                            "scheduledAt",
+                            "ScheduledAt",
+                            "defenseDate",
+                            "DefenseDate",
+                          ],
+                          "",
+                        ),
                       ),
-                    ),
-                  ) || undefined,
+                    ) || undefined,
                   orderIndex:
                     Number(
                       pickCaseInsensitiveValue(
@@ -2743,17 +2859,24 @@ const CommitteeManagement: React.FC = () => {
                         ["orderIndex", "OrderIndex"],
                         0,
                       ),
-                    ) ||
-                    assignmentIndex + 1,
+                    ) || assignmentIndex + 1,
                 };
               })
               .filter((assignment) => assignment.studentCode);
 
             const explicitMorning = extractStudentCodes(
-              pickCaseInsensitiveValue(item, ["morningStudents", "MorningStudents"], []),
+              pickCaseInsensitiveValue(
+                item,
+                ["morningStudents", "MorningStudents"],
+                [],
+              ),
             );
             const explicitAfternoon = extractStudentCodes(
-              pickCaseInsensitiveValue(item, ["afternoonStudents", "AfternoonStudents"], []),
+              pickCaseInsensitiveValue(
+                item,
+                ["afternoonStudents", "AfternoonStudents"],
+                [],
+              ),
             );
             const derivedMorning = assignmentRows
               .filter((assignment) => assignment.sessionCode === "MORNING")
@@ -2768,17 +2891,25 @@ const CommitteeManagement: React.FC = () => {
                 Number(
                   pickCaseInsensitiveValue(
                     item,
-                    ["councilId", "CouncilId", "committeeId", "CommitteeId", "id", "Id"],
+                    [
+                      "councilId",
+                      "CouncilId",
+                      "committeeId",
+                      "CommitteeId",
+                      "id",
+                      "Id",
+                    ],
                     0,
                   ),
                 ) || undefined,
-              name: String(
-                pickCaseInsensitiveValue(
-                  item,
-                  ["name", "Name", "councilName", "CouncilName"],
-                  councilCode,
-                ),
-              ).trim() || councilCode,
+              name:
+                String(
+                  pickCaseInsensitiveValue(
+                    item,
+                    ["name", "Name", "councilName", "CouncilName"],
+                    councilCode,
+                  ),
+                ).trim() || councilCode,
               concurrencyToken: pickCaseInsensitiveValue(
                 item,
                 ["concurrencyToken", "ConcurrencyToken"],
@@ -2793,12 +2924,16 @@ const CommitteeManagement: React.FC = () => {
                   )
                 : undefined,
               room: normalizeRoomCode(
-                String(
-                  pickCaseInsensitiveValue(item, ["room", "Room"], ""),
-                ) || selectedRoomsRef.current[0] || "",
+                String(pickCaseInsensitiveValue(item, ["room", "Room"], "")) ||
+                  selectedRoomsRef.current[0] ||
+                  "",
               ),
               defenseDate: normalizeDefenseDateOnly(
-                pickCaseInsensitiveValue(item, ["defenseDate", "DefenseDate"], "")
+                pickCaseInsensitiveValue(
+                  item,
+                  ["defenseDate", "DefenseDate"],
+                  "",
+                )
                   ? String(
                       pickCaseInsensitiveValue(
                         item,
@@ -2811,13 +2946,19 @@ const CommitteeManagement: React.FC = () => {
               session: "Sang",
               slotId: `${councilCode}-FULLDAY`,
               councilTags: Array.isArray(
-                pickCaseInsensitiveValue(item, ["councilTags", "CouncilTags"], []),
+                pickCaseInsensitiveValue(
+                  item,
+                  ["councilTags", "CouncilTags"],
+                  [],
+                ),
               )
-                ? (pickCaseInsensitiveValue(
-                    item,
-                    ["councilTags", "CouncilTags"],
-                    [],
-                  ) as unknown[])
+                ? (
+                    pickCaseInsensitiveValue(
+                      item,
+                      ["councilTags", "CouncilTags"],
+                      [],
+                    ) as unknown[]
+                  )
                     .map((tag) => String(tag ?? "").trim())
                     .filter(Boolean)
                 : [],
@@ -2829,13 +2970,19 @@ const CommitteeManagement: React.FC = () => {
                   : derivedAfternoon,
               assignments: assignmentRows,
               forbiddenLecturers: Array.isArray(
-                pickCaseInsensitiveValue(item, ["forbiddenLecturers", "ForbiddenLecturers"], []),
+                pickCaseInsensitiveValue(
+                  item,
+                  ["forbiddenLecturers", "ForbiddenLecturers"],
+                  [],
+                ),
               )
-                ? (pickCaseInsensitiveValue(
-                    item,
-                    ["forbiddenLecturers", "ForbiddenLecturers"],
-                    [],
-                  ) as unknown[])
+                ? (
+                    pickCaseInsensitiveValue(
+                      item,
+                      ["forbiddenLecturers", "ForbiddenLecturers"],
+                      [],
+                    ) as unknown[]
+                  )
                     .map((entry) => String(entry ?? "").trim())
                     .filter(Boolean)
                 : [],
@@ -2847,20 +2994,34 @@ const CommitteeManagement: React.FC = () => {
                     ["members", "Members"],
                     [],
                   ) as Array<Record<string, unknown>>)
-                : [])
-                .map((m) => ({
-                  role: String(
-                    pickCaseInsensitiveValue(m, ["role", "Role"], "UV"),
+                : []
+              ).map((m) => ({
+                role: String(
+                  pickCaseInsensitiveValue(m, ["role", "Role"], "UV"),
+                ),
+                lecturerCode: String(
+                  pickCaseInsensitiveValue(
+                    m,
+                    ["lecturerCode", "LecturerCode"],
+                    "",
                   ),
-                  lecturerCode: String(
-                    pickCaseInsensitiveValue(m, ["lecturerCode", "LecturerCode"], ""),
+                ),
+                lecturerName: String(
+                  pickCaseInsensitiveValue(
+                    m,
+                    ["lecturerName", "LecturerName"],
+                    "",
                   ),
-                  lecturerName: String(
-                    pickCaseInsensitiveValue(m, ["lecturerName", "LecturerName"], ""),
-                  ),
-                })),
-              warning: pickCaseInsensitiveValue(item, ["warning", "Warning"], "")
-                ? String(pickCaseInsensitiveValue(item, ["warning", "Warning"], ""))
+                ),
+              })),
+              warning: pickCaseInsensitiveValue(
+                item,
+                ["warning", "Warning"],
+                "",
+              )
+                ? String(
+                    pickCaseInsensitiveValue(item, ["warning", "Warning"], ""),
+                  )
                 : undefined,
             };
           });
@@ -2878,7 +3039,14 @@ const CommitteeManagement: React.FC = () => {
     };
 
     void hydrateFromBackend();
-  }, [adminApi, defensePeriodId, notifyWarning, parseApiEnvelope]);
+  }, [
+    adminApi,
+    defensePeriodBase,
+    defensePeriodId,
+    loadOptionalResponse,
+    notifyWarning,
+    parseApiEnvelope,
+  ]);
 
   const validRows = useMemo(
     () => students.filter((item: EligibleStudent) => item.valid),
@@ -2917,8 +3085,7 @@ const CommitteeManagement: React.FC = () => {
       const current = parseTimeSelector(currentValue);
       const updated: TimeSelectorParts = {
         ...current,
-        [key]:
-          key === "meridiem" ? fixedMeridiem : toTwoDigits(nextValue),
+        [key]: key === "meridiem" ? fixedMeridiem : toTwoDigits(nextValue),
       } as TimeSelectorParts;
       updated.meridiem = fixedMeridiem;
       setConfigSaved(false);
@@ -3075,7 +3242,9 @@ const CommitteeManagement: React.FC = () => {
             }
           />
         </div>
-        <div className="prepare-date-help">Định dạng: {formatDateLabel(value)}</div>
+        <div className="prepare-date-help">
+          Định dạng: {formatDateLabel(value)}
+        </div>
       </label>
     );
   };
@@ -3089,7 +3258,9 @@ const CommitteeManagement: React.FC = () => {
     lecturerCapabilities.forEach((item: LecturerCapability) =>
       item.tags.forEach((tag) => values.add(tag)),
     );
-    drafts.forEach((item) => item.councilTags.forEach((tag) => values.add(tag)));
+    drafts.forEach((item) =>
+      item.councilTags.forEach((tag) => values.add(tag)),
+    );
     configCouncilTags.forEach((tag) => values.add(tag));
     manualCouncilTags.forEach((tag) => values.add(tag));
     return Array.from(values)
@@ -3105,8 +3276,7 @@ const CommitteeManagement: React.FC = () => {
   ]);
 
   const eligibleStudents = useMemo(
-    () =>
-      validRows.filter((item: EligibleStudent) => item.isEligible),
+    () => validRows.filter((item: EligibleStudent) => item.isEligible),
     [validRows],
   );
 
@@ -3125,9 +3295,7 @@ const CommitteeManagement: React.FC = () => {
   const getTagDisplayList = useCallback(
     (tags: string[]) =>
       Array.from(
-        new Set(
-          mergeStringLists(tags).map((tag) => getTagDisplayName(tag)),
-        ),
+        new Set(mergeStringLists(tags).map((tag) => getTagDisplayName(tag))),
       ),
     [getTagDisplayName],
   );
@@ -3165,7 +3333,8 @@ const CommitteeManagement: React.FC = () => {
   const assignedTopicsCount = useMemo(
     () =>
       councilRows.reduce(
-        (sum, row) => sum + row.morningStudents.length + row.afternoonStudents.length,
+        (sum, row) =>
+          sum + row.morningStudents.length + row.afternoonStudents.length,
         0,
       ),
     [councilRows],
@@ -3173,7 +3342,10 @@ const CommitteeManagement: React.FC = () => {
 
   const councilCompletionPercent = useMemo(() => {
     if (!validRows.length) return 0;
-    return Math.min(100, Math.round((assignedTopicsCount / validRows.length) * 100));
+    return Math.min(
+      100,
+      Math.round((assignedTopicsCount / validRows.length) * 100),
+    );
   }, [assignedTopicsCount, validRows.length]);
 
   const latestCouncilOverview = useMemo(() => {
@@ -3217,8 +3389,8 @@ const CommitteeManagement: React.FC = () => {
 
   const autoRoomOptions = useMemo(
     () =>
-      normalizeRoomCodeList([...availableAutoRooms, ...roomOptions]).sort((a, b) =>
-        a.localeCompare(b, "vi"),
+      normalizeRoomCodeList([...availableAutoRooms, ...roomOptions]).sort(
+        (a, b) => a.localeCompare(b, "vi"),
       ),
     [availableAutoRooms, roomOptions],
   );
@@ -3347,24 +3519,16 @@ const CommitteeManagement: React.FC = () => {
         "MORNING",
       ),
     );
-    const startTime = normalizeTimeOnly(
-      String(
-        pickCaseInsensitiveValue(
-          record,
-          ["startTime", "StartTime"],
-          "",
+    const startTime =
+      normalizeTimeOnly(
+        String(
+          pickCaseInsensitiveValue(record, ["startTime", "StartTime"], ""),
         ),
-      ),
-    ) || undefined;
-    const endTime = normalizeTimeOnly(
-      String(
-        pickCaseInsensitiveValue(
-          record,
-          ["endTime", "EndTime"],
-          "",
-        ),
-      ),
-    ) || undefined;
+      ) || undefined;
+    const endTime =
+      normalizeTimeOnly(
+        String(pickCaseInsensitiveValue(record, ["endTime", "EndTime"], "")),
+      ) || undefined;
     const assignments = Array.isArray(item.assignments) ? item.assignments : [];
     const assignmentRows: CouncilAssignment[] = assignments
       .map((assignment, assignmentIndex) => {
@@ -3391,8 +3555,9 @@ const CommitteeManagement: React.FC = () => {
             normalizeTimeOnly(String(assignmentRecord.endTime ?? "")) ||
             undefined,
           scheduledAt:
-            normalizeDefenseDateOnly(String(assignmentRecord.scheduledAt ?? "")) ||
-            undefined,
+            normalizeDefenseDateOnly(
+              String(assignmentRecord.scheduledAt ?? ""),
+            ) || undefined,
           orderIndex:
             Number(assignmentRecord.orderIndex ?? 0) || assignmentIndex + 1,
         };
@@ -3416,7 +3581,14 @@ const CommitteeManagement: React.FC = () => {
         Number(
           pickCaseInsensitiveValue(
             record,
-            ["councilId", "CouncilId", "committeeId", "CommitteeId", "id", "Id"],
+            [
+              "councilId",
+              "CouncilId",
+              "committeeId",
+              "CommitteeId",
+              "id",
+              "Id",
+            ],
             0,
           ),
         ) || undefined,
@@ -3429,7 +3601,9 @@ const CommitteeManagement: React.FC = () => {
           ),
         ).trim() || code,
       concurrencyToken: item.concurrencyToken ?? undefined,
-      room: normalizeRoomCode(item.room ?? selectedRooms[0] ?? roomOptions[0] ?? ""),
+      room: normalizeRoomCode(
+        item.room ?? selectedRooms[0] ?? roomOptions[0] ?? "",
+      ),
       defenseDate: normalizeDefenseDateOnly(item.defenseDate ?? autoStartDate),
       session: sessionCode === "AFTERNOON" ? "Chieu" : "Sang",
       sessionCode,
@@ -3450,9 +3624,12 @@ const CommitteeManagement: React.FC = () => {
     const councilsRes = (await loadOptionalResponse(
       "councils",
       `${defensePeriodBase}/councils`,
-      () => adminApi.getCouncils() as Promise<ApiResponse<{
-        items?: Array<Record<string, unknown>>;
-      }>>,
+      () =>
+        adminApi.getCouncils() as Promise<
+          ApiResponse<{
+            items?: Array<Record<string, unknown>>;
+          }>
+        >,
     )) as ApiResponse<{
       items?: Array<Record<string, unknown>>;
     }> | null;
@@ -3500,8 +3677,10 @@ const CommitteeManagement: React.FC = () => {
           sessionCode: normalizeSessionCode(
             assignment.sessionCode ?? assignment.session ?? "MORNING",
           ),
-          startTime: normalizeTimeOnly(String(assignment.startTime ?? "")) || undefined,
-          endTime: normalizeTimeOnly(String(assignment.endTime ?? "")) || undefined,
+          startTime:
+            normalizeTimeOnly(String(assignment.startTime ?? "")) || undefined,
+          endTime:
+            normalizeTimeOnly(String(assignment.endTime ?? "")) || undefined,
           scheduledAt:
             normalizeDefenseDateOnly(String(assignment.scheduledAt ?? "")) ||
             undefined,
@@ -3549,12 +3728,8 @@ const CommitteeManagement: React.FC = () => {
         ),
         session: sessionCode === "AFTERNOON" ? "Chieu" : "Sang",
         sessionCode,
-        startTime: normalizeTimeOnly(
-          item.startTime ?? "",
-        ) || undefined,
-        endTime: normalizeTimeOnly(
-          item.endTime ?? "",
-        ) || undefined,
+        startTime: normalizeTimeOnly(item.startTime ?? "") || undefined,
+        endTime: normalizeTimeOnly(item.endTime ?? "") || undefined,
         slotId: `${item.committeeCode ?? `HD-${index + 1}`}-${sessionCode === "AFTERNOON" ? "PM" : "AM"}`,
         councilTags: item.councilTags ?? [],
         morningStudents:
@@ -3677,18 +3852,21 @@ const CommitteeManagement: React.FC = () => {
           endTime:
             normalizeTimeOnly(assignment.endTime ?? sessionRange.endTime) ||
             sessionRange.endTime,
-          orderIndex:
-            Number(assignment.orderIndex ?? index + 1) || index + 1,
+          orderIndex: Number(assignment.orderIndex ?? index + 1) || index + 1,
         };
       })
-      .filter((assignment): assignment is {
-        topicCode: string;
-        scheduledAt: string;
-        sessionCode: SessionCode;
-        startTime: string;
-        endTime: string;
-        orderIndex: number;
-      } => Boolean(assignment));
+      .filter(
+        (
+          assignment,
+        ): assignment is {
+          topicCode: string;
+          scheduledAt: string;
+          sessionCode: SessionCode;
+          startTime: string;
+          endTime: string;
+          orderIndex: number;
+        } => Boolean(assignment),
+      );
 
     return {
       step3: {
@@ -3740,8 +3918,7 @@ const CommitteeManagement: React.FC = () => {
       if (!configParsed.ok) {
         return;
       }
-      const configData =
-        (configParsed.data ?? {}) as Record<string, unknown>;
+      const configData = (configParsed.data ?? {}) as Record<string, unknown>;
 
       const availableRoomsRaw = pickCaseInsensitiveValue<unknown>(
         configData,
@@ -3754,14 +3931,13 @@ const CommitteeManagement: React.FC = () => {
         [],
       );
       const roomSource =
-        Array.isArray(defaultSelectedRoomsRaw) && defaultSelectedRoomsRaw.length > 0
+        Array.isArray(defaultSelectedRoomsRaw) &&
+        defaultSelectedRoomsRaw.length > 0
           ? defaultSelectedRoomsRaw
           : availableRoomsRaw;
       const rooms = normalizeRoomCodeList(
         Array.isArray(roomSource)
-          ? roomSource
-              .map((room) => String(room ?? "").trim())
-              .filter(Boolean)
+          ? roomSource.map((room) => String(room ?? "").trim()).filter(Boolean)
           : [],
       );
 
@@ -3769,7 +3945,10 @@ const CommitteeManagement: React.FC = () => {
       if (topicsRes) {
         const topicsParsed = parseApiEnvelope(topicsRes);
         if (topicsParsed.ok) {
-          const topicsData = (topicsParsed.data ?? {}) as Record<string, unknown>;
+          const topicsData = (topicsParsed.data ?? {}) as Record<
+            string,
+            unknown
+          >;
           topics = extractCompactRows(topicsData, ["items", "Items"])
             .map((item) => mapTopicRecordToAutoTopic(item))
             .filter((topic) => Boolean(topic.topicCode || topic.topicId));
@@ -3790,9 +3969,14 @@ const CommitteeManagement: React.FC = () => {
       if (lecturersRes) {
         const lecturersParsed = parseApiEnvelope(lecturersRes);
         if (lecturersParsed.ok) {
-          lecturers = ((lecturersParsed.data ?? []) as Array<Record<string, unknown>>)
+          lecturers = (
+            (lecturersParsed.data ?? []) as Array<Record<string, unknown>>
+          )
             .map((item) => mapLecturerDefenseRecord(item))
-            .filter((item) => Boolean(item.lecturerCode) || Boolean(item.lecturerProfileId));
+            .filter(
+              (item) =>
+                Boolean(item.lecturerCode) || Boolean(item.lecturerProfileId),
+            );
         }
       }
       if (lecturers.length === 0) {
@@ -3827,8 +4011,12 @@ const CommitteeManagement: React.FC = () => {
             return kept;
           }
         }
-        const selectedFromConfig = normalizeRoomCodeList(selectedRoomsRef.current);
-        const matched = selectedFromConfig.filter((room) => roomPool.includes(room));
+        const selectedFromConfig = normalizeRoomCodeList(
+          selectedRoomsRef.current,
+        );
+        const matched = selectedFromConfig.filter((room) =>
+          roomPool.includes(room),
+        );
         return matched.length ? matched : roomPool.slice(0, 2);
       });
       setSelectedRooms((prev) => {
@@ -3884,7 +4072,9 @@ const CommitteeManagement: React.FC = () => {
             return kept;
           }
         }
-        const selectedFromConfig = normalizeRoomCodeList(selectedRoomsRef.current);
+        const selectedFromConfig = normalizeRoomCodeList(
+          selectedRoomsRef.current,
+        );
         const matched = selectedFromConfig.filter((room) =>
           fallbackRooms.includes(room),
         );
@@ -3984,7 +4174,9 @@ const CommitteeManagement: React.FC = () => {
       new Set(
         availableAutoTopics
           .filter((topic) =>
-            selectedTopicKeys.has(String(topic.topicId ?? topic.topicCode ?? "")),
+            selectedTopicKeys.has(
+              String(topic.topicId ?? topic.topicCode ?? ""),
+            ),
           )
           .map((topic) => String(topic.topicCode ?? topic.topicId ?? "").trim())
           .filter((code) => code.length > 0),
@@ -4155,7 +4347,9 @@ const CommitteeManagement: React.FC = () => {
         return;
       }
 
-      const simulationResult = unwrapGenerateActionData(simulateParsed.data as unknown);
+      const simulationResult = unwrapGenerateActionData(
+        simulateParsed.data as unknown,
+      );
       if (simulationResult.action && simulationResult.action !== "SIMULATE") {
         notifyWarning(
           `Phản hồi mô phỏng trả về action ${simulationResult.action}. Tiếp tục tạo chính thức theo dữ liệu nhận được.`,
@@ -4279,8 +4473,8 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
-    const allowedActionsRaw =
-      (stateData.allowedActions ?? stateData.AllowedActions) as unknown;
+    const allowedActionsRaw = (stateData.allowedActions ??
+      stateData.AllowedActions) as unknown;
     const allowedActions = Array.isArray(allowedActionsRaw)
       ? allowedActionsRaw.map((item) => String(item))
       : [];
@@ -4289,11 +4483,13 @@ const CommitteeManagement: React.FC = () => {
     setCapabilitiesLocked(
       Boolean(
         stateData.lecturerCapabilitiesLocked ??
-          stateData.LecturerCapabilitiesLocked,
+        stateData.LecturerCapabilitiesLocked,
       ),
     );
     setCouncilConfigConfirmed(
-      Boolean(stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed),
+      Boolean(
+        stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed,
+      ),
     );
     setIsFinalized(Boolean(stateData.finalized ?? stateData.Finalized));
 
@@ -4755,16 +4951,24 @@ const CommitteeManagement: React.FC = () => {
   const renderLecturerPickerOption = useCallback(
     (lecturer: ManualLecturerOption) => {
       const tagNames = getTagDisplayList(lecturer.tags);
-      const safeDegree = String(lecturer.degree ?? "").trim() || "Chưa cập nhật học vị";
+      const safeDegree =
+        String(lecturer.degree ?? "").trim() || "Chưa cập nhật học vị";
       const lecturerSummary = `${lecturer.lecturerCode} - ${lecturer.lecturerName}`;
-      const tagSummary = tagNames.length > 0 ? tagNames.join(", ") : "Chưa có tags";
+      const tagSummary =
+        tagNames.length > 0 ? tagNames.join(", ") : "Chưa có tags";
 
       return (
         <div className="committee-lecturer-option">
-          <div className="committee-lecturer-option-title" title={lecturerSummary}>
+          <div
+            className="committee-lecturer-option-title"
+            title={lecturerSummary}
+          >
             {lecturerSummary}
           </div>
-          <div className="committee-lecturer-option-meta" title={`${safeDegree} · ${tagSummary}`}>
+          <div
+            className="committee-lecturer-option-meta"
+            title={`${safeDegree} · ${tagSummary}`}
+          >
             <span className="committee-lecturer-option-degree-text">
               {safeDegree}
             </span>
@@ -4859,8 +5063,7 @@ const CommitteeManagement: React.FC = () => {
       isChairRole(normalizeManualMemberRoleCode(item.role, index)),
     );
     const secretaryMembers = manualMembers.filter(
-      (item, index) =>
-        normalizeManualMemberRoleCode(item.role, index) === "TK",
+      (item, index) => normalizeManualMemberRoleCode(item.role, index) === "TK",
     );
 
     if (chairMembers.length !== 1 || secretaryMembers.length !== 1) {
@@ -5065,8 +5268,9 @@ const CommitteeManagement: React.FC = () => {
       const scheduleMode = options?.scheduleMode ?? manualScheduleMode;
       const sessionCode = options?.sessionCode ?? manualSessionCode;
       const defaultDefenseDate =
-        normalizeDefenseDateOnly(options?.assignmentDefaults?.defenseDate ?? manualDefenseDate) ||
-        manualDefenseDate;
+        normalizeDefenseDateOnly(
+          options?.assignmentDefaults?.defenseDate ?? manualDefenseDate,
+        ) || manualDefenseDate;
       const defaultStartTime =
         options?.assignmentDefaults?.startTime ?? manualStartTime;
       const defaultEndTime =
@@ -5089,7 +5293,9 @@ const CommitteeManagement: React.FC = () => {
 
       const normalizeCodes = (codes: string[]) =>
         Array.from(
-          new Set(codes.map((code) => String(code ?? "").trim()).filter(Boolean)),
+          new Set(
+            codes.map((code) => String(code ?? "").trim()).filter(Boolean),
+          ),
         );
 
       const selectedRelated = normalizeCodes(relatedCodes);
@@ -5128,16 +5334,16 @@ const CommitteeManagement: React.FC = () => {
           topicCode: topicCode || undefined,
           sessionCode: nextSessionCode,
           scheduledAt:
-            normalizeDefenseDateOnly(previous?.scheduledAt ?? defaultDefenseDate) ||
-            defaultDefenseDate,
+            normalizeDefenseDateOnly(
+              previous?.scheduledAt ?? defaultDefenseDate,
+            ) || defaultDefenseDate,
           startTime:
             normalizeTimeOnly(previous?.startTime ?? defaultRange.startTime) ||
             defaultRange.startTime,
           endTime:
             normalizeTimeOnly(previous?.endTime ?? defaultRange.endTime) ||
             defaultRange.endTime,
-          orderIndex:
-            Number(previous?.orderIndex ?? orderIndex) || orderIndex,
+          orderIndex: Number(previous?.orderIndex ?? orderIndex) || orderIndex,
         };
       };
 
@@ -5154,6 +5360,8 @@ const CommitteeManagement: React.FC = () => {
       manualDefenseDate,
       manualScheduleMode,
       manualSessionCode,
+      manualEndTime,
+      manualStartTime,
       resolveManualAssignmentRange,
       students,
     ],
@@ -5204,19 +5412,29 @@ const CommitteeManagement: React.FC = () => {
       const scheduleMode = options?.scheduleMode ?? manualScheduleMode;
       const oneSessionCode = options?.sessionCode ?? manualSessionCode;
       const normalizedRelated = Array.from(
-        new Set(relatedCodes.map((code) => String(code ?? "").trim()).filter(Boolean)),
+        new Set(
+          relatedCodes.map((code) => String(code ?? "").trim()).filter(Boolean),
+        ),
       );
       const relatedSet = new Set(normalizedRelated);
 
       let nextMorning = Array.from(
-        new Set(morningCodes.map((code) => String(code ?? "").trim()).filter(Boolean)),
+        new Set(
+          morningCodes.map((code) => String(code ?? "").trim()).filter(Boolean),
+        ),
       ).filter((code) => relatedSet.has(code));
       let nextAfternoon = Array.from(
-        new Set(afternoonCodes.map((code) => String(code ?? "").trim()).filter(Boolean)),
+        new Set(
+          afternoonCodes
+            .map((code) => String(code ?? "").trim())
+            .filter(Boolean),
+        ),
       ).filter((code) => relatedSet.has(code) && !nextMorning.includes(code));
 
       const assignedSet = new Set([...nextMorning, ...nextAfternoon]);
-      const unassigned = normalizedRelated.filter((code) => !assignedSet.has(code));
+      const unassigned = normalizedRelated.filter(
+        (code) => !assignedSet.has(code),
+      );
 
       if (scheduleMode === "ONE_SESSION") {
         const combined = Array.from(
@@ -5282,8 +5500,12 @@ const CommitteeManagement: React.FC = () => {
     if (!manualRelatedStudents.includes(studentCode)) {
       return;
     }
-    const nextMorning = manualMorningStudents.filter((code) => code !== studentCode);
-    const nextAfternoon = manualAfternoonStudents.filter((code) => code !== studentCode);
+    const nextMorning = manualMorningStudents.filter(
+      (code) => code !== studentCode,
+    );
+    const nextAfternoon = manualAfternoonStudents.filter(
+      (code) => code !== studentCode,
+    );
     if (sessionCode === "AFTERNOON") {
       nextAfternoon.push(studentCode);
     } else {
@@ -5305,7 +5527,9 @@ const CommitteeManagement: React.FC = () => {
           ? {
               ...assignment,
               sessionCode,
-              scheduledAt: normalizeDefenseDateOnly(manualDefenseDate) || manualDefenseDate,
+              scheduledAt:
+                normalizeDefenseDateOnly(manualDefenseDate) ||
+                manualDefenseDate,
               startTime: defaultRange.startTime,
               endTime: defaultRange.endTime,
             }
@@ -5321,7 +5545,9 @@ const CommitteeManagement: React.FC = () => {
     ) => {
       setManualAssignments((prev) =>
         prev.map((assignment) =>
-          assignment.studentCode === studentCode ? updater(assignment) : assignment,
+          assignment.studentCode === studentCode
+            ? updater(assignment)
+            : assignment,
         ),
       );
     },
@@ -5341,9 +5567,7 @@ const CommitteeManagement: React.FC = () => {
             ),
           );
 
-    const autoPicked = pickStudentsByTags(
-      preferredTags,
-    );
+    const autoPicked = pickStudentsByTags(preferredTags);
     setManualId(defaultId ?? nextGeneratedCouncilId);
     setManualName("Hội đồng mới");
     setManualDefenseDate("2026-04-24");
@@ -5406,7 +5630,11 @@ const CommitteeManagement: React.FC = () => {
       const selectedCodes = Array.from(
         new Set([...autoPicked.morning, ...autoPicked.afternoon]),
       );
-      applyManualTopicSelection(selectedCodes, autoPicked.morning, autoPicked.afternoon);
+      applyManualTopicSelection(
+        selectedCodes,
+        autoPicked.morning,
+        autoPicked.afternoon,
+      );
       return next;
     });
   };
@@ -5415,7 +5643,11 @@ const CommitteeManagement: React.FC = () => {
     const nextRelated = Array.from(
       new Set([...manualRelatedStudents, studentCode]),
     );
-    applyManualTopicSelection(nextRelated, manualMorningStudents, manualAfternoonStudents);
+    applyManualTopicSelection(
+      nextRelated,
+      manualMorningStudents,
+      manualAfternoonStudents,
+    );
   };
 
   const moveTopicToUnrelated = (studentCode: string) => {
@@ -5456,14 +5688,19 @@ const CommitteeManagement: React.FC = () => {
         ? target.afternoonStudents.length > 0
           ? "AFTERNOON"
           : "MORNING"
-        : target.sessionCode ?? normalizeSessionCode(target.session);
+        : (target.sessionCode ?? normalizeSessionCode(target.session));
     const normalizedMembers = target.members.map((member, index) => ({
       ...member,
       role: normalizeManualMemberRoleCode(member.role, index),
     }));
     while (normalizedMembers.length < expectedManualMemberCount) {
       normalizedMembers.push({
-        role: normalizedMembers.length === 0 ? "CT" : normalizedMembers.length === 1 ? "TK" : "UV",
+        role:
+          normalizedMembers.length === 0
+            ? "CT"
+            : normalizedMembers.length === 1
+              ? "TK"
+              : "UV",
         lecturerCode: "",
         lecturerName: "",
       });
@@ -5583,7 +5820,8 @@ const CommitteeManagement: React.FC = () => {
       (lecturer) => lecturer.lecturerCode === normalizedCode,
     );
     const lecturerName = normalizedCode
-      ? selectedLecturer?.lecturerName ?? getLecturerNameByCode(normalizedCode)
+      ? (selectedLecturer?.lecturerName ??
+        getLecturerNameByCode(normalizedCode))
       : "";
     setManualMembers((prev: CouncilMember[]) =>
       prev.map((member: CouncilMember, idx: number) =>
@@ -5689,23 +5927,22 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
-    if (
-      targetStep >= 2 &&
-      (!manualDefenseDate || !normalizedManualRoom)
-    ) {
-      notifyError(
-        "Bước 1 chưa đầy đủ: vui lòng chọn ngày và phòng.",
-      );
+    if (targetStep >= 2 && (!manualDefenseDate || !normalizedManualRoom)) {
+      notifyError("Bước 1 chưa đầy đủ: vui lòng chọn ngày và phòng.");
       return;
     }
 
     if (targetStep >= 2 && !roomOptions.includes(normalizedManualRoom)) {
-      notifyError("Phòng hội đồng không hợp lệ hoặc không thuộc danh mục phòng của đợt.");
+      notifyError(
+        "Phòng hội đồng không hợp lệ hoặc không thuộc danh mục phòng của đợt.",
+      );
       return;
     }
 
     if (targetStep >= 2 && normalizedManualCouncilTagCodes.length === 0) {
-      notifyError("Bước 1 chưa hoàn tất: vui lòng chọn ít nhất 1 tag hội đồng.");
+      notifyError(
+        "Bước 1 chưa hoàn tất: vui lòng chọn ít nhất 1 tag hội đồng.",
+      );
       return;
     }
     if (
@@ -5713,14 +5950,18 @@ const CommitteeManagement: React.FC = () => {
       manualScheduleMode === "ONE_SESSION" &&
       normalizeTimeOnly(manualStartTime) >= normalizeTimeOnly(manualEndTime)
     ) {
-      notifyError("Khung giờ 1 buổi không hợp lệ: giờ bắt đầu phải nhỏ hơn giờ kết thúc.");
+      notifyError(
+        "Khung giờ 1 buổi không hợp lệ: giờ bắt đầu phải nhỏ hơn giờ kết thúc.",
+      );
       return;
     }
     if (
       targetStep >= 2 &&
       normalizeTimeOnly(manualStartTime) >= normalizeTimeOnly(manualEndTime)
     ) {
-      notifyError("Khung giờ hội đồng không hợp lệ: giờ bắt đầu phải nhỏ hơn giờ kết thúc.");
+      notifyError(
+        "Khung giờ hội đồng không hợp lệ: giờ bắt đầu phải nhỏ hơn giờ kết thúc.",
+      );
       return;
     }
     if (targetStep === 3) {
@@ -5800,18 +6041,19 @@ const CommitteeManagement: React.FC = () => {
     }
 
     const normalizedManualRoom = normalizeRoomCode(manualRoom);
-    const normalizedManualDefenseDate = normalizeDefenseDateOnly(
-      manualDefenseDate,
-    );
+    const normalizedManualDefenseDate =
+      normalizeDefenseDateOnly(manualDefenseDate);
     const normalizedManualName = String(manualName ?? "").trim();
     const normalizedManualId = manualId.trim();
     const resolvedCouncilId =
       manualMode === "edit"
         ? (selectedCouncil?.id ?? manualSnapshot?.id ?? normalizedManualId)
-        : ((manualSnapshot?.id ?? normalizedManualId) || nextGeneratedCouncilId);
+        : (manualSnapshot?.id ?? normalizedManualId) || nextGeneratedCouncilId;
     const resolvedCouncilNumericId =
       manualMode === "edit"
-        ? toPositiveInteger(selectedCouncil?.councilId ?? manualSnapshot?.councilId)
+        ? toPositiveInteger(
+            selectedCouncil?.councilId ?? manualSnapshot?.councilId,
+          )
         : toPositiveInteger(manualSnapshot?.councilId);
     const normalizedManualStartTime = normalizeTimeOnly(manualStartTime);
     const normalizedManualEndTime = normalizeTimeOnly(manualEndTime);
@@ -5905,7 +6147,8 @@ const CommitteeManagement: React.FC = () => {
 
       if (
         manualScheduleMode === "FULL_DAY" &&
-        (manualMorningStudents.length === 0 || manualAfternoonStudents.length === 0)
+        (manualMorningStudents.length === 0 ||
+          manualAfternoonStudents.length === 0)
       ) {
         notifyError(
           "Hội đồng cả ngày cần có đề tài cho cả buổi sáng và buổi chiều.",
@@ -5953,12 +6196,14 @@ const CommitteeManagement: React.FC = () => {
         ...assignment,
         topicCode: String(assignment.topicCode ?? "").trim() || undefined,
         scheduledAt:
-          normalizeDefenseDateOnly(assignment.scheduledAt ?? normalizedManualDefenseDate) ||
-          normalizedManualDefenseDate,
+          normalizeDefenseDateOnly(
+            assignment.scheduledAt ?? normalizedManualDefenseDate,
+          ) || normalizedManualDefenseDate,
         sessionCode: normalizeSessionCode(assignment.sessionCode),
         startTime:
-          normalizeTimeOnly(assignment.startTime ?? normalizedManualStartTime) ||
-          normalizedManualStartTime,
+          normalizeTimeOnly(
+            assignment.startTime ?? normalizedManualStartTime,
+          ) || normalizedManualStartTime,
         endTime:
           normalizeTimeOnly(assignment.endTime ?? normalizedManualEndTime) ||
           normalizedManualEndTime,
@@ -5977,28 +6222,38 @@ const CommitteeManagement: React.FC = () => {
       parsedData: unknown,
     ) => {
       const responseData =
-        parsedData && typeof parsedData === "object" && !Array.isArray(parsedData)
+        parsedData &&
+        typeof parsedData === "object" &&
+        !Array.isArray(parsedData)
           ? (parsedData as Record<string, unknown>)
           : {};
-      const savedCouncilCode = String(
-        pickCaseInsensitiveValue(
-          responseData,
-          [
-            "committeeCode",
-            "CommitteeCode",
-            "councilCode",
-            "CouncilCode",
-            "id",
-            "Id",
-          ],
-          draft.id,
-        ),
-      ).trim() || draft.id;
+      const savedCouncilCode =
+        String(
+          pickCaseInsensitiveValue(
+            responseData,
+            [
+              "committeeCode",
+              "CommitteeCode",
+              "councilCode",
+              "CouncilCode",
+              "id",
+              "Id",
+            ],
+            draft.id,
+          ),
+        ).trim() || draft.id;
       const savedCouncilId =
         toPositiveInteger(
           pickCaseInsensitiveValue(
             responseData,
-            ["councilId", "CouncilId", "committeeId", "CommitteeId", "id", "Id"],
+            [
+              "councilId",
+              "CouncilId",
+              "committeeId",
+              "CommitteeId",
+              "id",
+              "Id",
+            ],
             draft.councilId ?? 0,
           ),
         ) ?? draft.councilId;
@@ -6009,13 +6264,17 @@ const CommitteeManagement: React.FC = () => {
             ["name", "Name", "councilName", "CouncilName"],
             draft.name ?? savedCouncilCode,
           ),
-        ).trim() || draft.name || savedCouncilCode;
+        ).trim() ||
+        draft.name ||
+        savedCouncilCode;
       const tokenFromData = String(
         pickCaseInsensitiveValue(
           responseData,
           ["concurrencyToken", "ConcurrencyToken"],
           draft.concurrencyToken ?? "",
-        ) ?? draft.concurrencyToken ?? "",
+        ) ??
+          draft.concurrencyToken ??
+          "",
       ).trim();
       const savedConcurrencyToken =
         readEnvelopeConcurrencyToken(response) ?? (tokenFromData || undefined);
@@ -6101,7 +6360,9 @@ const CommitteeManagement: React.FC = () => {
         }
 
         if (!workflowCouncilId) {
-          notifyError("Không xác định được councilId số nguyên để lưu thành viên.");
+          notifyError(
+            "Không xác định được councilId số nguyên để lưu thành viên.",
+          );
           return;
         }
 
@@ -6128,7 +6389,8 @@ const CommitteeManagement: React.FC = () => {
                 id: meta.councilCode,
                 councilId: meta.councilId ?? prev.councilId,
                 name: meta.name,
-                concurrencyToken: meta.concurrencyToken ?? prev.concurrencyToken,
+                concurrencyToken:
+                  meta.concurrencyToken ?? prev.concurrencyToken,
                 assignments: draft.assignments ? [...draft.assignments] : [],
                 members: draft.members.map((member, index) => ({
                   ...member,
@@ -6151,7 +6413,9 @@ const CommitteeManagement: React.FC = () => {
         }
 
         if (!workflowCouncilId) {
-          notifyError("Không xác định được councilId số nguyên để lưu danh sách đề tài.");
+          notifyError(
+            "Không xác định được councilId số nguyên để lưu danh sách đề tài.",
+          );
           return;
         }
 
@@ -6167,7 +6431,9 @@ const CommitteeManagement: React.FC = () => {
           return;
         }
         if (step3Payload.step3.assignments.length === 0) {
-          notifyError("Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.");
+          notifyError(
+            "Danh sách đề tài theo buổi đang rỗng, chưa thể lưu bước 3.",
+          );
           return;
         }
 
@@ -6217,7 +6483,10 @@ const CommitteeManagement: React.FC = () => {
   const manualAssignmentByStudentCode = useMemo(
     () =>
       new Map(
-        manualAssignments.map((assignment) => [assignment.studentCode, assignment]),
+        manualAssignments.map((assignment) => [
+          assignment.studentCode,
+          assignment,
+        ]),
       ),
     [manualAssignments],
   );
@@ -7590,18 +7859,20 @@ const CommitteeManagement: React.FC = () => {
         `}
       </style>
       <div className="committee-content">
-
         <section className="committee-hero">
           <div className="committee-hero-grid">
             <div>
-              <div className="committee-kicker">FIT DNU · Quản trị hội đồng</div>
+              <div className="committee-kicker">
+                FIT DNU · Quản trị hội đồng
+              </div>
               <h1 className="committee-hero-title">
                 <GraduationCap size={24} color="#f37021" /> Quản lý hội đồng bảo
                 vệ
               </h1>
               <div className="committee-hero-sub">
                 Điều phối quản trị hội đồng theo chuẩn vận hành FIT DNU: đồng bộ
-                dữ liệu, cấu hình đợt, phân công và chốt danh sách trước điều hành.
+                dữ liệu, cấu hình đợt, phân công và chốt danh sách trước điều
+                hành.
               </div>
             </div>
           </div>
@@ -7641,8 +7912,12 @@ const CommitteeManagement: React.FC = () => {
             <div className="committee-overview-icon committee-overview-icon-accent">
               <CheckCircle2 size={18} color="#06b6d4" />
             </div>
-            <div className="committee-overview-label">Đề tài đã phân hội đồng</div>
-            <div className="committee-overview-value">{assignedTopicsCount}</div>
+            <div className="committee-overview-label">
+              Đề tài đã phân hội đồng
+            </div>
+            <div className="committee-overview-value">
+              {assignedTopicsCount}
+            </div>
             <div className="committee-overview-meta">
               Tỷ lệ hoàn thành {councilCompletionPercent}%
             </div>
@@ -7652,508 +7927,517 @@ const CommitteeManagement: React.FC = () => {
             <div className="committee-overview-icon committee-overview-icon-primary">
               <CalendarDays size={18} color="#ffffff" />
             </div>
-            <div className="committee-overview-label">Phiên bảo vệ gần nhất</div>
+            <div className="committee-overview-label">
+              Phiên bảo vệ gần nhất
+            </div>
             <div className="committee-overview-value">
               {latestCouncilOverview
-                ? new Date(latestCouncilOverview.defenseDate).toLocaleDateString("vi-VN")
+                ? new Date(
+                    latestCouncilOverview.defenseDate,
+                  ).toLocaleDateString("vi-VN")
                 : "-"}
             </div>
             <div className="committee-overview-meta">
               <div>Phòng: {latestCouncilOverview?.room ?? "-"}</div>
               <div>
-                Khung giờ: {latestCouncilOverview?.startTime ?? morningStart} - {latestCouncilOverview?.endTime ?? afternoonEnd}
+                Khung giờ: {latestCouncilOverview?.startTime ?? morningStart} -{" "}
+                {latestCouncilOverview?.endTime ?? afternoonEnd}
               </div>
               <div>
-                Đề tài: {latestCouncilOverview
-                  ? latestCouncilOverview.morningStudents.length + latestCouncilOverview.afternoonStudents.length
+                Đề tài:{" "}
+                {latestCouncilOverview
+                  ? latestCouncilOverview.morningStudents.length +
+                    latestCouncilOverview.afternoonStudents.length
                   : 0}
               </div>
             </div>
           </article>
         </section>
 
-        <div ref={councilCenterRef} style={{ marginTop: 16, display: "grid", gap: 16 }}>
-            <section style={baseCard} className="section-card-sm">
-              <h2 className="section-title-sm">
-                <Gavel size={18} color="#0f172a" /> Trung tâm quản lý hội đồng
-              </h2>
-              <div style={{ color: "#0f172a", fontSize: 13, marginBottom: 10 }}>
-                Quản lý danh sách hội đồng theo phòng, tags và trạng thái.
-              </div>
+        <div
+          ref={councilCenterRef}
+          style={{ marginTop: 16, display: "grid", gap: 16 }}
+        >
+          <section style={baseCard} className="section-card-sm">
+            <h2 className="section-title-sm">
+              <Gavel size={18} color="#0f172a" /> Trung tâm quản lý hội đồng
+            </h2>
+            <div style={{ color: "#0f172a", fontSize: 13, marginBottom: 10 }}>
+              Quản lý danh sách hội đồng theo phòng, tags và trạng thái.
+            </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: 10,
-                  marginBottom: 12,
-                }}
-              >
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
-                  >
-                    Tìm hội đồng
-                  </span>
-                  <div style={{ position: "relative" }}>
-                    <Search
-                      size={14}
-                      color="#0f172a"
-                      style={{ position: "absolute", left: 10, top: 11 }}
-                    />
-                    <input
-                      value={searchCouncil}
-                      onChange={(event) => {
-                        setSearchCouncil(event.target.value);
-                        setCouncilPage(1);
-                      }}
-                      placeholder="VD: HD-2026-01, FULLDAY"
-                      style={{
-                        width: "100%",
-                        padding: "8px 10px 8px 32px",
-                        borderRadius: 10,
-                        border: "1px solid #cbd5e1",
-                      }}
-                    />
-                  </div>
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
-                  >
-                    Lọc theo tags
-                  </span>
-                  <InlinePicker
-                    value={tagFilter}
-                    onChange={(event) => {
-                      setTagFilter(event);
-                      setCouncilPage(1);
-                    }}
-                    ariaLabel="Lọc theo tags"
-                    className="prepare-picker-wide committee-filter-picker"
-                    options={[
-                      { value: "all", label: "Tất cả tags" },
-                      ...allTags.map((tag) => ({
-                        value: tag,
-                        label: getTagDisplayName(tag),
-                      })),
-                    ]}
-                  />
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
-                  >
-                    Lọc theo phòng
-                  </span>
-                  <InlinePicker
-                    value={roomFilter}
-                    onChange={(event) => {
-                      setRoomFilter(event);
-                      setCouncilPage(1);
-                    }}
-                    ariaLabel="Lọc theo phòng"
-                    className="prepare-picker-wide committee-filter-picker"
-                    options={[
-                      { value: "all", label: "Tất cả phòng" },
-                      ...availableRooms.map((room) => ({
-                        value: room,
-                        label: room,
-                      })),
-                    ]}
-                  />
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span
-                    style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
-                  >
-                    Lọc theo ngày
-                  </span>
-                  <InlinePicker
-                    value={dateFilter}
-                    onChange={(event) => {
-                      setDateFilter(event);
-                      setCouncilPage(1);
-                    }}
-                    ariaLabel="Lọc theo ngày"
-                    className="prepare-picker-wide committee-filter-picker"
-                    options={[
-                      { value: "all", label: "Tất cả ngày" },
-                      ...availableDates.map((date) => ({
-                        value: date,
-                        label: new Date(date).toLocaleDateString("vi-VN"),
-                      })),
-                    ]}
-                  />
-                </label>
-              </div>
-
-              <div
-                style={{
-                  marginBottom: 10,
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 10,
-                  padding: 10,
-                  background: "#ffffff",
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 12,
-                    color: "#0f172a",
-                    marginBottom: 6,
-                  }}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <label style={{ display: "grid", gap: 6 }}>
+                <span
+                  style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
                 >
-                  Lịch hội đồng theo ngày
+                  Tìm hội đồng
+                </span>
+                <div style={{ position: "relative" }}>
+                  <Search
+                    size={14}
+                    color="#0f172a"
+                    style={{ position: "absolute", left: 10, top: 11 }}
+                  />
+                  <input
+                    value={searchCouncil}
+                    onChange={(event) => {
+                      setSearchCouncil(event.target.value);
+                      setCouncilPage(1);
+                    }}
+                    placeholder="VD: HD-2026-01, FULLDAY"
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px 8px 32px",
+                      borderRadius: 10,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {councilsPerDate.map((item) => (
-                    <span
-                      key={item.date}
-                      style={{
-                        border: "1px solid #cbd5e1",
-                        borderRadius: 999,
-                        padding: "4px 10px",
-                        fontSize: 12,
-                        color: "#0f172a",
-                        background: "#ffffff",
-                      }}
-                    >
-                      {new Date(item.date).toLocaleDateString("vi-VN")}:{" "}
-                      {item.count} hội đồng
-                    </span>
-                  ))}
-                </div>
-              </div>
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span
+                  style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
+                >
+                  Lọc theo tags
+                </span>
+                <InlinePicker
+                  value={tagFilter}
+                  onChange={(event) => {
+                    setTagFilter(event);
+                    setCouncilPage(1);
+                  }}
+                  ariaLabel="Lọc theo tags"
+                  className="prepare-picker-wide committee-filter-picker"
+                  options={[
+                    { value: "all", label: "Tất cả tags" },
+                    ...allTags.map((tag) => ({
+                      value: tag,
+                      label: getTagDisplayName(tag),
+                    })),
+                  ]}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span
+                  style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
+                >
+                  Lọc theo phòng
+                </span>
+                <InlinePicker
+                  value={roomFilter}
+                  onChange={(event) => {
+                    setRoomFilter(event);
+                    setCouncilPage(1);
+                  }}
+                  ariaLabel="Lọc theo phòng"
+                  className="prepare-picker-wide committee-filter-picker"
+                  options={[
+                    { value: "all", label: "Tất cả phòng" },
+                    ...availableRooms.map((room) => ({
+                      value: room,
+                      label: room,
+                    })),
+                  ]}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span
+                  style={{ fontSize: 12, color: "#0f172a", fontWeight: 700 }}
+                >
+                  Lọc theo ngày
+                </span>
+                <InlinePicker
+                  value={dateFilter}
+                  onChange={(event) => {
+                    setDateFilter(event);
+                    setCouncilPage(1);
+                  }}
+                  ariaLabel="Lọc theo ngày"
+                  className="prepare-picker-wide committee-filter-picker"
+                  options={[
+                    { value: "all", label: "Tất cả ngày" },
+                    ...availableDates.map((date) => ({
+                      value: date,
+                      label: new Date(date).toLocaleDateString("vi-VN"),
+                    })),
+                  ]}
+                />
+              </label>
+            </div>
 
+            <div
+              style={{
+                marginBottom: 10,
+                border: "1px solid #cbd5e1",
+                borderRadius: 10,
+                padding: 10,
+                background: "#ffffff",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: 12,
+                  color: "#0f172a",
+                  marginBottom: 6,
+                }}
+              >
+                Lịch hội đồng theo ngày
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {councilsPerDate.map((item) => (
+                  <span
+                    key={item.date}
+                    style={{
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 999,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      color: "#0f172a",
+                      background: "#ffffff",
+                    }}
+                  >
+                    {new Date(item.date).toLocaleDateString("vi-VN")}:{" "}
+                    {item.count} hội đồng
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ color: "#0f172a", fontSize: 13 }}>
+                Hiển thị <strong>{pagedCouncilRows.length}</strong> /{" "}
+                {filteredCouncilRows.length} hội đồng
+                {selectedCouncilId ? (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      color: "#0f172a",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Đang chọn: {selectedCouncilId}
+                  </span>
+                ) : null}
+              </div>
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 8,
-                  gap: 10,
+                  gap: 8,
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ color: "#0f172a", fontSize: 13 }}>
-                  Hiển thị <strong>{pagedCouncilRows.length}</strong> /{" "}
-                  {filteredCouncilRows.length} hội đồng
-                  {selectedCouncilId ? (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        color: "#0f172a",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Đang chọn: {selectedCouncilId}
-                    </span>
-                  ) : null}
-                </div>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
+                    gap: 6,
+                    color: "#0f172a",
+                    fontSize: 12,
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      color: "#0f172a",
-                      fontSize: 12,
-                    }}
-                  >
-                    <SlidersHorizontal size={14} /> Bộ lọc vận hành thời gian
-                    thực
-                  </div>
+                  <SlidersHorizontal size={14} /> Bộ lọc vận hành thời gian thực
+                </div>
+                <button
+                  type="button"
+                  className="committee-primary-btn"
+                  onClick={runAssignment}
+                  disabled={
+                    !stateHydrated ||
+                    !hasAllowedAction("GENERATE_COUNCILS") ||
+                    assignmentLoading ||
+                    loadingAutoGenerateConfig ||
+                    Boolean(actionInFlight)
+                  }
+                >
+                  <Sparkles size={14} />{" "}
+                  {assignmentLoading || loadingAutoGenerateConfig
+                    ? "Đang tải cấu hình..."
+                    : "Tạo hội đồng tự động"}
+                </button>
+                <button
+                  type="button"
+                  className="committee-primary-btn"
+                  onClick={startCreateCouncil}
+                >
+                  <Plus size={14} /> Thêm hội đồng thủ công
+                </button>
+                <button
+                  type="button"
+                  className="committee-ghost-btn"
+                  onClick={exportCouncilListCsv}
+                >
+                  <Download size={14} /> Xuất danh sách hội đồng
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid #cbd5e1",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
+            >
+              <table className="committee-data-table">
+                <colgroup>
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "22%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "11%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Mã hội đồng</th>
+                    <th>Ngày</th>
+                    <th>Phòng</th>
+                    <th>Tags</th>
+                    <th>Sáng</th>
+                    <th>Chiều</th>
+                    <th>Thành viên</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedCouncilRows.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => setSelectedCouncilId(row.id)}
+                      style={{
+                        background:
+                          selectedCouncilId === row.id
+                            ? "#ffffff"
+                            : "transparent",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <td style={{ fontWeight: 700 }}>{row.id}</td>
+                      <td>
+                        {new Date(row.defenseDate).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td>{row.room}</td>
+                      <td>
+                        {getTagDisplayList(row.councilTags).join(", ") || "-"}
+                      </td>
+                      <td>
+                        {row.morningStudents.length}/{FIXED_TOPICS_PER_SESSION}
+                      </td>
+                      <td>
+                        {row.afternoonStudents.length}/
+                        {FIXED_TOPICS_PER_SESSION}
+                      </td>
+                      <td>
+                        {row.memberCount}/{FIXED_MEMBERS_PER_COUNCIL}
+                      </td>
+                      <td>
+                        <span
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            background:
+                              row.status === "Ready"
+                                ? "#0f172a"
+                                : row.status === "Warning"
+                                  ? "#ffffff"
+                                  : "#ffffff",
+                            color:
+                              row.status === "Ready"
+                                ? "#0f172a"
+                                : row.status === "Warning"
+                                  ? "#f37021"
+                                  : "#0f172a",
+                          }}
+                        >
+                          {row.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="committee-ghost-btn committee-icon-btn"
+                            title="Xem chi tiết hội đồng"
+                            aria-label="Xem chi tiết hội đồng"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startEditCouncil(row.id, true);
+                            }}
+                            style={{ minHeight: 34, padding: 0 }}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="committee-ghost-btn committee-icon-btn"
+                            title="Sửa hội đồng"
+                            aria-label="Sửa hội đồng"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startEditCouncil(row.id, false);
+                            }}
+                            style={{ minHeight: 34, padding: 0 }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="committee-danger-btn committee-icon-btn"
+                            title="Xóa hội đồng"
+                            aria-label="Xóa hội đồng"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteSelectedCouncil(row.id);
+                            }}
+                            disabled={Boolean(actionInFlight)}
+                            style={{ minHeight: 34, padding: 0 }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {pagedCouncilRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          padding: 14,
+                          textAlign: "center",
+                          color: "#0f172a",
+                        }}
+                      >
+                        Chưa có dữ liệu để hiển thị.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {filteredCouncilRows.length > 10 && (
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ color: "#0f172a", fontSize: 12 }}>
+                  Trang {Math.min(councilPage, councilTotalPages)} /{" "}
+                  {councilTotalPages}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
                   <button
                     type="button"
-                    className="committee-primary-btn"
-                    onClick={runAssignment}
-                    disabled={
-                      !stateHydrated ||
-                      !hasAllowedAction("GENERATE_COUNCILS") ||
-                      assignmentLoading ||
-                      loadingAutoGenerateConfig ||
-                      Boolean(actionInFlight)
+                    className="committee-ghost-btn"
+                    disabled={councilPage <= 1}
+                    onClick={() =>
+                      setCouncilPage((prev) => Math.max(1, prev - 1))
                     }
+                    style={{ minHeight: 34, padding: "6px 10px" }}
                   >
-                    <Sparkles size={14} />{" "}
-                    {assignmentLoading || loadingAutoGenerateConfig
-                      ? "Đang tải cấu hình..."
-                      : "Tạo hội đồng tự động"}
-                  </button>
-                  <button
-                    type="button"
-                    className="committee-primary-btn"
-                    onClick={startCreateCouncil}
-                  >
-                    <Plus size={14} /> Thêm hội đồng thủ công
+                    Trước
                   </button>
                   <button
                     type="button"
                     className="committee-ghost-btn"
-                    onClick={exportCouncilListCsv}
+                    disabled={councilPage >= councilTotalPages}
+                    onClick={() =>
+                      setCouncilPage((prev) =>
+                        Math.min(councilTotalPages, prev + 1),
+                      )
+                    }
+                    style={{ minHeight: 34, padding: "6px 10px" }}
                   >
-                    <Download size={14} /> Xuất danh sách hội đồng
+                    Sau
                   </button>
                 </div>
               </div>
+            )}
 
-              <div
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}
-              >
-                <table className="committee-data-table">
-                  <colgroup>
-                    <col style={{ width: "14%" }} />
-                    <col style={{ width: "11%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "22%" }} />
-                    <col style={{ width: "7%" }} />
-                    <col style={{ width: "7%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "11%" }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th>Mã hội đồng</th>
-                      <th>Ngày</th>
-                      <th>Phòng</th>
-                      <th>Tags</th>
-                      <th>Sáng</th>
-                      <th>Chiều</th>
-                      <th>Thành viên</th>
-                      <th>Trạng thái</th>
-                      <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedCouncilRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        onClick={() => setSelectedCouncilId(row.id)}
-                        style={{
-                          background:
-                            selectedCouncilId === row.id
-                              ? "#ffffff"
-                              : "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <td style={{ fontWeight: 700 }}>{row.id}</td>
-                        <td>
-                          {new Date(row.defenseDate).toLocaleDateString(
-                            "vi-VN",
-                          )}
-                        </td>
-                        <td>{row.room}</td>
-                        <td>{getTagDisplayList(row.councilTags).join(", ") || "-"}</td>
-                        <td>
-                          {row.morningStudents.length}/
-                          {FIXED_TOPICS_PER_SESSION}
-                        </td>
-                        <td>
-                          {row.afternoonStudents.length}/
-                          {FIXED_TOPICS_PER_SESSION}
-                        </td>
-                        <td>
-                          {row.memberCount}/{FIXED_MEMBERS_PER_COUNCIL}
-                        </td>
-                        <td>
-                          <span
-                            style={{
-                              padding: "4px 10px",
-                              borderRadius: 999,
-                              fontWeight: 700,
-                              fontSize: 12,
-                              background:
-                                row.status === "Ready"
-                                  ? "#0f172a"
-                                  : row.status === "Warning"
-                                    ? "#ffffff"
-                                    : "#ffffff",
-                              color:
-                                row.status === "Ready"
-                                  ? "#0f172a"
-                                  : row.status === "Warning"
-                                    ? "#f37021"
-                                    : "#0f172a",
-                            }}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 6,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              className="committee-ghost-btn committee-icon-btn"
-                              title="Xem chi tiết hội đồng"
-                              aria-label="Xem chi tiết hội đồng"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                startEditCouncil(row.id, true);
-                              }}
-                              style={{ minHeight: 34, padding: 0 }}
-                            >
-                              <Eye size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="committee-ghost-btn committee-icon-btn"
-                              title="Sửa hội đồng"
-                              aria-label="Sửa hội đồng"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                startEditCouncil(row.id, false);
-                              }}
-                              style={{ minHeight: 34, padding: 0 }}
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="committee-danger-btn committee-icon-btn"
-                              title="Xóa hội đồng"
-                              aria-label="Xóa hội đồng"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                deleteSelectedCouncil(row.id);
-                              }}
-                              disabled={Boolean(actionInFlight)}
-                              style={{ minHeight: 34, padding: 0 }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {pagedCouncilRows.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          style={{
-                            padding: 14,
-                            textAlign: "center",
-                            color: "#0f172a",
-                          }}
-                        >
-                          Chưa có dữ liệu để hiển thị.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {filteredCouncilRows.length > 10 && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div style={{ color: "#0f172a", fontSize: 12 }}>
-                    Trang {Math.min(councilPage, councilTotalPages)} /{" "}
-                    {councilTotalPages}
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      type="button"
-                      className="committee-ghost-btn"
-                      disabled={councilPage <= 1}
-                      onClick={() =>
-                        setCouncilPage((prev) => Math.max(1, prev - 1))
+            <div
+              style={{
+                marginTop: 12,
+                borderTop: "1px solid #e2e8f0",
+                paddingTop: 12,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "grid", gap: 6 }}>
+                {hasUnresolvedWarning && (
+                  <label
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allowFinalizeAfterWarning}
+                      onChange={(event) =>
+                        setAllowFinalizeAfterWarning(event.target.checked)
                       }
-                      style={{ minHeight: 34, padding: "6px 10px" }}
-                    >
-                      Trước
-                    </button>
-                    <button
-                      type="button"
-                      className="committee-ghost-btn"
-                      disabled={councilPage >= councilTotalPages}
-                      onClick={() =>
-                        setCouncilPage((prev) =>
-                          Math.min(councilTotalPages, prev + 1),
-                        )
-                      }
-                      style={{ minHeight: 34, padding: "6px 10px" }}
-                    >
-                      Sau
-                    </button>
-                  </div>
+                    />
+                    Cho phép chốt khi còn cảnh báo
+                  </label>
+                )}
+                <div style={{ fontSize: 12, color: "#0f172a" }}>
+                  Trạng thái chốt: {isFinalized ? "Đã chốt" : "Chưa chốt"}
                 </div>
-              )}
-
-              <div
-                style={{
-                  marginTop: 12,
-                  borderTop: "1px solid #e2e8f0",
-                  paddingTop: 12,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "grid", gap: 6 }}>
-                  {hasUnresolvedWarning && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={allowFinalizeAfterWarning}
-                        onChange={(event) =>
-                          setAllowFinalizeAfterWarning(event.target.checked)
-                        }
-                      />
-                      Cho phép chốt khi còn cảnh báo
-                    </label>
-                  )}
-                  <div style={{ fontSize: 12, color: "#0f172a" }}>
-                    Trạng thái chốt: {isFinalized ? "Đã chốt" : "Chưa chốt"}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={finalize}
-                  disabled={
-                    !stateHydrated ||
-                    !hasAllowedAction("FINALIZE") ||
-                    !drafts.length ||
-                    Boolean(actionInFlight)
-                  }
-                  className="committee-primary-btn"
-                >
-                  <Lock size={14} /> Chốt hội đồng
-                </button>
               </div>
-            </section>
-
-          </div>
+              <button
+                type="button"
+                onClick={finalize}
+                disabled={
+                  !stateHydrated ||
+                  !hasAllowedAction("FINALIZE") ||
+                  !drafts.length ||
+                  Boolean(actionInFlight)
+                }
+                className="committee-primary-btn"
+              >
+                <Lock size={14} /> Chốt hội đồng
+              </button>
+            </div>
+          </section>
+        </div>
 
         {/* Finalize block moved to table footer actions */}
 
@@ -8179,7 +8463,8 @@ const CommitteeManagement: React.FC = () => {
                       Danh sách đề tài đủ điều kiện
                     </div>
                     <div className="committee-modal-sub">
-                      Tổng cộng {eligibleTopicRows.length} đề tài sẵn sàng phân công hội đồng trong đợt hiện tại.
+                      Tổng cộng {eligibleTopicRows.length} đề tài sẵn sàng phân
+                      công hội đồng trong đợt hiện tại.
                     </div>
                   </div>
                   <button
@@ -8195,7 +8480,9 @@ const CommitteeManagement: React.FC = () => {
 
                 <div className="committee-modal-summary">
                   <div className="committee-modal-summary-row">
-                    <span className="committee-modal-summary-label">Trạng thái</span>
+                    <span className="committee-modal-summary-label">
+                      Trạng thái
+                    </span>
                     <div className="committee-modal-chip-list">
                       {eligibleTopicModalSummary.statuses.length > 0 ? (
                         eligibleTopicModalSummary.statuses.map((status) => (
@@ -8218,7 +8505,9 @@ const CommitteeManagement: React.FC = () => {
                   </div>
 
                   <div className="committee-modal-summary-row">
-                    <span className="committee-modal-summary-label">Tags đề tài</span>
+                    <span className="committee-modal-summary-label">
+                      Tags đề tài
+                    </span>
                     <div className="committee-modal-chip-list">
                       {eligibleTopicModalSummary.topicTags.length > 0 ? (
                         eligibleTopicModalSummary.topicTags.map((tag) => (
@@ -8238,7 +8527,9 @@ const CommitteeManagement: React.FC = () => {
                   </div>
 
                   <div className="committee-modal-summary-row">
-                    <span className="committee-modal-summary-label">Tags giảng viên</span>
+                    <span className="committee-modal-summary-label">
+                      Tags giảng viên
+                    </span>
                     <div className="committee-modal-chip-list">
                       {eligibleTopicModalSummary.lecturerTags.length > 0 ? (
                         eligibleTopicModalSummary.lecturerTags.map((tag) => (
@@ -8285,12 +8576,15 @@ const CommitteeManagement: React.FC = () => {
                     </thead>
                     <tbody>
                       {eligibleTopicRows.map((item, index) => {
-                        const isWarningStatus = /warning|cảnh báo|chưa|thiếu/i.test(
-                          item.status,
-                        );
+                        const isWarningStatus =
+                          /warning|cảnh báo|chưa|thiếu/i.test(item.status);
                         return (
-                          <tr key={`${item.topicCode}-${item.studentName}-${index}`}>
-                            <td style={{ fontWeight: 700 }}>{item.topicCode}</td>
+                          <tr
+                            key={`${item.topicCode}-${item.studentName}-${index}`}
+                          >
+                            <td style={{ fontWeight: 700 }}>
+                              {item.topicCode}
+                            </td>
                             <td>
                               <div className="committee-modal-cell-stack">
                                 <div className="committee-modal-cell-title">
@@ -8377,1470 +8671,2082 @@ const CommitteeManagement: React.FC = () => {
         {showAutoGenerateModal &&
           typeof document !== "undefined" &&
           createPortal(
-          <div
-            className="committee-modal-overlay"
-            onClick={closeAutoGenerateModal}
-          >
             <div
-              className="committee-modal"
-              style={{ width: "min(1120px, calc(100vw - 32px))", maxHeight: "calc(100vh - 48px)", padding: 18 }}
-              onClick={(event) => event.stopPropagation()}
+              className="committee-modal-overlay"
+              onClick={closeAutoGenerateModal}
             >
-              <div className="committee-modal-head">
-                <div>
-                  <div className="committee-modal-title">
-                    Cấu hình tạo hội đồng tự động
-                  </div>
-                  <div className="committee-modal-sub">
-                    Chọn dữ liệu đủ điều kiện trong đợt hiện tại, sau đó gửi yêu
-                    cầu để backend thực hiện phân công tự động.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="committee-ghost-btn committee-icon-btn"
-                  onClick={closeAutoGenerateModal}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {autoGenerateModalAlert && (
-                <div
-                  className={
-                    autoGenerateModalAlert.type === "error"
-                      ? "committee-modal-alert committee-modal-alert-error"
-                      : "committee-modal-alert"
-                  }
-                  style={{ marginBottom: 10 }}
-                >
-                  {autoGenerateModalAlert.message}
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className={
-                    autoGenerateStep === 1
-                      ? "committee-primary-btn committee-modal-step-btn"
-                      : "committee-ghost-btn committee-modal-step-btn"
-                  }
-                  style={{ minHeight: 34, padding: "6px 12px" }}
-                  onClick={() => setAutoGenerateStep(1)}
-                >
-                  <span className="committee-inline-icon-label">
-                    <Search size={14} />
-                    <span>1. Chọn đề tài và giảng viên</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={
-                    autoGenerateStep === 2
-                      ? "committee-primary-btn committee-modal-step-btn"
-                      : "committee-ghost-btn committee-modal-step-btn"
-                  }
-                  style={{ minHeight: 34, padding: "6px 12px" }}
-                  onClick={proceedAutoGenerateStep2}
-                >
-                  <span className="committee-inline-icon-label">
-                    <Layers3 size={14} />
-                    <span>2. Nhập tham số tạo hội đồng</span>
-                  </span>
-                </button>
-              </div>
-
               <div
+                className="committee-modal"
                 style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gap: 12,
+                  width: "min(1120px, calc(100vw - 32px))",
+                  maxHeight: "calc(100vh - 48px)",
+                  padding: 18,
                 }}
+                onClick={(event) => event.stopPropagation()}
               >
-                {autoGenerateStep === 1 ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-                      gap: 12,
-                    }}
-                  >
-                    <div className="committee-modal-card" style={{ gap: 10 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <Search size={14} />
-                          <span>Đề tài đủ điều kiện ({selectedAutoTopicIds.length}/{filteredAutoTopics.length})</span>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            type="button"
-                            className="committee-ghost-btn committee-modal-step-btn"
-                            style={{ minHeight: 30, padding: "4px 10px" }}
-                            onClick={() => void syncData()}
-                            disabled={syncing || Boolean(actionInFlight)}
-                          >
-                            <span className="committee-inline-icon-label">
-                              <RefreshCw size={13} />
-                              <span>{syncing ? "Đang đồng bộ..." : "Đồng bộ dữ liệu"}</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="committee-ghost-btn committee-modal-step-btn"
-                            style={{ minHeight: 30, padding: "4px 10px" }}
-                            onClick={() =>
-                              setSelectedAutoTopicIds(
-                                filteredAutoTopics
-                                  .map((topic) => topic.topicId ?? topic.topicCode ?? "")
-                                  .filter(
-                                    (id): id is number | string =>
-                                      id !== "" && id !== null && id !== undefined,
-                                  ),
-                              )
-                            }
-                          >
-                            <span className="committee-inline-icon-label">
-                              <CheckCircle2 size={13} />
-                              <span>Chọn tất cả</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="committee-ghost-btn committee-modal-step-btn"
-                            style={{ minHeight: 30, padding: "4px 10px" }}
-                            onClick={() => setSelectedAutoTopicIds([])}
-                          >
-                            <span className="committee-inline-icon-label">
-                              <X size={13} />
-                              <span>Bỏ chọn</span>
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        {syncedAt ? `Lần đồng bộ gần nhất: ${syncedAt}` : "Chưa có lần đồng bộ gần nhất."}
-                        {syncStatus === "timeout" ? " · Có lỗi timeout khi đồng bộ." : ""}
-                      </div>
-
-                      <label style={{ display: "grid", gap: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 12 }}>Tìm đề tài</span>
-                        <input
-                          type="text"
-                          value={topicSearchKeyword}
-                          onChange={(event) => setTopicSearchKeyword(event.target.value)}
-                          placeholder="Mã đề tài / tên đề tài / tag"
-                        />
-                      </label>
-
-                      <div
-                        style={{
-                          maxHeight: 320,
-                          overflow: "auto",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 10,
-                          padding: 8,
-                          display: "grid",
-                          gap: 6,
-                        }}
-                      >
-                        {filteredAutoTopics.map((topic) => {
-                          const id = topic.topicId ?? topic.topicCode ?? "";
-                          const checked = selectedAutoTopicIds.includes(id);
-                          return (
-                            <label
-                              key={`topic-${id}`}
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "auto 1fr",
-                                gap: 8,
-                                alignItems: "start",
-                                padding: 8,
-                                border: "1px solid #e2e8f0",
-                                borderRadius: 8,
-                                background: checked ? "#fff7ed" : "#ffffff",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleAutoTopic(id)}
-                              />
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700 }}>
-                                  {topic.topicCode ?? topic.topicId ?? "-"}
-                                </div>
-                                <div style={{ fontSize: 12, marginTop: 2 }}>
-                                  {topic.title ?? "(Không tiêu đề)"}
-                                </div>
-                                <div style={{ fontSize: 11, marginTop: 2, color: "#64748b" }}>
-                                  Tags: {getTagDisplayList(topic.tagCodes ?? []).join(", ") || "-"}
-                                </div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                        {filteredAutoTopics.length === 0 && (
-                          <div style={{ fontSize: 12, color: "#64748b", padding: 8 }}>
-                            Chưa có đề tài đủ điều kiện để hiển thị.
-                          </div>
-                        )}
-                      </div>
+                <div className="committee-modal-head">
+                  <div>
+                    <div className="committee-modal-title">
+                      Cấu hình tạo hội đồng tự động
                     </div>
-
-                    <div className="committee-modal-card" style={{ gap: 8 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <Users size={14} />
-                          <span>Giảng viên tham gia ({selectedAutoLecturerIds.length}/{availableAutoLecturers.length})</span>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            type="button"
-                            className="committee-ghost-btn committee-modal-step-btn"
-                            style={{ minHeight: 30, padding: "4px 10px" }}
-                            onClick={() =>
-                              setSelectedAutoLecturerIds(
-                                availableAutoLecturers
-                                  .map(
-                                    (lecturer) =>
-                                      lecturer.lecturerProfileId ??
-                                      lecturer.lecturerId ??
-                                      lecturer.lecturerCode ??
-                                      "",
-                                  )
-                                  .filter(
-                                    (id): id is number | string =>
-                                      id !== "" && id !== null && id !== undefined,
-                                  ),
-                              )
-                            }
-                          >
-                            <span className="committee-inline-icon-label">
-                              <CheckCircle2 size={13} />
-                              <span>Chọn tất cả</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="committee-ghost-btn committee-modal-step-btn"
-                            style={{ minHeight: 30, padding: "4px 10px" }}
-                            onClick={() => setSelectedAutoLecturerIds([])}
-                          >
-                            <span className="committee-inline-icon-label">
-                              <X size={13} />
-                              <span>Bỏ chọn</span>
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "minmax(130px, 170px) minmax(0, 1fr) auto",
-                          gap: 8,
-                          alignItems: "end",
-                        }}
-                      >
-                        <label style={{ display: "grid", gap: 6 }}>
-                          <span style={{ fontWeight: 700, fontSize: 12 }}>
-                            Nguồn giảng viên
-                          </span>
-                          <InlinePicker
-                            value={lecturerSourceFilter}
-                            onChange={(event) =>
-                              setLecturerSourceFilter(
-                                event as "all" | "committee" | "supervisor",
-                              )
-                            }
-                            ariaLabel="Nguồn giảng viên"
-                            className="prepare-picker-wide committee-filter-picker"
-                            options={[
-                              { value: "all", label: "Tất cả" },
-                              {
-                                value: "committee",
-                                label: "Đã vào hội đồng",
-                              },
-                              {
-                                value: "supervisor",
-                                label: "GV hướng dẫn",
-                              },
-                            ]}
-                          />
-                        </label>
-
-                        <label style={{ display: "grid", gap: 6 }}>
-                          <span style={{ fontWeight: 700, fontSize: 12 }}>
-                            Từ khóa
-                          </span>
-                          <input
-                            type="text"
-                            value={lecturerSearchKeyword}
-                            onChange={(event) =>
-                              setLecturerSearchKeyword(event.target.value)
-                            }
-                            placeholder="Mã GV / tên giảng viên"
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          className="committee-ghost-btn committee-modal-step-btn"
-                          style={{ minHeight: 36, padding: "0 12px" }}
-                          onClick={() => void loadAutoGenerateConfig()}
-                          disabled={loadingAutoGenerateConfig || Boolean(actionInFlight)}
-                        >
-                          <span className="committee-inline-icon-label">
-                            <RefreshCw size={13} />
-                            <span>Tải lại</span>
-                          </span>
-                        </button>
-                      </div>
-
-                      <div
-                        style={{
-                          maxHeight: 320,
-                          overflow: "auto",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 10,
-                          padding: 8,
-                          display: "grid",
-                          gap: 6,
-                        }}
-                      >
-                        {availableAutoLecturers.map((lecturer) => {
-                          const id =
-                            lecturer.lecturerProfileId ??
-                            lecturer.lecturerId ??
-                            lecturer.lecturerCode ??
-                            "";
-                          const checked = selectedAutoLecturerIds.includes(id);
-                          return (
-                            <label
-                              key={`lecturer-${id}`}
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "auto 1fr",
-                                gap: 8,
-                                alignItems: "start",
-                                padding: 8,
-                                border: "1px solid #e2e8f0",
-                                borderRadius: 8,
-                                background: checked ? "#fff7ed" : "#ffffff",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleAutoLecturer(id)}
-                              />
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700 }}>
-                                  {formatLecturerOptionLabel({
-                                    lecturerCode: String(
-                                      lecturer.lecturerCode ??
-                                        lecturer.lecturerId ??
-                                        "",
-                                    ).trim(),
-                                    lecturerName: lecturer.lecturerName,
-                                    degree: lecturer.degree,
-                                  })}
-                                </div>
-                                <div style={{ fontSize: 11, marginTop: 2, color: "#64748b" }}>
-                                  Hướng dẫn: {Number.isFinite(Number(lecturer.currentGuidingCount)) ? Number(lecturer.currentGuidingCount) : 0}/{Number.isFinite(Number(lecturer.guideQuota)) ? Number(lecturer.guideQuota) : 0}
-                                </div>
-                                <div style={{ fontSize: 11, marginTop: 2, color: "#64748b" }}>
-                                  Tags: {getTagDisplayList(lecturer.tagCodes ?? []).join(", ") || "-"}
-                                </div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                        {availableAutoLecturers.length === 0 && (
-                          <div style={{ fontSize: 12, color: "#64748b", padding: 8 }}>
-                            Chưa có giảng viên đủ điều kiện để hiển thị.
-                          </div>
-                        )}
-                      </div>
+                    <div className="committee-modal-sub">
+                      Chọn dữ liệu đủ điều kiện trong đợt hiện tại, sau đó gửi
+                      yêu cầu để backend thực hiện phân công tự động.
                     </div>
                   </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(320px, 420px))",
-                      gap: 12,
-                      justifyContent: "center",
-                    }}
-                  >
-                    <div className="committee-modal-card" style={{ gap: 10, maxWidth: 420 }}>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 13,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          whiteSpace: "normal",
-                          flexWrap: "wrap",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        <CalendarDays size={14} />
-                        <span>Cấu hình đợt</span>
-                      </div>
-                      <div style={{ marginTop: 2, fontSize: 12, color: "#64748b", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.35 }}>
-                        <Building2 size={13} />
-                        Thiết lập phòng, ca bảo vệ và năng lực vận hành mỗi ngày.
-                      </div>
-
-                      <div style={{ marginTop: 6, fontSize: 12, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.35 }}>
-                        <Building2 size={13} />
-                        <span>Danh mục phòng: {roomCatalog.length} phòng từ API</span>
-                      </div>
-
-                      <div className="prepare-room-title" style={{ marginTop: 2, marginBottom: 0, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.3 }}>
-                        <Building2 size={13} />
-                        <span>Phòng dùng khi tạo tự động</span>
-                      </div>
-                      <div className="prepare-room-list" style={{ marginBottom: 6 }}>
-                        {autoRoomOptions.map((room: string) => (
-                          <button
-                            key={room}
-                            type="button"
-                            onClick={() => toggleAutoRoom(room)}
-                            className={`prepare-room-chip ${selectedAutoRooms.includes(room) ? "active" : ""}`}
-                          >
-                            {room}
-                          </button>
-                        ))}
-                        {autoRoomOptions.length === 0 && (
-                          <div style={{ fontSize: 12, color: "#0f172a" }}>
-                            Chưa đồng bộ được danh mục phòng từ API. Vui lòng kiểm tra endpoint phòng rồi tải lại.
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#475569" }}>
-                        Đã chọn {selectedAutoRooms.length} phòng để backend phân bổ lịch tự động.
-                      </div>
-
-                      <div className="prepare-time-grid">
-                        {renderTimeSelector("Ca sáng", morningStart, setMorningStart, "AM")}
-                        {renderTimeSelector("Kết thúc ca sáng", morningEnd, setMorningEnd, "AM")}
-                        {renderTimeSelector("Ca chiều", afternoonStart, setAfternoonStart, "PM")}
-                        {renderTimeSelector("Kết thúc ca chiều", afternoonEnd, setAfternoonEnd, "PM")}
-                        {renderDateSelector("Tạo tự động từ ngày", autoStartDate, setAutoStartDate)}
-                        {renderDateSelector("Đến ngày", autoEndDate, setAutoEndDate)}
-                      </div>
-
-                      <label className="prepare-field" style={{ marginTop: 4 }}>
-                        <span>Số hội đồng tối đa/ngày</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={maxCapacity}
-                          onChange={(event) => {
-                            setConfigSaved(false);
-                            setMaxCapacity(Number(event.target.value));
-                          }}
-                        />
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => void saveConfig()}
-                        disabled={!stateHydrated || Boolean(actionInFlight)}
-                        className="committee-primary-btn committee-config-save-btn"
-                      >
-                        <Save size={14} /> Lưu cấu hình đợt
-                      </button>
-                      {configSaved && (
-                        <div style={{ fontSize: 12, color: "#0f172a" }}>
-                          Đã lưu cấu hình đợt.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="committee-modal-card" style={{ gap: 10, maxWidth: 420 }}>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 14,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          whiteSpace: "normal",
-                          flexWrap: "wrap",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        <Sparkles size={14} />
-                        <span>Cấu hình hội đồng</span>
-                      </div>
-                      <div style={{ marginTop: 2, fontSize: 12, color: "#64748b", display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.35 }}>
-                        <Layers3 size={13} />
-                        Thiết lập tham số phân hội đồng và tags áp dụng.
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                          gap: 10,
-                        }}
-                      >
-                        <label style={{ display: "grid", gap: 6 }}>
-                          <span style={{ fontWeight: 600, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.3 }}>
-                            <Layers3 size={13} />
-                            <span>Số đề tài/buổi</span>
-                          </span>
-                          <InlinePicker
-                            value={topicsPerSessionConfig}
-                            onChange={(event) => {
-                              setTopicsPerSessionConfig(Number(event));
-                              setCouncilConfigConfirmed(false);
-                            }}
-                            ariaLabel="Số đề tài mỗi buổi"
-                            className="prepare-picker-compact"
-                            options={COUNCIL_CONFIG_OPTIONS.map((value) => ({
-                              value,
-                              label: String(value),
-                            }))}
-                          />
-                        </label>
-
-                        <label style={{ display: "grid", gap: 6 }}>
-                          <span style={{ fontWeight: 600, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.3 }}>
-                            <Users size={13} />
-                            <span>Số thành viên/hội đồng</span>
-                          </span>
-                          <InlinePicker
-                            value={membersPerCouncilConfig}
-                            onChange={(event) => {
-                              setMembersPerCouncilConfig(Number(event));
-                              setCouncilConfigConfirmed(false);
-                            }}
-                            ariaLabel="Số thành viên mỗi hội đồng"
-                            className="prepare-picker-compact"
-                            options={COUNCIL_CONFIG_OPTIONS.map((value) => ({
-                              value,
-                              label: String(value),
-                            }))}
-                          />
-                        </label>
-                      </div>
-
-                      <div style={{ fontWeight: 600, fontSize: 12, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.3 }}>
-                        <Sparkles size={13} />
-                        <span>Tags hội đồng</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {allTags.map((tag: string) => (
-                          <button
-                            key={`cfg-tag-modal-${tag}`}
-                            type="button"
-                            onClick={() => toggleConfigCouncilTag(tag)}
-                            className={`committee-tag-toggle ${configCouncilTags.includes(resolveTagCode(tag)) ? "active" : ""}`}
-                            style={{
-                              minHeight: 32,
-                              padding: "0 10px",
-                              fontSize: 12,
-                              lineHeight: 1.1,
-                            }}
-                          >
-                            {getTagDisplayName(tag)}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: 10,
-                          background: "#ffffff",
-                          padding: 10,
-                          fontSize: 13,
-                          color: "#0f172a",
-                        }}
-                      >
-                        {topicsPerSessionConfig} đề tài/buổi · {membersPerCouncilConfig} thành viên/hội đồng · {normalizedConfigCouncilTagCodes.length} tag
-                      </div>
-
-                      <div className="committee-config-actions">
-                        <button
-                          type="button"
-                          onClick={() => void saveCouncilConfig()}
-                          disabled={!stateHydrated || Boolean(actionInFlight)}
-                          className="committee-primary-btn"
-                        >
-                          <Save size={14} /> Lưu cấu hình hội đồng
-                        </button>
-                      </div>
-
-                      <div style={{ fontSize: 12, color: canCreateCouncils ? "#0f172a" : "#b91c1c", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.35 }}>
-                        <CheckCircle2 size={13} />
-                        Điều kiện tạo tự động: {canCreateCouncils ? "Đạt" : "Chưa đạt"}
-                      </div>
-
-                      <div className="committee-auto-options">
-                        <div style={{ fontWeight: 700, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "normal", flexWrap: "wrap", lineHeight: 1.3 }}>
-                          <SlidersHorizontal size={13} />
-                          <span>Tùy chọn xử lý tự động</span>
-                        </div>
-                        <label className="committee-auto-option-row">
-                          <input
-                            type="checkbox"
-                            checked={autoGroupByTag}
-                            onChange={(event) => setAutoGroupByTag(event.target.checked)}
-                          />
-                          <span className="committee-auto-option-label">Group theo tag</span>
-                        </label>
-                        <label className="committee-auto-option-row">
-                          <input
-                            type="checkbox"
-                            checked={autoPrioritizeMatchTag}
-                            onChange={(event) => setAutoPrioritizeMatchTag(event.target.checked)}
-                          />
-                          <span className="committee-auto-option-label">Ưu tiên trùng tag</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 8,
-                  marginTop: 14,
-                }}
-              >
-                {autoGenerateStep === 2 && (
                   <button
                     type="button"
-                    className="committee-ghost-btn committee-modal-step-btn"
+                    className="committee-ghost-btn committee-icon-btn"
+                    onClick={closeAutoGenerateModal}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {autoGenerateModalAlert && (
+                  <div
+                    className={
+                      autoGenerateModalAlert.type === "error"
+                        ? "committee-modal-alert committee-modal-alert-error"
+                        : "committee-modal-alert"
+                    }
+                    style={{ marginBottom: 10 }}
+                  >
+                    {autoGenerateModalAlert.message}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className={
+                      autoGenerateStep === 1
+                        ? "committee-primary-btn committee-modal-step-btn"
+                        : "committee-ghost-btn committee-modal-step-btn"
+                    }
+                    style={{ minHeight: 34, padding: "6px 12px" }}
                     onClick={() => setAutoGenerateStep(1)}
                   >
                     <span className="committee-inline-icon-label">
-                      <Layers3 size={14} />
-                      <span>Quay lại bước 1</span>
+                      <Search size={14} />
+                      <span>1. Chọn đề tài và giảng viên</span>
                     </span>
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="committee-ghost-btn committee-modal-step-btn"
-                  onClick={closeAutoGenerateModal}
-                >
-                  <span className="committee-inline-icon-label">
-                    <X size={14} />
-                    <span>Hủy</span>
-                  </span>
-                </button>
-                {autoGenerateStep === 1 ? (
                   <button
                     type="button"
-                    className="committee-primary-btn committee-modal-step-btn"
-                    onClick={proceedAutoGenerateStep2}
-                    disabled={loadingAutoGenerateConfig || Boolean(actionInFlight)}
-                  >
-                    <span className="committee-inline-icon-label">
-                      <Layers3 size={14} />
-                      <span>Tiếp tục bước 2</span>
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="committee-primary-btn committee-modal-step-btn"
-                    onClick={submitAutoGenerate}
-                    disabled={
-                      assignmentLoading ||
-                      loadingAutoGenerateConfig ||
-                      !stateHydrated ||
-                      !hasAllowedAction("GENERATE_COUNCILS") ||
-                      Boolean(actionInFlight)
+                    className={
+                      autoGenerateStep === 2
+                        ? "committee-primary-btn committee-modal-step-btn"
+                        : "committee-ghost-btn committee-modal-step-btn"
                     }
+                    style={{ minHeight: 34, padding: "6px 12px" }}
+                    onClick={proceedAutoGenerateStep2}
                   >
                     <span className="committee-inline-icon-label">
-                      <CheckCircle2 size={14} />
-                      <span>
-                        {assignmentLoading
-                          ? "Đang mô phỏng & tạo..."
-                          : loadingAutoGenerateConfig
-                            ? "Đang tải cấu hình..."
-                            : "Xác nhận tạo hội đồng tự động"}
-                      </span>
+                      <Layers3 size={14} />
+                      <span>2. Nhập tham số tạo hội đồng</span>
                     </span>
                   </button>
-                )}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "grid",
+                    gap: 12,
+                  }}
+                >
+                  {autoGenerateStep === 1 ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(360px, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      <div className="committee-modal-card" style={{ gap: 10 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: 14,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <Search size={14} />
+                            <span>
+                              Đề tài đủ điều kiện ({selectedAutoTopicIds.length}
+                              /{filteredAutoTopics.length})
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              type="button"
+                              className="committee-ghost-btn committee-modal-step-btn"
+                              style={{ minHeight: 30, padding: "4px 10px" }}
+                              onClick={() => void syncData()}
+                              disabled={syncing || Boolean(actionInFlight)}
+                            >
+                              <span className="committee-inline-icon-label">
+                                <RefreshCw size={13} />
+                                <span>
+                                  {syncing
+                                    ? "Đang đồng bộ..."
+                                    : "Đồng bộ dữ liệu"}
+                                </span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="committee-ghost-btn committee-modal-step-btn"
+                              style={{ minHeight: 30, padding: "4px 10px" }}
+                              onClick={() =>
+                                setSelectedAutoTopicIds(
+                                  filteredAutoTopics
+                                    .map(
+                                      (topic) =>
+                                        topic.topicId ?? topic.topicCode ?? "",
+                                    )
+                                    .filter(
+                                      (id): id is number | string =>
+                                        id !== "" &&
+                                        id !== null &&
+                                        id !== undefined,
+                                    ),
+                                )
+                              }
+                            >
+                              <span className="committee-inline-icon-label">
+                                <CheckCircle2 size={13} />
+                                <span>Chọn tất cả</span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="committee-ghost-btn committee-modal-step-btn"
+                              style={{ minHeight: 30, padding: "4px 10px" }}
+                              onClick={() => setSelectedAutoTopicIds([])}
+                            >
+                              <span className="committee-inline-icon-label">
+                                <X size={13} />
+                                <span>Bỏ chọn</span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                          {syncedAt
+                            ? `Lần đồng bộ gần nhất: ${syncedAt}`
+                            : "Chưa có lần đồng bộ gần nhất."}
+                          {syncStatus === "timeout"
+                            ? " · Có lỗi timeout khi đồng bộ."
+                            : ""}
+                        </div>
+
+                        <label style={{ display: "grid", gap: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: 12 }}>
+                            Tìm đề tài
+                          </span>
+                          <input
+                            type="text"
+                            value={topicSearchKeyword}
+                            onChange={(event) =>
+                              setTopicSearchKeyword(event.target.value)
+                            }
+                            placeholder="Mã đề tài / tên đề tài / tag"
+                          />
+                        </label>
+
+                        <div
+                          style={{
+                            maxHeight: 320,
+                            overflow: "auto",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 10,
+                            padding: 8,
+                            display: "grid",
+                            gap: 6,
+                          }}
+                        >
+                          {filteredAutoTopics.map((topic) => {
+                            const id = topic.topicId ?? topic.topicCode ?? "";
+                            const checked = selectedAutoTopicIds.includes(id);
+                            return (
+                              <label
+                                key={`topic-${id}`}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "auto 1fr",
+                                  gap: 8,
+                                  alignItems: "start",
+                                  padding: 8,
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: 8,
+                                  background: checked ? "#fff7ed" : "#ffffff",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAutoTopic(id)}
+                                />
+                                <div>
+                                  <div
+                                    style={{ fontSize: 12, fontWeight: 700 }}
+                                  >
+                                    {topic.topicCode ?? topic.topicId ?? "-"}
+                                  </div>
+                                  <div style={{ fontSize: 12, marginTop: 2 }}>
+                                    {topic.title ?? "(Không tiêu đề)"}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      marginTop: 2,
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    Tags:{" "}
+                                    {getTagDisplayList(
+                                      topic.tagCodes ?? [],
+                                    ).join(", ") || "-"}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {filteredAutoTopics.length === 0 && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#64748b",
+                                padding: 8,
+                              }}
+                            >
+                              Chưa có đề tài đủ điều kiện để hiển thị.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="committee-modal-card" style={{ gap: 8 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: 14,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <Users size={14} />
+                            <span>
+                              Giảng viên tham gia (
+                              {selectedAutoLecturerIds.length}/
+                              {availableAutoLecturers.length})
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              type="button"
+                              className="committee-ghost-btn committee-modal-step-btn"
+                              style={{ minHeight: 30, padding: "4px 10px" }}
+                              onClick={() =>
+                                setSelectedAutoLecturerIds(
+                                  availableAutoLecturers
+                                    .map(
+                                      (lecturer) =>
+                                        lecturer.lecturerProfileId ??
+                                        lecturer.lecturerId ??
+                                        lecturer.lecturerCode ??
+                                        "",
+                                    )
+                                    .filter(
+                                      (id): id is number | string =>
+                                        id !== "" &&
+                                        id !== null &&
+                                        id !== undefined,
+                                    ),
+                                )
+                              }
+                            >
+                              <span className="committee-inline-icon-label">
+                                <CheckCircle2 size={13} />
+                                <span>Chọn tất cả</span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="committee-ghost-btn committee-modal-step-btn"
+                              style={{ minHeight: 30, padding: "4px 10px" }}
+                              onClick={() => setSelectedAutoLecturerIds([])}
+                            >
+                              <span className="committee-inline-icon-label">
+                                <X size={13} />
+                                <span>Bỏ chọn</span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "minmax(130px, 170px) minmax(0, 1fr) auto",
+                            gap: 8,
+                            alignItems: "end",
+                          }}
+                        >
+                          <label style={{ display: "grid", gap: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: 12 }}>
+                              Nguồn giảng viên
+                            </span>
+                            <InlinePicker
+                              value={lecturerSourceFilter}
+                              onChange={(event) =>
+                                setLecturerSourceFilter(
+                                  event as "all" | "committee" | "supervisor",
+                                )
+                              }
+                              ariaLabel="Nguồn giảng viên"
+                              className="prepare-picker-wide committee-filter-picker"
+                              options={[
+                                { value: "all", label: "Tất cả" },
+                                {
+                                  value: "committee",
+                                  label: "Đã vào hội đồng",
+                                },
+                                {
+                                  value: "supervisor",
+                                  label: "GV hướng dẫn",
+                                },
+                              ]}
+                            />
+                          </label>
+
+                          <label style={{ display: "grid", gap: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: 12 }}>
+                              Từ khóa
+                            </span>
+                            <input
+                              type="text"
+                              value={lecturerSearchKeyword}
+                              onChange={(event) =>
+                                setLecturerSearchKeyword(event.target.value)
+                              }
+                              placeholder="Mã GV / tên giảng viên"
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            className="committee-ghost-btn committee-modal-step-btn"
+                            style={{ minHeight: 36, padding: "0 12px" }}
+                            onClick={() => void loadAutoGenerateConfig()}
+                            disabled={
+                              loadingAutoGenerateConfig ||
+                              Boolean(actionInFlight)
+                            }
+                          >
+                            <span className="committee-inline-icon-label">
+                              <RefreshCw size={13} />
+                              <span>Tải lại</span>
+                            </span>
+                          </button>
+                        </div>
+
+                        <div
+                          style={{
+                            maxHeight: 320,
+                            overflow: "auto",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 10,
+                            padding: 8,
+                            display: "grid",
+                            gap: 6,
+                          }}
+                        >
+                          {availableAutoLecturers.map((lecturer) => {
+                            const id =
+                              lecturer.lecturerProfileId ??
+                              lecturer.lecturerId ??
+                              lecturer.lecturerCode ??
+                              "";
+                            const checked =
+                              selectedAutoLecturerIds.includes(id);
+                            return (
+                              <label
+                                key={`lecturer-${id}`}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "auto 1fr",
+                                  gap: 8,
+                                  alignItems: "start",
+                                  padding: 8,
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: 8,
+                                  background: checked ? "#fff7ed" : "#ffffff",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAutoLecturer(id)}
+                                />
+                                <div>
+                                  <div
+                                    style={{ fontSize: 12, fontWeight: 700 }}
+                                  >
+                                    {formatLecturerOptionLabel({
+                                      lecturerCode: String(
+                                        lecturer.lecturerCode ??
+                                          lecturer.lecturerId ??
+                                          "",
+                                      ).trim(),
+                                      lecturerName: lecturer.lecturerName,
+                                      degree: lecturer.degree,
+                                    })}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      marginTop: 2,
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    Hướng dẫn:{" "}
+                                    {Number.isFinite(
+                                      Number(lecturer.currentGuidingCount),
+                                    )
+                                      ? Number(lecturer.currentGuidingCount)
+                                      : 0}
+                                    /
+                                    {Number.isFinite(
+                                      Number(lecturer.guideQuota),
+                                    )
+                                      ? Number(lecturer.guideQuota)
+                                      : 0}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      marginTop: 2,
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    Tags:{" "}
+                                    {getTagDisplayList(
+                                      lecturer.tagCodes ?? [],
+                                    ).join(", ") || "-"}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {availableAutoLecturers.length === 0 && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#64748b",
+                                padding: 8,
+                              }}
+                            >
+                              Chưa có giảng viên đủ điều kiện để hiển thị.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(320px, 420px))",
+                        gap: 12,
+                        justifyContent: "center",
+                      }}
+                    >
+                      <div
+                        className="committee-modal-card"
+                        style={{ gap: 10, maxWidth: 420 }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: 13,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          <CalendarDays size={14} />
+                          <span>Cấu hình đợt</span>
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 2,
+                            fontSize: 12,
+                            color: "#64748b",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          <Building2 size={13} />
+                          Thiết lập phòng, ca bảo vệ và năng lực vận hành mỗi
+                          ngày.
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 12,
+                            color: "#0f172a",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          <Building2 size={13} />
+                          <span>
+                            Danh mục phòng: {roomCatalog.length} phòng từ API
+                          </span>
+                        </div>
+
+                        <div
+                          className="prepare-room-title"
+                          style={{
+                            marginTop: 2,
+                            marginBottom: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          <Building2 size={13} />
+                          <span>Phòng dùng khi tạo tự động</span>
+                        </div>
+                        <div
+                          className="prepare-room-list"
+                          style={{ marginBottom: 6 }}
+                        >
+                          {autoRoomOptions.map((room: string) => (
+                            <button
+                              key={room}
+                              type="button"
+                              onClick={() => toggleAutoRoom(room)}
+                              className={`prepare-room-chip ${selectedAutoRooms.includes(room) ? "active" : ""}`}
+                            >
+                              {room}
+                            </button>
+                          ))}
+                          {autoRoomOptions.length === 0 && (
+                            <div style={{ fontSize: 12, color: "#0f172a" }}>
+                              Chưa đồng bộ được danh mục phòng từ API. Vui lòng
+                              kiểm tra endpoint phòng rồi tải lại.
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#475569" }}>
+                          Đã chọn {selectedAutoRooms.length} phòng để backend
+                          phân bổ lịch tự động.
+                        </div>
+
+                        <div className="prepare-time-grid">
+                          {renderTimeSelector(
+                            "Ca sáng",
+                            morningStart,
+                            setMorningStart,
+                            "AM",
+                          )}
+                          {renderTimeSelector(
+                            "Kết thúc ca sáng",
+                            morningEnd,
+                            setMorningEnd,
+                            "AM",
+                          )}
+                          {renderTimeSelector(
+                            "Ca chiều",
+                            afternoonStart,
+                            setAfternoonStart,
+                            "PM",
+                          )}
+                          {renderTimeSelector(
+                            "Kết thúc ca chiều",
+                            afternoonEnd,
+                            setAfternoonEnd,
+                            "PM",
+                          )}
+                          {renderDateSelector(
+                            "Tạo tự động từ ngày",
+                            autoStartDate,
+                            setAutoStartDate,
+                          )}
+                          {renderDateSelector(
+                            "Đến ngày",
+                            autoEndDate,
+                            setAutoEndDate,
+                          )}
+                        </div>
+
+                        <label
+                          className="prepare-field"
+                          style={{ marginTop: 4 }}
+                        >
+                          <span>Số hội đồng tối đa/ngày</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={maxCapacity}
+                            onChange={(event) => {
+                              setConfigSaved(false);
+                              setMaxCapacity(Number(event.target.value));
+                            }}
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => void saveConfig()}
+                          disabled={!stateHydrated || Boolean(actionInFlight)}
+                          className="committee-primary-btn committee-config-save-btn"
+                        >
+                          <Save size={14} /> Lưu cấu hình đợt
+                        </button>
+                        {configSaved && (
+                          <div style={{ fontSize: 12, color: "#0f172a" }}>
+                            Đã lưu cấu hình đợt.
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        className="committee-modal-card"
+                        style={{ gap: 10, maxWidth: 420 }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: 14,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          <Sparkles size={14} />
+                          <span>Cấu hình hội đồng</span>
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 2,
+                            fontSize: 12,
+                            color: "#64748b",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          <Layers3 size={13} />
+                          Thiết lập tham số phân hội đồng và tags áp dụng.
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                            gap: 10,
+                          }}
+                        >
+                          <label style={{ display: "grid", gap: 6 }}>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 12,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                whiteSpace: "normal",
+                                flexWrap: "wrap",
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              <Layers3 size={13} />
+                              <span>Số đề tài/buổi</span>
+                            </span>
+                            <InlinePicker
+                              value={topicsPerSessionConfig}
+                              onChange={(event) => {
+                                setTopicsPerSessionConfig(Number(event));
+                                setCouncilConfigConfirmed(false);
+                              }}
+                              ariaLabel="Số đề tài mỗi buổi"
+                              className="prepare-picker-compact"
+                              options={COUNCIL_CONFIG_OPTIONS.map((value) => ({
+                                value,
+                                label: String(value),
+                              }))}
+                            />
+                          </label>
+
+                          <label style={{ display: "grid", gap: 6 }}>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 12,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                whiteSpace: "normal",
+                                flexWrap: "wrap",
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              <Users size={13} />
+                              <span>Số thành viên/hội đồng</span>
+                            </span>
+                            <InlinePicker
+                              value={membersPerCouncilConfig}
+                              onChange={(event) => {
+                                setMembersPerCouncilConfig(Number(event));
+                                setCouncilConfigConfirmed(false);
+                              }}
+                              ariaLabel="Số thành viên mỗi hội đồng"
+                              className="prepare-picker-compact"
+                              options={COUNCIL_CONFIG_OPTIONS.map((value) => ({
+                                value,
+                                label: String(value),
+                              }))}
+                            />
+                          </label>
+                        </div>
+
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 12,
+                            color: "#0f172a",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          <Sparkles size={13} />
+                          <span>Tags hội đồng</span>
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                        >
+                          {allTags.map((tag: string) => (
+                            <button
+                              key={`cfg-tag-modal-${tag}`}
+                              type="button"
+                              onClick={() => toggleConfigCouncilTag(tag)}
+                              className={`committee-tag-toggle ${configCouncilTags.includes(resolveTagCode(tag)) ? "active" : ""}`}
+                              style={{
+                                minHeight: 32,
+                                padding: "0 10px",
+                                fontSize: 12,
+                                lineHeight: 1.1,
+                              }}
+                            >
+                              {getTagDisplayName(tag)}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 10,
+                            background: "#ffffff",
+                            padding: 10,
+                            fontSize: 13,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {topicsPerSessionConfig} đề tài/buổi ·{" "}
+                          {membersPerCouncilConfig} thành viên/hội đồng ·{" "}
+                          {normalizedConfigCouncilTagCodes.length} tag
+                        </div>
+
+                        <div className="committee-config-actions">
+                          <button
+                            type="button"
+                            onClick={() => void saveCouncilConfig()}
+                            disabled={!stateHydrated || Boolean(actionInFlight)}
+                            className="committee-primary-btn"
+                          >
+                            <Save size={14} /> Lưu cấu hình hội đồng
+                          </button>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: canCreateCouncils ? "#0f172a" : "#b91c1c",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            whiteSpace: "normal",
+                            flexWrap: "wrap",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          <CheckCircle2 size={13} />
+                          Điều kiện tạo tự động:{" "}
+                          {canCreateCouncils ? "Đạt" : "Chưa đạt"}
+                        </div>
+
+                        <div className="committee-auto-options">
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: 13,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              whiteSpace: "normal",
+                              flexWrap: "wrap",
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            <SlidersHorizontal size={13} />
+                            <span>Tùy chọn xử lý tự động</span>
+                          </div>
+                          <label className="committee-auto-option-row">
+                            <input
+                              type="checkbox"
+                              checked={autoGroupByTag}
+                              onChange={(event) =>
+                                setAutoGroupByTag(event.target.checked)
+                              }
+                            />
+                            <span className="committee-auto-option-label">
+                              Group theo tag
+                            </span>
+                          </label>
+                          <label className="committee-auto-option-row">
+                            <input
+                              type="checkbox"
+                              checked={autoPrioritizeMatchTag}
+                              onChange={(event) =>
+                                setAutoPrioritizeMatchTag(event.target.checked)
+                              }
+                            />
+                            <span className="committee-auto-option-label">
+                              Ưu tiên trùng tag
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: 8,
+                    marginTop: 14,
+                  }}
+                >
+                  {autoGenerateStep === 2 && (
+                    <button
+                      type="button"
+                      className="committee-ghost-btn committee-modal-step-btn"
+                      onClick={() => setAutoGenerateStep(1)}
+                    >
+                      <span className="committee-inline-icon-label">
+                        <Layers3 size={14} />
+                        <span>Quay lại bước 1</span>
+                      </span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="committee-ghost-btn committee-modal-step-btn"
+                    onClick={closeAutoGenerateModal}
+                  >
+                    <span className="committee-inline-icon-label">
+                      <X size={14} />
+                      <span>Hủy</span>
+                    </span>
+                  </button>
+                  {autoGenerateStep === 1 ? (
+                    <button
+                      type="button"
+                      className="committee-primary-btn committee-modal-step-btn"
+                      onClick={proceedAutoGenerateStep2}
+                      disabled={
+                        loadingAutoGenerateConfig || Boolean(actionInFlight)
+                      }
+                    >
+                      <span className="committee-inline-icon-label">
+                        <Layers3 size={14} />
+                        <span>Tiếp tục bước 2</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="committee-primary-btn committee-modal-step-btn"
+                      onClick={submitAutoGenerate}
+                      disabled={
+                        assignmentLoading ||
+                        loadingAutoGenerateConfig ||
+                        !stateHydrated ||
+                        !hasAllowedAction("GENERATE_COUNCILS") ||
+                        Boolean(actionInFlight)
+                      }
+                    >
+                      <span className="committee-inline-icon-label">
+                        <CheckCircle2 size={14} />
+                        <span>
+                          {assignmentLoading
+                            ? "Đang mô phỏng & tạo..."
+                            : loadingAutoGenerateConfig
+                              ? "Đang tải cấu hình..."
+                              : "Xác nhận tạo hội đồng tự động"}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+            </div>,
+            document.body,
+          )}
 
         {manualMode &&
           typeof document !== "undefined" &&
           createPortal(
-          <div className="committee-modal-overlay" onClick={closeManualModal}>
-            <div
-              className="committee-modal"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="committee-modal-head">
-                <div>
-                  <div className="committee-modal-title">
-                    {manualMode === "create"
-                      ? "Thêm hội đồng mới"
-                      : manualReadOnly
-                        ? `Chi tiết hội đồng ${selectedCouncilId}`
-                        : `Chỉnh sửa hội đồng ${selectedCouncilId}`}
+            <div className="committee-modal-overlay" onClick={closeManualModal}>
+              <div
+                className="committee-modal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="committee-modal-head">
+                  <div>
+                    <div className="committee-modal-title">
+                      {manualMode === "create"
+                        ? "Thêm hội đồng mới"
+                        : manualReadOnly
+                          ? `Chi tiết hội đồng ${selectedCouncilId}`
+                          : `Chỉnh sửa hội đồng ${selectedCouncilId}`}
+                    </div>
+                    <div className="committee-modal-sub">
+                      {manualMode === "create"
+                        ? "Lưu từng bước để hoàn tất hội đồng: thông tin cơ bản, thành viên, rồi đề tài."
+                        : "Xem chi tiết, xác nhận chỉnh sửa, hủy hoặc lưu thay đổi."}
+                    </div>
                   </div>
-                  <div className="committee-modal-sub">
-                    {manualMode === "create"
-                      ? "Lưu từng bước để hoàn tất hội đồng: thông tin cơ bản, thành viên, rồi đề tài."
-                      : "Xem chi tiết, xác nhận chỉnh sửa, hủy hoặc lưu thay đổi."}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="committee-ghost-btn committee-icon-btn"
-                    onClick={closeManualModal}
-                    title="Đóng"
-                    aria-label="Đóng"
-                    disabled={Boolean(actionInFlight)}
-                  >
-                    <X size={16} />
-                  </button>
-                  {manualReadOnly ? (
+                  <div style={{ display: "flex", gap: 8 }}>
                     <button
                       type="button"
-                      className="committee-primary-btn committee-icon-btn"
-                      onClick={enableEditFromDetail}
-                      title="Chuyển sang chỉnh sửa"
-                      aria-label="Chuyển sang chỉnh sửa"
+                      className="committee-ghost-btn committee-icon-btn"
+                      onClick={closeManualModal}
+                      title="Đóng"
+                      aria-label="Đóng"
+                      disabled={Boolean(actionInFlight)}
                     >
-                      <Pencil size={16} />
+                      <X size={16} />
                     </button>
-                  ) : (
-                    <>
-                      {manualMode === "edit" && (
-                        <button
-                          type="button"
-                          className="committee-danger-btn committee-icon-btn"
-                          onClick={cancelManualEdit}
-                          title="Hủy chỉnh sửa"
-                          aria-label="Hủy chỉnh sửa"
-                          disabled={Boolean(actionInFlight)}
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
+                    {manualReadOnly ? (
                       <button
                         type="button"
-                        className="committee-accent-btn committee-icon-btn"
-                        onClick={saveManualCouncil}
-                        title={
-                          `Lưu bước ${createStep}`
-                        }
-                        aria-label={
-                          `Lưu bước ${createStep}`
-                        }
-                        disabled={Boolean(actionInFlight)}
+                        className="committee-primary-btn committee-icon-btn"
+                        onClick={enableEditFromDetail}
+                        title="Chuyển sang chỉnh sửa"
+                        aria-label="Chuyển sang chỉnh sửa"
                       >
-                        <Save size={16} />
+                        <Pencil size={16} />
                       </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {!manualReadOnly && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    marginBottom: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {[1, 2, 3].map((step) => (
-                    <button
-                      key={`create-step-${step}`}
-                      type="button"
-                      className={
-                        createStep === step
-                          ? "committee-primary-btn"
-                          : "committee-ghost-btn"
-                      }
-                      style={{ minHeight: 34, padding: "6px 10px" }}
-                      onClick={() => proceedCreateStep(step as 1 | 2 | 3)}
-                    >
-                      Bước {step}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="committee-modal-body">
-                {(manualReadOnly || createStep === 1) && (
-                  <>
-                    <div
-                      style={{ fontSize: 12, color: "#0f172a", marginBottom: 8 }}
-                    >
-                      Trường bắt buộc: ngày bảo vệ, phòng, tags và lịch hội đồng.
-                    </div>
-                    <div className="committee-modal-grid-3">
-                      <label className="committee-modal-card">
-                        <span className="committee-modal-label">Mã hội đồng</span>
-                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
-                          {manualMode === "create"
-                            ? "Mã sẽ được hệ thống sinh khi lưu bước 1."
-                            : "Mã chỉ dùng để tham chiếu, không chỉnh sửa trực tiếp."}
-                        </div>
-                        <input
-                          value={manualId}
-                          readOnly
-                          aria-readonly="true"
-                          placeholder="Mã hội đồng"
-                          style={{ background: "#f8fafc", cursor: "not-allowed" }}
-                        />
-                      </label>
-
-                      <label className="committee-modal-card">
-                        <span className="committee-modal-label">Tên hội đồng</span>
-                        {manualReadOnly ? (
-                          <div className="committee-modal-value">
-                            {manualName || "-"}
-                          </div>
-                        ) : (
-                          <input
-                            value={manualName}
-                            onChange={(event) => setManualName(event.target.value)}
-                            placeholder="Ví dụ: Hội đồng 1"
-                          />
+                    ) : (
+                      <>
+                        {manualMode === "edit" && (
+                          <button
+                            type="button"
+                            className="committee-danger-btn committee-icon-btn"
+                            onClick={cancelManualEdit}
+                            title="Hủy chỉnh sửa"
+                            aria-label="Hủy chỉnh sửa"
+                            disabled={Boolean(actionInFlight)}
+                          >
+                            <X size={16} />
+                          </button>
                         )}
-                      </label>
+                        <button
+                          type="button"
+                          className="committee-accent-btn committee-icon-btn"
+                          onClick={saveManualCouncil}
+                          title={`Lưu bước ${createStep}`}
+                          aria-label={`Lưu bước ${createStep}`}
+                          disabled={Boolean(actionInFlight)}
+                        >
+                          <Save size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-                      <label className="committee-modal-card">
-                        <span className="committee-modal-label">Ngày bảo vệ</span>
-                        {manualReadOnly ? (
-                          <div className="committee-modal-value">
-                            {new Date(manualDefenseDate).toLocaleDateString("vi-VN")}
+                {!manualReadOnly && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      marginBottom: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {[1, 2, 3].map((step) => (
+                      <button
+                        key={`create-step-${step}`}
+                        type="button"
+                        className={
+                          createStep === step
+                            ? "committee-primary-btn"
+                            : "committee-ghost-btn"
+                        }
+                        style={{ minHeight: 34, padding: "6px 10px" }}
+                        onClick={() => proceedCreateStep(step as 1 | 2 | 3)}
+                      >
+                        Bước {step}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="committee-modal-body">
+                  {(manualReadOnly || createStep === 1) && (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#0f172a",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Trường bắt buộc: ngày bảo vệ, phòng, tags và lịch hội
+                        đồng.
+                      </div>
+                      <div className="committee-modal-grid-3">
+                        <label className="committee-modal-card">
+                          <span className="committee-modal-label">
+                            Mã hội đồng
+                          </span>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#64748b",
+                              marginBottom: 6,
+                            }}
+                          >
+                            {manualMode === "create"
+                              ? "Mã sẽ được hệ thống sinh khi lưu bước 1."
+                              : "Mã chỉ dùng để tham chiếu, không chỉnh sửa trực tiếp."}
                           </div>
-                        ) : (
                           <input
-                            type="date"
-                            value={manualDefenseDate}
-                            onChange={(event) => {
-                              const nextDate = event.target.value;
-                              setManualDefenseDate(nextDate);
-                              applyManualTopicSelection(
-                                manualRelatedStudents,
-                                manualMorningStudents,
-                                manualAfternoonStudents,
-                                {
-                                  scheduleMode: manualScheduleMode,
-                                  sessionCode: manualSessionCode,
-                                  preserveAssignments: false,
-                                  assignmentDefaults: {
-                                    defenseDate: nextDate,
-                                  },
-                                },
-                              );
+                            value={manualId}
+                            readOnly
+                            aria-readonly="true"
+                            placeholder="Mã hội đồng"
+                            style={{
+                              background: "#f8fafc",
+                              cursor: "not-allowed",
                             }}
                           />
-                        )}
-                      </label>
+                        </label>
 
-                      <label className="committee-modal-card">
-                        <span className="committee-modal-label">Phòng</span>
-                        {manualReadOnly ? (
-                          <div className="committee-modal-value">
-                            {manualRoom || "-"}
-                          </div>
-                        ) : (
-                          <>
-                            <InlinePicker
-                              value={manualRoom}
-                              onChange={(event) => setManualRoom(event)}
-                              disabled={roomOptions.length === 0}
-                              ariaLabel="Chọn phòng"
-                              className="prepare-picker-wide"
-                              options={
-                                roomOptions.length === 0
-                                  ? [
-                                      {
-                                        value: "",
-                                        label: "Chưa có phòng từ API",
-                                      },
-                                    ]
-                                  : roomOptions.map((room) => ({
-                                      value: room,
-                                      label: room,
-                                    }))
-                              }
-                            />
-                            <div
-                              style={{
-                                marginTop: 6,
-                                fontSize: 11,
-                                color:
-                                  roomOptions.length > 0 ? "#0f172a" : "#f37021",
-                              }}
-                            >
-                              {roomOptions.length > 0
-                                ? `Có ${roomOptions.length} phòng khả dụng từ API.`
-                                : "Chưa lấy được danh mục phòng. Cần đồng bộ API phòng trước khi lưu."}
+                        <label className="committee-modal-card">
+                          <span className="committee-modal-label">
+                            Tên hội đồng
+                          </span>
+                          {manualReadOnly ? (
+                            <div className="committee-modal-value">
+                              {manualName || "-"}
                             </div>
-                          </>
-                        )}
-                      </label>
+                          ) : (
+                            <input
+                              value={manualName}
+                              onChange={(event) =>
+                                setManualName(event.target.value)
+                              }
+                              placeholder="Ví dụ: Hội đồng 1"
+                            />
+                          )}
+                        </label>
 
-                      <label className="committee-modal-card">
-                        <span className="committee-modal-label">Lịch hội đồng</span>
-                        {manualReadOnly ? (
-                          <div className="committee-modal-value">
-                            {manualScheduleMode === "FULL_DAY"
-                              ? `Cả ngày · ${manualStartTime} - ${manualEndTime}`
-                              : `1 buổi · ${manualSessionCode === "AFTERNOON" ? "Buổi chiều" : "Buổi sáng"} · ${manualStartTime} - ${manualEndTime}`}
-                          </div>
-                        ) : (
-                          <div style={{ display: "grid", gap: 8 }}>
-                            <InlinePicker
-                              value={manualScheduleMode}
+                        <label className="committee-modal-card">
+                          <span className="committee-modal-label">
+                            Ngày bảo vệ
+                          </span>
+                          {manualReadOnly ? (
+                            <div className="committee-modal-value">
+                              {new Date(manualDefenseDate).toLocaleDateString(
+                                "vi-VN",
+                              )}
+                            </div>
+                          ) : (
+                            <input
+                              type="date"
+                              value={manualDefenseDate}
                               onChange={(event) => {
-                                const nextMode = event as CouncilScheduleMode;
-                                setManualScheduleMode(nextMode);
-                                if (nextMode === "FULL_DAY") {
-                                  setManualSessionCode("MORNING");
-                                  applyManualSchedulePreset(nextMode, "MORNING");
-                                  applyManualTopicSelection(
-                                    manualRelatedStudents,
-                                    manualMorningStudents,
-                                    manualAfternoonStudents,
-                                    {
-                                      scheduleMode: "FULL_DAY",
-                                      sessionCode: "MORNING",
-                                      preserveAssignments: false,
-                                    },
-                                  );
-                                  return;
-                                }
-                                const nextOneSessionRange =
-                                  manualSessionCode === "AFTERNOON"
-                                    ? {
-                                        startTime:
-                                          normalizeTimeOnly(afternoonStart) || afternoonStart,
-                                        endTime:
-                                          normalizeTimeOnly(afternoonEnd) || afternoonEnd,
-                                      }
-                                    : {
-                                        startTime:
-                                          normalizeTimeOnly(morningStart) || morningStart,
-                                        endTime:
-                                          normalizeTimeOnly(morningEnd) || morningEnd,
-                                      };
-                                applyManualSchedulePreset(nextMode, manualSessionCode);
+                                const nextDate = event.target.value;
+                                setManualDefenseDate(nextDate);
                                 applyManualTopicSelection(
                                   manualRelatedStudents,
                                   manualMorningStudents,
                                   manualAfternoonStudents,
                                   {
-                                    scheduleMode: nextMode,
+                                    scheduleMode: manualScheduleMode,
                                     sessionCode: manualSessionCode,
                                     preserveAssignments: false,
                                     assignmentDefaults: {
-                                      defenseDate: manualDefenseDate,
-                                      ...nextOneSessionRange,
+                                      defenseDate: nextDate,
                                     },
                                   },
                                 );
                               }}
-                              ariaLabel="Chọn lịch hội đồng"
-                              className="prepare-picker-wide"
-                              options={[
-                                { value: "FULL_DAY", label: "Cả ngày" },
-                                { value: "ONE_SESSION", label: "1 buổi" },
-                              ]}
                             />
-                            {manualScheduleMode === "ONE_SESSION" ? (
-                              <>
-                                <InlinePicker
-                                  value={manualSessionCode}
-                                  onChange={(event) => {
-                                    const nextSession = normalizeSessionCode(event);
-                                      const nextOneSessionRange =
-                                        nextSession === "AFTERNOON"
-                                          ? {
-                                              startTime:
-                                                normalizeTimeOnly(afternoonStart) || afternoonStart,
-                                              endTime:
-                                                normalizeTimeOnly(afternoonEnd) || afternoonEnd,
-                                            }
-                                          : {
-                                              startTime:
-                                                normalizeTimeOnly(morningStart) || morningStart,
-                                              endTime:
-                                                normalizeTimeOnly(morningEnd) || morningEnd,
-                                            };
-                                    setManualSessionCode(nextSession);
-                                    applyManualSchedulePreset("ONE_SESSION", nextSession);
+                          )}
+                        </label>
+
+                        <label className="committee-modal-card">
+                          <span className="committee-modal-label">Phòng</span>
+                          {manualReadOnly ? (
+                            <div className="committee-modal-value">
+                              {manualRoom || "-"}
+                            </div>
+                          ) : (
+                            <>
+                              <InlinePicker
+                                value={manualRoom}
+                                onChange={(event) => setManualRoom(event)}
+                                disabled={roomOptions.length === 0}
+                                ariaLabel="Chọn phòng"
+                                className="prepare-picker-wide"
+                                options={
+                                  roomOptions.length === 0
+                                    ? [
+                                        {
+                                          value: "",
+                                          label: "Chưa có phòng từ API",
+                                        },
+                                      ]
+                                    : roomOptions.map((room) => ({
+                                        value: room,
+                                        label: room,
+                                      }))
+                                }
+                              />
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  fontSize: 11,
+                                  color:
+                                    roomOptions.length > 0
+                                      ? "#0f172a"
+                                      : "#f37021",
+                                }}
+                              >
+                                {roomOptions.length > 0
+                                  ? `Có ${roomOptions.length} phòng khả dụng từ API.`
+                                  : "Chưa lấy được danh mục phòng. Cần đồng bộ API phòng trước khi lưu."}
+                              </div>
+                            </>
+                          )}
+                        </label>
+
+                        <label className="committee-modal-card">
+                          <span className="committee-modal-label">
+                            Lịch hội đồng
+                          </span>
+                          {manualReadOnly ? (
+                            <div className="committee-modal-value">
+                              {manualScheduleMode === "FULL_DAY"
+                                ? `Cả ngày · ${manualStartTime} - ${manualEndTime}`
+                                : `1 buổi · ${manualSessionCode === "AFTERNOON" ? "Buổi chiều" : "Buổi sáng"} · ${manualStartTime} - ${manualEndTime}`}
+                            </div>
+                          ) : (
+                            <div style={{ display: "grid", gap: 8 }}>
+                              <InlinePicker
+                                value={manualScheduleMode}
+                                onChange={(event) => {
+                                  const nextMode = event as CouncilScheduleMode;
+                                  setManualScheduleMode(nextMode);
+                                  if (nextMode === "FULL_DAY") {
+                                    setManualSessionCode("MORNING");
+                                    applyManualSchedulePreset(
+                                      nextMode,
+                                      "MORNING",
+                                    );
                                     applyManualTopicSelection(
                                       manualRelatedStudents,
                                       manualMorningStudents,
                                       manualAfternoonStudents,
                                       {
-                                        scheduleMode: "ONE_SESSION",
-                                        sessionCode: nextSession,
+                                        scheduleMode: "FULL_DAY",
+                                        sessionCode: "MORNING",
+                                        preserveAssignments: false,
+                                      },
+                                    );
+                                    return;
+                                  }
+                                  const nextOneSessionRange =
+                                    manualSessionCode === "AFTERNOON"
+                                      ? {
+                                          startTime:
+                                            normalizeTimeOnly(afternoonStart) ||
+                                            afternoonStart,
+                                          endTime:
+                                            normalizeTimeOnly(afternoonEnd) ||
+                                            afternoonEnd,
+                                        }
+                                      : {
+                                          startTime:
+                                            normalizeTimeOnly(morningStart) ||
+                                            morningStart,
+                                          endTime:
+                                            normalizeTimeOnly(morningEnd) ||
+                                            morningEnd,
+                                        };
+                                  applyManualSchedulePreset(
+                                    nextMode,
+                                    manualSessionCode,
+                                  );
+                                  applyManualTopicSelection(
+                                    manualRelatedStudents,
+                                    manualMorningStudents,
+                                    manualAfternoonStudents,
+                                    {
+                                      scheduleMode: nextMode,
+                                      sessionCode: manualSessionCode,
+                                      preserveAssignments: false,
+                                      assignmentDefaults: {
+                                        defenseDate: manualDefenseDate,
+                                        ...nextOneSessionRange,
+                                      },
+                                    },
+                                  );
+                                }}
+                                ariaLabel="Chọn lịch hội đồng"
+                                className="prepare-picker-wide"
+                                options={[
+                                  { value: "FULL_DAY", label: "Cả ngày" },
+                                  { value: "ONE_SESSION", label: "1 buổi" },
+                                ]}
+                              />
+                              {manualScheduleMode === "ONE_SESSION" ? (
+                                <>
+                                  <InlinePicker
+                                    value={manualSessionCode}
+                                    onChange={(event) => {
+                                      const nextSession =
+                                        normalizeSessionCode(event);
+                                      const nextOneSessionRange =
+                                        nextSession === "AFTERNOON"
+                                          ? {
+                                              startTime:
+                                                normalizeTimeOnly(
+                                                  afternoonStart,
+                                                ) || afternoonStart,
+                                              endTime:
+                                                normalizeTimeOnly(
+                                                  afternoonEnd,
+                                                ) || afternoonEnd,
+                                            }
+                                          : {
+                                              startTime:
+                                                normalizeTimeOnly(
+                                                  morningStart,
+                                                ) || morningStart,
+                                              endTime:
+                                                normalizeTimeOnly(morningEnd) ||
+                                                morningEnd,
+                                            };
+                                      setManualSessionCode(nextSession);
+                                      applyManualSchedulePreset(
+                                        "ONE_SESSION",
+                                        nextSession,
+                                      );
+                                      applyManualTopicSelection(
+                                        manualRelatedStudents,
+                                        manualMorningStudents,
+                                        manualAfternoonStudents,
+                                        {
+                                          scheduleMode: "ONE_SESSION",
+                                          sessionCode: nextSession,
                                           preserveAssignments: false,
                                           assignmentDefaults: {
                                             defenseDate: manualDefenseDate,
                                             ...nextOneSessionRange,
                                           },
+                                        },
+                                      );
+                                    }}
+                                    ariaLabel="Chọn buổi hội đồng"
+                                    className="prepare-picker-wide"
+                                    options={[
+                                      { value: "MORNING", label: "Buổi sáng" },
+                                      {
+                                        value: "AFTERNOON",
+                                        label: "Buổi chiều",
                                       },
-                                    );
-                                  }}
-                                  ariaLabel="Chọn buổi hội đồng"
-                                  className="prepare-picker-wide"
-                                  options={[
-                                    { value: "MORNING", label: "Buổi sáng" },
-                                    { value: "AFTERNOON", label: "Buổi chiều" },
-                                  ]}
-                                />
-                                <div className="prepare-time-grid">
-                                  {renderTimeSelector(
-                                    "Giờ bắt đầu",
-                                    manualStartTime,
-                                    setManualStartTime,
-                                    manualSessionCode === "AFTERNOON" ? "PM" : "AM",
-                                    (nextTime) =>
-                                      applyManualTopicSelection(
-                                        manualRelatedStudents,
-                                        manualMorningStudents,
-                                        manualAfternoonStudents,
-                                        {
-                                          scheduleMode: manualScheduleMode,
-                                          sessionCode: manualSessionCode,
-                                          preserveAssignments: false,
-                                          assignmentDefaults: {
-                                            defenseDate: manualDefenseDate,
-                                            startTime: nextTime,
-                                            endTime: manualEndTime,
+                                    ]}
+                                  />
+                                  <div className="prepare-time-grid">
+                                    {renderTimeSelector(
+                                      "Giờ bắt đầu",
+                                      manualStartTime,
+                                      setManualStartTime,
+                                      manualSessionCode === "AFTERNOON"
+                                        ? "PM"
+                                        : "AM",
+                                      (nextTime) =>
+                                        applyManualTopicSelection(
+                                          manualRelatedStudents,
+                                          manualMorningStudents,
+                                          manualAfternoonStudents,
+                                          {
+                                            scheduleMode: manualScheduleMode,
+                                            sessionCode: manualSessionCode,
+                                            preserveAssignments: false,
+                                            assignmentDefaults: {
+                                              defenseDate: manualDefenseDate,
+                                              startTime: nextTime,
+                                              endTime: manualEndTime,
+                                            },
                                           },
-                                        },
-                                      ),
-                                  )}
-                                  {renderTimeSelector(
-                                    "Giờ kết thúc",
-                                    manualEndTime,
-                                    setManualEndTime,
-                                    manualSessionCode === "AFTERNOON" ? "PM" : "AM",
-                                    (nextTime) =>
-                                      applyManualTopicSelection(
-                                        manualRelatedStudents,
-                                        manualMorningStudents,
-                                        manualAfternoonStudents,
-                                        {
-                                          scheduleMode: manualScheduleMode,
-                                          sessionCode: manualSessionCode,
-                                          preserveAssignments: false,
-                                          assignmentDefaults: {
-                                            defenseDate: manualDefenseDate,
-                                            startTime: manualStartTime,
-                                            endTime: nextTime,
+                                        ),
+                                    )}
+                                    {renderTimeSelector(
+                                      "Giờ kết thúc",
+                                      manualEndTime,
+                                      setManualEndTime,
+                                      manualSessionCode === "AFTERNOON"
+                                        ? "PM"
+                                        : "AM",
+                                      (nextTime) =>
+                                        applyManualTopicSelection(
+                                          manualRelatedStudents,
+                                          manualMorningStudents,
+                                          manualAfternoonStudents,
+                                          {
+                                            scheduleMode: manualScheduleMode,
+                                            sessionCode: manualSessionCode,
+                                            preserveAssignments: false,
+                                            assignmentDefaults: {
+                                              defenseDate: manualDefenseDate,
+                                              startTime: manualStartTime,
+                                              endTime: nextTime,
+                                            },
                                           },
-                                        },
-                                      ),
-                                  )}
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="prepare-time-grid">
-                                  {renderTimeSelector(
-                                    "Bắt đầu cả ngày",
-                                    manualStartTime,
-                                    setManualStartTime,
-                                    "AM",
-                                  )}
-                                  {renderTimeSelector(
-                                    "Kết thúc cả ngày",
-                                    manualEndTime,
-                                    setManualEndTime,
-                                    "PM",
-                                  )}
-                                </div>
-                                <div style={{ fontSize: 12, color: "#0f172a", lineHeight: 1.45 }}>
-                                  Chia buổi theo cấu hình đợt: sáng {morningStart} - {morningEnd}, chiều {afternoonStart} - {afternoonEnd}.
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </label>
+                                        ),
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="prepare-time-grid">
+                                    {renderTimeSelector(
+                                      "Bắt đầu cả ngày",
+                                      manualStartTime,
+                                      setManualStartTime,
+                                      "AM",
+                                    )}
+                                    {renderTimeSelector(
+                                      "Kết thúc cả ngày",
+                                      manualEndTime,
+                                      setManualEndTime,
+                                      "PM",
+                                    )}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#0f172a",
+                                      lineHeight: 1.45,
+                                    }}
+                                  >
+                                    Chia buổi theo cấu hình đợt: sáng{" "}
+                                    {morningStart} - {morningEnd}, chiều{" "}
+                                    {afternoonStart} - {afternoonEnd}.
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </>
+                  )}
+
+                  {(manualReadOnly || createStep === 1) && (
+                    <div className="committee-modal-card">
+                      <span className="committee-modal-label">
+                        Tags hội đồng
+                      </span>
+                      {manualReadOnly ? (
+                        <div className="committee-modal-value">
+                          {getTagDisplayList(manualCouncilTags).join(", ") ||
+                            "-"}
+                        </div>
+                      ) : (
+                        <div
+                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                        >
+                          {allTags.map((tag: string) => (
+                            <button
+                              key={`manual-tag-${tag}`}
+                              type="button"
+                              className={`committee-tag-toggle ${manualCouncilTags.includes(resolveTagCode(tag)) ? "active" : ""}`}
+                              onClick={() => toggleManualCouncilTag(tag)}
+                              style={{
+                                minHeight: 34,
+                                padding: "6px 10px",
+                              }}
+                            >
+                              {getTagDisplayName(tag)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!manualReadOnly && allTags.length === 0 && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            fontSize: 12,
+                            color: "#f37021",
+                          }}
+                        >
+                          Chưa có tags từ API. Hãy kiểm tra endpoint /Tags/list
+                          rồi tải lại để có thể cấu hình hội đồng.
+                        </div>
+                      )}
                     </div>
-                  </>
-                )}
+                  )}
 
-                {(manualReadOnly || createStep === 1) && (
-                  <div className="committee-modal-card">
-                    <span className="committee-modal-label">Tags hội đồng</span>
-                    {manualReadOnly ? (
-                      <div className="committee-modal-value">
-                        {getTagDisplayList(manualCouncilTags).join(", ") || "-"}
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {allTags.map((tag: string) => (
-                          <button
-                            key={`manual-tag-${tag}`}
-                            type="button"
-                            className={`committee-tag-toggle ${manualCouncilTags.includes(resolveTagCode(tag)) ? "active" : ""}`}
-                            onClick={() => toggleManualCouncilTag(tag)}
-                            style={{
-                              minHeight: 34,
-                              padding: "6px 10px",
-                            }}
-                          >
-                            {getTagDisplayName(tag)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {!manualReadOnly && allTags.length === 0 && (
-                      <div
-                        style={{ marginTop: 8, fontSize: 12, color: "#f37021" }}
-                      >
-                        Chưa có tags từ API. Hãy kiểm tra endpoint /Tags/list rồi
-                        tải lại để có thể cấu hình hội đồng.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!manualReadOnly && createStep === 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      gap: 8,
-                      marginTop: 10,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
+                  {!manualReadOnly && createStep === 1 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: 8,
+                        marginTop: 10,
+                        flexWrap: "wrap",
+                      }}
                     >
-                      {manualMode === "create"
-                        ? "Lưu bước 1 & sang bước 2"
-                        : "Cập nhật bước 1 & sang bước 2"}
-                    </button>
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        className="committee-primary-btn"
+                        onClick={() => void saveManualCouncil()}
+                      >
+                        {manualMode === "create"
+                          ? "Lưu bước 1 & sang bước 2"
+                          : "Cập nhật bước 1 & sang bước 2"}
+                      </button>
+                    </div>
+                  )}
 
-                {(manualReadOnly || createStep === 2) && (
-                  <div className="committee-modal-card">
+                  {(manualReadOnly || createStep === 2) && (
+                    <div className="committee-modal-card">
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ display: "grid", gap: 2 }}>
+                          <span className="committee-modal-label">
+                            Danh sách thành viên hội đồng
+                          </span>
+                          <span className="committee-member-caption">
+                            Chủ tịch và Thư ký được khóa cứng. Tổng số thành
+                            viên phải đúng {expectedManualMemberCount} theo cấu
+                            hình đợt.
+                          </span>
+                        </div>
+                        {!manualReadOnly && (
+                          <button
+                            type="button"
+                            className="committee-ghost-btn"
+                            style={{ minHeight: 30, padding: "4px 10px" }}
+                            onClick={addManualMemberSlot}
+                            disabled={
+                              manualMembers.length >= expectedManualMemberCount
+                            }
+                          >
+                            <Plus size={13} /> Thêm slot thành viên
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="committee-manual-members-grid">
+                        {manualMembers.map(
+                          (member: CouncilMember, idx: number) => {
+                            const isFixedRoleSlot =
+                              idx < FIXED_MANUAL_MEMBER_SLOT_COUNT;
+                            const roleLabel = getManualMemberSlotRoleLabel(
+                              idx,
+                              member.role,
+                            );
+                            const roleSelectOptions =
+                              getManualMemberRoleSelectOptions(
+                                idx,
+                                member.role,
+                              );
+                            const lecturerOptions =
+                              buildManualMemberLecturerOptions(
+                                idx,
+                                member.role,
+                              );
+                            const selectedDegree = getLecturerDegreeByCode(
+                              member.lecturerCode,
+                            );
+                            const selectedTags = getTagDisplayList(
+                              getLecturerTagsByCode(member.lecturerCode),
+                            );
+                            const selectedLabel = member.lecturerCode
+                              ? formatLecturerOptionLabel({
+                                  lecturerCode: member.lecturerCode,
+                                  lecturerName: member.lecturerName,
+                                  degree: selectedDegree,
+                                })
+                              : "-";
+                            const requiresDoctorDegree = isChairRole(
+                              member.role,
+                            );
+
+                            return (
+                              <div
+                                key={`${member.role}-${idx}`}
+                                className="committee-member-slot-card"
+                              >
+                                <div className="committee-member-slot-head">
+                                  <span className="committee-modal-label">
+                                    {roleLabel}
+                                  </span>
+                                  {isFixedRoleSlot ? (
+                                    <span className="committee-member-role-hint">
+                                      Khóa cứng
+                                    </span>
+                                  ) : (
+                                    <span className="committee-member-role-hint">
+                                      Phản biện / Ủy viên
+                                    </span>
+                                  )}
+                                </div>
+
+                                {manualReadOnly ? (
+                                  <>
+                                    <div className="committee-member-readonly-role">
+                                      Vai trò: {roleLabel}
+                                    </div>
+                                    <div className="committee-modal-value">
+                                      {selectedLabel}
+                                    </div>
+                                    {member.lecturerCode && (
+                                      <div className="committee-member-meta">
+                                        <div>
+                                          Học vị:{" "}
+                                          {selectedDegree ||
+                                            "Chưa cập nhật học vị"}{" "}
+                                          · Tags:{" "}
+                                          {selectedTags.join(", ") || "-"}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    {isFixedRoleSlot ? (
+                                      <div className="committee-member-readonly-role">
+                                        Vai trò cố định: {roleLabel}
+                                      </div>
+                                    ) : (
+                                      <label className="committee-member-field">
+                                        <span className="committee-member-field-label">
+                                          Vai trò
+                                        </span>
+                                        <InlinePicker
+                                          value={member.role}
+                                          onChange={(event) =>
+                                            updateManualMemberRole(idx, event)
+                                          }
+                                          ariaLabel={`Vai trò thành viên ${idx + 1}`}
+                                          className="prepare-picker-wide"
+                                          options={roleSelectOptions.map(
+                                            (roleValue) => ({
+                                              value: roleValue.value,
+                                              label: roleValue.label,
+                                            }),
+                                          )}
+                                        />
+                                      </label>
+                                    )}
+
+                                    <label className="committee-member-field">
+                                      <span className="committee-member-field-label">
+                                        Giảng viên{" "}
+                                        {requiresDoctorDegree
+                                          ? "(lọc Tiến sĩ)"
+                                          : ""}
+                                      </span>
+                                      <InlinePicker
+                                        value={member?.lecturerCode ?? ""}
+                                        onChange={(event) =>
+                                          updateManualMember(idx, event)
+                                        }
+                                        ariaLabel={`Chọn giảng viên cho slot ${idx + 1}`}
+                                        disabled={lecturerOptions.length === 0}
+                                        className="committee-lecturer-picker"
+                                        options={[
+                                          {
+                                            value: "",
+                                            label: requiresDoctorDegree
+                                              ? "Chọn giảng viên Tiến sĩ"
+                                              : "Chọn giảng viên",
+                                            displayLabel: requiresDoctorDegree
+                                              ? "Chọn giảng viên Tiến sĩ"
+                                              : "Chọn giảng viên",
+                                            className:
+                                              "committee-lecturer-picker-placeholder",
+                                          },
+                                          ...lecturerOptions.map(
+                                            (lecturer) => ({
+                                              value: lecturer.lecturerCode,
+                                              label:
+                                                renderLecturerPickerOption(
+                                                  lecturer,
+                                                ),
+                                              displayLabel: `${lecturer.lecturerCode} - ${lecturer.lecturerName}`,
+                                            }),
+                                          ),
+                                        ]}
+                                      />
+                                    </label>
+
+                                    {requiresDoctorDegree &&
+                                      lecturerOptions.length === 0 && (
+                                        <div className="committee-member-warning">
+                                          Không có giảng viên Tiến sĩ khả dụng
+                                          cho slot Chủ tịch.
+                                        </div>
+                                      )}
+
+                                    {member.lecturerCode && (
+                                      <div className="committee-member-meta">
+                                        <div>
+                                          Học vị:{" "}
+                                          {selectedDegree ||
+                                            "Chưa cập nhật học vị"}{" "}
+                                          · Tags:{" "}
+                                          {selectedTags.join(", ") || "-"}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {!isFixedRoleSlot &&
+                                      manualMembers.length >
+                                        expectedManualMemberCount && (
+                                        <button
+                                          type="button"
+                                          className="committee-danger-btn committee-member-remove-btn"
+                                          style={{
+                                            minHeight: 30,
+                                            padding: "4px 10px",
+                                          }}
+                                          onClick={() =>
+                                            removeManualMemberSlot(idx)
+                                          }
+                                        >
+                                          <Trash2 size={12} /> Xóa slot
+                                        </button>
+                                      )}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {!manualReadOnly && createStep === 2 && (
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center",
                         gap: 8,
-                        marginBottom: 8,
+                        marginTop: 10,
                         flexWrap: "wrap",
                       }}
                     >
-                      <div style={{ display: "grid", gap: 2 }}>
-                        <span className="committee-modal-label">
-                          Danh sách thành viên hội đồng
-                        </span>
-                        <span className="committee-member-caption">
-                          Chủ tịch và Thư ký được khóa cứng. Tổng số thành viên phải đúng {expectedManualMemberCount} theo cấu hình đợt.
-                        </span>
-                      </div>
-                      {!manualReadOnly && (
-                        <button
-                          type="button"
-                          className="committee-ghost-btn"
-                          style={{ minHeight: 30, padding: "4px 10px" }}
-                          onClick={addManualMemberSlot}
-                          disabled={manualMembers.length >= expectedManualMemberCount}
-                        >
-                          <Plus size={13} /> Thêm slot thành viên
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="committee-ghost-btn"
+                        onClick={() => setCreateStep(1)}
+                      >
+                        Quay lại bước 1
+                      </button>
+                      <button
+                        type="button"
+                        className="committee-primary-btn"
+                        onClick={() => void saveManualCouncil()}
+                      >
+                        {manualMode === "create"
+                          ? "Lưu bước 2 & sang bước 3"
+                          : "Cập nhật bước 2 & sang bước 3"}
+                      </button>
                     </div>
+                  )}
 
-                    <div className="committee-manual-members-grid">
-                      {manualMembers.map(
-                        (member: CouncilMember, idx: number) => {
-                          const isFixedRoleSlot =
-                            idx < FIXED_MANUAL_MEMBER_SLOT_COUNT;
-                          const roleLabel = getManualMemberSlotRoleLabel(
-                            idx,
-                            member.role,
-                          );
-                          const roleSelectOptions =
-                            getManualMemberRoleSelectOptions(idx, member.role);
-                          const lecturerOptions = buildManualMemberLecturerOptions(
-                            idx,
-                            member.role,
-                          );
-                          const selectedDegree = getLecturerDegreeByCode(
-                            member.lecturerCode,
-                          );
-                          const selectedTags = getTagDisplayList(
-                            getLecturerTagsByCode(member.lecturerCode),
-                          );
-                          const selectedLabel = member.lecturerCode
-                            ? formatLecturerOptionLabel({
-                                lecturerCode: member.lecturerCode,
-                                lecturerName: member.lecturerName,
-                                degree: selectedDegree,
-                              })
-                            : "-";
-                          const requiresDoctorDegree = isChairRole(member.role);
-
-                          return (
-                            <div
-                              key={`${member.role}-${idx}`}
-                              className="committee-member-slot-card"
-                            >
-                              <div className="committee-member-slot-head">
-                                <span className="committee-modal-label">
-                                  {roleLabel}
-                                </span>
-                                {isFixedRoleSlot ? (
-                                  <span className="committee-member-role-hint">
-                                    Khóa cứng
-                                  </span>
-                                ) : (
-                                  <span className="committee-member-role-hint">
-                                    Phản biện / Ủy viên
-                                  </span>
-                                )}
-                              </div>
-
-                              {manualReadOnly ? (
-                                <>
-                                  <div className="committee-member-readonly-role">
-                                    Vai trò: {roleLabel}
-                                  </div>
-                                  <div className="committee-modal-value">
-                                    {selectedLabel}
-                                  </div>
-                                  {member.lecturerCode && (
-                                    <div className="committee-member-meta">
-                                      <div>
-                                        Học vị: {selectedDegree || "Chưa cập nhật học vị"} · Tags:{" "}
-                                        {selectedTags.join(", ") || "-"}
-                                      </div>
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {isFixedRoleSlot ? (
-                                    <div className="committee-member-readonly-role">
-                                      Vai trò cố định: {roleLabel}
-                                    </div>
-                                  ) : (
-                                    <label className="committee-member-field">
-                                      <span className="committee-member-field-label">
-                                        Vai trò
-                                      </span>
-                                      <InlinePicker
-                                        value={member.role}
-                                        onChange={(event) =>
-                                          updateManualMemberRole(
-                                            idx,
-                                            event,
-                                          )
-                                        }
-                                        ariaLabel={`Vai trò thành viên ${idx + 1}`}
-                                        className="prepare-picker-wide"
-                                        options={roleSelectOptions.map((roleValue) => ({
-                                          value: roleValue.value,
-                                          label: roleValue.label,
-                                        }))}
-                                      />
-                                    </label>
-                                  )}
-
-                                  <label className="committee-member-field">
-                                    <span className="committee-member-field-label">
-                                      Giảng viên {requiresDoctorDegree ? "(lọc Tiến sĩ)" : ""}
+                  {(manualReadOnly || createStep === 3) && (
+                    <div className="committee-modal-card">
+                      <span className="committee-modal-label">
+                        Danh sách đề tài
+                      </span>
+                      <span className="committee-member-caption">
+                        Chọn đề tài liên quan để xếp vào hội đồng. Danh sách
+                        hiển thị đầy đủ mã, GVHD và tags.
+                      </span>
+                      <div className="committee-manual-topic-grid">
+                        <div className="committee-topic-panel">
+                          <div className="committee-topic-panel-head">
+                            <span>Đề tài liên quan</span>
+                            <span>{manualRelatedStudentView.length}</span>
+                          </div>
+                          <div className="committee-topic-panel-list">
+                            {manualRelatedStudentView.map((item) => {
+                              const topicSession = getManualTopicSessionCode(
+                                item.studentCode,
+                              );
+                              const currentAssignment =
+                                manualAssignmentByStudentCode.get(
+                                  item.studentCode,
+                                );
+                              return (
+                                <article
+                                  key={`related-${item.studentCode}`}
+                                  className="committee-topic-item committee-topic-item--selected"
+                                >
+                                  <div className="committee-topic-item-head">
+                                    <span className="committee-topic-item-code">
+                                      {item.topicCode}
                                     </span>
-                                    <InlinePicker
-                                      value={member?.lecturerCode ?? ""}
-                                      onChange={(event) =>
-                                        updateManualMember(
-                                          idx,
-                                          event,
-                                        )
-                                      }
-                                      ariaLabel={`Chọn giảng viên cho slot ${idx + 1}`}
-                                      disabled={lecturerOptions.length === 0}
-                                      className="committee-lecturer-picker"
-                                      options={[
-                                        {
-                                          value: "",
-                                          label: requiresDoctorDegree
-                                            ? "Chọn giảng viên Tiến sĩ"
-                                            : "Chọn giảng viên",
-                                          displayLabel: requiresDoctorDegree
-                                            ? "Chọn giảng viên Tiến sĩ"
-                                            : "Chọn giảng viên",
-                                          className: "committee-lecturer-picker-placeholder",
-                                        },
-                                        ...lecturerOptions.map((lecturer) => ({
-                                          value: lecturer.lecturerCode,
-                                          label: renderLecturerPickerOption(lecturer),
-                                          displayLabel: `${lecturer.lecturerCode} - ${lecturer.lecturerName}`,
-                                        })),
-                                      ]}
-                                    />
-                                  </label>
-
-                                  {requiresDoctorDegree &&
-                                    lecturerOptions.length === 0 && (
-                                      <div className="committee-member-warning">
-                                        Không có giảng viên Tiến sĩ khả dụng cho slot Chủ tịch.
-                                      </div>
+                                    <span className="committee-topic-item-student-code">
+                                      {item.studentCode}
+                                    </span>
+                                  </div>
+                                  <div className="committee-topic-item-title">
+                                    {item.topicTitle}
+                                  </div>
+                                  <div className="committee-topic-item-meta">
+                                    Sinh viên: {item.studentName}
+                                  </div>
+                                  <div className="committee-topic-item-meta">
+                                    GVHD: {item.supervisorName}
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    <span className="committee-modal-chip committee-modal-chip--status">
+                                      {topicSession === "AFTERNOON"
+                                        ? "Buổi chiều"
+                                        : "Buổi sáng"}
+                                    </span>
+                                    {!manualReadOnly &&
+                                      manualScheduleMode === "FULL_DAY" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className={
+                                              topicSession === "MORNING"
+                                                ? "committee-primary-btn"
+                                                : "committee-ghost-btn"
+                                            }
+                                            style={{
+                                              minHeight: 28,
+                                              padding: "2px 8px",
+                                            }}
+                                            onClick={() =>
+                                              assignTopicToSession(
+                                                item.studentCode,
+                                                "MORNING",
+                                              )
+                                            }
+                                          >
+                                            Sáng
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className={
+                                              topicSession === "AFTERNOON"
+                                                ? "committee-primary-btn"
+                                                : "committee-ghost-btn"
+                                            }
+                                            style={{
+                                              minHeight: 28,
+                                              padding: "2px 8px",
+                                            }}
+                                            onClick={() =>
+                                              assignTopicToSession(
+                                                item.studentCode,
+                                                "AFTERNOON",
+                                              )
+                                            }
+                                          >
+                                            Chiều
+                                          </button>
+                                        </>
+                                      )}
+                                  </div>
+                                  <div className="committee-modal-chip-list">
+                                    {item.topicTags.length > 0 ? (
+                                      item.topicTags.map((tag) => (
+                                        <span
+                                          key={`related-${item.studentCode}-${tag}`}
+                                          className="committee-modal-chip"
+                                        >
+                                          {getTagDisplayName(tag)}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="committee-modal-chip committee-modal-chip--muted">
+                                        -
+                                      </span>
                                     )}
+                                  </div>
 
-                                  {member.lecturerCode && (
-                                    <div className="committee-member-meta">
-                                      <div>
-                                        Học vị: {selectedDegree || "Chưa cập nhật học vị"} · Tags:{" "}
-                                        {selectedTags.join(", ") || "-"}
+                                  <div className="committee-member-meta">
+                                    <div>
+                                      Ngày:{" "}
+                                      {formatDateLabel(
+                                        currentAssignment?.scheduledAt ??
+                                          manualDefenseDate,
+                                      )}
+                                    </div>
+                                    <div>
+                                      Khung giờ:{" "}
+                                      {currentAssignment?.startTime ??
+                                        manualStartTime}{" "}
+                                      -{" "}
+                                      {currentAssignment?.endTime ??
+                                        manualEndTime}
+                                    </div>
+                                    <div>
+                                      Thứ tự:{" "}
+                                      {currentAssignment?.orderIndex ?? 1}
+                                    </div>
+                                  </div>
+
+                                  {!manualReadOnly && (
+                                    <div style={{ display: "grid", gap: 8 }}>
+                                      <label className="committee-member-field">
+                                        <span className="committee-member-field-label">
+                                          Ngày
+                                        </span>
+                                        <input
+                                          type="date"
+                                          value={
+                                            currentAssignment?.scheduledAt ??
+                                            manualDefenseDate
+                                          }
+                                          onChange={(event) => {
+                                            const nextDate =
+                                              normalizeDefenseDateOnly(
+                                                event.target.value,
+                                              ) || manualDefenseDate;
+                                            updateManualAssignment(
+                                              item.studentCode,
+                                              (assignment) => ({
+                                                ...assignment,
+                                                scheduledAt: nextDate,
+                                              }),
+                                            );
+                                          }}
+                                        />
+                                      </label>
+                                      <div className="prepare-time-grid">
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">
+                                            Giờ bắt đầu
+                                          </span>
+                                          <input
+                                            type="time"
+                                            value={
+                                              currentAssignment?.startTime ??
+                                              manualStartTime
+                                            }
+                                            onChange={(event) => {
+                                              const nextTime =
+                                                normalizeTimeOnly(
+                                                  event.target.value,
+                                                ) ||
+                                                currentAssignment?.startTime ||
+                                                manualStartTime;
+                                              updateManualAssignment(
+                                                item.studentCode,
+                                                (assignment) => ({
+                                                  ...assignment,
+                                                  startTime: nextTime,
+                                                }),
+                                              );
+                                            }}
+                                          />
+                                        </label>
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">
+                                            Giờ kết thúc
+                                          </span>
+                                          <input
+                                            type="time"
+                                            value={
+                                              currentAssignment?.endTime ??
+                                              manualEndTime
+                                            }
+                                            onChange={(event) => {
+                                              const nextTime =
+                                                normalizeTimeOnly(
+                                                  event.target.value,
+                                                ) ||
+                                                currentAssignment?.endTime ||
+                                                manualEndTime;
+                                              updateManualAssignment(
+                                                item.studentCode,
+                                                (assignment) => ({
+                                                  ...assignment,
+                                                  endTime: nextTime,
+                                                }),
+                                              );
+                                            }}
+                                          />
+                                        </label>
+                                        <label className="committee-member-field">
+                                          <span className="committee-member-field-label">
+                                            Thứ tự
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            step={1}
+                                            value={
+                                              currentAssignment?.orderIndex ?? 1
+                                            }
+                                            onChange={(event) => {
+                                              const nextOrder = Math.max(
+                                                1,
+                                                Math.floor(
+                                                  Number(event.target.value) ||
+                                                    1,
+                                                ),
+                                              );
+                                              updateManualAssignment(
+                                                item.studentCode,
+                                                (assignment) => ({
+                                                  ...assignment,
+                                                  orderIndex: nextOrder,
+                                                }),
+                                              );
+                                            }}
+                                          />
+                                        </label>
                                       </div>
                                     </div>
                                   )}
 
-                                  {!isFixedRoleSlot && manualMembers.length > expectedManualMemberCount && (
+                                  {!manualReadOnly && (
                                     <button
                                       type="button"
-                                      className="committee-danger-btn committee-member-remove-btn"
-                                      style={{
-                                        minHeight: 30,
-                                        padding: "4px 10px",
-                                      }}
+                                      className="committee-danger-btn committee-topic-item-action"
                                       onClick={() =>
-                                        removeManualMemberSlot(idx)
+                                        moveTopicToUnrelated(item.studentCode)
                                       }
                                     >
-                                      <Trash2 size={12} /> Xóa slot
+                                      <X size={12} /> Bỏ liên quan
                                     </button>
                                   )}
-                                </>
-                              )}
-                            </div>
-                          );
-                        },
-                      )}
-                    </div>
-                  </div>
-                )}
+                                </article>
+                              );
+                            })}
 
-                {!manualReadOnly && createStep === 2 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      marginTop: 10,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="committee-ghost-btn"
-                      onClick={() => setCreateStep(1)}
-                    >
-                      Quay lại bước 1
-                    </button>
-                    <button
-                      type="button"
-                      className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
-                    >
-                      {manualMode === "create"
-                        ? "Lưu bước 2 & sang bước 3"
-                        : "Cập nhật bước 2 & sang bước 3"}
-                    </button>
-                  </div>
-                )}
-
-                {(manualReadOnly || createStep === 3) && (
-                  <div className="committee-modal-card">
-                    <span className="committee-modal-label">
-                      Danh sách đề tài
-                    </span>
-                    <span className="committee-member-caption">
-                      Chọn đề tài liên quan để xếp vào hội đồng. Danh sách hiển thị đầy đủ mã, GVHD và tags.
-                    </span>
-                    <div
-                      className="committee-manual-topic-grid"
-                    >
-                      <div className="committee-topic-panel">
-                        <div className="committee-topic-panel-head">
-                          <span>Đề tài liên quan</span>
-                          <span>{manualRelatedStudentView.length}</span>
+                            {manualRelatedStudentView.length === 0 && (
+                              <div className="committee-topic-empty">
+                                Chưa có đề tài liên quan được chọn.
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="committee-topic-panel-list">
-                          {manualRelatedStudentView.map((item) => {
-                            const topicSession = getManualTopicSessionCode(item.studentCode);
-                            const currentAssignment =
-                              manualAssignmentByStudentCode.get(item.studentCode);
-                            return (
+
+                        <div className="committee-topic-panel">
+                          <div className="committee-topic-panel-head">
+                            <span>Đề tài chưa chọn</span>
+                            <span>{manualUnrelatedStudentView.length}</span>
+                          </div>
+                          <div className="committee-topic-panel-list">
+                            {manualUnrelatedStudentView.map((item) => (
                               <article
-                                key={`related-${item.studentCode}`}
-                                className="committee-topic-item committee-topic-item--selected"
+                                key={`unrelated-${item.studentCode}`}
+                                className="committee-topic-item"
                               >
                                 <div className="committee-topic-item-head">
                                   <span className="committee-topic-item-code">
@@ -9859,47 +10765,11 @@ const CommitteeManagement: React.FC = () => {
                                 <div className="committee-topic-item-meta">
                                   GVHD: {item.supervisorName}
                                 </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <span className="committee-modal-chip committee-modal-chip--status">
-                                    {topicSession === "AFTERNOON" ? "Buổi chiều" : "Buổi sáng"}
-                                  </span>
-                                  {!manualReadOnly && manualScheduleMode === "FULL_DAY" && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className={topicSession === "MORNING" ? "committee-primary-btn" : "committee-ghost-btn"}
-                                        style={{ minHeight: 28, padding: "2px 8px" }}
-                                        onClick={() =>
-                                          assignTopicToSession(item.studentCode, "MORNING")
-                                        }
-                                      >
-                                        Sáng
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={topicSession === "AFTERNOON" ? "committee-primary-btn" : "committee-ghost-btn"}
-                                        style={{ minHeight: 28, padding: "2px 8px" }}
-                                        onClick={() =>
-                                          assignTopicToSession(item.studentCode, "AFTERNOON")
-                                        }
-                                      >
-                                        Chiều
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
                                 <div className="committee-modal-chip-list">
                                   {item.topicTags.length > 0 ? (
                                     item.topicTags.map((tag) => (
                                       <span
-                                        key={`related-${item.studentCode}-${tag}`}
+                                        key={`unrelated-${item.studentCode}-${tag}`}
                                         className="committee-modal-chip"
                                       >
                                         {getTagDisplayName(tag)}
@@ -9912,229 +10782,78 @@ const CommitteeManagement: React.FC = () => {
                                   )}
                                 </div>
 
-                                <div className="committee-member-meta">
-                                  <div>
-                                    Ngày: {formatDateLabel(currentAssignment?.scheduledAt ?? manualDefenseDate)}
-                                  </div>
-                                  <div>
-                                    Khung giờ: {currentAssignment?.startTime ?? manualStartTime} - {currentAssignment?.endTime ?? manualEndTime}
-                                  </div>
-                                  <div>
-                                    Thứ tự: {currentAssignment?.orderIndex ?? 1}
-                                  </div>
-                                </div>
-
-                                {!manualReadOnly && (
-                                  <div style={{ display: "grid", gap: 8 }}>
-                                    <label className="committee-member-field">
-                                      <span className="committee-member-field-label">Ngày</span>
-                                      <input
-                                        type="date"
-                                        value={currentAssignment?.scheduledAt ?? manualDefenseDate}
-                                        onChange={(event) => {
-                                          const nextDate =
-                                            normalizeDefenseDateOnly(event.target.value) ||
-                                            manualDefenseDate;
-                                          updateManualAssignment(item.studentCode, (assignment) => ({
-                                            ...assignment,
-                                            scheduledAt: nextDate,
-                                          }));
-                                        }}
-                                      />
-                                    </label>
-                                    <div className="prepare-time-grid">
-                                      <label className="committee-member-field">
-                                        <span className="committee-member-field-label">Giờ bắt đầu</span>
-                                        <input
-                                          type="time"
-                                          value={currentAssignment?.startTime ?? manualStartTime}
-                                          onChange={(event) => {
-                                            const nextTime =
-                                              normalizeTimeOnly(event.target.value) ||
-                                              currentAssignment?.startTime ||
-                                              manualStartTime;
-                                            updateManualAssignment(item.studentCode, (assignment) => ({
-                                              ...assignment,
-                                              startTime: nextTime,
-                                            }));
-                                          }}
-                                        />
-                                      </label>
-                                      <label className="committee-member-field">
-                                        <span className="committee-member-field-label">Giờ kết thúc</span>
-                                        <input
-                                          type="time"
-                                          value={currentAssignment?.endTime ?? manualEndTime}
-                                          onChange={(event) => {
-                                            const nextTime =
-                                              normalizeTimeOnly(event.target.value) ||
-                                              currentAssignment?.endTime ||
-                                              manualEndTime;
-                                            updateManualAssignment(item.studentCode, (assignment) => ({
-                                              ...assignment,
-                                              endTime: nextTime,
-                                            }));
-                                          }}
-                                        />
-                                      </label>
-                                      <label className="committee-member-field">
-                                        <span className="committee-member-field-label">Thứ tự</span>
-                                        <input
-                                          type="number"
-                                          min={1}
-                                          step={1}
-                                          value={currentAssignment?.orderIndex ?? 1}
-                                          onChange={(event) => {
-                                            const nextOrder = Math.max(
-                                              1,
-                                              Math.floor(Number(event.target.value) || 1),
-                                            );
-                                            updateManualAssignment(item.studentCode, (assignment) => ({
-                                              ...assignment,
-                                              orderIndex: nextOrder,
-                                            }));
-                                          }}
-                                        />
-                                      </label>
-                                    </div>
-                                  </div>
-                                )}
-
                                 {!manualReadOnly && (
                                   <button
                                     type="button"
-                                    className="committee-danger-btn committee-topic-item-action"
-                                    onClick={() => moveTopicToUnrelated(item.studentCode)}
+                                    className="committee-ghost-btn committee-topic-item-action"
+                                    onClick={() =>
+                                      moveTopicToRelated(item.studentCode)
+                                    }
                                   >
-                                    <X size={12} /> Bỏ liên quan
+                                    <Plus size={12} /> Thêm liên quan
                                   </button>
                                 )}
                               </article>
-                            );
-                          })}
+                            ))}
 
-                          {manualRelatedStudentView.length === 0 && (
-                            <div className="committee-topic-empty">
-                              Chưa có đề tài liên quan được chọn.
-                            </div>
-                          )}
+                            {manualUnrelatedStudentView.length === 0 && (
+                              <div className="committee-topic-empty">
+                                Tất cả đề tài hiện đã được chọn liên quan.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="committee-topic-panel">
-                        <div className="committee-topic-panel-head">
-                          <span>Đề tài chưa chọn</span>
-                          <span>{manualUnrelatedStudentView.length}</span>
+                      {!manualReadOnly && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            fontSize: 12,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {manualScheduleMode === "ONE_SESSION"
+                            ? `Đề tài đã chọn: ${manualRelatedStudents.length} · Tất cả thuộc ${manualSessionCode === "AFTERNOON" ? "buổi chiều" : "buổi sáng"}`
+                            : `Đề tài đã chọn: ${manualRelatedStudents.length} · Buổi sáng: ${manualMorningStudents.length} · Buổi chiều: ${manualAfternoonStudents.length}`}
                         </div>
-                        <div className="committee-topic-panel-list">
-                          {manualUnrelatedStudentView.map((item) => (
-                            <article
-                              key={`unrelated-${item.studentCode}`}
-                              className="committee-topic-item"
-                            >
-                              <div className="committee-topic-item-head">
-                                <span className="committee-topic-item-code">
-                                  {item.topicCode}
-                                </span>
-                                <span className="committee-topic-item-student-code">
-                                  {item.studentCode}
-                                </span>
-                              </div>
-                              <div className="committee-topic-item-title">
-                                {item.topicTitle}
-                              </div>
-                              <div className="committee-topic-item-meta">
-                                Sinh viên: {item.studentName}
-                              </div>
-                              <div className="committee-topic-item-meta">
-                                GVHD: {item.supervisorName}
-                              </div>
-                              <div className="committee-modal-chip-list">
-                                {item.topicTags.length > 0 ? (
-                                  item.topicTags.map((tag) => (
-                                    <span
-                                      key={`unrelated-${item.studentCode}-${tag}`}
-                                      className="committee-modal-chip"
-                                    >
-                                      {getTagDisplayName(tag)}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="committee-modal-chip committee-modal-chip--muted">
-                                    -
-                                  </span>
-                                )}
-                              </div>
-
-                              {!manualReadOnly && (
-                                <button
-                                  type="button"
-                                  className="committee-ghost-btn committee-topic-item-action"
-                                  onClick={() => moveTopicToRelated(item.studentCode)}
-                                >
-                                  <Plus size={12} /> Thêm liên quan
-                                </button>
-                              )}
-                            </article>
-                          ))}
-
-                          {manualUnrelatedStudentView.length === 0 && (
-                            <div className="committee-topic-empty">
-                              Tất cả đề tài hiện đã được chọn liên quan.
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </div>
-                    {!manualReadOnly && (
-                      <div
-                        style={{
-                          marginTop: 10,
-                          fontSize: 12,
-                          color: "#0f172a",
-                        }}
+                  )}
+
+                  {!manualReadOnly && createStep === 3 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginTop: 10,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="committee-ghost-btn"
+                        onClick={() => setCreateStep(2)}
                       >
-                        {manualScheduleMode === "ONE_SESSION"
-                          ? `Đề tài đã chọn: ${manualRelatedStudents.length} · Tất cả thuộc ${manualSessionCode === "AFTERNOON" ? "buổi chiều" : "buổi sáng"}`
-                          : `Đề tài đã chọn: ${manualRelatedStudents.length} · Buổi sáng: ${manualMorningStudents.length} · Buổi chiều: ${manualAfternoonStudents.length}`}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!manualReadOnly && createStep === 3 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      marginTop: 10,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="committee-ghost-btn"
-                      onClick={() => setCreateStep(2)}
-                    >
-                      Quay lại bước 2
-                    </button>
-                    <button
-                      type="button"
-                      className="committee-primary-btn"
-                      onClick={() => void saveManualCouncil()}
-                      disabled={Boolean(actionInFlight)}
-                    >
-                      {manualMode === "create" ? "Lưu hội đồng" : "Hoàn tất cập nhật"}
-                    </button>
-                  </div>
-                )}
+                        Quay lại bước 2
+                      </button>
+                      <button
+                        type="button"
+                        className="committee-primary-btn"
+                        onClick={() => void saveManualCouncil()}
+                        disabled={Boolean(actionInFlight)}
+                      >
+                        {manualMode === "create"
+                          ? "Lưu hội đồng"
+                          : "Hoàn tất cập nhật"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
+            </div>,
+            document.body,
+          )}
       </div>
     </div>
   );

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertCircle,
   CalendarDays,
@@ -38,6 +44,12 @@ import {
   getActiveDefensePeriodId,
   setActiveDefensePeriodId,
 } from "../../utils/defensePeriod";
+import DefenseTermLecturersSection, {
+  type DefenseTermLecturersSectionHandle,
+} from "../../components/admin/DefenseTermLecturersSection";
+import DefenseTermStudentsSection, {
+  type DefenseTermStudentsSectionHandle,
+} from "../../components/admin/DefenseTermStudentsSection";
 import "./Dashboard.css";
 
 type DefenseTermStatus =
@@ -136,7 +148,7 @@ const pageStyles: Record<string, React.CSSProperties> = {
     padding: 20,
     background: "#ffffff",
     overflowX: "hidden",
-    fontFamily: "\"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif",
+    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
     color: "#0f172a",
   },
   shell: {
@@ -160,7 +172,8 @@ const pageStyles: Record<string, React.CSSProperties> = {
     width: 220,
     height: 220,
     borderRadius: "50%",
-    background: "radial-gradient(circle, rgba(0, 0, 0, 0.16) 0, rgba(0, 0, 0, 0) 72%)",
+    background:
+      "radial-gradient(circle, rgba(0, 0, 0, 0.16) 0, rgba(0, 0, 0, 0) 72%)",
     pointerEvents: "none",
   },
   sectionCard: {
@@ -188,7 +201,8 @@ const pageStyles: Record<string, React.CSSProperties> = {
   },
   toolbar: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.05fr) minmax(150px, 1fr) minmax(150px, 1fr)",
+    gridTemplateColumns:
+      "minmax(0, 2fr) minmax(0, 1.05fr) minmax(150px, 1fr) minmax(150px, 1fr)",
     gap: 12,
     alignItems: "center",
     padding: 14,
@@ -477,7 +491,9 @@ const isNoDataMessage = (value: string): boolean => {
   );
 };
 
-const isNoDataEnvelope = (response: ApiResponse<unknown> | null | undefined): boolean => {
+const isNoDataEnvelope = (
+  response: ApiResponse<unknown> | null | undefined,
+): boolean => {
   if (!response) {
     return false;
   }
@@ -543,7 +559,9 @@ const defensePeriodApi = {
         ...(payload ?? {}),
         ...(idempotencyKey ? { idempotencyKey } : {}),
       },
-      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      headers: idempotencyKey
+        ? { "Idempotency-Key": idempotencyKey }
+        : undefined,
     }),
 };
 
@@ -581,12 +599,21 @@ const DefensePeriodsManagement: React.FC = () => {
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(() =>
     getActiveDefensePeriodId(),
   );
-  const [snapshotMap, setSnapshotMap] = useState<Record<number, DefensePeriodSnapshot>>({});
+  const [snapshotMap, setSnapshotMap] = useState<
+    Record<number, DefensePeriodSnapshot>
+  >({});
+  const studentsSectionRef = useRef<DefenseTermStudentsSectionHandle | null>(
+    null,
+  );
+  const lecturersSectionRef = useRef<DefenseTermLecturersSectionHandle | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [showForm, setShowForm] = useState(false);
   const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
-  const [allowFinalizeAfterWarning, setAllowFinalizeAfterWarning] = useState(false);
+  const [allowFinalizeAfterWarning, setAllowFinalizeAfterWarning] =
+    useState(false);
   const [roadmapLayout, setRoadmapLayout] = useState<RoadmapLayout>("vertical");
   const [roadmapAnimated, setRoadmapAnimated] = useState(false);
   const roadmapTrackRef = useRef<HTMLDivElement | null>(null);
@@ -606,15 +633,17 @@ const DefensePeriodsManagement: React.FC = () => {
       );
 
       const rawCode = asString(
-        pickValue(item, ["defenseTermCode", "DefenseTermCode", "code", "Code"], ""),
+        pickValue(
+          item,
+          ["defenseTermCode", "DefenseTermCode", "code", "Code"],
+          "",
+        ),
       );
 
       const startDate = toIsoDate(
         pickValue(item, ["startDate", "StartDate"], ""),
       );
-      const endDate = toIsoDate(
-        pickValue(item, ["endDate", "EndDate"], ""),
-      );
+      const endDate = toIsoDate(pickValue(item, ["endDate", "EndDate"], ""));
 
       const code =
         rawCode ||
@@ -630,9 +659,15 @@ const DefensePeriodsManagement: React.FC = () => {
         startDate,
         endDate,
         status: normalizeStatus(pickValue(item, ["status", "Status"], "Draft")),
-        createdAt: toLocalDateTime(pickValue(item, ["createdAt", "CreatedAt"], "")),
+        createdAt: toLocalDateTime(
+          pickValue(item, ["createdAt", "CreatedAt"], ""),
+        ),
         updatedAt: toLocalDateTime(
-          pickValue(item, ["lastUpdated", "LastUpdated", "updatedAt", "UpdatedAt"], ""),
+          pickValue(
+            item,
+            ["lastUpdated", "LastUpdated", "updatedAt", "UpdatedAt"],
+            "",
+          ),
         ),
       };
     },
@@ -682,13 +717,15 @@ const DefensePeriodsManagement: React.FC = () => {
         ? payload
         : payload && typeof payload === "object"
           ? ((payload as { items?: unknown[]; Items?: unknown[] }).items ??
-              (payload as { Items?: unknown[] }).Items ??
-              [])
+            (payload as { Items?: unknown[] }).Items ??
+            [])
           : [];
 
       const mapped = list
         .filter((item) => item && typeof item === "object")
-        .map((item, index) => normalizePeriodRow(item as Record<string, unknown>, index))
+        .map((item, index) =>
+          normalizePeriodRow(item as Record<string, unknown>, index),
+        )
         .filter((item) => item.periodId > 0)
         .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
@@ -734,7 +771,8 @@ const DefensePeriodsManagement: React.FC = () => {
           return;
         }
 
-        const payload = readEnvelopeData<Record<string, unknown>>(response) ?? {};
+        const payload =
+          readEnvelopeData<Record<string, unknown>>(response) ?? {};
         const snapshot: DefensePeriodSnapshot = {
           detail: pickValue(payload, ["detail", "Detail"], {}),
           dashboard: pickValue(payload, ["dashboard", "Dashboard"], {}),
@@ -779,7 +817,8 @@ const DefensePeriodsManagement: React.FC = () => {
         item.code.toLowerCase().includes(normalizedKeyword) ||
         item.name.toLowerCase().includes(normalizedKeyword);
       const hitStatus = statusFilter === "all" || item.status === statusFilter;
-      const hitFrom = !dateFrom || !item.startDate || item.startDate >= dateFrom;
+      const hitFrom =
+        !dateFrom || !item.startDate || item.startDate >= dateFrom;
       const hitTo = !dateTo || !item.endDate || item.endDate <= dateTo;
       return hitKeyword && hitStatus && hitFrom && hitTo;
     });
@@ -793,10 +832,22 @@ const DefensePeriodsManagement: React.FC = () => {
   const selectedSnapshot =
     selectedPeriodId != null ? snapshotMap[selectedPeriodId] : undefined;
 
-  const statePayload = selectedSnapshot?.state ?? {};
-  const dashboardPayload = selectedSnapshot?.dashboard ?? {};
-  const configPayload = selectedSnapshot?.config ?? {};
-  const workflowPayload = selectedSnapshot?.workflow ?? {};
+  const statePayload = useMemo(
+    () => selectedSnapshot?.state ?? {},
+    [selectedSnapshot],
+  );
+  const dashboardPayload = useMemo(
+    () => selectedSnapshot?.dashboard ?? {},
+    [selectedSnapshot],
+  );
+  const configPayload = useMemo(
+    () => selectedSnapshot?.config ?? {},
+    [selectedSnapshot],
+  );
+  const workflowPayload = useMemo(
+    () => selectedSnapshot?.workflow ?? {},
+    [selectedSnapshot],
+  );
 
   const configRooms = useMemo(() => {
     const rooms = pickValue(configPayload, ["rooms", "Rooms"], [] as unknown[]);
@@ -852,12 +903,16 @@ const DefensePeriodsManagement: React.FC = () => {
       },
       {
         label: "Đã finalize",
-        value: rows.filter((item) => ["Finalized", "Published", "Archived"].includes(item.status)).length,
+        value: rows.filter((item) =>
+          ["Finalized", "Published", "Archived"].includes(item.status),
+        ).length,
         note: "Danh sách đã chốt",
       },
       {
         label: "Đã publish",
-        value: rows.filter((item) => ["Published", "Archived"].includes(item.status)).length,
+        value: rows.filter((item) =>
+          ["Published", "Archived"].includes(item.status),
+        ).length,
         note: "Đã công bố kết quả",
       },
     ],
@@ -922,7 +977,9 @@ const DefensePeriodsManagement: React.FC = () => {
         pickValue(data, ["defenseTermId", "DefenseTermId", "id", "Id"], 0),
       );
 
-      notifySuccess(editingPeriodId ? "Đã cập nhật đợt bảo vệ." : "Đã tạo đợt bảo vệ.");
+      notifySuccess(
+        editingPeriodId ? "Đã cập nhật đợt bảo vệ." : "Đã tạo đợt bảo vệ.",
+      );
       setShowForm(false);
       await loadRows();
 
@@ -1092,7 +1149,11 @@ const DefensePeriodsManagement: React.FC = () => {
         pickValue(dashboardPayload, ["revisionCount", "RevisionCount"], 0),
       ),
       eligibleStudentCount: asNumber(
-        pickValue(dashboardPayload, ["eligibleStudentCount", "EligibleStudentCount"], 0),
+        pickValue(
+          dashboardPayload,
+          ["eligibleStudentCount", "EligibleStudentCount"],
+          0,
+        ),
       ),
       capabilityLecturerCount: asNumber(
         pickValue(
@@ -1133,7 +1194,11 @@ const DefensePeriodsManagement: React.FC = () => {
       scoresPublished: asBoolean(
         pickValue(statePayload, ["scoresPublished", "ScoresPublished"], false),
       ),
-      warnings: pickValue(statePayload, ["warnings", "Warnings"], [] as unknown[])
+      warnings: pickValue(
+        statePayload,
+        ["warnings", "Warnings"],
+        [] as unknown[],
+      )
         .map((item) => asString(item))
         .filter(Boolean),
     };
@@ -1161,7 +1226,11 @@ const DefensePeriodsManagement: React.FC = () => {
           key: step.key,
           title: step.title,
           description: step.description,
-          status: completed ? "completed" : inProgress ? "in-progress" : "pending",
+          status: completed
+            ? "completed"
+            : inProgress
+              ? "in-progress"
+              : "pending",
           blockedReason: "",
         };
       });
@@ -1192,7 +1261,11 @@ const DefensePeriodsManagement: React.FC = () => {
 
   const workflowCompletionPercent = useMemo(() => {
     const fromSnapshot = asNumber(
-      pickValue(workflowPayload, ["completionPercent", "CompletionPercent"], -1),
+      pickValue(
+        workflowPayload,
+        ["completionPercent", "CompletionPercent"],
+        -1,
+      ),
       -1,
     );
 
@@ -1200,9 +1273,16 @@ const DefensePeriodsManagement: React.FC = () => {
       return Math.min(100, fromSnapshot);
     }
 
-    const completed = workflowSteps.filter((step) => step.status === "completed").length;
-    const hasInProgress = workflowSteps.some((step) => step.status === "in-progress");
-    const fallback = ((completed + (hasInProgress ? 0.5 : 0)) / Math.max(1, workflowBlueprint.length)) * 100;
+    const completed = workflowSteps.filter(
+      (step) => step.status === "completed",
+    ).length;
+    const hasInProgress = workflowSteps.some(
+      (step) => step.status === "in-progress",
+    );
+    const fallback =
+      ((completed + (hasInProgress ? 0.5 : 0)) /
+        Math.max(1, workflowBlueprint.length)) *
+      100;
     return Math.round(fallback * 10) / 10;
   }, [workflowPayload, workflowSteps]);
 
@@ -1228,7 +1308,8 @@ const DefensePeriodsManagement: React.FC = () => {
     );
 
     const activeIndex = Math.max(statusIndex, workflowIndex, percentIndex);
-    const closeAll = selectedRow?.status === "Published" || selectedRow?.status === "Archived";
+    const closeAll =
+      selectedRow?.status === "Published" || selectedRow?.status === "Archived";
 
     return workflowBlueprint.map((step, index) => {
       let status: RoadmapStepStatus = "pending";
@@ -1250,14 +1331,22 @@ const DefensePeriodsManagement: React.FC = () => {
       return 0;
     }
 
-    const completed = roadmapSteps.filter((step) => step.status === "completed").length;
-    const hasInProgress = roadmapSteps.some((step) => step.status === "in-progress");
-    const rawPercent = ((completed + (hasInProgress ? 0.5 : 0)) / roadmapSteps.length) * 100;
+    const completed = roadmapSteps.filter(
+      (step) => step.status === "completed",
+    ).length;
+    const hasInProgress = roadmapSteps.some(
+      (step) => step.status === "in-progress",
+    );
+    const rawPercent =
+      ((completed + (hasInProgress ? 0.5 : 0)) / roadmapSteps.length) * 100;
     return Math.min(100, Math.round(rawPercent * 10) / 10);
   }, [roadmapSteps]);
 
   const activeRoadmapStep = useMemo(
-    () => roadmapSteps.find((step) => step.status === "in-progress") ?? roadmapSteps[roadmapSteps.length - 1] ?? null,
+    () =>
+      roadmapSteps.find((step) => step.status === "in-progress") ??
+      roadmapSteps[roadmapSteps.length - 1] ??
+      null,
     [roadmapSteps],
   );
 
@@ -1488,12 +1577,21 @@ const DefensePeriodsManagement: React.FC = () => {
                   lineHeight: 1.6,
                 }}
               >
-                Màn hình này chỉ quản lý thông tin đợt và vòng đời đợt (CRUD + lifecycle).
-                Các thao tác setup, generate và chỉnh sửa hội đồng được tách riêng sang module Quản lý hội đồng.
+                Màn hình này chỉ quản lý thông tin đợt và vòng đời đợt (CRUD +
+                lifecycle). Các thao tác setup, generate và chỉnh sửa hội đồng
+                được tách riêng sang module Quản lý hội đồng.
               </p>
             </div>
 
-            <div style={{ display: "grid", gap: 10, width: "100%", maxWidth: 320, marginLeft: "auto" }}>
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+                width: "100%",
+                maxWidth: 320,
+                marginLeft: "auto",
+              }}
+            >
               <div style={{ ...pageStyles.sectionCard, padding: 14 }}>
                 <div
                   style={{
@@ -1544,7 +1642,9 @@ const DefensePeriodsManagement: React.FC = () => {
                   </span>
                 </div>
                 <div style={{ marginTop: 10, fontSize: 12, color: "#0f172a" }}>
-                  Đợt thứ {selectedRow?.roundIndex ?? 0} - {selectedRow?.startDate ?? "--"} đến {selectedRow?.endDate ?? "--"}
+                  Đợt thứ {selectedRow?.roundIndex ?? 0} -{" "}
+                  {selectedRow?.startDate ?? "--"} đến{" "}
+                  {selectedRow?.endDate ?? "--"}
                 </div>
               </div>
             </div>
@@ -1565,7 +1665,8 @@ const DefensePeriodsManagement: React.FC = () => {
               key={item.label}
               style={{
                 ...pageStyles.statCard,
-                borderTop: index === 0 ? "3px solid #f37021" : "3px solid #e2e8f0",
+                borderTop:
+                  index === 0 ? "3px solid #f37021" : "3px solid #e2e8f0",
               }}
             >
               <div
@@ -1601,7 +1702,12 @@ const DefensePeriodsManagement: React.FC = () => {
             <div style={{ position: "relative" }}>
               <Search
                 size={16}
-                style={{ position: "absolute", left: 14, top: 14, color: "#f37021" }}
+                style={{
+                  position: "absolute",
+                  left: 14,
+                  top: 14,
+                  color: "#f37021",
+                }}
               />
               <input
                 value={keyword}
@@ -1663,6 +1769,20 @@ const DefensePeriodsManagement: React.FC = () => {
             >
               <button
                 type="button"
+                style={pageStyles.ghostButton}
+                onClick={() => studentsSectionRef.current?.openAdd()}
+              >
+                <Plus size={15} /> Thêm sinh viên vào đợt
+              </button>
+              <button
+                type="button"
+                style={pageStyles.ghostButton}
+                onClick={() => lecturersSectionRef.current?.openAdd()}
+              >
+                <Plus size={15} /> Thêm giảng viên vào đợt
+              </button>
+              <button
+                type="button"
                 style={pageStyles.primaryButton}
                 onClick={() => void loadRows()}
                 disabled={loadingRows}
@@ -1693,14 +1813,21 @@ const DefensePeriodsManagement: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>
+                <div
+                  style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}
+                >
                   Danh sách đợt
                 </div>
                 <div style={{ color: "#0f172a", fontSize: 13, marginTop: 4 }}>
-                  Quản lý thông tin đợt bảo vệ, không thao tác chi tiết hội đồng tại đây.
+                  Quản lý thông tin đợt bảo vệ, không thao tác chi tiết hội đồng
+                  tại đây.
                 </div>
               </div>
-              <button type="button" style={pageStyles.primaryButton} onClick={openCreate}>
+              <button
+                type="button"
+                style={pageStyles.primaryButton}
+                onClick={openCreate}
+              >
                 <Plus size={15} /> Tạo đợt mới
               </button>
             </div>
@@ -1733,33 +1860,73 @@ const DefensePeriodsManagement: React.FC = () => {
                         key={item.periodId}
                         style={{
                           background:
-                            selectedPeriodId === item.periodId ? "#ffffff" : "#ffffff",
+                            selectedPeriodId === item.periodId
+                              ? "#ffffff"
+                              : "#ffffff",
                         }}
                       >
-                        <td style={{ ...tableCellStyle, fontWeight: 900, color: "#0f172a" }}>
+                        <td
+                          style={{
+                            ...tableCellStyle,
+                            fontWeight: 900,
+                            color: "#0f172a",
+                          }}
+                        >
                           {item.code}
                         </td>
                         <td style={{ ...tableCellStyle, minWidth: 170 }}>
-                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{item.name}</div>
-                          <div style={{ fontSize: 12, color: "#0f172a", marginTop: 4 }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                            {item.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#0f172a",
+                              marginTop: 4,
+                            }}
+                          >
                             Đợt thứ {item.roundIndex}
                           </div>
                         </td>
                         <td style={tableCellStyle}>{item.startDate || "-"}</td>
                         <td style={tableCellStyle}>{item.endDate || "-"}</td>
                         <td style={tableCellStyle}>
-                          <span style={{ ...pageStyles.chip, background: badge.bg, color: badge.text }}>
+                          <span
+                            style={{
+                              ...pageStyles.chip,
+                              background: badge.bg,
+                              color: badge.text,
+                            }}
+                          >
                             {item.status}
                           </span>
                         </td>
-                        <td style={{ ...tableCellStyle, fontSize: 12, color: "#0f172a" }}>
+                        <td
+                          style={{
+                            ...tableCellStyle,
+                            fontSize: 12,
+                            color: "#0f172a",
+                          }}
+                        >
                           {item.createdAt}
                         </td>
-                        <td style={{ ...tableCellStyle, fontSize: 12, color: "#0f172a" }}>
+                        <td
+                          style={{
+                            ...tableCellStyle,
+                            fontSize: 12,
+                            color: "#0f172a",
+                          }}
+                        >
                           {item.updatedAt}
                         </td>
                         <td style={tableCellStyle}>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
                             <button
                               type="button"
                               style={pageStyles.iconActionButton}
@@ -1856,8 +2023,12 @@ const DefensePeriodsManagement: React.FC = () => {
                     >
                       {selectedRow.name}
                     </div>
-                    <div style={{ color: "#0f172a", fontSize: 13, marginTop: 6 }}>
-                      Đợt thứ {selectedRow.roundIndex} - {selectedRow.startDate || "-"} đến {selectedRow.endDate || "-"}
+                    <div
+                      style={{ color: "#0f172a", fontSize: 13, marginTop: 6 }}
+                    >
+                      Đợt thứ {selectedRow.roundIndex} -{" "}
+                      {selectedRow.startDate || "-"} đến{" "}
+                      {selectedRow.endDate || "-"}
                     </div>
                   </div>
                   <span
@@ -1881,9 +2052,15 @@ const DefensePeriodsManagement: React.FC = () => {
                 >
                   {[
                     { label: "Hội đồng", value: dashboardNumbers.councilCount },
-                    { label: "Assignment", value: dashboardNumbers.assignmentCount },
+                    {
+                      label: "Assignment",
+                      value: dashboardNumbers.assignmentCount,
+                    },
                     { label: "Kết quả", value: dashboardNumbers.resultCount },
-                    { label: "Revision", value: dashboardNumbers.revisionCount },
+                    {
+                      label: "Revision",
+                      value: dashboardNumbers.revisionCount,
+                    },
                     {
                       label: "SV đủ điều kiện",
                       value: dashboardNumbers.eligibleStudentCount,
@@ -1899,7 +2076,8 @@ const DefensePeriodsManagement: React.FC = () => {
                         border: "1px solid #cbd5e1",
                         borderRadius: 12,
                         padding: 12,
-                        background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)",
+                        background:
+                          "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)",
                       }}
                     >
                       <div
@@ -1935,7 +2113,13 @@ const DefensePeriodsManagement: React.FC = () => {
                     background: "#ffffff",
                   }}
                 >
-                  <div style={{ fontWeight: 900, color: "#0f172a", marginBottom: 10 }}>
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      color: "#0f172a",
+                      marginBottom: 10,
+                    }}
+                  >
                     Thao tác vòng đời (module Quản lý đợt)
                   </div>
 
@@ -2023,7 +2207,14 @@ const DefensePeriodsManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    marginBottom: 12,
+                  }}
+                >
                   {[
                     { key: "overview", label: "Tổng quan" },
                     { key: "state", label: "Trạng thái" },
@@ -2060,45 +2251,101 @@ const DefensePeriodsManagement: React.FC = () => {
                 >
                   {activeTab === "overview" && (
                     <div style={{ display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          color: "#0f172a",
+                        }}
+                      >
                         <CalendarDays size={14} color="#0f172a" />
-                        {selectedRow.startDate || "-"} - {selectedRow.endDate || "-"}
+                        {selectedRow.startDate || "-"} -{" "}
+                        {selectedRow.endDate || "-"}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          color: "#0f172a",
+                        }}
+                      >
                         <Clock3 size={14} color="#0f172a" />
-                        Tạo lúc {selectedRow.createdAt}, cập nhật {selectedRow.updatedAt}
+                        Tạo lúc {selectedRow.createdAt}, cập nhật{" "}
+                        {selectedRow.updatedAt}
                       </div>
                       <div style={{ color: "#0f172a" }}>
-                        Tỷ lệ phân công: <strong>{dashboardNumbers.assignmentCoveragePercent.toFixed(2)}%</strong>
+                        Tỷ lệ phân công:{" "}
+                        <strong>
+                          {dashboardNumbers.assignmentCoveragePercent.toFixed(
+                            2,
+                          )}
+                          %
+                        </strong>
                       </div>
                       <div style={{ color: "#0f172a" }}>
                         Số phòng cấu hình: <strong>{configRooms.length}</strong>
                       </div>
                       <div style={{ color: "#0f172a", fontSize: 12 }}>
-                        Snapshot: <strong>/api/defense-periods/{"{"}periodId{"}"}/snapshot</strong>
+                        Snapshot:{" "}
+                        <strong>
+                          /api/defense-periods/{"{"}periodId{"}"}/snapshot
+                        </strong>
                       </div>
                       <div style={{ color: "#0f172a" }}>
-                        Lưu ý: Setup và chỉnh sửa hội đồng thực hiện tại module Quản lý hội đồng.
+                        Lưu ý: Setup và chỉnh sửa hội đồng thực hiện tại module
+                        Quản lý hội đồng.
                       </div>
                     </div>
                   )}
 
                   {activeTab === "state" && (
-                    <div style={{ display: "grid", gap: 8, color: "#0f172a", fontSize: 13 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 8,
+                        color: "#0f172a",
+                        fontSize: 13,
+                      }}
+                    >
                       <div>
-                        Trạng thái khóa giảng viên: <strong>{stateFlags.lecturerCapabilitiesLocked ? "Đã khóa" : "Chưa khóa"}</strong>
+                        Trạng thái khóa giảng viên:{" "}
+                        <strong>
+                          {stateFlags.lecturerCapabilitiesLocked
+                            ? "Đã khóa"
+                            : "Chưa khóa"}
+                        </strong>
                       </div>
                       <div>
-                        Trạng thái xác nhận cấu hình: <strong>{stateFlags.councilConfigConfirmed ? "Đã xác nhận" : "Chưa xác nhận"}</strong>
+                        Trạng thái xác nhận cấu hình:{" "}
+                        <strong>
+                          {stateFlags.councilConfigConfirmed
+                            ? "Đã xác nhận"
+                            : "Chưa xác nhận"}
+                        </strong>
                       </div>
                       <div>
-                        Trạng thái chốt đợt: <strong>{stateFlags.finalized ? "Đã chốt" : "Chưa chốt"}</strong>
+                        Trạng thái chốt đợt:{" "}
+                        <strong>
+                          {stateFlags.finalized ? "Đã chốt" : "Chưa chốt"}
+                        </strong>
                       </div>
                       <div>
-                        Trạng thái công bố: <strong>{stateFlags.scoresPublished ? "Đã công bố" : "Chưa công bố"}</strong>
+                        Trạng thái công bố:{" "}
+                        <strong>
+                          {stateFlags.scoresPublished
+                            ? "Đã công bố"
+                            : "Chưa công bố"}
+                        </strong>
                       </div>
                       <div>
-                        Hành động cho phép: <strong>{allowedActions.length ? allowedActions.join(", ") : "Không giới hạn"}</strong>
+                        Hành động cho phép:{" "}
+                        <strong>
+                          {allowedActions.length
+                            ? allowedActions.join(", ")
+                            : "Không giới hạn"}
+                        </strong>
                       </div>
                       {stateFlags.warnings.length > 0 && (
                         <div style={{ color: "#0f172a" }}>
@@ -2125,7 +2372,13 @@ const DefensePeriodsManagement: React.FC = () => {
                                   : "#ffffff",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
                             {step.status === "completed" ? (
                               <CheckCircle size={16} color="#0f172a" />
                             ) : step.status === "in-progress" ? (
@@ -2133,15 +2386,29 @@ const DefensePeriodsManagement: React.FC = () => {
                             ) : (
                               <AlertCircle size={16} color="#0f172a" />
                             )}
-                            <strong style={{ color: "#0f172a" }}>{step.title}</strong>
+                            <strong style={{ color: "#0f172a" }}>
+                              {step.title}
+                            </strong>
                           </div>
                           {step.description && (
-                            <div style={{ marginTop: 6, fontSize: 12, color: "#0f172a" }}>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                fontSize: 12,
+                                color: "#0f172a",
+                              }}
+                            >
                               {step.description}
                             </div>
                           )}
                           {step.blockedReason && (
-                            <div style={{ marginTop: 6, fontSize: 12, color: "#f37021" }}>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                fontSize: 12,
+                                color: "#f37021",
+                              }}
+                            >
                               Đang chặn: {step.blockedReason}
                             </div>
                           )}
@@ -2152,12 +2419,21 @@ const DefensePeriodsManagement: React.FC = () => {
 
                   {activeTab === "history" && (
                     <div style={{ display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          color: "#0f172a",
+                        }}
+                      >
                         <History size={14} color="#0f172a" />
-                        Bản ghi dành cho module Quản lý đợt tập trung vào vòng đời đợt.
+                        Bản ghi dành cho module Quản lý đợt tập trung vào vòng
+                        đời đợt.
                       </div>
                       <div style={{ color: "#0f172a", fontSize: 13 }}>
-                        Nếu cần thao tác danh sách hội đồng, hãy chuyển sang module Quản lý hội đồng.
+                        Nếu cần thao tác danh sách hội đồng, hãy chuyển sang
+                        module Quản lý hội đồng.
                       </div>
                       <button
                         type="button"
@@ -2170,7 +2446,9 @@ const DefensePeriodsManagement: React.FC = () => {
                   )}
 
                   {loadingSnapshot && (
-                    <div style={{ marginTop: 12, fontSize: 12, color: "#0f172a" }}>
+                    <div
+                      style={{ marginTop: 12, fontSize: 12, color: "#0f172a" }}
+                    >
                       Đang đồng bộ snapshot mới nhất...
                     </div>
                   )}
@@ -2201,15 +2479,32 @@ const DefensePeriodsManagement: React.FC = () => {
             }}
           >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0f172a", fontWeight: 800 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  color: "#0f172a",
+                  fontWeight: 800,
+                }}
+              >
                 <Workflow size={16} /> Timeline roadmap theo đợt
               </div>
               <div style={{ marginTop: 4, color: "#0f172a", fontSize: 13 }}>
-                Shell quản trị đợt giữ tab nội bộ (overview/state/workflow/history), không tách route con khi snapshot tổng đã đủ.
+                Shell quản trị đợt giữ tab nội bộ
+                (overview/state/workflow/history), không tách route con khi
+                snapshot tổng đã đủ.
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
               <button
                 type="button"
                 style={{
@@ -2217,25 +2512,42 @@ const DefensePeriodsManagement: React.FC = () => {
                   width: 42,
                   height: 42,
                   padding: 0,
-                  background: roadmapLayout === "horizontal" ? "#ffffff" : "#ffffff",
-                  borderColor: roadmapLayout === "horizontal" ? "#f37021" : "#cbd5e1",
+                  background:
+                    roadmapLayout === "horizontal" ? "#ffffff" : "#ffffff",
+                  borderColor:
+                    roadmapLayout === "horizontal" ? "#f37021" : "#cbd5e1",
                   color: roadmapLayout === "horizontal" ? "#f37021" : "#0f172a",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
                 onClick={() =>
-                  setRoadmapLayout((prev) => (prev === "horizontal" ? "vertical" : "horizontal"))
+                  setRoadmapLayout((prev) =>
+                    prev === "horizontal" ? "vertical" : "horizontal",
+                  )
                 }
-                title={roadmapLayout === "horizontal" ? "Chuyển sang chế độ dọc" : "Chuyển sang chế độ slide"}
-                aria-label={roadmapLayout === "horizontal" ? "Chuyển sang chế độ dọc" : "Chuyển sang chế độ slide"}
+                title={
+                  roadmapLayout === "horizontal"
+                    ? "Chuyển sang chế độ dọc"
+                    : "Chuyển sang chế độ slide"
+                }
+                aria-label={
+                  roadmapLayout === "horizontal"
+                    ? "Chuyển sang chế độ dọc"
+                    : "Chuyển sang chế độ slide"
+                }
               >
-                {roadmapLayout === "horizontal" ? <Columns3 size={16} /> : <Rows3 size={16} />}
+                {roadmapLayout === "horizontal" ? (
+                  <Columns3 size={16} />
+                ) : (
+                  <Rows3 size={16} />
+                )}
               </button>
               <span
                 style={{
                   ...pageStyles.chip,
-                  background: roadmapLayout === "horizontal" ? "#ffffff" : "#ffffff",
+                  background:
+                    roadmapLayout === "horizontal" ? "#ffffff" : "#ffffff",
                   color: roadmapLayout === "horizontal" ? "#f37021" : "#0f172a",
                   border: "1px solid #cbd5e1",
                 }}
@@ -2246,7 +2558,14 @@ const DefensePeriodsManagement: React.FC = () => {
           </div>
 
           <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
               <span
                 style={{
                   ...pageStyles.chip,
@@ -2265,7 +2584,9 @@ const DefensePeriodsManagement: React.FC = () => {
                   fontWeight: 800,
                 }}
               >
-                {activeRoadmapStep ? `Đang xử lý: ${activeRoadmapStep.title}` : "Chưa có dữ liệu bước"}
+                {activeRoadmapStep
+                  ? `Đang xử lý: ${activeRoadmapStep.title}`
+                  : "Chưa có dữ liệu bước"}
               </span>
               <span
                 style={{
@@ -2300,7 +2621,9 @@ const DefensePeriodsManagement: React.FC = () => {
 
           {roadmapLayout === "horizontal" ? (
             <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <div
+                style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+              >
                 <button
                   type="button"
                   style={{ ...pageStyles.ghostButton, padding: "7px 10px" }}
@@ -2341,9 +2664,20 @@ const DefensePeriodsManagement: React.FC = () => {
                           : undefined,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 8,
+                        }}
+                      >
                         <span
-                          className={step.status === "in-progress" ? "dp-roadmap-pulse" : undefined}
+                          className={
+                            step.status === "in-progress"
+                              ? "dp-roadmap-pulse"
+                              : undefined
+                          }
                           style={{
                             width: 28,
                             height: 28,
@@ -2363,7 +2697,13 @@ const DefensePeriodsManagement: React.FC = () => {
                             <AlertCircle size={14} color="#0f172a" />
                           )}
                         </span>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: "#0f172a" }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            color: "#0f172a",
+                          }}
+                        >
                           Bước {String(index + 1).padStart(2, "0")}
                         </span>
                       </div>
@@ -2377,11 +2717,27 @@ const DefensePeriodsManagement: React.FC = () => {
                           minHeight: 130,
                         }}
                       >
-                        <div style={{ fontWeight: 800, color: "#0f172a" }}>{step.title}</div>
-                        <div style={{ marginTop: 6, fontSize: 12, color: "#0f172a", lineHeight: 1.5 }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                          {step.title}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 12,
+                            color: "#0f172a",
+                            lineHeight: 1.5,
+                          }}
+                        >
                           {step.description}
                         </div>
-                        <div style={{ marginTop: 8, fontSize: 11, color: theme.text, fontWeight: 700 }}>
+                        <div
+                          style={{
+                            marginTop: 8,
+                            fontSize: 11,
+                            color: theme.text,
+                            fontWeight: 700,
+                          }}
+                        >
                           {roadmapStatusLabel[step.status]}
                         </div>
                       </div>
@@ -2408,9 +2764,19 @@ const DefensePeriodsManagement: React.FC = () => {
                         : undefined,
                     }}
                   >
-                    <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                    <div
+                      style={{
+                        position: "relative",
+                        display: "flex",
+                        justifyContent: "center",
+                      }}
+                    >
                       <span
-                        className={step.status === "in-progress" ? "dp-roadmap-pulse" : undefined}
+                        className={
+                          step.status === "in-progress"
+                            ? "dp-roadmap-pulse"
+                            : undefined
+                        }
                         style={{
                           width: 28,
                           height: 28,
@@ -2453,16 +2819,45 @@ const DefensePeriodsManagement: React.FC = () => {
                         padding: 12,
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a" }}>{step.title}</div>
-                        <div style={{ fontSize: 11, color: "#0f172a", fontWeight: 700 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                          {step.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
                           Bước {String(index + 1).padStart(2, "0")}
                         </div>
                       </div>
-                      <div style={{ marginTop: 6, fontSize: 12, color: "#0f172a", lineHeight: 1.5 }}>
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 12,
+                          color: "#0f172a",
+                          lineHeight: 1.5,
+                        }}
+                      >
                         {step.description}
                       </div>
-                      <div style={{ marginTop: 8, fontSize: 11, color: theme.text, fontWeight: 700 }}>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: 11,
+                          color: theme.text,
+                          fontWeight: 700,
+                        }}
+                      >
                         {roadmapStatusLabel[step.status]}
                       </div>
                     </div>
@@ -2473,9 +2868,20 @@ const DefensePeriodsManagement: React.FC = () => {
           )}
 
           <div style={{ marginTop: 10, fontSize: 12, color: "#0f172a" }}>
-            Roadmap này chỉ điều hành tổng của đợt; tác vụ chi tiết hội đồng vẫn xử lý tại module Quản lý hội đồng.
+            Roadmap này chỉ điều hành tổng của đợt; tác vụ chi tiết hội đồng vẫn
+            xử lý tại module Quản lý hội đồng.
           </div>
+        </section>
 
+        <section style={{ marginTop: 16, display: "grid", gap: 16 }}>
+          <DefenseTermStudentsSection
+            ref={studentsSectionRef}
+            defenseTermId={selectedPeriodId}
+          />
+          <DefenseTermLecturersSection
+            ref={lecturersSectionRef}
+            defenseTermId={selectedPeriodId}
+          />
         </section>
 
         {showForm && (
@@ -2503,23 +2909,40 @@ const DefensePeriodsManagement: React.FC = () => {
                 padding: 20,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "start",
+                }}
+              >
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>
+                  <div
+                    style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}
+                  >
                     {editingPeriodId ? "Sửa đợt bảo vệ" : "Tạo đợt bảo vệ"}
                   </div>
                   <div style={{ marginTop: 4, fontSize: 13, color: "#0f172a" }}>
-                    Nhập thông tin đợt theo chuẩn quản trị, ưu tiên bố cục gọn và dễ kiểm tra.
+                    Nhập thông tin đợt theo chuẩn quản trị, ưu tiên bố cục gọn
+                    và dễ kiểm tra.
                   </div>
                 </div>
-                <button type="button" style={pageStyles.ghostButton} onClick={() => setShowForm(false)} disabled={isActionBusy}>
+                <button
+                  type="button"
+                  style={pageStyles.ghostButton}
+                  onClick={() => setShowForm(false)}
+                  disabled={isActionBusy}
+                >
                   Đóng
                 </button>
               </div>
 
               <div style={{ display: "grid", gap: 14, marginTop: 18 }}>
                 <label style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Tên đợt *</span>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                    Tên đợt *
+                  </span>
                   <input
                     type="text"
                     value={formState.name}
@@ -2539,9 +2962,17 @@ const DefensePeriodsManagement: React.FC = () => {
                   />
                 </label>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 12,
+                  }}
+                >
                   <label style={{ display: "grid", gap: 6 }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>Ngày bắt đầu *</span>
+                    <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                      Ngày bắt đầu *
+                    </span>
                     <input
                       type="date"
                       value={formState.startDate}
@@ -2561,7 +2992,9 @@ const DefensePeriodsManagement: React.FC = () => {
                   </label>
 
                   <label style={{ display: "grid", gap: 6 }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>Ngày kết thúc</span>
+                    <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                      Ngày kết thúc
+                    </span>
                     <input
                       type="date"
                       value={formState.endDate}
@@ -2582,7 +3015,9 @@ const DefensePeriodsManagement: React.FC = () => {
                 </div>
 
                 <label style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontWeight: 700, color: "#0f172a" }}>Trạng thái</span>
+                  <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                    Trạng thái
+                  </span>
                   <select
                     value={formState.status}
                     onChange={(event) =>
@@ -2602,11 +3037,28 @@ const DefensePeriodsManagement: React.FC = () => {
                 </label>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
-                <button type="button" style={pageStyles.ghostButton} onClick={() => setShowForm(false)} disabled={isActionBusy}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  marginTop: 18,
+                }}
+              >
+                <button
+                  type="button"
+                  style={pageStyles.ghostButton}
+                  onClick={() => setShowForm(false)}
+                  disabled={isActionBusy}
+                >
                   Đóng
                 </button>
-                <button type="button" style={pageStyles.primaryButton} onClick={() => void saveForm()} disabled={isActionBusy}>
+                <button
+                  type="button"
+                  style={pageStyles.primaryButton}
+                  onClick={() => void saveForm()}
+                  disabled={isActionBusy}
+                >
                   <Save size={14} /> {isActionBusy ? "Đang lưu" : "Lưu đợt"}
                 </button>
               </div>

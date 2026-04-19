@@ -295,6 +295,16 @@
   color: #d97706;
 }
 
+.spm-status-defense-ready {
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.spm-status-committee-assigned {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .spm-status-approved {
   background: #dcfce7;
   color: #16a34a;

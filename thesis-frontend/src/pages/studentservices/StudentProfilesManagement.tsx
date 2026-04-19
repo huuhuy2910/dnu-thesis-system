@@ -10,6 +10,7 @@ import {
   Filter,
   Plus,
   Search,
+  ShieldCheck,
   Trash,
   Users,
   Eye,
@@ -144,7 +145,13 @@ type ProgressHistoryPayload = {
   totalCount: number;
 };
 
-type RowStatus = "approved" | "pending" | "rejected" | "revision";
+type RowStatus =
+  | "approved"
+  | "pending"
+  | "rejected"
+  | "revision"
+  | "defense-ready"
+  | "committee-assigned";
 
 type DashboardRowView = StudentDashboardItem & {
   __status: RowStatus;
@@ -278,13 +285,20 @@ async function requestApiData<T>(
 
 function mapApiStatusToDisplay(apiStatus?: string): RowStatus {
   const status = (apiStatus || "").toLowerCase();
+  if (status.includes("đủ điều kiện bảo vệ")) return "defense-ready";
+  if (status.includes("đã phân hội đồng")) return "committee-assigned";
   if (status.includes("đã duyệt")) return "approved";
   if (status.includes("từ chối")) return "rejected";
   if (status.includes("cần sửa")) return "revision";
   return "pending";
 }
 
-function getStatusText(status: RowStatus): string {
+function getStatusText(status: RowStatus | string): string {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("đã phân hội đồng")) return "đã có HĐ";
+  if (normalized === "committee-assigned") return "đã có HĐ";
+  if (normalized.includes("đủ điều kiện bảo vệ")) return "Chờ bảo vệ";
+  if (normalized === "defense-ready") return "Chờ bảo vệ";
   if (status === "approved") return "Đã duyệt";
   if (status === "rejected") return "Từ chối";
   if (status === "revision") return "Cần sửa đổi";
@@ -770,6 +784,8 @@ const StudentProfilesManagement: React.FC = () => {
               <option value="pending">Chờ duyệt</option>
               <option value="approved">Đã duyệt</option>
               <option value="revision">Cần sửa đổi</option>
+              <option value="defense-ready">Chờ bảo vệ</option>
+              <option value="committee-assigned">đã có HĐ</option>
               <option value="rejected">Từ chối</option>
             </select>
           </div>
@@ -861,6 +877,12 @@ const StudentProfilesManagement: React.FC = () => {
                       {(row.__status === "revision" ||
                         row.__status === "rejected") && (
                         <AlertCircle size={14} />
+                      )}
+                      {row.__status === "defense-ready" && (
+                        <ShieldCheck size={14} />
+                      )}
+                      {row.__status === "committee-assigned" && (
+                        <BookOpen size={14} />
                       )}
                       {getStatusText(row.__status)}
                     </span>
@@ -986,8 +1008,15 @@ const StudentProfilesManagement: React.FC = () => {
                       <span
                         className={`spm-status spm-status-${detailModal.row.__status}`}
                       >
-                        {detailModal.row.student.status ||
-                          getStatusText(detailModal.row.__status)}
+                        {detailModal.row.__status === "defense-ready" && (
+                          <ShieldCheck size={14} />
+                        )}
+                        {detailModal.row.__status === "committee-assigned" && (
+                          <BookOpen size={14} />
+                        )}
+                        {detailModal.row.student.status
+                          ? getStatusText(detailModal.row.student.status)
+                          : getStatusText(detailModal.row.__status)}
                       </span>
                       <span className="spm-detail-gpa">
                         GPA {detailModal.row.student.gpa ?? "--"}

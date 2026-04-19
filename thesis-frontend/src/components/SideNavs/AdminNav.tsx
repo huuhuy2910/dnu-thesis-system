@@ -26,9 +26,13 @@ import { hasUserManagementPermission } from "../../utils/permissions";
 
 interface AdminNavProps {
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
+const AdminNav: React.FC<AdminNavProps> = ({
+  onNavigate,
+  collapsed = false,
+}) => {
   const auth = useAuth();
   const role = normalizeRole(auth.user?.role);
 
@@ -85,8 +89,14 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
 
   const roleCanSeeUsers = hasUserManagementPermission(role, "users:list");
 
+  const hiddenPaths =
+    role === ROLE_STUDENT_SERVICE
+      ? new Set([`${basePath}/defense-periods`, `${basePath}/rooms`])
+      : new Set<string>();
+
   const adminOnlyItems = [
-    {      path: `${basePath}/topic-review`,
+    {
+      path: `${basePath}/topic-review`,
       label: "Duyệt đề tài",
       icon: <BookOpen size={18} />,
     },
@@ -137,11 +147,15 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
   ];
 
   const navItems = Array.from(
-    new Map(rawNavItems.map((item) => [item.path, item])).values()
+    new Map(
+      rawNavItems
+        .filter((item) => !hiddenPaths.has(item.path))
+        .map((item) => [item.path, item]),
+    ).values(),
   );
 
   return (
-    <nav className="sidenav admin-theme">
+    <nav className={`sidenav admin-theme ${collapsed ? "collapsed" : ""}`}>
       <ul>
         {navItems.map((item) => (
           <li key={`${item.path}-${item.label}`}>
@@ -150,6 +164,8 @@ const AdminNav: React.FC<AdminNavProps> = ({ onNavigate }) => {
               end
               className={({ isActive }) => (isActive ? "active" : undefined)}
               onClick={onNavigate}
+              title={item.label}
+              aria-label={item.label}
             >
               <span className="icon">{item.icon}</span>
               <span className="label">{item.label}</span>

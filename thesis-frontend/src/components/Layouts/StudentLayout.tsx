@@ -2,7 +2,16 @@ import React, { useEffect, useState } from "react";
 import StudentNav from "../SideNavs/StudentNav";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { LogOut, ChevronDown, User, Menu, X, KeyRound } from "lucide-react";
+import {
+  LogOut,
+  ChevronDown,
+  User,
+  Menu,
+  X,
+  KeyRound,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
@@ -16,6 +25,8 @@ const StudentLayout: React.FC = () => {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const sidebarWidth = isSidebarCollapsed ? 84 : 260;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -38,7 +49,6 @@ const StudentLayout: React.FC = () => {
     loadProfile();
   }, [auth.user?.userCode]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -88,17 +98,14 @@ const StudentLayout: React.FC = () => {
               height: 60px !important;
             }
             
-            /* Hide desktop title and icon on mobile */
             .student-header > div:first-child > div:last-child {
               display: none !important;
             }
             
-            /* Show mobile logo */
             .student-mobile-logo {
               display: flex !important;
             }
             
-            /* Hide status badge on mobile */
             .student-status-badge {
               display: none !important;
             }
@@ -116,7 +123,6 @@ const StudentLayout: React.FC = () => {
               margin-bottom: 60px;
             }
             
-            /* Avatar section responsive */
             .student-avatar-section {
               padding: 6px 12px !important;
               border-radius: 12px !important;
@@ -155,12 +161,33 @@ const StudentLayout: React.FC = () => {
               left: 220px !important;
             }
           }
+
+          .student-sidebar,
+          .student-main,
+          .student-header,
+          .student-sidebar img,
+          .student-sidebar .sidebar-brand-text,
+          .student-sidebar .sidebar-footer-text {
+            transition: width 0.28s ease, margin-left 0.28s ease, left 0.28s ease, opacity 0.24s ease, transform 0.24s ease, margin 0.28s ease;
+          }
+
+          .student-sidebar .sidebar-brand-text,
+          .student-sidebar .sidebar-footer-text {
+            will-change: opacity, transform;
+          }
+
+          .student-sidebar.collapsed .sidebar-brand-text,
+          .student-sidebar.collapsed .sidebar-footer-text {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.96);
+            pointer-events: none;
+          }
         `}
       </style>
       <aside
-        className={`student-sidebar ${isMobileMenuOpen ? "open" : ""}`}
+        className={`student-sidebar ${isMobileMenuOpen ? "open" : ""} ${isSidebarCollapsed ? "collapsed" : ""}`}
         style={{
-          width: 260,
+          width: sidebarWidth,
           backgroundColor: "#FFFFFF",
           color: "#002855",
           display: "flex",
@@ -184,7 +211,6 @@ const StudentLayout: React.FC = () => {
             position: "relative",
           }}
         >
-          {/* Close Button for Mobile */}
           <button
             onClick={() => setIsMobileMenuOpen(false)}
             className="mobile-close-btn"
@@ -209,39 +235,75 @@ const StudentLayout: React.FC = () => {
             src="/dnu_logo.png"
             alt="Đại học Đại Nam"
             style={{
-              width: 88,
+              width: isSidebarCollapsed ? 52 : 88,
               display: "block",
-              margin: "0 auto 10px",
+              margin: isSidebarCollapsed ? "16px auto 10px" : "0 auto 10px",
               filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
+              transition:
+                "width 0.28s ease, margin 0.28s ease, opacity 0.24s ease",
             }}
           />
           <h3
+            className="sidebar-brand-text"
             style={{
               color: "#F37021",
               fontSize: 17,
               fontWeight: 700,
               margin: 0,
               letterSpacing: "0.5px",
+              opacity: isSidebarCollapsed ? 0 : 1,
+              transform: isSidebarCollapsed
+                ? "translateY(-8px) scale(0.96)"
+                : "translateY(0) scale(1)",
+              maxHeight: isSidebarCollapsed ? 0 : 40,
+              overflow: "hidden",
+              transition:
+                "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
             }}
           >
             Hệ thống Quản lý Đồ án
           </h3>
-          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6 }}>
+          <div
+            className="sidebar-brand-text"
+            style={{
+              fontSize: 12,
+              color: "#6B7280",
+              marginTop: 6,
+              opacity: isSidebarCollapsed ? 0 : 1,
+              transform: isSidebarCollapsed
+                ? "translateY(-8px) scale(0.96)"
+                : "translateY(0) scale(1)",
+              maxHeight: isSidebarCollapsed ? 0 : 28,
+              overflow: "hidden",
+              transition:
+                "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
+            }}
+          >
             Vai trò: <strong style={{ color: "#F37021" }}>Sinh viên</strong>
           </div>
         </div>
 
         <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
-          <StudentNav onNavigate={() => setIsMobileMenuOpen(false)} />
+          <StudentNav
+            collapsed={isSidebarCollapsed}
+            onNavigate={() => setIsMobileMenuOpen(false)}
+          />
         </div>
 
         <footer
+          className="sidebar-footer-text"
           style={{
             fontSize: 11,
             color: "#6B7280",
             textAlign: "center",
             padding: "18px 12px",
             borderTop: "1px solid #E5E7EB",
+            opacity: isSidebarCollapsed ? 0 : 1,
+            transform: isSidebarCollapsed ? "translateY(8px)" : "translateY(0)",
+            maxHeight: isSidebarCollapsed ? 0 : 80,
+            overflow: "hidden",
+            transition:
+              "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
           }}
         >
           © 2025 Đại học Đại Nam
@@ -254,7 +316,8 @@ const StudentLayout: React.FC = () => {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          marginLeft: 260,
+          marginLeft: sidebarWidth,
+          transition: "margin-left 0.28s ease",
         }}
       >
         <header
@@ -268,17 +331,17 @@ const StudentLayout: React.FC = () => {
             alignItems: "center",
             color: "#1a2736",
             position: "fixed",
-            left: 260,
+            left: sidebarWidth,
             right: 0,
             top: 0,
             height: 72,
             zIndex: 20,
             borderBottom: "1px solid #E5E7EB",
             background: "linear-gradient(135deg, #ffffff 0%, #fefefe 100%)",
+            transition: "left 0.28s ease",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               style={{
@@ -295,7 +358,36 @@ const StudentLayout: React.FC = () => {
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Mobile Logo - Only visible on mobile */}
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+              title={
+                isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+              }
+              aria-label={
+                isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+              }
+              style={{
+                width: 36,
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                border: "1px solid rgba(243, 112, 33, 0.2)",
+                background: "rgba(243, 112, 33, 0.08)",
+                color: "#F37021",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen size={18} />
+              ) : (
+                <PanelLeftClose size={18} />
+              )}
+            </button>
+
             <img
               src="/logo-ios.png"
               alt="Đại học Đại Nam"
@@ -319,7 +411,6 @@ const StudentLayout: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {/* Status Badge - Hidden on mobile */}
             <div
               className="student-status-badge"
               style={{
@@ -429,7 +520,6 @@ const StudentLayout: React.FC = () => {
                 />
               </button>
 
-              {/* Dropdown Menu */}
               {showDropdown && (
                 <div
                   style={{
@@ -459,7 +549,6 @@ const StudentLayout: React.FC = () => {
                         "linear-gradient(135deg, rgba(243, 112, 33, 0.02) 0%, rgba(243, 112, 33, 0.01) 100%)",
                     }}
                   >
-                    {/* Avatar */}
                     {studentImage ? (
                       <img
                         src={getAvatarUrl(studentImage)}
@@ -494,7 +583,6 @@ const StudentLayout: React.FC = () => {
                       </div>
                     )}
 
-                    {/* User Info */}
                     <div style={{ flex: 1 }}>
                       <div
                         className="user-name"

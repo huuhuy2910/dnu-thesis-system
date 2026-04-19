@@ -36,6 +36,10 @@ namespace ThesisManagement.Api.Services
 
             DefenseTermStudents = new GenericRepository<DefenseTermStudent>(_db);
             DefenseTermLecturers = new GenericRepository<DefenseTermLecturer>(_db);
+            Classes = new GenericRepository<Class>(_db);
+            TopicRenameRequests = new GenericRepository<TopicRenameRequest>(_db);
+            TopicRenameRequestFiles = new GenericRepository<TopicRenameRequestFile>(_db);
+            TopicTitleHistories = new GenericRepository<TopicTitleHistory>(_db);
 
             Rooms = new GenericRepository<Room>(_db);
 
@@ -85,6 +89,10 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<DefenseTerm> DefenseTerms { get; }
         public IGenericRepository<DefenseTermStudent> DefenseTermStudents { get; }
         public IGenericRepository<DefenseTermLecturer> DefenseTermLecturers { get; }
+        public IGenericRepository<Class> Classes { get; }
+        public IGenericRepository<TopicRenameRequest> TopicRenameRequests { get; }
+        public IGenericRepository<TopicRenameRequestFile> TopicRenameRequestFiles { get; }
+        public IGenericRepository<TopicTitleHistory> TopicTitleHistories { get; }
 
         public IGenericRepository<Room> Rooms { get; }
 

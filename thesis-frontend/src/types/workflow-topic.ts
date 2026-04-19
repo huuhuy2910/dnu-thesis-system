@@ -50,6 +50,8 @@ export interface WorkflowResubmitRequest {
   supervisorUserCode: string;
   supervisorLecturerProfileID: number;
   supervisorLecturerCode: string;
+  reviewedByUserCode?: string | null;
+  reviewedByRole?: string | null;
   catalogTopicID: number | null;
   catalogTopicCode: string | null;
   departmentID: number;
