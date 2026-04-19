@@ -225,6 +225,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.CatalogTopicCode).HasMaxLength(40);
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
                 b.Property(x => x.DefenseTermId);
+                b.Property(x => x.Score).HasPrecision(5, 2);
                 // Oracle: map to CLOB by convention
                 b.Property(x => x.LecturerComment);
                 

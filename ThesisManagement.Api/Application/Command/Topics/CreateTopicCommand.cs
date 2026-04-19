@@ -64,6 +64,7 @@ namespace ThesisManagement.Api.Application.Command.Topics
                 DepartmentID = dto.DepartmentID,
                 DepartmentCode = dto.DepartmentCode,
                 DefenseTermId = dto.DefenseTermId,
+                Score = dto.Score,
                 Status = string.IsNullOrWhiteSpace(dto.Status) ? "DRAFT" : dto.Status,
                 ResubmitCount = dto.ResubmitCount ?? 0,
                 CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt,
