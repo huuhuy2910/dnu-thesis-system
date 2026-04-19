@@ -148,8 +148,9 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
         case "pending":
         case "đang chờ":
         case "chờ duyệt":
-        default:
           return "Chờ duyệt";
+        default:
+          return "Đã duyệt";
       }
     },
     [],
@@ -454,7 +455,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
       case "Cần sửa đổi":
         return <Edit size={16} color="#F59E0B" />;
       default:
-        return <Clock size={16} color="#6B7280" />;
+        return <CheckCircle size={16} color="#22C55E" />;
     }
   };
 
@@ -469,7 +470,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
       case "Cần sửa đổi":
         return "Cần sửa đổi";
       default:
-        return "Không xác định";
+        return "Đã duyệt";
     }
   };
 
@@ -484,7 +485,7 @@ const LecturerTopicReview: React.FC<LecturerTopicReviewProps> = ({
       case "Cần sửa đổi":
         return "#F59E0B";
       default:
-        return "#6B7280";
+        return "#22C55E";
     }
   };
 

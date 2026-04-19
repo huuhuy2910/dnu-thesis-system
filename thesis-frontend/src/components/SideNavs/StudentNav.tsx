@@ -14,9 +14,13 @@ import "./StudentNav.css";
 
 interface StudentNavProps {
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-const StudentNav: React.FC<StudentNavProps> = ({ onNavigate }) => {
+const StudentNav: React.FC<StudentNavProps> = ({
+  onNavigate,
+  collapsed = false,
+}) => {
   const navItems = [
     { path: "/student", label: "Trang chủ", icon: <Home size={18} /> },
     {
@@ -53,7 +57,7 @@ const StudentNav: React.FC<StudentNavProps> = ({ onNavigate }) => {
   ];
 
   return (
-    <nav className="sidenav student-theme">
+    <nav className={`sidenav student-theme ${collapsed ? "collapsed" : ""}`}>
       <ul>
         {navItems.map((item) => (
           <li key={item.path}>
@@ -62,6 +66,8 @@ const StudentNav: React.FC<StudentNavProps> = ({ onNavigate }) => {
               end
               className={({ isActive }) => (isActive ? "active" : undefined)}
               onClick={onNavigate}
+              title={item.label}
+              aria-label={item.label}
             >
               <span className="icon">{item.icon}</span>
               <span className="label">{item.label}</span>

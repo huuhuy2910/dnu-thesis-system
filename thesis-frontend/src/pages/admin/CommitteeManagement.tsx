@@ -1253,7 +1253,6 @@ const CommitteeManagement: React.FC = () => {
   >([]);
   const selectedRoomsRef = useRef(selectedRooms);
   const autoStartDateRef = useRef(autoStartDate);
-  const lifecycleActionBusyRef = useRef(false);
   const missingEndpointWarningsRef = useRef(new Set<string>());
   const missingPeriodWarningsRef = useRef(false);
 
@@ -1308,20 +1307,11 @@ const CommitteeManagement: React.FC = () => {
   const defensePeriodBase = defensePeriodId
     ? `/defense-periods/${defensePeriodId}`
     : "";
-  const roleTokens = useMemo(() => {
-    const rawRole = (getRoleClaimFromAccessToken() ?? "").trim().toUpperCase();
-    if (!rawRole) {
-      return [] as string[];
-    }
-
-    return rawRole
-      .split(/[\s,;|]+/)
-      .map((role) => role.trim())
-      .filter(Boolean);
-  }, []);
-  const isAdminRole = roleTokens.some(
-    (role) => role === "ADMIN" || role === "ROLE_ADMIN" || role === "SYSTEM_ADMIN",
+  const currentRole = useMemo(
+    () => (getRoleClaimFromAccessToken() ?? "").trim().toUpperCase(),
+    [],
   );
+  const isAdminRole = currentRole === "ADMIN";
   const makeIdempotencyKey = (prefix: string) =>
     `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
   const adminApi = useMemo(() => {
@@ -1637,36 +1627,15 @@ const CommitteeManagement: React.FC = () => {
         const response = await getSetupSnapshot();
         const snapshotRaw = readEnvelopeData<unknown>(response);
         const snapshot = unwrapCompactPayload(snapshotRaw);
-        const snapshotObject =
-          snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
-            ? (snapshot as Record<string, unknown>)
-            : {};
-        const statePayload = pickSection<Record<string, unknown>>(
-          snapshotObject,
-          ["state", "State"],
-          {},
-        );
-        const hasStateSignals =
-          statePayload &&
-          typeof statePayload === "object" &&
-          (Object.prototype.hasOwnProperty.call(statePayload, "councilListLocked") ||
-            Object.prototype.hasOwnProperty.call(statePayload, "CouncilListLocked") ||
-            Object.prototype.hasOwnProperty.call(statePayload, "allowedActions") ||
-            Object.prototype.hasOwnProperty.call(statePayload, "AllowedActions"));
-
-        const snapshotLooksLikeState =
-          Object.prototype.hasOwnProperty.call(snapshotObject, "councilListLocked") ||
-          Object.prototype.hasOwnProperty.call(snapshotObject, "CouncilListLocked") ||
-          Object.prototype.hasOwnProperty.call(snapshotObject, "allowedActions") ||
-          Object.prototype.hasOwnProperty.call(snapshotObject, "AllowedActions");
-
         return toCompatResponse(
           response,
-          hasStateSignals
-            ? statePayload
-            : snapshotLooksLikeState
-              ? snapshotObject
+          pickSection<Record<string, unknown>>(
+            snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+              ? (snapshot as Record<string, unknown>)
               : {},
+            ["state", "State"],
+            {},
+          ),
         );
       },
       getRoomCatalog: async () => {
@@ -2253,7 +2222,6 @@ const CommitteeManagement: React.FC = () => {
 
   const canLockCouncils = backendAllowedActions.includes("LOCK_COUNCILS");
   const canReopenCouncils = isAdminRole;
-  const showReopenCouncils = councilListLocked || canReopenCouncils;
   const canModifyCouncils = !councilListLocked;
 
   const logMissingEndpoint = useCallback((label: string, url: string) => {
@@ -4378,40 +4346,25 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
-    const hasAnyStateField = (...keys: string[]) =>
-      keys.some((key) => Object.prototype.hasOwnProperty.call(stateData, key));
-
     const allowedActionsRaw =
       (stateData.allowedActions ?? stateData.AllowedActions) as unknown;
-    if (
-      hasAnyStateField("allowedActions", "AllowedActions") &&
-      Array.isArray(allowedActionsRaw)
-    ) {
-      setBackendAllowedActions(
-        allowedActionsRaw.map((item) => String(item ?? "").trim()).filter(Boolean),
-      );
-    }
+    const allowedActions = Array.isArray(allowedActionsRaw)
+      ? allowedActionsRaw.map((item) => String(item))
+      : [];
 
-    if (hasAnyStateField("lecturerCapabilitiesLocked", "LecturerCapabilitiesLocked")) {
-      setCapabilitiesLocked(
-        Boolean(
-          stateData.lecturerCapabilitiesLocked ??
-            stateData.LecturerCapabilitiesLocked,
-        ),
-      );
-    }
-
-    if (hasAnyStateField("councilConfigConfirmed", "CouncilConfigConfirmed")) {
-      setCouncilConfigConfirmed(
-        Boolean(stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed),
-      );
-    }
-
-    if (hasAnyStateField("councilListLocked", "CouncilListLocked")) {
-      setCouncilListLocked(
-        Boolean(stateData.councilListLocked ?? stateData.CouncilListLocked),
-      );
-    }
+    setBackendAllowedActions(allowedActions);
+    setCapabilitiesLocked(
+      Boolean(
+        stateData.lecturerCapabilitiesLocked ??
+          stateData.LecturerCapabilitiesLocked,
+      ),
+    );
+    setCouncilConfigConfirmed(
+      Boolean(stateData.councilConfigConfirmed ?? stateData.CouncilConfigConfirmed),
+    );
+    setCouncilListLocked(
+      Boolean(stateData.councilListLocked ?? stateData.CouncilListLocked),
+    );
 
     hydrateReadinessState(stateData);
   };
@@ -4626,7 +4579,7 @@ const CommitteeManagement: React.FC = () => {
   }, [filteredCouncilRows, getTagDisplayList, notifySuccess, notifyWarning]);
 
   const lockCouncils = async () => {
-    if (councilListLocked || actionInFlight || lifecycleActionBusyRef.current) {
+    if (councilListLocked || actionInFlight) {
       return;
     }
 
@@ -4636,7 +4589,6 @@ const CommitteeManagement: React.FC = () => {
     }
 
     try {
-      lifecycleActionBusyRef.current = true;
       setActionInFlight("Chốt danh sách hội đồng");
       const idempotencyKey = makeIdempotencyKey("LOCK-COUNCILS");
       const response = await adminApi.lockCouncils(idempotencyKey);
@@ -4656,7 +4608,6 @@ const CommitteeManagement: React.FC = () => {
     } catch {
       notifyError("Không chốt được danh sách hội đồng. Vui lòng thử lại.");
     } finally {
-      lifecycleActionBusyRef.current = false;
       setActionInFlight(null);
     }
   };
@@ -4672,12 +4623,11 @@ const CommitteeManagement: React.FC = () => {
       return;
     }
 
-    if (actionInFlight || lifecycleActionBusyRef.current) {
+    if (actionInFlight) {
       return;
     }
 
     try {
-      lifecycleActionBusyRef.current = true;
       setActionInFlight("Mở lại chốt hội đồng");
       const idempotencyKey = makeIdempotencyKey("REOPEN-COUNCILS");
       const response = await adminApi.reopenCouncils(idempotencyKey);
@@ -4697,7 +4647,6 @@ const CommitteeManagement: React.FC = () => {
     } catch {
       notifyError("Không mở lại được danh sách hội đồng. Vui lòng thử lại.");
     } finally {
-      lifecycleActionBusyRef.current = false;
       setActionInFlight(null);
     }
   };
@@ -8720,20 +8669,14 @@ const CommitteeManagement: React.FC = () => {
                       <Lock size={14} /> Chốt danh sách hội đồng
                     </button>
                   )}
-                  {showReopenCouncils && (
+                  {canReopenCouncils && (
                     <button
                       type="button"
                       onClick={reopenCouncils}
-                      title={
-                        !canReopenCouncils
-                          ? "Chỉ tài khoản Admin mới được mở lại chốt hội đồng."
-                          : undefined
-                      }
                       disabled={
                         !stateHydrated ||
                         !councilListLocked ||
-                        Boolean(actionInFlight) ||
-                        !canReopenCouncils
+                        Boolean(actionInFlight)
                       }
                       className="committee-ghost-btn"
                     >

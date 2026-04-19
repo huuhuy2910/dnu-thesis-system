@@ -14,14 +14,14 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<Topic> Topics { get; }
         IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
-    IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
-    IGenericRepository<SubmissionFile> SubmissionFiles { get; }
-    IGenericRepository<Conversation> Conversations { get; }
-    IGenericRepository<ConversationMember> ConversationMembers { get; }
-    IGenericRepository<Message> Messages { get; }
-    IGenericRepository<MessageAttachment> MessageAttachments { get; }
-    IGenericRepository<MessageReaction> MessageReactions { get; }
-    IGenericRepository<MessageReadReceipt> MessageReadReceipts { get; }
+            IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }
+            IGenericRepository<SubmissionFile> SubmissionFiles { get; }
+            IGenericRepository<Conversation> Conversations { get; }
+            IGenericRepository<ConversationMember> ConversationMembers { get; }
+            IGenericRepository<Message> Messages { get; }
+            IGenericRepository<MessageAttachment> MessageAttachments { get; }
+            IGenericRepository<MessageReaction> MessageReactions { get; }
+            IGenericRepository<MessageReadReceipt> MessageReadReceipts { get; }
         IGenericRepository<Committee> Committees { get; }
         IGenericRepository<CommitteeMember> CommitteeMembers { get; }
         IGenericRepository<CommitteeSession> CommitteeSessions { get; }
@@ -31,6 +31,10 @@ namespace ThesisManagement.Api.Services
 
         IGenericRepository<DefenseTermStudent> DefenseTermStudents { get; }
         IGenericRepository<DefenseTermLecturer> DefenseTermLecturers { get; }
+        IGenericRepository<Class> Classes { get; }
+            IGenericRepository<TopicRenameRequest> TopicRenameRequests { get; }
+            IGenericRepository<TopicRenameRequestFile> TopicRenameRequestFiles { get; }
+            IGenericRepository<TopicTitleHistory> TopicTitleHistories { get; }
 
         IGenericRepository<Room> Rooms { get; }
 

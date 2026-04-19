@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Edit,
 } from "lucide-react";
+import TopicRenameRequestModal from "../../components/workflow/TopicRenameRequestModal";
 import {
   type DefensePeriodId,
   type WorkflowDetailResponse,
@@ -32,6 +33,23 @@ import {
   rollbackTopicWorkflowMyTestData,
   submitTopicWorkflow,
 } from "../../services/topic-workflow.service";
+
+type TopicRenameRequestModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  currentTopic?: {
+    topicID?: number | null;
+    topicCode?: string | null;
+    title?: string | null;
+    proposerUserCode?: string | null;
+    supervisorUserCode?: string | null;
+  } | null;
+  initialMode?: "detail" | "create" | "edit" | "review";
+};
+
+const TopicRenameRequestModalView =
+  TopicRenameRequestModal as unknown as React.ComponentType<TopicRenameRequestModalProps>;
+import { ROLE_LECTURER } from "../../utils/role";
 
 type CatalogTopicWithTags = {
   catalogTopicID: number;
@@ -71,6 +89,14 @@ async function getWorkflowTopicDetailApi(
   topicId: number,
 ): Promise<WorkflowDetailResponse> {
   return getTopicWorkflowDetail(topicId);
+}
+
+function getDisplayedTopicStatus(status?: string): string {
+  const normalized = String(status || "").trim();
+  if (normalized === "Đủ điều kiện bảo vệ") {
+    return "Chờ bảo vệ";
+  }
+  return normalized || "--";
 }
 
 async function getCatalogTopicsWithTagsApi(input?: {
@@ -120,9 +146,8 @@ const TopicRegistration: React.FC = () => {
   );
   const [tags, setTags] = useState<Tag[]>([]);
   const [defenseTerms, setDefenseTerms] = useState<DefenseTermOption[]>([]);
-  const [selectedDefenseTermId, setSelectedDefenseTermId] = useState<
-    DefensePeriodId | null
-  >(null);
+  const [selectedDefenseTermId, setSelectedDefenseTermId] =
+    useState<DefensePeriodId | null>(null);
   const [selectedTagInfo, setSelectedTagInfo] = useState<Tag | null>(null);
   const [selectedTagIDs, setSelectedTagIDs] = useState<number[]>([]);
   const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
@@ -135,6 +160,7 @@ const TopicRegistration: React.FC = () => {
   const [existingTopic, setExistingTopic] = useState<Topic | null>(null);
   const [, setWorkflowDetail] = useState<WorkflowDetailResponse | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isTopicRenameModalOpen, setIsTopicRenameModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState<TopicFormData>({
     topicCode: "",
     title: "",
@@ -246,26 +272,27 @@ const TopicRegistration: React.FC = () => {
         console.error("Error fetching topic code template:", error);
       }
 
-      // Check if student already has a pending or approved topic
+      // Check if student already has a topic
       if (userCode) {
         try {
           const topicsRes = await fetchData(
             `/Topics/get-list?ProposerUserCode=${userCode}`,
           );
           const topics = (topicsRes as ApiResponse<Topic[]>)?.data || [];
-          const existingTopic = topics.find(
-            (topic) =>
-              topic.status === "Đang chờ" ||
-              topic.status === "Đã duyệt" ||
-              topic.status === "Đã chấp nhận" ||
-              topic.status === "Từ chối" ||
-              topic.status === "Cần sửa đổi",
-          );
-          if (existingTopic) {
-            setExistingTopic(existingTopic);
-          } else {
-            setExistingTopic(null);
-          }
+          const existingTopic =
+            topics.find(
+              (topic) =>
+                topic.status === "Đang chờ" ||
+                topic.status === "Đã duyệt" ||
+                topic.status === "Đã chấp nhận" ||
+                topic.status === "Đủ điều kiện bảo vệ" ||
+                topic.status === "Từ chối" ||
+                topic.status === "Cần sửa đổi",
+            ) ??
+            topics[0] ??
+            null;
+
+          setExistingTopic(existingTopic);
         } catch (error) {
           console.error("Error checking existing topics:", error);
         }
@@ -900,6 +927,8 @@ const TopicRegistration: React.FC = () => {
         supervisorUserCode: selectedLecturer.userCode || "",
         supervisorLecturerProfileID: formData.supervisorLecturerProfileID || 0,
         supervisorLecturerCode: selectedLecturer.lecturerCode || "",
+        reviewedByUserCode: selectedLecturer.userCode || null,
+        reviewedByRole: ROLE_LECTURER,
         catalogTopicID: formData.catalogTopicID,
         catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || null,
         departmentID: formData.departmentID || selectedDepartment.departmentID,
@@ -999,6 +1028,8 @@ const TopicRegistration: React.FC = () => {
         supervisorLecturerProfileID:
           editFormData.supervisorLecturerProfileID || 0,
         supervisorLecturerCode: selectedLecturer.lecturerCode || "",
+        reviewedByUserCode: selectedLecturer.userCode || null,
+        reviewedByRole: ROLE_LECTURER,
         catalogTopicID: editFormData.catalogTopicID,
         catalogTopicCode: selectedCatalogTopic?.catalogTopicCode || null,
         departmentID:
@@ -1833,7 +1864,7 @@ const TopicRegistration: React.FC = () => {
                     fontWeight: "500",
                   }}
                 >
-                  {existingTopic.status}
+                  {getDisplayedTopicStatus(existingTopic.status)}
                 </div>
               </div>
 
@@ -2163,6 +2194,39 @@ const TopicRegistration: React.FC = () => {
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={() => setIsTopicRenameModalOpen(true)}
+              style={{
+                marginTop:
+                  existingTopic.status === "Từ chối" ||
+                  existingTopic.status === "Cần sửa đổi"
+                    ? "16px"
+                    : "0",
+                backgroundColor: "#fff",
+                color: "#f37021",
+                border: "1px solid #f37021",
+                padding: "10px 20px",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                transition: "background-color 0.2s",
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#fff8f3";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#fff";
+              }}
+            >
+              <Edit size={16} />
+              Đơn xin đổi đề tài
+            </button>
+
             <div
               style={{
                 marginTop: "16px",
@@ -2207,6 +2271,17 @@ const TopicRegistration: React.FC = () => {
             </div>
           </div>
         </div>
+        <TopicRenameRequestModalView
+          isOpen={isTopicRenameModalOpen}
+          onClose={() => setIsTopicRenameModalOpen(false)}
+          currentTopic={{
+            topicID: existingTopic.topicID,
+            topicCode: existingTopic.topicCode || null,
+            title: existingTopic.title || null,
+            proposerUserCode: existingTopic.proposerUserCode || null,
+            supervisorUserCode: existingTopic.supervisorUserCode || null,
+          }}
+        />
       </div>
     );
   }

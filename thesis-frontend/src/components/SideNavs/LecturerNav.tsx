@@ -15,9 +15,13 @@ import "./LecturerNav.css";
 
 interface LecturerNavProps {
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
+const LecturerNav: React.FC<LecturerNavProps> = ({
+  onNavigate,
+  collapsed = false,
+}) => {
   const navItems = [
     { path: "/lecturer", label: "Trang chủ", icon: <Home size={18} /> },
     {
@@ -34,6 +38,11 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
       path: "/lecturer/topic-review",
       label: "Duyệt đề tài",
       icon: <BookOpen size={18} />,
+    },
+    {
+      path: "/lecturer/topic-rename-requests",
+      label: "Xin đổi tên đề tài",
+      icon: <FileText size={18} />,
     },
     {
       path: "/lecturer/workflow-audits",
@@ -59,7 +68,7 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
   ];
 
   return (
-    <nav className="sidenav lecturer-theme">
+    <nav className={`sidenav lecturer-theme ${collapsed ? "collapsed" : ""}`}>
       <ul>
         {navItems.map((item) => (
           <li key={item.path}>
@@ -68,6 +77,8 @@ const LecturerNav: React.FC<LecturerNavProps> = ({ onNavigate }) => {
               end
               className={({ isActive }) => (isActive ? "active" : undefined)}
               onClick={onNavigate}
+              title={item.label}
+              aria-label={item.label}
             >
               <span className="icon">{item.icon}</span>
               <span className="label">{item.label}</span>

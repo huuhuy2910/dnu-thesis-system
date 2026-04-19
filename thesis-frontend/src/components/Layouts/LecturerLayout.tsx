@@ -10,6 +10,8 @@ import {
   Menu,
   X,
   KeyRound,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { fetchData, getAvatarUrl } from "../../api/fetchData";
 import type { ApiResponse } from "../../types/api";
@@ -50,6 +52,8 @@ const LecturerLayout: React.FC = () => {
       tooltip: "Hệ thống đang tự động xác định đợt bảo vệ hiện tại.",
     };
   });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const sidebarWidth = isSidebarCollapsed ? 84 : 260;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -315,12 +319,33 @@ const LecturerLayout: React.FC = () => {
               left: 220px !important;
             }
           }
+
+          .lecturer-sidebar,
+          .lecturer-main,
+          .lecturer-header,
+          .lecturer-sidebar img,
+          .lecturer-sidebar .sidebar-brand-text,
+          .lecturer-sidebar .sidebar-footer-text {
+            transition: width 0.28s ease, margin-left 0.28s ease, left 0.28s ease, opacity 0.24s ease, transform 0.24s ease, margin 0.28s ease;
+          }
+
+          .lecturer-sidebar .sidebar-brand-text,
+          .lecturer-sidebar .sidebar-footer-text {
+            will-change: opacity, transform;
+          }
+
+          .lecturer-sidebar.collapsed .sidebar-brand-text,
+          .lecturer-sidebar.collapsed .sidebar-footer-text {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.96);
+            pointer-events: none;
+          }
         `}
       </style>
       <aside
-        className={`lecturer-sidebar ${isMobileMenuOpen ? "open" : ""}`}
+        className={`lecturer-sidebar ${isMobileMenuOpen ? "open" : ""} ${isSidebarCollapsed ? "collapsed" : ""}`}
         style={{
-          width: 260,
+          width: sidebarWidth,
           backgroundColor: "#002855",
           color: "#FFFFFF",
           display: "flex",
@@ -369,13 +394,16 @@ const LecturerLayout: React.FC = () => {
             src="/dnu_logo.png"
             alt="Đại học Đại Nam"
             style={{
-              width: 88,
+              width: isSidebarCollapsed ? 52 : 88,
               display: "block",
-              margin: "0 auto 10px",
+              margin: isSidebarCollapsed ? "16px auto 10px" : "0 auto 10px",
               filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
+              transition:
+                "width 0.28s ease, margin 0.28s ease, opacity 0.24s ease",
             }}
           />
           <h3
+            className="sidebar-brand-text"
             style={{
               color: "#f37021",
               fontSize: 17,
@@ -383,20 +411,47 @@ const LecturerLayout: React.FC = () => {
               margin: 0,
               letterSpacing: "0.5px",
               textShadow: "0 1px 2px rgba(0, 0, 0, 0.3)",
+              opacity: isSidebarCollapsed ? 0 : 1,
+              transform: isSidebarCollapsed
+                ? "translateY(-8px) scale(0.96)"
+                : "translateY(0) scale(1)",
+              maxHeight: isSidebarCollapsed ? 0 : 40,
+              overflow: "hidden",
+              transition:
+                "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
             }}
           >
             Hệ thống Quản lý Đồ án
           </h3>
-          <div style={{ fontSize: 12, color: "#e2e8f0", marginTop: 6 }}>
+          <div
+            className="sidebar-brand-text"
+            style={{
+              fontSize: 12,
+              color: "#e2e8f0",
+              marginTop: 6,
+              opacity: isSidebarCollapsed ? 0 : 1,
+              transform: isSidebarCollapsed
+                ? "translateY(-8px) scale(0.96)"
+                : "translateY(0) scale(1)",
+              maxHeight: isSidebarCollapsed ? 0 : 28,
+              overflow: "hidden",
+              transition:
+                "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
+            }}
+          >
             Vai trò: <strong style={{ color: "#f37021" }}>Giảng viên</strong>
           </div>
         </div>
 
         <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
-          <LecturerNav onNavigate={() => setIsMobileMenuOpen(false)} />
+          <LecturerNav
+            collapsed={isSidebarCollapsed}
+            onNavigate={() => setIsMobileMenuOpen(false)}
+          />
         </div>
 
         <footer
+          className="sidebar-footer-text"
           style={{
             fontSize: 11,
             color: "#94a3b8",
@@ -404,6 +459,12 @@ const LecturerLayout: React.FC = () => {
             padding: "18px 12px",
             borderTop: "1px solid rgba(255, 255, 255, 0.1)",
             background: "rgba(0, 0, 0, 0.2)",
+            opacity: isSidebarCollapsed ? 0 : 1,
+            transform: isSidebarCollapsed ? "translateY(8px)" : "translateY(0)",
+            maxHeight: isSidebarCollapsed ? 0 : 80,
+            overflow: "hidden",
+            transition:
+              "opacity 0.24s ease, transform 0.24s ease, max-height 0.28s ease",
           }}
         >
           © 2025 Đại học Đại Nam
@@ -416,7 +477,8 @@ const LecturerLayout: React.FC = () => {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          marginLeft: 260,
+          marginLeft: sidebarWidth,
+          transition: "margin-left 0.28s ease",
         }}
       >
         <header
@@ -432,13 +494,14 @@ const LecturerLayout: React.FC = () => {
             alignItems: "center",
             color: "#FFFFFF",
             position: "fixed",
-            left: 260,
+            left: sidebarWidth,
             right: 0,
             top: 0,
             height: 80,
             zIndex: 20,
             borderBottom: "2px solid rgba(243, 112, 33, 0.3)",
             backdropFilter: "blur(10px)",
+            transition: "left 0.28s ease",
           }}
         >
           {/* Left Section - Title and Profile Info */}
@@ -458,6 +521,36 @@ const LecturerLayout: React.FC = () => {
               className="mobile-menu-btn"
             >
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+              title={
+                isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+              }
+              aria-label={
+                isSidebarCollapsed ? "Mở rộng thanh nav" : "Thu gọn thanh nav"
+              }
+              style={{
+                width: 36,
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                background: "rgba(255, 255, 255, 0.1)",
+                color: "#fff",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen size={18} />
+              ) : (
+                <PanelLeftClose size={18} />
+              )}
             </button>
 
             {/* White Logo - Always visible */}

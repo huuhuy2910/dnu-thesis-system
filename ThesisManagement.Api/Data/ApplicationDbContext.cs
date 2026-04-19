@@ -40,6 +40,9 @@ namespace ThesisManagement.Api.Data
 
         public DbSet<DefenseTermStudent> DefenseTermStudents => Set<DefenseTermStudent>();
         public DbSet<DefenseTermLecturer> DefenseTermLecturers => Set<DefenseTermLecturer>();
+        public DbSet<TopicRenameRequest> TopicRenameRequests => Set<TopicRenameRequest>();
+        public DbSet<TopicRenameRequestFile> TopicRenameRequestFiles => Set<TopicRenameRequestFile>();
+        public DbSet<TopicTitleHistory> TopicTitleHistories => Set<TopicTitleHistory>();
 
         public DbSet<Room> Rooms => Set<Room>();
         public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
@@ -731,6 +734,101 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => new { x.DefenseTermId, x.LecturerProfileID }).IsUnique();
                 b.HasIndex(x => new { x.DefenseTermId, x.LecturerCode }).IsUnique();
                 b.HasIndex(x => new { x.DefenseTermId, x.UserCode }).IsUnique();
+            });
+
+            // TopicRenameRequests
+            modelBuilder.Entity<TopicRenameRequest>(b =>
+            {
+                b.ToTable("TOPIC_RENAME_REQUESTS", tb =>
+                {
+                    tb.HasTrigger("TRG_TOPIC_RENAME_REQUESTS_BIU");
+                });
+                b.HasKey(x => x.RequestId);
+                b.Property(x => x.RequestId).HasDefaultValueSql("TOPIC_RENAME_REQUESTS_SEQ.NEXTVAL");
+                b.Property(x => x.RequestCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.RequestCode).IsUnique();
+                b.Property(x => x.TopicCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.OldTitle).HasMaxLength(500).IsRequired();
+                b.Property(x => x.NewTitle).HasMaxLength(500).IsRequired();
+                b.Property(x => x.Status).HasMaxLength(20).IsRequired();
+                b.Property(x => x.RequestedByUserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.RequestedByRole).HasMaxLength(20).IsRequired();
+                b.Property(x => x.ReviewedByUserCode).HasMaxLength(40);
+                b.Property(x => x.ReviewedByRole).HasMaxLength(20);
+                b.Property(x => x.GeneratedFileUrl).HasMaxLength(500);
+                b.Property(x => x.GeneratedFileName).HasMaxLength(255);
+                b.Property(x => x.GeneratedFileHash).HasMaxLength(64);
+                b.Property(x => x.RequestedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.RequestedByUser).WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+                b.HasOne(x => x.ReviewedByUser).WithMany().HasForeignKey(x => x.ReviewedByUserId).OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // TopicRenameRequestFiles
+            modelBuilder.Entity<TopicRenameRequestFile>(b =>
+            {
+                b.ToTable("TOPIC_RENAME_REQUEST_FILES", tb =>
+                {
+                    tb.HasTrigger("TRG_TOPIC_RENAME_REQUEST_FILES_BIU");
+                });
+                b.HasKey(x => x.FileId);
+                b.Property(x => x.FileId).HasDefaultValueSql("TOPIC_RENAME_REQUEST_FILES_SEQ.NEXTVAL");
+                b.Property(x => x.FileCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.FileCode).IsUnique();
+                b.Property(x => x.FileType).HasMaxLength(30).IsRequired();
+                b.Property(x => x.FileName).HasMaxLength(255).IsRequired();
+                b.Property(x => x.OriginalFileName).HasMaxLength(255);
+                b.Property(x => x.FileUrl).HasMaxLength(500).IsRequired();
+                b.Property(x => x.FilePath).HasMaxLength(500);
+                b.Property(x => x.StorageProvider).HasMaxLength(20).IsRequired();
+                b.Property(x => x.MimeType).HasMaxLength(100);
+                b.Property(x => x.FileHash).HasMaxLength(64);
+                b.Property(x => x.FileVersion).HasDefaultValue(1);
+                b.Property(x => x.IsCurrent).HasConversion<int>().HasDefaultValue(1);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasOne(x => x.Request).WithMany(x => x.Files).HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Cascade);
+                b.HasOne(x => x.UploadedByUser).WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.SetNull);
+                b.HasIndex(x => new { x.RequestId, x.IsCurrent });
+            });
+
+            // TopicTitleHistory
+            modelBuilder.Entity<TopicTitleHistory>(b =>
+            {
+                b.ToTable("TOPIC_TITLE_HISTORY", tb =>
+                {
+                    tb.HasTrigger("TRG_TOPIC_TITLE_HISTORY_BIU");
+                });
+                b.HasKey(x => x.HistoryId);
+                b.Property(x => x.HistoryId).HasDefaultValueSql("TOPIC_TITLE_HISTORY_SEQ.NEXTVAL");
+                b.Property(x => x.HistoryCode).HasMaxLength(40).IsRequired();
+                b.HasIndex(x => x.HistoryCode).IsUnique();
+                b.Property(x => x.TopicCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.RequestCode).HasMaxLength(40);
+                b.Property(x => x.PreviousTitle).HasMaxLength(500).IsRequired();
+                b.Property(x => x.NewTitle).HasMaxLength(500).IsRequired();
+                b.Property(x => x.ChangeType).HasMaxLength(30).IsRequired();
+                b.Property(x => x.ChangedByUserCode).HasMaxLength(40).IsRequired();
+                b.Property(x => x.ChangedByRole).HasMaxLength(20).IsRequired();
+                b.Property(x => x.ApprovedByUserCode).HasMaxLength(40);
+                b.Property(x => x.ApprovedByRole).HasMaxLength(20);
+                b.Property(x => x.EffectiveAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
+
+                b.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.Request).WithMany(x => x.TitleHistories).HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.SetNull);
+                b.HasOne(x => x.ChangedByUser).WithMany().HasForeignKey(x => x.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
+                b.HasOne(x => x.ApprovedByUser).WithMany().HasForeignKey(x => x.ApprovedByUserId).OnDelete(DeleteBehavior.SetNull);
+
+                b.HasIndex(x => x.TopicId);
+                b.HasIndex(x => x.TopicCode);
+                b.HasIndex(x => x.RequestId);
+                b.HasIndex(x => x.EffectiveAt);
             });
 
             // SyncAuditLogs

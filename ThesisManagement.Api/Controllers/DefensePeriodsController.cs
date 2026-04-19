@@ -207,7 +207,6 @@ namespace ThesisManagement.Api.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Head")]
         public Task<ActionResult<ApiResponse<IEnumerable<DefensePeriodListItemDto>>>> ListPeriodsCompact(
             [FromQuery] string? keyword = null,
             [FromQuery] string? status = null,
