@@ -49,10 +49,10 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     public class ConfirmCouncilConfigDto
     {
         [Range(3, 7)]
-        public int TopicsPerSessionConfig { get; set; } = 4;
+        public int TopicsPerSessionConfig { get; set; } = 3;
 
         [Range(3, 7)]
-        public int MembersPerCouncilConfig { get; set; } = 4;
+        public int MembersPerCouncilConfig { get; set; } = 3;
 
         public List<string> Tags { get; set; } = new();
     }
@@ -100,7 +100,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     {
         public bool AvoidSupervisorConflict { get; set; } = true;
         public bool AvoidLecturerOverlap { get; set; } = true;
-        public List<string> RequireRoles { get; set; } = new() { "CT", "TK" };
+        public List<string> RequireRoles { get; set; } = new() { "CT", "UVTK", "UVPB" };
     }
 
     public class CouncilUpsertDto
@@ -208,6 +208,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         [Required]
         public string EndTime { get; set; } = "08:30";
 
+        [Range(1, int.MaxValue)]
         public int? OrderIndex { get; set; }
     }
 
@@ -264,6 +265,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         [Required]
         public string EndTime { get; set; } = "08:30";
 
+        [Range(1, int.MaxValue)]
         public int? OrderIndex { get; set; }
     }
 
@@ -280,6 +282,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 
         public string? EndTime { get; set; }
 
+        [Range(1, int.MaxValue)]
         public int? OrderIndex { get; set; }
     }
 

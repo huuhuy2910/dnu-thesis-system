@@ -8,8 +8,8 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string MorningStart { get; set; } = "07:30";
         public string AfternoonStart { get; set; } = "13:30";
         public int SoftMaxCapacity { get; set; } = 4;
-        public int TopicsPerSessionConfig { get; set; } = 4;
-        public int MembersPerCouncilConfig { get; set; } = 4;
+        public int TopicsPerSessionConfig { get; set; } = 3;
+        public int MembersPerCouncilConfig { get; set; } = 3;
         public List<string> Tags { get; set; } = new();
     }
 
@@ -19,6 +19,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public DateTime? EndDate { get; set; }
         public bool LecturerCapabilitiesLocked { get; set; }
         public bool CouncilConfigConfirmed { get; set; }
+        public bool CouncilListLocked { get; set; }
         public bool Finalized { get; set; }
         public bool ScoresPublished { get; set; }
         public int CouncilCount { get; set; }

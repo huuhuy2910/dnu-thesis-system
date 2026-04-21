@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using ThesisManagement.Api.Application.Common;
 using ThesisManagement.Api.Application.Common.Resilience;
 using ThesisManagement.Api.Data;
@@ -13,12 +14,18 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
     {
         Task SubmitIndependentScoreAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
         Task RequestReopenScoreAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
+        Task OpenSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
         Task LockSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
     }
 
     public sealed class DefenseScoreWorkflowService : IDefenseScoreWorkflowService
     {
         private const decimal ScoreVarianceThreshold = 2.0m;
+
+        private sealed class DefensePeriodSessionConfigSnapshot
+        {
+            public bool CouncilListLocked { get; set; }
+        }
 
         private sealed class SubmittedScoreRow
         {
@@ -70,6 +77,29 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             if (member == null)
             {
                 throw new BusinessRuleException("Giảng viên không thuộc hội đồng.");
+            }
+
+            var committeeState = await _db.Committees.AsNoTracking().FirstOrDefaultAsync(x => x.CommitteeID == committeeId, cancellationToken);
+            if (committeeState == null)
+            {
+                throw new BusinessRuleException("Không tìm thấy hội đồng.");
+            }
+
+            var normalizedCommitteeStatus = DefenseWorkflowStateMachine.ParseCommitteeStatus(committeeState.Status);
+            var normalizedAssignmentStatus = DefenseWorkflowStateMachine.ParseAssignmentStatus(assignment.Status);
+            if (normalizedCommitteeStatus == CommitteeStatus.Draft)
+            {
+                throw new BusinessRuleException("Hội đồng đang ở trạng thái Draft. Cần sẵn sàng và mở ca trước khi chấm điểm.", "UC3.4.INVALID_COMMITTEE_STATE");
+            }
+
+            if (normalizedCommitteeStatus == CommitteeStatus.Ready && normalizedAssignmentStatus == AssignmentStatus.Pending)
+            {
+                throw new BusinessRuleException("Cần mở ca bảo vệ trước khi chấm điểm.", "UC3.4.SESSION_NOT_OPEN");
+            }
+
+            if (normalizedCommitteeStatus == CommitteeStatus.Finalized || normalizedCommitteeStatus == CommitteeStatus.Published)
+            {
+                throw new BusinessRuleException("Hội đồng đã chốt/công bố kết quả, không thể chấm điểm thêm.", "UC3.4.INVALID_COMMITTEE_STATE");
             }
 
             var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
@@ -298,6 +328,97 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }, cancellationToken);
         }
 
+        public async Task OpenSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
+        {
+            await using var tx = await _uow.BeginTransactionAsync(cancellationToken);
+
+            var member = await _db.CommitteeMembers.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CommitteeID == committeeId && x.MemberLecturerCode == lecturerCode, cancellationToken);
+            if (member == null || NormalizeRole(member.Role) != "CT")
+            {
+                throw new BusinessRuleException("Chỉ Chủ tịch hội đồng (CT) được mở ca bảo vệ.");
+            }
+
+            var committee = await _db.Committees.FirstOrDefaultAsync(x => x.CommitteeID == committeeId, cancellationToken);
+            if (committee == null)
+            {
+                throw new BusinessRuleException("Không tìm thấy hội đồng.");
+            }
+
+            if (committee.DefenseTermId.HasValue)
+            {
+                var configJson = await _db.DefenseTerms.AsNoTracking()
+                    .Where(x => x.DefenseTermId == committee.DefenseTermId.Value)
+                    .Select(x => x.ConfigJson)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (!IsCouncilListLocked(configJson))
+                {
+                    throw new BusinessRuleException(
+                        "Danh sách hội đồng chưa được chốt. Cần chốt hội đồng trước khi mở ca bảo vệ.",
+                        "UC3.4.COUNCIL_LIST_NOT_LOCKED");
+                }
+            }
+
+            var assignments = await _db.DefenseAssignments.Where(x => x.CommitteeID == committeeId).ToListAsync(cancellationToken);
+            if (assignments.Count == 0)
+            {
+                throw new BusinessRuleException("Hội đồng chưa có đề tài để mở ca bảo vệ.", "UC3.4.SESSION_EMPTY");
+            }
+
+            var beforeSnapshot = new { committee.Status, committee.LastUpdated };
+            var committeeStatus = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
+            if (committeeStatus == CommitteeStatus.Draft)
+            {
+                throw new BusinessRuleException("Hội đồng đang ở trạng thái Draft. Không thể mở ca bảo vệ.", "UC3.4.INVALID_COMMITTEE_STATE");
+            }
+
+            if (committeeStatus == CommitteeStatus.Completed || committeeStatus == CommitteeStatus.Finalized || committeeStatus == CommitteeStatus.Published)
+            {
+                throw new BusinessRuleException("Hội đồng đã kết thúc/chốt, không thể mở ca bảo vệ.", "UC3.4.INVALID_COMMITTEE_STATE");
+            }
+
+            var now = DateTime.UtcNow;
+            if (committeeStatus == CommitteeStatus.Ready)
+            {
+                DefenseWorkflowStateMachine.EnsureCommitteeTransition(committeeStatus, CommitteeStatus.Ongoing, "UC3.4.INVALID_COMMITTEE_STATE");
+                committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Ongoing);
+            }
+
+            committee.LastUpdated = now;
+            _uow.Committees.Update(committee);
+
+            foreach (var assignment in assignments)
+            {
+                var assignmentStatus = DefenseWorkflowStateMachine.ParseAssignmentStatus(assignment.Status);
+                if (assignmentStatus != AssignmentStatus.Pending)
+                {
+                    continue;
+                }
+
+                assignment.Status = DefenseWorkflowStateMachine.ToValue(AssignmentStatus.Defending);
+                assignment.LastUpdated = now;
+                _uow.DefenseAssignments.Update(assignment);
+            }
+
+            await _uow.SaveChangesAsync();
+            await tx.CommitAsync(cancellationToken);
+
+            await _auditTrail.WriteAsync(
+                "OPEN_SESSION",
+                "SUCCESS",
+                beforeSnapshot,
+                new { committee.Status, committee.LastUpdated },
+                new { CommitteeId = committeeId, LecturerCode = lecturerCode },
+                actorUserId,
+                cancellationToken);
+
+            await _resiliencePolicy.ExecuteAsync("DEFENSE_HUB_NOTIFY", async ct =>
+            {
+                await _hub.Clients.All.SendAsync("DefenseSessionOpened", new { CommitteeId = committeeId, LecturerCode = lecturerCode }, ct);
+            }, cancellationToken);
+        }
+
         public async Task LockSessionAsync(int committeeId, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
         {
             await using var tx = await _uow.BeginTransactionAsync(cancellationToken);
@@ -308,9 +429,25 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 throw new BusinessRuleException("Chỉ Chủ tịch hội đồng (CT) được khóa ca bảo vệ.");
             }
 
+            var committee = await _db.Committees.FirstOrDefaultAsync(x => x.CommitteeID == committeeId, cancellationToken);
+            if (committee == null)
+            {
+                throw new BusinessRuleException("Không tìm thấy hội đồng.");
+            }
+
+            var committeeStatus = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
+            if (committeeStatus != CommitteeStatus.Ongoing && committeeStatus != CommitteeStatus.Completed)
+            {
+                throw new BusinessRuleException("Chỉ có thể đóng ca khi hội đồng đang ở trạng thái Ongoing.", "UC3.5.INVALID_COMMITTEE_STATE");
+            }
+
             var assignmentIds = await _db.DefenseAssignments.AsNoTracking().Where(x => x.CommitteeID == committeeId).Select(x => x.AssignmentID).ToListAsync(cancellationToken);
             var existingResults = await _db.DefenseResults.Where(x => assignmentIds.Contains(x.AssignmentId)).ToListAsync(cancellationToken);
             var existingResultIds = existingResults.Select(x => x.AssignmentId).ToHashSet();
+            var topicSupervisorScoreMap = await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentID) && !string.IsNullOrWhiteSpace(x.TopicCode))
+                .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => new { a.AssignmentID, t.Score })
+                .ToDictionaryAsync(x => x.AssignmentID, x => x.Score, cancellationToken);
             var now = DateTime.UtcNow;
 
             var memberCodes = await _db.CommitteeMembers.AsNoTracking()
@@ -381,24 +518,16 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 }
 
                 var memberScores = submittedRows.Select(x => (decimal)x.Score).ToList();
-                var finalScore = Math.Round(memberScores.Average(), 1);
 
-                var scoreCt = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "CT")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scoreTk = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "TK")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scorePb = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "PB")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scoreGvhd = submittedRows
+                var scoreCt = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "CT");
+                var scoreTk = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "UVTK");
+                var scorePb = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "UVPB");
+                topicSupervisorScoreMap.TryGetValue(assignmentId, out var topicSupervisorScore);
+                var scoreGvhd = topicSupervisorScore ?? submittedRows
                     .Where(x => NormalizeRole((string?)x.Role) == "GVHD")
                     .Select(x => (decimal?)x.Score)
                     .FirstOrDefault();
+                var finalScore = ResolveFinalScore(memberScores, scoreGvhd, scoreCt, scoreTk, scorePb);
 
                 if (!existingResultIds.Contains(assignmentId))
                 {
@@ -430,26 +559,14 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 _uow.DefenseResults.Update(result);
             }
 
-            var committee = await _db.Committees.FirstOrDefaultAsync(x => x.CommitteeID == committeeId, cancellationToken);
-            if (committee != null)
+            if (committeeStatus == CommitteeStatus.Ongoing)
             {
-                var fromStatus = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
-                if (fromStatus == CommitteeStatus.Ready)
-                {
-                    DefenseWorkflowStateMachine.EnsureCommitteeTransition(fromStatus, CommitteeStatus.Ongoing, "UC3.5.INVALID_COMMITTEE_STATE");
-                    committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Ongoing);
-                }
-
-                var progressedFrom = DefenseWorkflowStateMachine.ParseCommitteeStatus(committee.Status);
-                if (progressedFrom == CommitteeStatus.Ongoing)
-                {
-                    DefenseWorkflowStateMachine.EnsureCommitteeTransition(progressedFrom, CommitteeStatus.Completed, "UC3.5.INVALID_COMMITTEE_STATE");
-                    committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Completed);
-                }
-
-                committee.LastUpdated = now;
-                _uow.Committees.Update(committee);
+                DefenseWorkflowStateMachine.EnsureCommitteeTransition(committeeStatus, CommitteeStatus.Completed, "UC3.5.INVALID_COMMITTEE_STATE");
+                committee.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Completed);
             }
+
+            committee.LastUpdated = now;
+            _uow.Committees.Update(committee);
 
             var committeeAssignments = await _db.DefenseAssignments.Where(x => x.CommitteeID == committeeId).ToListAsync(cancellationToken);
             foreach (var assignment in committeeAssignments)
@@ -472,6 +589,24 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 cancellationToken);
         }
 
+        private static bool IsCouncilListLocked(string? configJson)
+        {
+            if (string.IsNullOrWhiteSpace(configJson))
+            {
+                return false;
+            }
+
+            try
+            {
+                var config = JsonSerializer.Deserialize<DefensePeriodSessionConfigSnapshot>(configJson);
+                return config?.CouncilListLocked ?? false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static string NormalizeRole(string? role)
         {
             if (string.IsNullOrWhiteSpace(role))
@@ -480,12 +615,31 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }
 
             var upper = role.Trim().ToUpperInvariant();
-            if (upper.Contains("CHU") || upper == "CT") return "CT";
-            if (upper.Contains("THU") || upper == "TK") return "TK";
-            if (upper.Contains("PHAN") || upper == "PB") return "PB";
-            if (upper == "UV") return "UV";
             if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
             return upper;
+        }
+
+        private static decimal? ResolveRoleScore<T>(
+            IEnumerable<T> source,
+            Func<T, string?> roleSelector,
+            Func<T, decimal> scoreSelector,
+            string targetRole)
+        {
+            var values = source
+                .Where(x => NormalizeRole(roleSelector(x)) == targetRole)
+                .Select(scoreSelector)
+                .ToList();
+
+            if (values.Count == 0)
+            {
+                return null;
+            }
+
+            return Math.Round(values.Average(), 1);
         }
 
         private static string? ToGrade(decimal? score)
@@ -551,11 +705,12 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 return;
             }
 
-            var finalScore = Math.Round(perMemberLatest.Average(x => x.Score), 1);
-            var scoreCt = perMemberLatest.Where(x => NormalizeRole(x.Role) == "CT").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scoreTk = perMemberLatest.Where(x => NormalizeRole(x.Role) == "TK").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scorePb = perMemberLatest.Where(x => NormalizeRole(x.Role) == "PB").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scoreGvhd = perMemberLatest.Where(x => NormalizeRole(x.Role) == "GVHD").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var scoreCt = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "CT");
+            var scoreTk = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "UVTK");
+            var scorePb = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "UVPB");
+            var topicSupervisorScore = await GetTopicSupervisorScoreByAssignmentAsync(assignmentId, cancellationToken);
+            var scoreGvhd = topicSupervisorScore ?? perMemberLatest.Where(x => NormalizeRole(x.Role) == "GVHD").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var finalScore = ResolveFinalScore(perMemberLatest.Select(x => x.Score).ToList(), scoreGvhd, scoreCt, scoreTk, scorePb);
 
             var now = DateTime.UtcNow;
             var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == assignmentId, cancellationToken);
@@ -589,6 +744,29 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }
 
             await _uow.SaveChangesAsync();
+        }
+
+        private static decimal ResolveFinalScore(
+            IReadOnlyCollection<decimal> memberScores,
+            decimal? scoreGvhd,
+            decimal? scoreCt,
+            decimal? scoreTk,
+            decimal? scorePb)
+        {
+            if (scoreGvhd.HasValue && scoreCt.HasValue && scoreTk.HasValue && scorePb.HasValue)
+            {
+                return Math.Round((scoreGvhd.Value + scoreCt.Value + scoreTk.Value + scorePb.Value) / 4m, 1);
+            }
+
+            return Math.Round(memberScores.Average(), 1);
+        }
+
+        private async Task<decimal?> GetTopicSupervisorScoreByAssignmentAsync(int assignmentId, CancellationToken cancellationToken)
+        {
+            return await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => x.AssignmentID == assignmentId && !string.IsNullOrWhiteSpace(x.TopicCode))
+                .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => (decimal?)t.Score)
+                .FirstOrDefaultAsync(cancellationToken);
         }
     }
 }

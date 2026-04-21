@@ -414,17 +414,27 @@ namespace ThesisManagement.Api.Data
             // Committees
             modelBuilder.Entity<IdempotencyRecord>(b =>
             {
+                var nullableBoolToNumberConverter = new ValueConverter<bool?, int?>(
+                    value => !value.HasValue ? null : (value.Value ? 1 : 0),
+                    value => !value.HasValue ? null : value.Value != 0);
+
                 b.ToTable("IDEMPOTENCY_RECORDS");
                 b.HasKey(x => x.IdempotencyRecordID);
-                b.Property(x => x.Action).HasMaxLength(80).IsRequired();
-                b.Property(x => x.RequestKey).HasMaxLength(200).IsRequired();
-                b.Property(x => x.RequestHash).HasMaxLength(128).IsRequired();
-                b.Property(x => x.ResponsePayload).HasColumnType("CLOB");
-                b.Property(x => x.ResponseStatusCode);
-                b.Property(x => x.ResponseSuccess);
-                b.Property(x => x.RecordStatus).HasDefaultValue(IdempotencyRecordStatus.Processing);
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
-                b.Property(x => x.CompletedAt);
+                b.Property(x => x.IdempotencyRecordID).HasColumnName("IDEMPOTENCY_RECORD_ID");
+                b.Property(x => x.Action).HasColumnName("ACTION").HasMaxLength(80).IsRequired();
+                b.Property(x => x.PeriodID).HasColumnName("PERIOD_ID");
+                b.Property(x => x.RequestKey).HasColumnName("REQUEST_KEY").HasMaxLength(200).IsRequired();
+                b.Property(x => x.RequestHash).HasColumnName("REQUEST_HASH").HasMaxLength(128).IsRequired();
+                b.Property(x => x.ResponsePayload).HasColumnName("RESPONSE_PAYLOAD").HasColumnType("CLOB");
+                b.Property(x => x.ResponseStatusCode).HasColumnName("RESPONSE_STATUS_CODE");
+                b.Property(x => x.ResponseSuccess)
+                    .HasColumnName("RESPONSE_SUCCESS")
+                    .HasColumnType("NUMBER(1)")
+                    .HasConversion(nullableBoolToNumberConverter);
+                b.Property(x => x.RecordStatus).HasColumnName("RECORD_STATUS").HasDefaultValue(IdempotencyRecordStatus.Processing);
+                b.Property(x => x.CreatedAt).HasColumnName("CREATED_AT").HasDefaultValueSql("SYSTIMESTAMP");
+                b.Property(x => x.ExpiresAt).HasColumnName("EXPIRES_AT").IsRequired();
+                b.Property(x => x.CompletedAt).HasColumnName("COMPLETED_AT");
                 b.HasIndex(x => new { x.Action, x.PeriodID, x.RequestKey }).IsUnique();
                 b.HasIndex(x => new { x.Action, x.PeriodID, x.RequestKey, x.RequestHash });
                 b.HasIndex(x => x.ExpiresAt);
@@ -1280,6 +1290,7 @@ namespace ThesisManagement.Api.Data
         {
             var preserveExplicitMappingTables = new HashSet<string>(StringComparer.Ordinal)
             {
+                "IDEMPOTENCY_RECORDS",
                 "EVALUATION_REVIEWS",
                 "DEFENSE_MINUTES",
                 "DEFENSE_RESULTS",

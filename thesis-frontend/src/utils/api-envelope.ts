@@ -64,9 +64,74 @@ export const readEnvelopeData = <T,>(
   response: MaybeApiResponse<unknown>,
 ): T | null => (response?.data ?? response?.Data ?? null) as T | null;
 
+const readBooleanLike = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return null;
+};
+
 export const readEnvelopeSuccess = (
   response: MaybeApiResponse<unknown>,
-): boolean => Boolean(response?.success ?? response?.Success);
+): boolean => {
+  if (!response || typeof response !== "object") {
+    return false;
+  }
+
+  const source = response as unknown as Record<string, unknown>;
+  const explicitSuccess = readBooleanLike(
+    source.success ??
+      source.Success ??
+      source.succeeded ??
+      source.Succeeded ??
+      source.isSuccess ??
+      source.IsSuccess,
+  );
+
+  if (explicitSuccess !== null) {
+    return explicitSuccess;
+  }
+
+  const rawStatus = source.httpStatusCode ?? source.HttpStatusCode;
+  if (rawStatus !== undefined && rawStatus !== null) {
+    const statusCode = Number(rawStatus);
+    if (Number.isFinite(statusCode) && statusCode >= 400) {
+      return false;
+    }
+  }
+
+  const errors = source.errors ?? source.Errors;
+  if (typeof errors === "string") {
+    return errors.trim().length === 0;
+  }
+
+  if (Array.isArray(errors)) {
+    return errors.length === 0;
+  }
+
+  if (errors && typeof errors === "object") {
+    return Object.keys(errors as Record<string, unknown>).length === 0;
+  }
+
+  // Some compatibility endpoints return 2xx payloads without success field.
+  return true;
+};
 
 export const readEnvelopeMessage = (
   response: MaybeApiResponse<unknown>,

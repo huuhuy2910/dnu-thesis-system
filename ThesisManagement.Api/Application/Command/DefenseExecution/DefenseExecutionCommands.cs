@@ -12,7 +12,7 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
 
     public interface ISaveLecturerMinuteCommand
     {
-        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, UpdateLecturerMinutesDto request, int actorUserId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, UpdateLecturerMinutesDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default);
     }
 
     public interface ISubmitLecturerIndependentScoreCommand
@@ -23,6 +23,11 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
     public interface IRequestReopenScoreCommand
     {
         Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
+    }
+
+    public interface IOpenLecturerSessionCommand
+    {
+        Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
     }
 
     public interface ILockLecturerSessionCommand
@@ -57,8 +62,8 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
     {
         private readonly IDefensePeriodCommandProcessor _processor;
         public SaveLecturerMinuteCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
-        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, UpdateLecturerMinutesDto request, int actorUserId, CancellationToken cancellationToken = default)
-            => _processor.SaveLecturerMinuteAsync(committeeId, request, actorUserId, cancellationToken);
+        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, UpdateLecturerMinutesDto request, string lecturerCode, int actorUserId, CancellationToken cancellationToken = default)
+            => _processor.SaveLecturerMinuteAsync(committeeId, request, lecturerCode, actorUserId, cancellationToken);
     }
 
     public class SubmitLecturerIndependentScoreCommand : ISubmitLecturerIndependentScoreCommand
@@ -75,6 +80,14 @@ namespace ThesisManagement.Api.Application.Command.DefenseExecution
         public RequestReopenScoreCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
         public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, ReopenScoreRequestDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
             => _processor.RequestReopenScoreAsync(committeeId, request, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
+    }
+
+    public class OpenLecturerSessionCommand : IOpenLecturerSessionCommand
+    {
+        private readonly IDefensePeriodCommandProcessor _processor;
+        public OpenLecturerSessionCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
+        public Task<ApiResponse<bool>> ExecuteAsync(int committeeId, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.OpenSessionAsync(committeeId, lecturerCode, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class LockLecturerSessionCommand : ILockLecturerSessionCommand

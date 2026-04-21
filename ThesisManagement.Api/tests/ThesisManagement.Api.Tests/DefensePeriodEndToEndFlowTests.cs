@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Moq;
+using ThesisManagement.Api.Application.Command.Notifications;
 using ThesisManagement.Api.Application.Command.DefensePeriods;
 using ThesisManagement.Api.Application.Command.DefensePeriods.Services;
 using ThesisManagement.Api.Application.Common;
@@ -28,7 +29,7 @@ public class DefensePeriodEndToEndFlowTests
 
         SeedPeriodAndMasterData(db);
 
-        var processor = BuildProcessor(db, uow);
+        var (processor, notificationPublisher) = BuildProcessor(db, uow);
 
         var syncResult = await processor.SyncAsync(1, new SyncDefensePeriodRequestDto { RetryOnFailure = true, IdempotencyKey = "sync-e2e" }, actorUserId: 1001);
         Assert.True(syncResult.Success);
@@ -50,8 +51,8 @@ public class DefensePeriodEndToEndFlowTests
 
         var confirmConfigResult = await processor.ConfirmCouncilConfigAsync(1, new ConfirmCouncilConfigDto
         {
-            TopicsPerSessionConfig = 4,
-            MembersPerCouncilConfig = 4,
+            TopicsPerSessionConfig = 3,
+            MembersPerCouncilConfig = 3,
             Tags = new List<string>()
         }, actorUserId: 1001);
         Assert.True(confirmConfigResult.Success);
@@ -67,6 +68,61 @@ public class DefensePeriodEndToEndFlowTests
         Assert.True(generateResult.Success, generateResult.Message ?? "Generate failed");
         Assert.NotNull(generateResult.Data);
         Assert.NotEmpty(generateResult.Data!);
+        var generatedCouncil = Assert.Single(generateResult.Data!);
+        Assert.Equal("Ready", generatedCouncil.Status);
+        Assert.True(string.IsNullOrWhiteSpace(generatedCouncil.Warning));
+
+        var lockCouncilsResult = await processor.LockCouncilsAsync(1, actorUserId: 1001, idempotencyKey: "lock-councils-e2e");
+        Assert.True(lockCouncilsResult.Success, lockCouncilsResult.Message ?? "Lock councils failed");
+
+        var studentAssignment = generatedCouncil.Assignments.Single(x =>
+            string.Equals(x.StudentCode, "S001", StringComparison.OrdinalIgnoreCase));
+        var expectedStudentWeekday = ToVietnameseWeekdayLabel(
+            studentAssignment.ScheduledAt ?? throw new InvalidOperationException("Missing student assignment date"));
+        var expectedStudentTime = String.IsNullOrWhiteSpace(studentAssignment.StartTime)
+            ? string.Empty
+            : studentAssignment.StartTime;
+
+        notificationPublisher.Verify(
+            x => x.PublishAsync(It.Is<NotificationEventRequest>(request =>
+                request.ActionType == "OPEN_DEFENSE_STUDENT"
+                && request.ActionUrl == "/defense/periods/1/student"
+                && request.TargetUserCodes.Any(code => string.Equals(code, "S001", StringComparison.OrdinalIgnoreCase))
+                && request.NotifBody.Contains("Lịch bảo vệ của bạn")
+                && request.NotifBody.Contains(generatedCouncil.CommitteeCode)
+                && request.NotifBody.Contains(generatedCouncil.Room)
+                && request.NotifBody.Contains(expectedStudentWeekday)
+                && request.NotifBody.Contains(expectedStudentTime)
+                && !request.NotifBody.Contains("Giảng viên hướng dẫn")
+                && !request.NotifBody.Contains("Chủ tịch hội đồng"))),
+            Times.AtLeastOnce);
+
+        notificationPublisher.Verify(
+            x => x.PublishAsync(It.Is<NotificationEventRequest>(request =>
+                request.ActionType == "OPEN_DEFENSE_COMMITTEE"
+                && request.ActionUrl == "/defense/periods/1/lecturer/committees"
+                && request.TargetUserCodes.Any(code => string.Equals(code, "L001", StringComparison.OrdinalIgnoreCase))
+                && request.NotifBody.Contains("Hội đồng của bạn")
+                && request.NotifBody.Contains("Ngày:")
+                && request.NotifBody.Contains("Vai trò:")
+                && !request.NotifBody.Contains("Giảng viên hướng dẫn")
+                && (
+                    request.NotifBody.Contains("Chủ tịch hội đồng")
+                    || request.NotifBody.Contains("Ủy viên thư ký hội đồng")
+                    || request.NotifBody.Contains("Ủy viên phản biện hội đồng")
+                    || request.NotifBody.Contains("Ủy viên hội đồng")
+                ))),
+            Times.AtLeastOnce);
+
+        notificationPublisher.Verify(
+            x => x.PublishAsync(It.Is<NotificationEventRequest>(request =>
+                request.TargetUserCodes.Any(code => string.Equals(code, "SUP001", StringComparison.OrdinalIgnoreCase)))),
+            Times.Never);
+
+        notificationPublisher.Verify(
+            x => x.PublishAsync(It.Is<NotificationEventRequest>(request =>
+                request.TargetUserCodes.Any(code => string.Equals(code, "S009", StringComparison.OrdinalIgnoreCase)))),
+            Times.Never);
 
         await SeedScoresForPublishAsync(db);
 
@@ -107,7 +163,7 @@ public class DefensePeriodEndToEndFlowTests
         return new ApplicationDbContext(options);
     }
 
-    private static DefensePeriodCommandProcessor BuildProcessor(ApplicationDbContext db, IUnitOfWork uow)
+    private static (DefensePeriodCommandProcessor Processor, Mock<INotificationEventPublisher> NotificationPublisher) BuildProcessor(ApplicationDbContext db, IUnitOfWork uow)
     {
         var clients = new Mock<IHubClients>();
         var clientProxy = new Mock<IClientProxy>();
@@ -126,6 +182,10 @@ public class DefensePeriodEndToEndFlowTests
 
         var scoreWorkflow = new Mock<IDefenseScoreWorkflowService>();
         var revisionWorkflow = new Mock<IDefenseRevisionWorkflowService>();
+        var notificationPublisher = new Mock<INotificationEventPublisher>();
+        notificationPublisher
+            .Setup(x => x.PublishAsync(It.IsAny<NotificationEventRequest>()))
+            .Returns(Task.CompletedTask);
 
         var rules = new ICommitteeConstraintRule[]
         {
@@ -148,7 +208,7 @@ public class DefensePeriodEndToEndFlowTests
                 CircuitBreakSeconds = 5
             }));
 
-        return new DefensePeriodCommandProcessor(
+        var processor = new DefensePeriodCommandProcessor(
             db,
             uow,
             hub.Object,
@@ -157,7 +217,10 @@ public class DefensePeriodEndToEndFlowTests
             scoreWorkflow.Object,
             revisionWorkflow.Object,
             auditTrail.Object,
-            resiliencePolicy);
+            resiliencePolicy,
+            notificationPublisher.Object);
+
+        return (processor, notificationPublisher);
     }
 
     private static void SeedPeriodAndMasterData(ApplicationDbContext db)
@@ -175,6 +238,15 @@ public class DefensePeriodEndToEndFlowTests
             ConfigJson = "{}"
         });
 
+        db.Rooms.Add(new Room
+        {
+            RoomID = 1,
+            RoomCode = "R101",
+            Status = "Active",
+            CreatedAt = now,
+            LastUpdated = now
+        });
+
         db.StudentProfiles.AddRange(
             new StudentProfile { StudentProfileID = 1, StudentCode = "S001", UserID = 1, FullName = "Student 1" },
             new StudentProfile { StudentProfileID = 2, StudentCode = "S002", UserID = 2, FullName = "Student 2" },
@@ -183,7 +255,8 @@ public class DefensePeriodEndToEndFlowTests
             new StudentProfile { StudentProfileID = 5, StudentCode = "S005", UserID = 5, FullName = "Student 5" },
             new StudentProfile { StudentProfileID = 6, StudentCode = "S006", UserID = 6, FullName = "Student 6" },
             new StudentProfile { StudentProfileID = 7, StudentCode = "S007", UserID = 7, FullName = "Student 7" },
-            new StudentProfile { StudentProfileID = 8, StudentCode = "S008", UserID = 8, FullName = "Student 8" });
+            new StudentProfile { StudentProfileID = 8, StudentCode = "S008", UserID = 8, FullName = "Student 8" },
+            new StudentProfile { StudentProfileID = 9, StudentCode = "S009", UserID = 9, FullName = "Student 9" });
 
         db.DefenseTermStudents.AddRange(
             new DefenseTermStudent { DefenseTermStudentID = 1, DefenseTermId = 1, StudentProfileID = 1, StudentCode = "S001", UserCode = "S001", CreatedAt = now, LastUpdated = now },
@@ -193,19 +266,22 @@ public class DefensePeriodEndToEndFlowTests
             new DefenseTermStudent { DefenseTermStudentID = 5, DefenseTermId = 1, StudentProfileID = 5, StudentCode = "S005", UserCode = "S005", CreatedAt = now, LastUpdated = now },
             new DefenseTermStudent { DefenseTermStudentID = 6, DefenseTermId = 1, StudentProfileID = 6, StudentCode = "S006", UserCode = "S006", CreatedAt = now, LastUpdated = now },
             new DefenseTermStudent { DefenseTermStudentID = 7, DefenseTermId = 1, StudentProfileID = 7, StudentCode = "S007", UserCode = "S007", CreatedAt = now, LastUpdated = now },
-            new DefenseTermStudent { DefenseTermStudentID = 8, DefenseTermId = 1, StudentProfileID = 8, StudentCode = "S008", UserCode = "S008", CreatedAt = now, LastUpdated = now });
+            new DefenseTermStudent { DefenseTermStudentID = 8, DefenseTermId = 1, StudentProfileID = 8, StudentCode = "S008", UserCode = "S008", CreatedAt = now, LastUpdated = now },
+            new DefenseTermStudent { DefenseTermStudentID = 9, DefenseTermId = 1, StudentProfileID = 9, StudentCode = "S009", UserCode = "S009", CreatedAt = now, LastUpdated = now });
 
         db.LecturerProfiles.AddRange(
             new LecturerProfile { LecturerProfileID = 1, LecturerCode = "L001", FullName = "Lec 1" },
             new LecturerProfile { LecturerProfileID = 2, LecturerCode = "L002", FullName = "Lec 2" },
             new LecturerProfile { LecturerProfileID = 3, LecturerCode = "L003", FullName = "Lec 3" },
-            new LecturerProfile { LecturerProfileID = 4, LecturerCode = "L004", FullName = "Lec 4" });
+            new LecturerProfile { LecturerProfileID = 4, LecturerCode = "L004", FullName = "Lec 4" },
+            new LecturerProfile { LecturerProfileID = 5, LecturerCode = "SUP001", FullName = "Supervisor 1", UserCode = "SUP001" });
 
         db.DefenseTermLecturers.AddRange(
             new DefenseTermLecturer { DefenseTermLecturerID = 1, DefenseTermId = 1, LecturerProfileID = 1, LecturerCode = "L001", UserCode = "L001", Role = "Chair", IsPrimary = true, CreatedAt = now, LastUpdated = now },
             new DefenseTermLecturer { DefenseTermLecturerID = 2, DefenseTermId = 1, LecturerProfileID = 2, LecturerCode = "L002", UserCode = "L002", Role = "Secretary", IsPrimary = true, CreatedAt = now, LastUpdated = now },
             new DefenseTermLecturer { DefenseTermLecturerID = 3, DefenseTermId = 1, LecturerProfileID = 3, LecturerCode = "L003", UserCode = "L003", Role = "Reviewer", IsPrimary = true, CreatedAt = now, LastUpdated = now },
-            new DefenseTermLecturer { DefenseTermLecturerID = 4, DefenseTermId = 1, LecturerProfileID = 4, LecturerCode = "L004", UserCode = "L004", Role = "Member", IsPrimary = true, CreatedAt = now, LastUpdated = now });
+            new DefenseTermLecturer { DefenseTermLecturerID = 4, DefenseTermId = 1, LecturerProfileID = 4, LecturerCode = "L004", UserCode = "L004", Role = "Member", IsPrimary = true, CreatedAt = now, LastUpdated = now },
+            new DefenseTermLecturer { DefenseTermLecturerID = 5, DefenseTermId = 1, LecturerProfileID = 5, LecturerCode = "SUP001", UserCode = "SUP001", Role = "Supervisor", IsPrimary = false, CreatedAt = now, LastUpdated = now });
 
         db.Topics.AddRange(
             new Topic { TopicID = 1, TopicCode = "T001", Title = "Topic 1", Type = "Research", ProposerUserID = 1, ProposerStudentCode = "S001", SupervisorLecturerCode = "SUP001", DefenseTermId = 1, Status = "Eligible" },
@@ -240,7 +316,7 @@ public class DefensePeriodEndToEndFlowTests
         {
             var committeeMembers = members.Where(x => x.CommitteeID == assignment.CommitteeID).ToList();
 
-            foreach (var member in committeeMembers.Where(x => x.Role == "CT" || x.Role == "TK" || x.Role == "PB"))
+            foreach (var member in committeeMembers.Where(x => x.Role == "CT" || x.Role == "UVTK" || x.Role == "UVPB"))
             {
                 db.DefenseScores.Add(new DefenseScore
                 {
@@ -270,5 +346,20 @@ public class DefensePeriodEndToEndFlowTests
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static string ToVietnameseWeekdayLabel(DateTime date)
+    {
+        return date.DayOfWeek switch
+        {
+            DayOfWeek.Monday => "Thứ Hai",
+            DayOfWeek.Tuesday => "Thứ Ba",
+            DayOfWeek.Wednesday => "Thứ Tư",
+            DayOfWeek.Thursday => "Thứ Năm",
+            DayOfWeek.Friday => "Thứ Sáu",
+            DayOfWeek.Saturday => "Thứ Bảy",
+            DayOfWeek.Sunday => "Chủ nhật",
+            _ => "Chưa xác định"
+        };
     }
 }

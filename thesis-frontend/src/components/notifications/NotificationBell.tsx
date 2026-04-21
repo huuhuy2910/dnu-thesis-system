@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -38,6 +39,10 @@ import {
 } from "../../services/notification.service";
 import { getAccessToken } from "../../services/auth-session.service";
 import { useToast } from "../../context/useToast";
+import {
+  normalizeDefensePeriodId,
+  setActiveDefensePeriodId,
+} from "../../utils/defensePeriod";
 
 type NotificationTheme = "student" | "lecturer";
 type PanelMode = "feed" | "preferences";
@@ -85,6 +90,116 @@ const priorityLabelMap: Record<string, string> = {
   NORMAL: "Bình thường",
   HIGH: "Cao",
   URGENT: "Khẩn",
+};
+
+const fallbackActionUrlByType: Record<string, string> = {
+  OPEN_DEFENSE_STUDENT: "/student/defense-info",
+  OPEN_DEFENSE_SUPERVISOR: "/lecturer/students",
+  OPEN_DEFENSE_COMMITTEE: "/lecturer/committees",
+};
+
+const extractPeriodIdFromPath = (pathname: string): number | null => {
+  const matchers = [
+    /\/defense-periods\/(\d+)\//i,
+    /\/defense-periods\/(\d+)$/i,
+    /\/defense\/periods\/(\d+)\//i,
+    /\/defense\/periods\/(\d+)$/i,
+  ];
+
+  for (const matcher of matchers) {
+    const matched = pathname.match(matcher);
+    if (!matched) {
+      continue;
+    }
+    const normalized = normalizeDefensePeriodId(matched[1]);
+    if (normalized != null) {
+      return normalized;
+    }
+  }
+
+  return null;
+};
+
+const attachPeriodIdQuery = (targetUrl: string, periodId: number | null): string => {
+  if (!targetUrl || periodId == null) {
+    return targetUrl;
+  }
+
+  const [pathAndQuery, hash = ""] = targetUrl.split("#");
+  const [pathname, query = ""] = pathAndQuery.split("?");
+  const params = new URLSearchParams(query);
+  if (!params.has("periodId")) {
+    params.set("periodId", String(periodId));
+  }
+  const queryText = params.toString();
+  return `${pathname}${queryText ? `?${queryText}` : ""}${hash ? `#${hash}` : ""}`;
+};
+
+const normalizeActionTarget = (
+  rawActionUrl: string,
+  actionType: string,
+): { targetUrl: string; isExternal: boolean; periodId: number | null } | null => {
+  const fallbackTarget = fallbackActionUrlByType[actionType] || "";
+  const candidate = rawActionUrl || fallbackTarget;
+  if (!candidate) {
+    return null;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(candidate, window.location.origin);
+  } catch {
+    return {
+      targetUrl: candidate,
+      isExternal: /^https?:\/\//i.test(candidate),
+      periodId: null,
+    };
+  }
+
+  const isExternal =
+    /^https?:\/\//i.test(candidate) &&
+    parsedUrl.origin.toLowerCase() !== window.location.origin.toLowerCase();
+
+  if (isExternal) {
+    return {
+      targetUrl: parsedUrl.toString(),
+      isExternal: true,
+      periodId: null,
+    };
+  }
+
+  const normalizedPath = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+  const periodIdFromQuery = normalizeDefensePeriodId(
+    parsedUrl.searchParams.get("periodId"),
+  );
+  const periodIdFromPath = extractPeriodIdFromPath(normalizedPath);
+  const periodId = periodIdFromQuery ?? periodIdFromPath;
+
+  let inAppPath = normalizedPath;
+  if (/^\/defense\/periods\/\d+\/student(?:\/.*)?$/i.test(normalizedPath)) {
+    inAppPath = "/student/defense-info";
+  } else if (/^\/defense-periods\/\d+\/student(?:\/.*)?$/i.test(normalizedPath)) {
+    inAppPath = "/student/defense-info";
+  } else if (/^\/defense\/periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)) {
+    inAppPath = "/lecturer/committees";
+  } else if (/^\/defense-periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)) {
+    inAppPath = "/lecturer/committees";
+  }
+
+  let targetUrl = `${inAppPath}${parsedUrl.search}${parsedUrl.hash}`;
+  if (
+    inAppPath === "/student/defense-info" ||
+    inAppPath === "/student/schedule" ||
+    inAppPath === "/lecturer/committees"
+  ) {
+    targetUrl = attachPeriodIdQuery(targetUrl, periodId);
+  }
+
+  return {
+    targetUrl,
+    isExternal: false,
+    periodId,
+  };
 };
 
 function mergeByRecipientId(
@@ -143,6 +258,7 @@ function eventToRecipient(
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
+  const navigate = useNavigate();
   const { addToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PanelMode>("feed");
@@ -397,8 +513,38 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
       if (!item.isRead) {
         await markOneAsRead(item.recipientID);
       }
+
+      const rawActionUrl = String(item.notification.actionUrl ?? "").trim();
+      const normalizedActionType = String(item.notification.actionType ?? "")
+        .trim()
+        .toUpperCase();
+
+      const resolvedTarget = normalizeActionTarget(
+        rawActionUrl,
+        normalizedActionType,
+      );
+
+      if (!resolvedTarget?.targetUrl) {
+        return;
+      }
+
+      if (resolvedTarget.periodId != null) {
+        setActiveDefensePeriodId(resolvedTarget.periodId);
+      }
+
+      if (resolvedTarget.isExternal) {
+        window.location.assign(resolvedTarget.targetUrl);
+        return;
+      }
+
+      navigate(
+        resolvedTarget.targetUrl.startsWith("/")
+          ? resolvedTarget.targetUrl
+          : `/${resolvedTarget.targetUrl}`,
+      );
+      setIsOpen(false);
     },
-    [markOneAsRead],
+    [markOneAsRead, navigate],
   );
 
   useEffect(() => {

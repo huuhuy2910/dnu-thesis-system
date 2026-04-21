@@ -41,6 +41,7 @@ namespace ThesisManagement.Api.Application.Common
             public const string InvalidScoreRange = "UC3.2.INVALID_SCORE_RANGE";
             public const string VarianceAlert = "UC3.3.VARIANCE_ALERT";
             public const string IncompleteAlert = "UC3.3.INCOMPLETE_SUBMISSION";
+            public const string OpenSuccess = "UC3.4.OPEN.SUCCESS";
             public const string SubmitSuccess = "UC3.2.SUBMIT_SCORE.SUCCESS";
             public const string ReopenSuccess = "UC3.3.REOPEN_REQUEST.SUCCESS";
             public const string LockSuccess = "UC3.5.LOCK.SUCCESS";

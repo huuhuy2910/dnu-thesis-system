@@ -29,6 +29,16 @@ namespace ThesisManagement.Api.Application.Command.DefenseSetup
         Task<ApiResponse<List<CouncilDraftDto>>> ExecuteAsync(int periodId, GenerateCouncilsRequestDto request, int actorUserId, CancellationToken cancellationToken = default);
     }
 
+    public interface ILockCouncilsCommand
+    {
+        Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
+    }
+
+    public interface IReopenCouncilsCommand
+    {
+        Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
+    }
+
     public interface ICreateCouncilCommand
     {
         Task<ApiResponse<CouncilDraftDto>> ExecuteAsync(int periodId, CouncilUpsertDto request, int actorUserId, CancellationToken cancellationToken = default);
@@ -147,6 +157,22 @@ namespace ThesisManagement.Api.Application.Command.DefenseSetup
         public GenerateCouncilsCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
         public Task<ApiResponse<List<CouncilDraftDto>>> ExecuteAsync(int periodId, GenerateCouncilsRequestDto request, int actorUserId, CancellationToken cancellationToken = default)
             => _processor.GenerateCouncilsAsync(periodId, request, actorUserId, cancellationToken);
+    }
+
+    public class LockCouncilsCommand : ILockCouncilsCommand
+    {
+        private readonly IDefensePeriodCommandProcessor _processor;
+        public LockCouncilsCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
+        public Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.LockCouncilsAsync(periodId, actorUserId, idempotencyKey, cancellationToken);
+    }
+
+    public class ReopenCouncilsCommand : IReopenCouncilsCommand
+    {
+        private readonly IDefensePeriodCommandProcessor _processor;
+        public ReopenCouncilsCommand(IDefensePeriodCommandProcessor processor) => _processor = processor;
+        public Task<ApiResponse<bool>> ExecuteAsync(int periodId, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
+            => _processor.ReopenCouncilsAsync(periodId, actorUserId, idempotencyKey, cancellationToken);
     }
 
     public class CreateCouncilCommand : ICreateCouncilCommand

@@ -17,6 +17,11 @@ import type { ApiResponse } from "../../types/api";
 import type { StudentProfile } from "../../types/studentProfile";
 import ChatWidget from "../chat/ChatWidget.tsx";
 import NotificationBell from "../notifications/NotificationBell";
+import {
+  getActiveDefensePeriodId,
+  setActiveDefensePeriodId,
+} from "../../utils/defensePeriod";
+import { fetchCurrentDefensePeriod } from "../../services/current-defense-period.service";
 
 const StudentLayout: React.FC = () => {
   const auth = useAuth();
@@ -25,6 +30,26 @@ const StudentLayout: React.FC = () => {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [headerPeriod, setHeaderPeriod] = useState<{
+    label: string;
+    tone: "normal" | "warning" | "error";
+    tooltip: string;
+  }>(() => {
+    const cachedPeriodId = getActiveDefensePeriodId();
+    if (cachedPeriodId) {
+      return {
+        label: `Đợt #${cachedPeriodId}`,
+        tone: "normal",
+        tooltip: `Đợt đang dùng: #${cachedPeriodId}`,
+      };
+    }
+
+    return {
+      label: "Đang xác định đợt",
+      tone: "normal",
+      tooltip: "Hệ thống đang tự động xác định đợt bảo vệ hiện tại.",
+    };
+  });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const sidebarWidth = isSidebarCollapsed ? 84 : 260;
 
@@ -65,6 +90,92 @@ const StudentLayout: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showDropdown]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapCurrentPeriod = async () => {
+      const result = await fetchCurrentDefensePeriod("student");
+      if (cancelled) {
+        return;
+      }
+
+      if (result.ok) {
+        const periodName = result.period.name || `Đợt ${result.period.periodId}`;
+        setActiveDefensePeriodId(result.period.periodId);
+        setHeaderPeriod({
+          label: `${periodName} (#${result.period.periodId})`,
+          tone: "normal",
+          tooltip: `Đợt hiện tại: ${periodName} (#${result.period.periodId})`,
+        });
+        return;
+      }
+
+      if (result.code === "NOT_MAPPED") {
+        setActiveDefensePeriodId(null);
+        setHeaderPeriod({
+          label: "Chưa có mapping đợt",
+          tone: "warning",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      if (result.code === "AMBIGUOUS" || result.code === "INVALID_CONTRACT") {
+        setActiveDefensePeriodId(null);
+        setHeaderPeriod({
+          label: result.code === "AMBIGUOUS" ? "Dữ liệu đợt mơ hồ" : "Snapshot đợt không hợp lệ",
+          tone: "error",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      const cachedPeriodId = getActiveDefensePeriodId();
+      if (cachedPeriodId) {
+        setHeaderPeriod({
+          label: `Đợt #${cachedPeriodId} (cache)`,
+          tone: "warning",
+          tooltip: result.message,
+        });
+        return;
+      }
+
+      setHeaderPeriod({
+        label: "Không xác định đợt",
+        tone: "error",
+        tooltip: result.message,
+      });
+    };
+
+    void bootstrapCurrentPeriod();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const headerPeriodStyle =
+    headerPeriod.tone === "error"
+      ? {
+          borderColor: "rgba(220, 38, 38, 0.25)",
+          backgroundColor: "rgba(220, 38, 38, 0.08)",
+          textColor: "#b91c1c",
+          dotColor: "#dc2626",
+        }
+      : headerPeriod.tone === "warning"
+        ? {
+            borderColor: "rgba(245, 158, 11, 0.35)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            textColor: "#92400e",
+            dotColor: "#f59e0b",
+          }
+        : {
+            borderColor: "rgba(243, 112, 33, 0.2)",
+            backgroundColor: "rgba(243, 112, 33, 0.1)",
+            textColor: "#f37021",
+            dotColor: "#f37021",
+          };
 
   return (
     <div
@@ -109,6 +220,15 @@ const StudentLayout: React.FC = () => {
             .student-status-badge {
               display: none !important;
             }
+
+            .student-period-badge {
+              max-width: 150px !important;
+              padding: 6px 10px !important;
+            }
+
+            .student-period-badge .period-text {
+              font-size: 11px !important;
+            }
             
             .mobile-menu-btn {
               display: flex !important;
@@ -146,6 +266,18 @@ const StudentLayout: React.FC = () => {
             .student-avatar-section .user-code {
               display: none !important;
             }
+          }
+
+          .student-period-badge {
+            max-width: 280px;
+            min-width: 0;
+          }
+
+          .student-period-badge .period-text {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
           
           @media (min-width: 769px) and (max-width: 1024px) {
@@ -441,6 +573,40 @@ const StudentLayout: React.FC = () => {
                 }}
               >
                 Sinh viên
+              </span>
+            </div>
+
+            <div
+              className="student-period-badge"
+              title={headerPeriod.tooltip}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "20px",
+                border: `1px solid ${headerPeriodStyle.borderColor}`,
+                backgroundColor: headerPeriodStyle.backgroundColor,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: headerPeriodStyle.dotColor,
+                }}
+              />
+              <span
+                className="period-text"
+                style={{
+                  fontSize: 12,
+                  color: headerPeriodStyle.textColor,
+                  fontWeight: 600,
+                  letterSpacing: "0.2px",
+                }}
+              >
+                {headerPeriod.label}
               </span>
             </div>
 

@@ -99,11 +99,23 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
 
     public class LecturerCommitteeMinuteDto
     {
+        public int CommitteeId { get; set; }
+        public string CommitteeCode { get; set; } = string.Empty;
         public int AssignmentId { get; set; }
         public string TopicCode { get; set; } = string.Empty;
         public string TopicTitle { get; set; } = string.Empty;
         public string? SummaryContent { get; set; }
+        public string? ReviewerComments { get; set; }
         public string? QnaDetails { get; set; }
+        public string? Strengths { get; set; }
+        public string? Weaknesses { get; set; }
+        public string? Recommendations { get; set; }
+        public decimal? ScoreGvhd { get; set; }
+        public decimal? ScoreCt { get; set; }
+        public decimal? ScoreTk { get; set; }
+        public decimal? ScorePb { get; set; }
+        public decimal? FinalScore { get; set; }
+        public string? FinalGrade { get; set; }
         public DateTime? LastUpdated { get; set; }
     }
 
@@ -120,6 +132,8 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string? SessionCode { get; set; }
         public decimal? FinalScore { get; set; }
         public string? Grade { get; set; }
+        public bool CouncilListLocked { get; set; }
+        public string CouncilLockStatus { get; set; } = "UNLOCKED";
     }
 
     public class StudentNotificationDto
