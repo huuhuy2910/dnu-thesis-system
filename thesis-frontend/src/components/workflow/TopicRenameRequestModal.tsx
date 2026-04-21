@@ -326,6 +326,7 @@ function normalizeStatusTone(
     return "pending";
   if (
     normalized.includes("approved") ||
+    normalized.includes("applied") ||
     normalized.includes("duyet") ||
     normalized.includes("đã duyệt")
   )
@@ -385,11 +386,18 @@ function extractValidationMessages(error: unknown): Record<string, string> {
 
 function isEditableStatus(status: string): boolean {
   const tone = normalizeStatusTone(status);
-  return tone === "pending" || tone === "rejected";
+  return tone === "pending" || tone === "rejected" || tone === "approved";
 }
 
 function isPendingStatus(status: string): boolean {
   return normalizeStatusTone(status) === "pending";
+}
+
+function isAppliedStatus(status: string): boolean {
+  return String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .includes("applied");
 }
 
 function formatDisplay(value: unknown, placeholder = "-"): string {
@@ -549,7 +557,9 @@ const TopicRenameRequestModal: FC<TopicRenameRequestModalProps> = ({
     String(selectedRequestOwnerCode) === String(auth.user?.userCode ?? "");
   const canEditSelected = canModifySelected && isEditableStatus(currentStatus);
   const canDeleteSelected =
-    canModifySelected && isEditableStatus(currentStatus);
+    canModifySelected &&
+    isEditableStatus(currentStatus) &&
+    !isAppliedStatus(currentStatus);
   const canReviewSelected = canReview && isPendingStatus(currentStatus);
   const hasActiveRequest =
     activeRequestId !== null && activeRequestId !== undefined;

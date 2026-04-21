@@ -7,7 +7,6 @@ import {
   LineChart,
   Upload,
   Calendar,
-  Bell,
 } from "lucide-react";
 import "./SideNav.css";
 import "./StudentNav.css";
@@ -48,11 +47,6 @@ const StudentNav: React.FC<StudentNavProps> = ({
       path: "/student/defense-info",
       label: "Bảo vệ & kết quả",
       icon: <GraduationCap size={18} />,
-    },
-    {
-      path: "/student/notifications",
-      label: "Thông báo",
-      icon: <Bell size={18} />,
     },
   ];
 
