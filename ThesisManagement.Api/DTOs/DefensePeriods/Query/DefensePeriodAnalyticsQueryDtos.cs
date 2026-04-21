@@ -39,24 +39,41 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public int DocumentId { get; set; }
         public int AssignmentId { get; set; }
         public string DocumentType { get; set; } = string.Empty;
+        public string? FileName { get; set; }
         public string FileUrl { get; set; } = string.Empty;
+        public string? MimeType { get; set; }
         public DateTime GeneratedAt { get; set; }
+        public DateTime? UploadedAt { get; set; }
     }
 
     public class ScoringMatrixRowDto
     {
         public int CommitteeId { get; set; }
         public string CommitteeCode { get; set; } = string.Empty;
+        public string CommitteeName { get; set; } = string.Empty;
         public string? Room { get; set; }
         public int AssignmentId { get; set; }
         public string AssignmentCode { get; set; } = string.Empty;
         public string TopicCode { get; set; } = string.Empty;
         public string TopicTitle { get; set; } = string.Empty;
+        public string? SupervisorLecturerCode { get; set; }
+        public string? SupervisorLecturerName { get; set; }
+        public List<string> TopicTags { get; set; } = new();
+        public int? Session { get; set; }
+        public string? SessionCode { get; set; }
+        public DateTime? ScheduledAt { get; set; }
+        public string? StartTime { get; set; }
+        public string? EndTime { get; set; }
         public string StudentCode { get; set; } = string.Empty;
         public string StudentName { get; set; } = string.Empty;
         public int SubmittedCount { get; set; }
         public int RequiredCount { get; set; }
         public bool IsLocked { get; set; }
+        public decimal? ScoreGvhd { get; set; }
+        public decimal? ScoreCt { get; set; }
+        public decimal? ScoreTk { get; set; }
+        public decimal? ScorePb { get; set; }
+        public decimal? TopicSupervisorScore { get; set; }
         public decimal? FinalScore { get; set; }
         public string? FinalGrade { get; set; }
         public decimal? Variance { get; set; }

@@ -444,6 +444,10 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             var assignmentIds = await _db.DefenseAssignments.AsNoTracking().Where(x => x.CommitteeID == committeeId).Select(x => x.AssignmentID).ToListAsync(cancellationToken);
             var existingResults = await _db.DefenseResults.Where(x => assignmentIds.Contains(x.AssignmentId)).ToListAsync(cancellationToken);
             var existingResultIds = existingResults.Select(x => x.AssignmentId).ToHashSet();
+            var topicSupervisorScoreMap = await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentID) && !string.IsNullOrWhiteSpace(x.TopicCode))
+                .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => new { a.AssignmentID, t.Score })
+                .ToDictionaryAsync(x => x.AssignmentID, x => x.Score, cancellationToken);
             var now = DateTime.UtcNow;
 
             var memberCodes = await _db.CommitteeMembers.AsNoTracking()
@@ -514,24 +518,16 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 }
 
                 var memberScores = submittedRows.Select(x => (decimal)x.Score).ToList();
-                var finalScore = Math.Round(memberScores.Average(), 1);
 
-                var scoreCt = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "CT")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scoreTk = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "TK")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scorePb = submittedRows
-                    .Where(x => NormalizeRole((string?)x.Role) == "PB")
-                    .Select(x => (decimal?)x.Score)
-                    .FirstOrDefault();
-                var scoreGvhd = submittedRows
+                var scoreCt = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "CT");
+                var scoreTk = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "UVTK");
+                var scorePb = ResolveRoleScore(submittedRows, x => x.Role, x => x.Score, "UVPB");
+                topicSupervisorScoreMap.TryGetValue(assignmentId, out var topicSupervisorScore);
+                var scoreGvhd = topicSupervisorScore ?? submittedRows
                     .Where(x => NormalizeRole((string?)x.Role) == "GVHD")
                     .Select(x => (decimal?)x.Score)
                     .FirstOrDefault();
+                var finalScore = ResolveFinalScore(memberScores, scoreGvhd, scoreCt, scoreTk, scorePb);
 
                 if (!existingResultIds.Contains(assignmentId))
                 {
@@ -619,12 +615,31 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }
 
             var upper = role.Trim().ToUpperInvariant();
-            if (upper.Contains("CHU") || upper == "CT") return "CT";
-            if (upper.Contains("THU") || upper == "TK") return "TK";
-            if (upper.Contains("PHAN") || upper == "PB") return "PB";
-            if (upper == "UV") return "UV";
             if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
             return upper;
+        }
+
+        private static decimal? ResolveRoleScore<T>(
+            IEnumerable<T> source,
+            Func<T, string?> roleSelector,
+            Func<T, decimal> scoreSelector,
+            string targetRole)
+        {
+            var values = source
+                .Where(x => NormalizeRole(roleSelector(x)) == targetRole)
+                .Select(scoreSelector)
+                .ToList();
+
+            if (values.Count == 0)
+            {
+                return null;
+            }
+
+            return Math.Round(values.Average(), 1);
         }
 
         private static string? ToGrade(decimal? score)
@@ -690,11 +705,12 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
                 return;
             }
 
-            var finalScore = Math.Round(perMemberLatest.Average(x => x.Score), 1);
-            var scoreCt = perMemberLatest.Where(x => NormalizeRole(x.Role) == "CT").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scoreTk = perMemberLatest.Where(x => NormalizeRole(x.Role) == "TK").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scorePb = perMemberLatest.Where(x => NormalizeRole(x.Role) == "PB").Select(x => (decimal?)x.Score).FirstOrDefault();
-            var scoreGvhd = perMemberLatest.Where(x => NormalizeRole(x.Role) == "GVHD").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var scoreCt = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "CT");
+            var scoreTk = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "UVTK");
+            var scorePb = ResolveRoleScore(perMemberLatest, x => x.Role, x => x.Score, "UVPB");
+            var topicSupervisorScore = await GetTopicSupervisorScoreByAssignmentAsync(assignmentId, cancellationToken);
+            var scoreGvhd = topicSupervisorScore ?? perMemberLatest.Where(x => NormalizeRole(x.Role) == "GVHD").Select(x => (decimal?)x.Score).FirstOrDefault();
+            var finalScore = ResolveFinalScore(perMemberLatest.Select(x => x.Score).ToList(), scoreGvhd, scoreCt, scoreTk, scorePb);
 
             var now = DateTime.UtcNow;
             var result = await _db.DefenseResults.FirstOrDefaultAsync(x => x.AssignmentId == assignmentId, cancellationToken);
@@ -728,6 +744,29 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }
 
             await _uow.SaveChangesAsync();
+        }
+
+        private static decimal ResolveFinalScore(
+            IReadOnlyCollection<decimal> memberScores,
+            decimal? scoreGvhd,
+            decimal? scoreCt,
+            decimal? scoreTk,
+            decimal? scorePb)
+        {
+            if (scoreGvhd.HasValue && scoreCt.HasValue && scoreTk.HasValue && scorePb.HasValue)
+            {
+                return Math.Round((scoreGvhd.Value + scoreCt.Value + scoreTk.Value + scorePb.Value) / 4m, 1);
+            }
+
+            return Math.Round(memberScores.Average(), 1);
+        }
+
+        private async Task<decimal?> GetTopicSupervisorScoreByAssignmentAsync(int assignmentId, CancellationToken cancellationToken)
+        {
+            return await _db.DefenseAssignments.AsNoTracking()
+                .Where(x => x.AssignmentID == assignmentId && !string.IsNullOrWhiteSpace(x.TopicCode))
+                .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => (decimal?)t.Score)
+                .FirstOrDefaultAsync(cancellationToken);
         }
     }
 }

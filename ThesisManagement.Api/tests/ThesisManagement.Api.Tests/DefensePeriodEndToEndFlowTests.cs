@@ -52,7 +52,7 @@ public class DefensePeriodEndToEndFlowTests
         var confirmConfigResult = await processor.ConfirmCouncilConfigAsync(1, new ConfirmCouncilConfigDto
         {
             TopicsPerSessionConfig = 3,
-            MembersPerCouncilConfig = 4,
+            MembersPerCouncilConfig = 3,
             Tags = new List<string>()
         }, actorUserId: 1001);
         Assert.True(confirmConfigResult.Success);
@@ -108,8 +108,8 @@ public class DefensePeriodEndToEndFlowTests
                 && !request.NotifBody.Contains("Giảng viên hướng dẫn")
                 && (
                     request.NotifBody.Contains("Chủ tịch hội đồng")
-                    || request.NotifBody.Contains("Thư ký hội đồng")
-                    || request.NotifBody.Contains("Phản biện hội đồng")
+                    || request.NotifBody.Contains("Ủy viên thư ký hội đồng")
+                    || request.NotifBody.Contains("Ủy viên phản biện hội đồng")
                     || request.NotifBody.Contains("Ủy viên hội đồng")
                 ))),
             Times.AtLeastOnce);
@@ -316,7 +316,7 @@ public class DefensePeriodEndToEndFlowTests
         {
             var committeeMembers = members.Where(x => x.CommitteeID == assignment.CommitteeID).ToList();
 
-            foreach (var member in committeeMembers.Where(x => x.Role == "CT" || x.Role == "TK" || x.Role == "PB"))
+            foreach (var member in committeeMembers.Where(x => x.Role == "CT" || x.Role == "UVTK" || x.Role == "UVPB"))
             {
                 db.DefenseScores.Add(new DefenseScore
                 {

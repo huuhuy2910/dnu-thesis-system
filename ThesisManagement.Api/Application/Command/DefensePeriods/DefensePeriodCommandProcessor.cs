@@ -104,7 +104,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
         private const int MaxMembersPerCouncil = 7;
         private const int MinTopicsPerSession = 3;
         private const int MaxTopicsPerSession = 7;
-        private static readonly string[] AllowedAdditionalRoles = new[] { "PB", "UV" };
+        private static readonly string[] AllowedAdditionalRoles = new[] { "UVPB", "UV" };
         private static readonly TimeSpan SessionDuration = TimeSpan.FromMinutes(60);
         private readonly ApplicationDbContext _db;
         private readonly IUnitOfWork _uow;
@@ -2397,9 +2397,11 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     }
 
                     decimal? scoreCt = scores.Where(x => NormalizeRole(x.Role) == "CT").Select(x => (decimal?)x.Score).FirstOrDefault();
-                    decimal? scoreTk = scores.Where(x => NormalizeRole(x.Role) == "TK").Select(x => (decimal?)x.Score).FirstOrDefault();
-                    decimal? scorePb = scores.Where(x => NormalizeRole(x.Role) == "PB").Select(x => (decimal?)x.Score).FirstOrDefault();
-                    decimal? scoreGvhd = result.ScoreGvhd;
+                    var scoreTkValues = scores.Where(x => NormalizeRole(x.Role) == "UVTK").Select(x => x.Score).ToList();
+                    var scorePbValues = scores.Where(x => NormalizeRole(x.Role) == "UVPB").Select(x => x.Score).ToList();
+                    decimal? scoreTk = scoreTkValues.Count == 0 ? null : Math.Round(scoreTkValues.Average(), 1);
+                    decimal? scorePb = scorePbValues.Count == 0 ? null : Math.Round(scorePbValues.Average(), 1);
+                    decimal? scoreGvhd = topic.Score ?? result.ScoreGvhd;
 
                     if (!scoreGvhd.HasValue && !string.IsNullOrWhiteSpace(topic.SupervisorLecturerCode))
                     {
@@ -2412,7 +2414,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     if (!scoreGvhd.HasValue || !scoreCt.HasValue || !scoreTk.HasValue || !scorePb.HasValue)
                     {
                         throw new BusinessRuleException(
-                            $"Thiếu điểm thành phần bắt buộc (GVHD/CT/TK/PB) cho assignment {assignment.AssignmentCode}.",
+                            $"Thiếu điểm thành phần bắt buộc (GVHD/CT/UVTK/UVPB) cho assignment {assignment.AssignmentCode}.",
                             details: new
                             {
                                 assignment.AssignmentCode,
@@ -2420,8 +2422,8 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                                 {
                                     GVHD = !scoreGvhd.HasValue,
                                     CT = !scoreCt.HasValue,
-                                    TK = !scoreTk.HasValue,
-                                    PB = !scorePb.HasValue
+                                    UVTK = !scoreTk.HasValue,
+                                    UVPB = !scorePb.HasValue
                                 }
                             });
                     }
@@ -2738,9 +2740,9 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 }
 
                 var normalizedRole = NormalizeRole(member.Role);
-                if (normalizedRole != "TK" && normalizedRole != "CT")
+                if (normalizedRole != "UVTK" && normalizedRole != "CT")
                 {
-                    throw new BusinessRuleException("Chỉ Thư ký (TK) hoặc Chủ tịch (CT) được cập nhật biên bản.", "UC3.1.INVALID_ROLE");
+                    throw new BusinessRuleException("Chỉ Ủy viên thư ký (UVTK) hoặc Chủ tịch (CT) được cập nhật biên bản.", "UC3.1.INVALID_ROLE");
                 }
 
                 var minute = await _db.DefenseMinutes.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
@@ -5059,8 +5061,8 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
             return normalizedRole switch
             {
                 "CT" => "Chủ tịch hội đồng",
-                "TK" => "Thư ký hội đồng",
-                "PB" => "Phản biện hội đồng",
+                "UVTK" => "Ủy viên thư ký hội đồng",
+                "UVPB" => "Ủy viên phản biện hội đồng",
                 "UV" => "Ủy viên hội đồng",
                 _ => "Thành viên hội đồng"
             };
@@ -5070,7 +5072,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
         {
             if (value < MinMembersPerCouncil || value > MaxMembersPerCouncil)
             {
-                return 4;
+                return 3;
             }
 
             return value;
@@ -5089,10 +5091,15 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
         private static List<string> BuildRolePlan(int membersPerCouncil)
         {
             var normalizedCount = NormalizeMembersPerCouncil(membersPerCouncil);
-            var roles = new List<string> { "CT", "TK" };
-            for (var i = 2; i < normalizedCount; i++)
+            var roles = new List<string> { "CT", "UVTK" };
+            if (normalizedCount >= 3)
             {
-                roles.Add(i % 2 == 0 ? "PB" : "UV");
+                roles.Add("UVPB");
+            }
+
+            for (var i = roles.Count; i < normalizedCount; i++)
+            {
+                roles.Add("UV");
             }
 
             return roles;
@@ -5123,30 +5130,36 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 throw new BusinessRuleException($"Số lượng thành viên vượt quá {normalizedExpectedCount}.", errorCode);
             }
 
-            var invalidRole = normalizedRoles.FirstOrDefault(x => x != "CT" && x != "TK" && !AllowedAdditionalRoles.Contains(x, StringComparer.OrdinalIgnoreCase));
+            var invalidRole = normalizedRoles.FirstOrDefault(x => x != "CT" && x != "UVTK" && !AllowedAdditionalRoles.Contains(x, StringComparer.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(invalidRole))
             {
-                throw new BusinessRuleException("Vai trò chỉ hỗ trợ CT, TK, PB, UV.", errorCode, new { Role = invalidRole });
+                throw new BusinessRuleException("Vai trò chỉ hỗ trợ CT, UVTK, UVPB, UV.", errorCode, new { Role = invalidRole });
             }
 
             var chairCount = normalizedRoles.Count(x => x == "CT");
-            var secretaryCount = normalizedRoles.Count(x => x == "TK");
+            var secretaryCount = normalizedRoles.Count(x => x == "UVTK");
+            var reviewerCount = normalizedRoles.Count(x => x == "UVPB");
             if (chairCount > 1 || secretaryCount > 1)
             {
-                throw new BusinessRuleException("Hội đồng chỉ được có tối đa 1 CT và 1 TK.", errorCode);
+                throw new BusinessRuleException("Hội đồng chỉ được có tối đa 1 CT và 1 UVTK.", errorCode);
             }
 
             if (requireExactCount)
             {
                 if (chairCount != 1 || secretaryCount != 1)
                 {
-                    throw new BusinessRuleException("Hội đồng phải có đúng 1 CT và 1 TK.", errorCode);
+                    throw new BusinessRuleException("Hội đồng phải có đúng 1 CT và 1 UVTK.", errorCode);
                 }
 
-                var additionalCount = normalizedRoles.Count(x => x == "PB" || x == "UV");
+                var additionalCount = normalizedRoles.Count(x => x == "UVPB" || x == "UV");
                 if (additionalCount != normalizedExpectedCount - 2)
                 {
-                    throw new BusinessRuleException("Các thành viên còn lại phải thuộc vai trò PB hoặc UV.", errorCode);
+                    throw new BusinessRuleException("Các thành viên còn lại phải thuộc vai trò UVPB hoặc UV.", errorCode);
+                }
+
+                if (reviewerCount < 1)
+                {
+                    throw new BusinessRuleException("Hội đồng phải có tối thiểu 1 UVPB.", errorCode);
                 }
             }
         }
@@ -5176,11 +5189,11 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
             }
 
             var upper = role.Trim().ToUpperInvariant();
-            if (upper.Contains("CHU") || upper == "CT") return "CT";
-            if (upper.Contains("THU") || upper == "TK") return "TK";
-            if (upper.Contains("PHAN") || upper == "PB") return "PB";
-            if (upper == "UV") return "UV";
             if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
             return upper;
         }
 

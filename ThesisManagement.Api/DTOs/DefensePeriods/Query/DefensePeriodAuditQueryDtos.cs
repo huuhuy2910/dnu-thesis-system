@@ -9,7 +9,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string AfternoonStart { get; set; } = "13:30";
         public int SoftMaxCapacity { get; set; } = 4;
         public int TopicsPerSessionConfig { get; set; } = 3;
-        public int MembersPerCouncilConfig { get; set; } = 4;
+        public int MembersPerCouncilConfig { get; set; } = 3;
         public List<string> Tags { get; set; } = new();
     }
 

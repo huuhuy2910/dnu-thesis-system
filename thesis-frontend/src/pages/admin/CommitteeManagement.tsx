@@ -186,7 +186,8 @@ type CouncilRow = CouncilDraft & {
 const buildDefaultManualMembers = (count: number): CouncilMember[] => {
   const total = Math.max(FIXED_MANUAL_MEMBER_SLOT_COUNT, Number(count) || 0);
   return Array.from({ length: total }, (_, index) => ({
-    role: index === 0 ? "CT" : index === 1 ? "TK" : "UV",
+    role:
+      index === 0 ? "CT" : index === 1 ? "UVTK" : index === 2 ? "UVPB" : "UV",
     lecturerCode: "",
     lecturerName: "",
   }));
@@ -214,7 +215,7 @@ type ManualTopicRow = {
 };
 
 const FIXED_TOPICS_PER_SESSION = 4;
-const FIXED_MEMBERS_PER_COUNCIL = 4;
+const FIXED_MEMBERS_PER_COUNCIL = 3;
 const COUNCIL_CONFIG_OPTIONS = [3, 4, 5, 6, 7];
 
 const baseCard: React.CSSProperties = {
@@ -517,7 +518,7 @@ const MANUAL_MEMBER_ROLE_SELECT_OPTIONS: Array<{
   value: string;
   label: string;
 }> = [
-  { value: "PB", label: "Phản biện" },
+  { value: "UVPB", label: "Ủy viên phản biện" },
   { value: "UV", label: "Ủy viên" },
 ];
 
@@ -536,19 +537,21 @@ const getManualMemberRoleLabel = (role: string | null | undefined) => {
   }
 
   if (
+    normalized.startsWith("uvtk") ||
     normalized.startsWith("tk") ||
     normalized.includes("thu ky") ||
     normalized.includes("secretary")
   ) {
-    return "Thư ký";
+    return "Ủy viên thư ký";
   }
 
   if (
+    normalized.startsWith("uvpb") ||
     normalized.startsWith("pb") ||
     normalized.includes("phan bien") ||
     normalized.includes("reviewer")
   ) {
-    return "Phản biện";
+    return "Ủy viên phản biện";
   }
 
   if (
@@ -572,12 +575,23 @@ const normalizeManualMemberRoleCode = (
     return "CT";
   }
 
-  if (slotIndex === 1 || normalized === "tk" || normalized.includes("thu ky")) {
-    return "TK";
+  if (
+    slotIndex === 1 ||
+    normalized === "uvtk" ||
+    normalized === "tk" ||
+    normalized.includes("thu ky") ||
+    normalized.includes("secretary")
+  ) {
+    return "UVTK";
   }
 
-  if (normalized.startsWith("pb") || normalized.includes("phan bien")) {
-    return "PB";
+  if (
+    normalized.startsWith("uvpb") ||
+    normalized.startsWith("pb") ||
+    normalized.includes("phan bien") ||
+    normalized.includes("reviewer")
+  ) {
+    return "UVPB";
   }
 
   if (
@@ -597,7 +611,11 @@ const getManualMemberSlotRoleLabel = (
   slotIndex: number,
   role: string | null | undefined,
 ) =>
-  slotIndex === 0 ? "Chủ tịch" : slotIndex === 1 ? "Thư ký" : getManualMemberRoleLabel(role);
+  slotIndex === 0
+    ? "Chủ tịch"
+    : slotIndex === 1
+      ? "Ủy viên thư ký"
+      : getManualMemberRoleLabel(role);
 
 const getManualMemberRoleSelectOptions = (
   slotIndex: number,
@@ -1138,7 +1156,7 @@ const CommitteeManagement: React.FC = () => {
   const [configSaved, setConfigSaved] = useState(false);
   const [councilConfigConfirmed, setCouncilConfigConfirmed] = useState(false);
   const [topicsPerSessionConfig, setTopicsPerSessionConfig] = useState(4);
-  const [membersPerCouncilConfig, setMembersPerCouncilConfig] = useState(4);
+  const [membersPerCouncilConfig, setMembersPerCouncilConfig] = useState(3);
   const [configCouncilTags, setConfigCouncilTags] = useState<string[]>([]);
 
   const [capabilitiesLocked, setCapabilitiesLocked] = useState(false);
@@ -2664,7 +2682,7 @@ const CommitteeManagement: React.FC = () => {
               pickCaseInsensitiveValue(
                 configData,
                 ["membersPerCouncilConfig", "MembersPerCouncilConfig"],
-                4,
+                3,
               ),
             ),
           );
@@ -4157,7 +4175,7 @@ const CommitteeManagement: React.FC = () => {
         },
       },
       constraints: {
-        requireRoles: ["CT", "TK"],
+        requireRoles: ["CT", "UVTK", "UVPB"],
       },
     };
 
@@ -4484,7 +4502,7 @@ const CommitteeManagement: React.FC = () => {
       }
       setCouncilConfigConfirmed(Boolean(parsed.data));
       notifySuccess(
-        `Đã lưu tham số cấu hình (${topicsPerSessionConfig} đề tài/buổi, ${membersPerCouncilConfig} thành viên). Khi tạo chính thức hệ thống chuẩn hóa 2 buổi, mỗi buổi 4 đề tài và 4 thành viên.`,
+        `Đã lưu tham số cấu hình (${topicsPerSessionConfig} đề tài/buổi, ${membersPerCouncilConfig} thành viên).`,
       );
     } catch {
       setCouncilConfigConfirmed(false);
@@ -5032,10 +5050,10 @@ const CommitteeManagement: React.FC = () => {
       normalizeManualMemberRoleCode(item.role, index),
     );
     const invalidRole = normalizedRoles.find(
-      (role) => !["CT", "TK", "PB", "UV"].includes(role),
+      (role) => !["CT", "UVTK", "UVPB", "UV"].includes(role),
     );
     if (invalidRole) {
-      return `Bước 2 chưa hợp lệ: vai trò ${invalidRole} không thuộc danh sách cho phép CT, TK, PB, UV.`;
+      return `Bước 2 chưa hợp lệ: vai trò ${invalidRole} không thuộc danh sách cho phép CT, UVTK, UVPB, UV.`;
     }
 
     const missingMemberInfo = manualMembers.some((item, index) => {
@@ -5074,11 +5092,19 @@ const CommitteeManagement: React.FC = () => {
     );
     const secretaryMembers = manualMembers.filter(
       (item, index) =>
-        normalizeManualMemberRoleCode(item.role, index) === "TK",
+        normalizeManualMemberRoleCode(item.role, index) === "UVTK",
+    );
+    const reviewerMembers = manualMembers.filter(
+      (item, index) =>
+        normalizeManualMemberRoleCode(item.role, index) === "UVPB",
     );
 
     if (chairMembers.length !== 1 || secretaryMembers.length !== 1) {
-      return "Bước 3 chưa hợp lệ: phải có đúng 1 Chủ tịch (CT) và đúng 1 Thư ký (TK).";
+      return "Bước 3 chưa hợp lệ: phải có đúng 1 Chủ tịch (CT) và đúng 1 Ủy viên thư ký (UVTK).";
+    }
+
+    if (reviewerMembers.length < 1) {
+      return "Bước 3 chưa hợp lệ: phải có tối thiểu 1 Ủy viên phản biện (UVPB).";
     }
 
     const invalidChair = chairMembers.find((item) => {
@@ -5750,7 +5776,14 @@ const CommitteeManagement: React.FC = () => {
     }));
     while (normalizedMembers.length < expectedManualMemberCount) {
       normalizedMembers.push({
-        role: normalizedMembers.length === 0 ? "CT" : normalizedMembers.length === 1 ? "TK" : "UV",
+        role:
+          normalizedMembers.length === 0
+            ? "CT"
+            : normalizedMembers.length === 1
+              ? "UVTK"
+              : normalizedMembers.length === 2
+                ? "UVPB"
+                : "UV",
         lecturerCode: "",
         lecturerName: "",
       });
@@ -5960,7 +5993,7 @@ const CommitteeManagement: React.FC = () => {
       return [
         ...prev,
         {
-          role: "UV",
+          role: "UVPB",
           lecturerCode: "",
           lecturerName: "",
         },
@@ -8975,7 +9008,7 @@ const CommitteeManagement: React.FC = () => {
                           {FIXED_TOPICS_PER_SESSION}
                         </td>
                         <td>
-                          {row.memberCount}/{FIXED_MEMBERS_PER_COUNCIL}
+                          {row.memberCount}/{Math.max(3, Number(membersPerCouncilConfig) || FIXED_MEMBERS_PER_COUNCIL)}
                         </td>
                         <td>
                           <span
@@ -10560,7 +10593,7 @@ const CommitteeManagement: React.FC = () => {
                           Danh sách thành viên hội đồng
                         </span>
                         <span className="committee-member-caption">
-                          Chủ tịch và Thư ký được khóa cứng. Tổng số thành viên phải đúng {expectedManualMemberCount} theo cấu hình đợt.
+                          Chủ tịch và Ủy viên thư ký được khóa cứng. Tổng số thành viên phải đúng {expectedManualMemberCount} theo cấu hình đợt.
                         </span>
                         {!manualReadOnly && occupiedLecturerCodesOnManualDate.size > 0 && (
                           <span className="committee-member-caption">
@@ -10625,7 +10658,7 @@ const CommitteeManagement: React.FC = () => {
                                   </span>
                                 ) : (
                                   <span className="committee-member-role-hint">
-                                    Phản biện / Ủy viên
+                                    Ủy viên phản biện / Ủy viên
                                   </span>
                                 )}
                               </div>

@@ -156,7 +156,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             var role = member != null ? NormalizeRole(member.Role) : string.Empty;
             var isSupervisor = !string.IsNullOrWhiteSpace(topic.SupervisorLecturerCode)
                 && string.Equals(topic.SupervisorLecturerCode, lecturerCode, StringComparison.OrdinalIgnoreCase);
-            var canApprove = role == "CT" || role == "TK" || isSupervisor;
+            var canApprove = role == "CT" || role == "UVTK" || isSupervisor;
             if (!canApprove)
             {
                 throw new BusinessRuleException("Giảng viên không có quyền duyệt revision này.");
@@ -176,7 +176,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             };
 
             if (role == "CT") revision.IsCtApproved = approved;
-            if (role == "TK") revision.IsUvtkApproved = approved;
+            if (role == "UVTK") revision.IsUvtkApproved = approved;
             if (isSupervisor) revision.IsGvhdApproved = approved;
 
             revision.FinalStatus = ResolveFinalStatus(revision, approved, _quorumOptions);
@@ -243,11 +243,11 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods.Services
             }
 
             var upper = role.Trim().ToUpperInvariant();
-            if (upper.Contains("CHU") || upper == "CT") return "CT";
-            if (upper.Contains("THU") || upper == "TK") return "TK";
-            if (upper.Contains("PHAN") || upper == "PB") return "PB";
-            if (upper == "UV") return "UV";
             if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
             return upper;
         }
     }

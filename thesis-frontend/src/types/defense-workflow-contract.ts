@@ -30,7 +30,7 @@ const UC_ERROR_MESSAGES: Record<UcErrorCode, string> = {
   "UC2.2-GENERATE_BLOCKED": "Chưa đủ điều kiện generate hội đồng (sync/config/lock/council-config).",
   "UC2.3-MANUAL_EMPTY_ID": "Mã hội đồng không được để trống.",
   "UC2.3-MANUAL_TOPIC_COUNT": "Mỗi hội đồng phải đủ 4 đề tài MORNING và 4 đề tài AFTERNOON.",
-  "UC2.3-MANUAL_MEMBER_COUNT": "Hội đồng phải đủ 4 vai trò CT, TK, PB, UV.",
+  "UC2.3-MANUAL_MEMBER_COUNT": "Hội đồng phải có đúng CT, đúng UVTK và tối thiểu 1 UVPB.",
   "UC2.3-DUPLICATE_MEMBER": "Một giảng viên không thể giữ nhiều vai trò trong cùng hội đồng.",
   "UC2.3-SUPERVISOR_CONFLICT": "GVHD không được tham gia hội đồng có sinh viên do mình hướng dẫn.",
   "UC2.3-DUPLICATE_ID": "Mã hội đồng đã tồn tại.",
@@ -85,7 +85,7 @@ export interface DefenseTermStateDto {
 }
 
 export interface CommitteeMemberDto {
-  role: "CT" | "TK" | "PB" | "UV";
+  role: "CT" | "UVTK" | "UVPB" | "UV";
   lecturerCode: string;
 }
 

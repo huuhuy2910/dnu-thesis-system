@@ -52,7 +52,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public int TopicsPerSessionConfig { get; set; } = 3;
 
         [Range(3, 7)]
-        public int MembersPerCouncilConfig { get; set; } = 4;
+        public int MembersPerCouncilConfig { get; set; } = 3;
 
         public List<string> Tags { get; set; } = new();
     }
@@ -100,7 +100,7 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
     {
         public bool AvoidSupervisorConflict { get; set; } = true;
         public bool AvoidLecturerOverlap { get; set; } = true;
-        public List<string> RequireRoles { get; set; } = new() { "CT", "TK" };
+        public List<string> RequireRoles { get; set; } = new() { "CT", "UVTK", "UVPB" };
     }
 
     public class CouncilUpsertDto

@@ -92,6 +92,30 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             public string? Grade { get; set; }
         }
 
+        private sealed class CommitteeAssignmentSnapshotRow
+        {
+            public int CommitteeId { get; set; }
+            public int AssignmentId { get; set; }
+            public int? Session { get; set; }
+            public DateTime? ScheduledAt { get; set; }
+            public TimeSpan? StartTime { get; set; }
+            public TimeSpan? EndTime { get; set; }
+            public int? OrderIndex { get; set; }
+        }
+
+        private sealed class CommitteeMemberSnapshotRow
+        {
+            public int CommitteeId { get; set; }
+            public string? MemberLecturerCode { get; set; }
+            public string? Role { get; set; }
+        }
+
+        private sealed class LecturerNameSnapshotRow
+        {
+            public string LecturerCode { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+        }
+
         private sealed class CouncilCalendarProjection
         {
             public int CouncilId { get; set; }
@@ -830,6 +854,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     c.Name,
                     c.Room,
                     c.DefenseDate,
+                    c.Status,
                     Role = m.Role
                 })
                 .AsQueryable();
@@ -840,17 +865,140 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
 
             var committees = await query.OrderBy(x => x.DefenseDate).ToListAsync(cancellationToken);
+            var committeeIds = committees.Select(x => x.CommitteeID).Distinct().ToList();
+
+            var assignmentRows = committeeIds.Count == 0
+                ? new List<CommitteeAssignmentSnapshotRow>()
+                : (await _db.DefenseAssignments.AsNoTracking()
+                    .Where(x => x.CommitteeID.HasValue && committeeIds.Contains(x.CommitteeID.Value))
+                    .OrderBy(x => x.Session)
+                    .ThenBy(x => x.OrderIndex)
+                    .ThenBy(x => x.AssignmentID)
+                    .Select(x => new CommitteeAssignmentSnapshotRow
+                    {
+                        CommitteeId = x.CommitteeID!.Value,
+                        AssignmentId = x.AssignmentID,
+                        Session = x.Session,
+                        ScheduledAt = x.ScheduledAt,
+                        StartTime = x.StartTime,
+                        EndTime = x.EndTime,
+                        OrderIndex = x.OrderIndex
+                    })
+                    .ToListAsync(cancellationToken)).ToList();
+
+            var assignmentsByCommittee = assignmentRows
+                .GroupBy(x => x.CommitteeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var committeeMembers = committeeIds.Count == 0
+                ? new List<CommitteeMemberSnapshotRow>()
+                : (await _db.CommitteeMembers.AsNoTracking()
+                    .Where(x => x.CommitteeID.HasValue && committeeIds.Contains(x.CommitteeID.Value))
+                    .Select(x => new CommitteeMemberSnapshotRow
+                    {
+                        CommitteeId = x.CommitteeID!.Value,
+                        MemberLecturerCode = x.MemberLecturerCode,
+                        Role = x.Role
+                    })
+                    .ToListAsync(cancellationToken)).ToList();
+
+            var memberLecturerCodes = committeeMembers
+                .Where(x => !string.IsNullOrWhiteSpace(x.MemberLecturerCode))
+                .Select(x => x.MemberLecturerCode!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var lecturerNameRows = memberLecturerCodes.Count == 0
+                ? new List<LecturerNameSnapshotRow>()
+                : (await _db.LecturerProfiles.AsNoTracking()
+                    .Where(x => x.LecturerCode != null && memberLecturerCodes.Contains(x.LecturerCode))
+                    .Select(x => new LecturerNameSnapshotRow
+                    {
+                        LecturerCode = x.LecturerCode!,
+                        Name = x.FullName ?? x.LecturerCode!
+                    })
+                    .ToListAsync(cancellationToken)).ToList();
+
+            var lecturerNameMap = lecturerNameRows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .ToDictionary(x => x.LecturerCode, x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+            var membersByCommittee = committeeMembers
+                .GroupBy(x => x.CommitteeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select((member, index) =>
+                    {
+                        var code = member.MemberLecturerCode ?? string.Empty;
+                        return new
+                        {
+                            MemberId = $"{g.Key}-{index + 1}",
+                            LecturerCode = code,
+                            LecturerName = !string.IsNullOrWhiteSpace(code) && lecturerNameMap.TryGetValue(code, out var lecturerName)
+                                ? lecturerName
+                                : code,
+                            Role = member.Role ?? string.Empty,
+                            RoleCode = NormalizeCommitteeRole(member.Role)
+                        };
+                    }).Cast<object>().ToList());
+
+            var committeeDateMap = committees.ToDictionary(x => x.CommitteeID, x => x.DefenseDate);
+
+            var scheduleByCommittee = assignmentsByCommittee
+                .ToDictionary(
+                    g => g.Key,
+                    g =>
+                    {
+                        var orderedAssignments = g.Value
+                            .OrderBy(x => x.Session ?? int.MaxValue)
+                            .ThenBy(x => x.OrderIndex ?? int.MaxValue)
+                            .ThenBy(x => x.ScheduledAt ?? DateTime.MaxValue)
+                            .ThenBy(x => x.AssignmentId)
+                            .ToList();
+
+                        var first = orderedAssignments.First();
+                        var startTime = ResolveScheduledTimeOfDay(first.ScheduledAt, first.StartTime, first.Session, periodConfig);
+                        var endTime = first.EndTime;
+                        if (!endTime.HasValue && startTime.HasValue)
+                        {
+                            endTime = startTime.Value.Add(TimeSpan.FromMinutes(90));
+                        }
+
+                        committeeDateMap.TryGetValue(g.Key, out var defenseDate);
+                        var scheduledAt = ResolveScheduledAt(first.ScheduledAt, defenseDate, first.StartTime, first.Session, periodConfig);
+
+                        return new
+                        {
+                            SessionCode = ToSessionCode(first.Session),
+                            ScheduledAt = scheduledAt,
+                            StartTime = startTime?.ToString(@"hh\:mm"),
+                            EndTime = endTime?.ToString(@"hh\:mm"),
+                            AssignmentCount = orderedAssignments.Count
+                        };
+                    });
 
             var enrichedCommittees = committees.Select(x =>
             {
                 var normalizedRole = NormalizeCommitteeRole(x.Role);
+                scheduleByCommittee.TryGetValue(x.CommitteeID, out var schedule);
+                membersByCommittee.TryGetValue(x.CommitteeID, out var members);
+                members ??= new List<object>();
+
                 return new
                 {
                     x.CommitteeID,
                     x.CommitteeCode,
                     x.Name,
                     x.Room,
-                    x.DefenseDate,
+                    DefenseDate = schedule?.ScheduledAt ?? x.DefenseDate,
+                    Session = schedule?.SessionCode ?? DefenseSessionCodes.Morning,
+                    StartTime = schedule?.StartTime,
+                    EndTime = schedule?.EndTime,
+                    AssignmentCount = schedule?.AssignmentCount ?? 0,
+                    StudentCount = schedule?.AssignmentCount ?? 0,
+                    MemberCount = members.Count,
+                    Members = members,
+                    Status = x.Status,
                     Role = x.Role,
                     NormalizedRole = normalizedRole,
                     AllowedScoringActions = BuildAllowedScoringActions(normalizedRole),
@@ -885,15 +1033,29 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 .Where(x => x.CommitteeID == committeeId)
                 .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => new { a, t })
                 .GroupJoin(_db.DefenseMinutes.AsNoTracking(), at => at.a.AssignmentID, m => m.AssignmentId, (at, m) => new { at, minute = m.FirstOrDefault() })
+                .GroupJoin(_db.DefenseResults.AsNoTracking(), atm => atm.at.a.AssignmentID, r => r.AssignmentId, (atm, r) => new { atm.at, atm.minute, result = r.FirstOrDefault() })
                 .OrderBy(x => x.at.a.Session)
+                .ThenBy(x => x.at.a.OrderIndex)
                 .Select(x => new LecturerCommitteeMinuteDto
                 {
+                    CommitteeId = x.at.a.CommitteeID ?? committeeId,
+                    CommitteeCode = x.at.a.CommitteeCode ?? string.Empty,
                     AssignmentId = x.at.a.AssignmentID,
                     TopicCode = x.at.t.TopicCode,
                     TopicTitle = x.at.t.Title,
                     SummaryContent = x.minute != null ? x.minute.SummaryContent : null,
+                    ReviewerComments = x.minute != null ? x.minute.ReviewerComments : null,
                     QnaDetails = x.minute != null ? x.minute.QnaDetails : null,
-                    LastUpdated = x.minute != null ? x.minute.LastUpdated : null
+                    Strengths = x.minute != null ? x.minute.Strengths : null,
+                    Weaknesses = x.minute != null ? x.minute.Weaknesses : null,
+                    Recommendations = x.minute != null ? x.minute.Recommendations : null,
+                    ScoreGvhd = x.at.t.Score ?? (x.result != null ? x.result.ScoreGvhd : null),
+                    ScoreCt = x.result != null ? x.result.ScoreCt : null,
+                    ScoreTk = x.result != null ? x.result.ScoreUvtk : null,
+                    ScorePb = x.result != null ? x.result.ScoreUvpb : null,
+                    FinalScore = x.result != null ? x.result.FinalScoreNumeric : null,
+                    FinalGrade = x.result != null ? x.result.FinalScoreText : null,
+                    LastUpdated = x.minute != null ? x.minute.LastUpdated : (x.result != null ? x.result.LastUpdated : null)
                 })
                 .ToListAsync(cancellationToken);
 
@@ -1288,6 +1450,8 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var assignmentIds = assignments.Select(x => x.AssignmentID).ToList();
             var committeeIds = assignments.Where(x => x.CommitteeID.HasValue).Select(x => x.CommitteeID!.Value).Distinct().ToList();
             var topicCodes = assignments.Where(x => !string.IsNullOrWhiteSpace(x.TopicCode)).Select(x => x.TopicCode!).Distinct().ToList();
+            var periodConfig = await GetPeriodConfigAsync(periodId, cancellationToken);
+            var topicTagMap = await LoadTopicTagMapAsync(topicCodes, cancellationToken);
 
             var defenseDocuments = await _db.DefenseDocuments.AsNoTracking()
                 .Where(x => assignmentIds.Contains(x.AssignmentId))
@@ -1298,14 +1462,101 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     DocumentId = x.DocumentId,
                     AssignmentId = x.AssignmentId,
                     DocumentType = x.DocumentType,
+                    FileName = x.DocumentType,
                     FileUrl = x.FileUrl,
-                    GeneratedAt = x.GeneratedAt
+                    MimeType = null,
+                    GeneratedAt = x.GeneratedAt,
+                    UploadedAt = x.GeneratedAt
                 })
                 .ToListAsync(cancellationToken);
 
             var defenseDocumentsByAssignment = defenseDocuments
                 .GroupBy(x => x.AssignmentId)
                 .ToDictionary(g => g.Key, g => g.ToList());
+
+            var submissionCandidates = await _db.ProgressSubmissions.AsNoTracking()
+                .Join(_db.ProgressMilestones.AsNoTracking(), ps => ps.MilestoneID, pm => pm.MilestoneID, (ps, pm) => new
+                {
+                    TopicCode = pm.TopicCode,
+                    ps.SubmissionID,
+                    ps.SubmittedAt,
+                    ps.LastUpdated,
+                    ps.ReportTitle
+                })
+                .Where(x => x.TopicCode != null && topicCodes.Contains(x.TopicCode))
+                .ToListAsync(cancellationToken);
+
+            var latestSubmissionByTopic = submissionCandidates
+                .Where(x => !string.IsNullOrWhiteSpace(x.TopicCode))
+                .GroupBy(x => x.TopicCode!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .OrderByDescending(v => v.SubmittedAt ?? v.LastUpdated)
+                        .ThenByDescending(v => v.SubmissionID)
+                        .First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var latestSubmissionIds = latestSubmissionByTopic.Values
+                .Select(x => x.SubmissionID)
+                .Distinct()
+                .ToList();
+
+            var submissionFiles = await _db.SubmissionFiles.AsNoTracking()
+                .Where(x => latestSubmissionIds.Contains(x.SubmissionID))
+                .Select(x => new
+                {
+                    x.FileID,
+                    x.SubmissionID,
+                    x.FileURL,
+                    x.FileName,
+                    x.MimeType,
+                    x.UploadedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            var submissionFilesBySubmissionId = submissionFiles
+                .GroupBy(x => x.SubmissionID)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var fallbackDocumentsByAssignment = new Dictionary<int, List<DefenseDocumentDto>>();
+            foreach (var assignment in assignments)
+            {
+                if (string.IsNullOrWhiteSpace(assignment.TopicCode))
+                {
+                    continue;
+                }
+
+                if (!latestSubmissionByTopic.TryGetValue(assignment.TopicCode!, out var latestSubmission))
+                {
+                    continue;
+                }
+
+                if (!submissionFilesBySubmissionId.TryGetValue(latestSubmission.SubmissionID, out var files))
+                {
+                    continue;
+                }
+
+                var mappedFiles = files
+                    .Select(file => new DefenseDocumentDto
+                    {
+                        DocumentId = file.FileID,
+                        AssignmentId = assignment.AssignmentID,
+                        DocumentType = "REPORT_SUBMISSION",
+                        FileName = !string.IsNullOrWhiteSpace(file.FileName)
+                            ? file.FileName
+                            : (!string.IsNullOrWhiteSpace(latestSubmission.ReportTitle)
+                                ? latestSubmission.ReportTitle
+                                : $"Bao-cao-{latestSubmission.SubmissionID}"),
+                        FileUrl = file.FileURL,
+                        MimeType = file.MimeType,
+                        GeneratedAt = file.UploadedAt ?? DateTime.UtcNow,
+                        UploadedAt = file.UploadedAt
+                    })
+                    .ToList();
+
+                fallbackDocumentsByAssignment[assignment.AssignmentID] = mappedFiles;
+            }
 
             var committees = await _db.Committees.AsNoTracking()
                 .Where(x => committeeIds.Contains(x.CommitteeID))
@@ -1314,6 +1565,25 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var topics = await _db.Topics.AsNoTracking()
                 .Where(x => topicCodes.Contains(x.TopicCode))
                 .ToDictionaryAsync(x => x.TopicCode, cancellationToken);
+
+            var supervisorCodes = topics.Values
+                .Where(x => !string.IsNullOrWhiteSpace(x.SupervisorLecturerCode))
+                .Select(x => x.SupervisorLecturerCode!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var supervisorNameRows = await _db.LecturerProfiles.AsNoTracking()
+                .Where(x => x.LecturerCode != null && supervisorCodes.Contains(x.LecturerCode))
+                .Select(x => new
+                {
+                    x.LecturerCode,
+                    Name = x.FullName ?? x.LecturerCode
+                })
+                .ToListAsync(cancellationToken);
+
+            var supervisorNameMap = supervisorNameRows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .ToDictionary(x => x.LecturerCode!, x => x.Name, StringComparer.OrdinalIgnoreCase);
 
             var studentCodes = topics.Values
                 .Where(x => !string.IsNullOrWhiteSpace(x.ProposerStudentCode))
@@ -1364,11 +1634,21 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     var cid = assignment.CommitteeID ?? 0;
                     committees.TryGetValue(cid, out var committee);
                     topics.TryGetValue(assignment.TopicCode ?? string.Empty, out var topic);
+                    var topicCode = topic?.TopicCode ?? assignment.TopicCode ?? string.Empty;
 
                     var studentCode = topic?.ProposerStudentCode ?? string.Empty;
                     var studentName = !string.IsNullOrWhiteSpace(studentCode) && students.TryGetValue(studentCode, out var name)
                         ? name
                         : studentCode;
+
+                    var supervisorCode = topic?.SupervisorLecturerCode ?? string.Empty;
+                    var supervisorName = !string.IsNullOrWhiteSpace(supervisorCode) && supervisorNameMap.TryGetValue(supervisorCode, out var lecturerName)
+                        ? lecturerName
+                        : supervisorCode;
+
+                    var topicTags = topicTagMap.TryGetValue(topicCode, out var tags)
+                        ? tags.ToList()
+                        : new List<string>();
 
                     var requiredCount = memberCountMap.TryGetValue(cid, out var count) ? count : 0;
                     scoreMap.TryGetValue(assignment.AssignmentID, out var scoreBucket);
@@ -1378,6 +1658,27 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
                     resultMap.TryGetValue(assignment.AssignmentID, out var defenseResult);
                     var isLocked = defenseResult?.IsLocked ?? false;
+                    var topicSupervisorScore = topic?.Score;
+                    var resolvedSupervisorScore = topicSupervisorScore ?? defenseResult?.ScoreGvhd;
+
+                    var scheduledAt = ResolveScheduledAt(
+                        assignment.ScheduledAt,
+                        committee?.DefenseDate,
+                        assignment.StartTime,
+                        assignment.Session,
+                        periodConfig);
+
+                    var resolvedStartTime = ResolveScheduledTimeOfDay(
+                        assignment.ScheduledAt,
+                        assignment.StartTime,
+                        assignment.Session,
+                        periodConfig);
+
+                    var resolvedEndTime = assignment.EndTime;
+                    if (!resolvedEndTime.HasValue && resolvedStartTime.HasValue)
+                    {
+                        resolvedEndTime = resolvedStartTime.Value.Add(TimeSpan.FromMinutes(90));
+                    }
 
                     var status = isLocked
                         ? "LOCKED"
@@ -1387,27 +1688,47 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                                 ? "IN_PROGRESS"
                                 : "PENDING";
 
+                    var hasGeneratedDocuments = defenseDocumentsByAssignment.TryGetValue(assignment.AssignmentID, out var generatedDocuments)
+                        && generatedDocuments.Count > 0;
+                    var documents = hasGeneratedDocuments
+                        ? generatedDocuments!
+                        : (fallbackDocumentsByAssignment.TryGetValue(assignment.AssignmentID, out var fallbackDocuments)
+                            ? fallbackDocuments
+                            : new List<DefenseDocumentDto>());
+
                     return new ScoringMatrixRowDto
                     {
                         CommitteeId = cid,
-                        CommitteeCode = committee?.CommitteeCode ?? string.Empty,
+                        CommitteeCode = committee?.CommitteeCode ?? assignment.CommitteeCode ?? string.Empty,
+                        CommitteeName = committee?.Name ?? string.Empty,
                         Room = committee?.Room,
                         AssignmentId = assignment.AssignmentID,
                         AssignmentCode = assignment.AssignmentCode,
-                        TopicCode = topic?.TopicCode ?? assignment.TopicCode ?? string.Empty,
+                        TopicCode = topicCode,
                         TopicTitle = topic?.Title ?? string.Empty,
+                        SupervisorLecturerCode = supervisorCode,
+                        SupervisorLecturerName = supervisorName,
+                        TopicTags = topicTags,
                         StudentCode = studentCode,
                         StudentName = studentName,
+                        Session = assignment.Session,
+                        SessionCode = ToSessionCode(assignment.Session),
+                        ScheduledAt = scheduledAt,
+                        StartTime = resolvedStartTime?.ToString(@"hh\:mm"),
+                        EndTime = resolvedEndTime?.ToString(@"hh\:mm"),
                         SubmittedCount = submittedCount,
                         RequiredCount = requiredCount,
                         IsLocked = isLocked,
+                        ScoreGvhd = resolvedSupervisorScore,
+                        ScoreCt = defenseResult?.ScoreCt,
+                        ScoreTk = defenseResult?.ScoreUvtk,
+                        ScorePb = defenseResult?.ScoreUvpb,
+                        TopicSupervisorScore = topicSupervisorScore,
                         FinalScore = defenseResult?.FinalScoreNumeric,
                         FinalGrade = defenseResult?.FinalScoreText,
                         Variance = variance,
                         Status = status,
-                        DefenseDocuments = defenseDocumentsByAssignment.TryGetValue(assignment.AssignmentID, out var documents)
-                            ? documents
-                            : new List<DefenseDocumentDto>()
+                        DefenseDocuments = documents
                     };
                 })
                 .ToList();
@@ -1940,7 +2261,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var signRow = summaryRow + 5;
             sheet.Range(signRow, 1, signRow, 4).Merge().Value = "CHU TICH HOI DONG";
-            sheet.Range(signRow, 5, signRow, 8).Merge().Value = "THU KY";
+            sheet.Range(signRow, 5, signRow, 8).Merge().Value = "UY VIEN THU KY";
             sheet.Range(signRow, 1, signRow, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             sheet.Range(signRow, 1, signRow, 8).Style.Font.SetBold(true);
 
@@ -2108,11 +2429,11 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             }
 
             var upper = role.Trim().ToUpperInvariant();
-            if (upper.Contains("CHU") || upper == "CT") return "CT";
-            if (upper.Contains("THU") || upper == "TK") return "TK";
-            if (upper.Contains("PHAN") || upper == "PB") return "PB";
-            if (upper == "UV") return "UV";
             if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
             return upper;
         }
 
@@ -2265,7 +2586,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         private static List<string> BuildAllowedMinuteActions(string normalizedRole)
         {
-            if (normalizedRole == "CT" || normalizedRole == "TK")
+            if (normalizedRole == "CT" || normalizedRole == "UVTK")
             {
                 return new List<string> { "UPSERT_MINUTES" };
             }
@@ -2275,7 +2596,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         private static List<string> BuildAllowedRevisionActions(string normalizedRole)
         {
-            if (normalizedRole == "CT" || normalizedRole == "TK")
+            if (normalizedRole == "CT" || normalizedRole == "UVTK")
             {
                 return new List<string> { "APPROVE", "REJECT" };
             }
