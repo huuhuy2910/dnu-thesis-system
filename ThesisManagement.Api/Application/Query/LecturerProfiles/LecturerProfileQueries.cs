@@ -24,7 +24,7 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
 
     public class GetLecturerProfileCreateQuery : IGetLecturerProfileCreateQuery
     {
-        public object Execute() => new { UserID = 0, DepartmentID = (int?)null, CurrentGuidingCount = 0 };
+        public object Execute() => new { UserID = 0, DepartmentID = (int?)null, CurrentGuidingCount = 0, Organization = string.Empty };
     }
 
     public class GetLecturerProfileUpdateQuery : IGetLecturerProfileUpdateQuery
@@ -52,6 +52,7 @@ namespace ThesisManagement.Api.Application.Query.LecturerProfiles
             return new LecturerProfileUpdateDto(
                 entity.DepartmentCode,
                 entity.Degree,
+                entity.Organization,
                 entity.GuideQuota,
                 entity.DefenseQuota,
                 viewCount ?? entity.CurrentGuidingCount,

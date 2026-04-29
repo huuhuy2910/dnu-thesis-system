@@ -107,6 +107,7 @@ const mapHistorySubmissionToReport = (
   submissionCode: submission.submissionCode,
   milestoneID: submission.milestoneID,
   milestoneCode: submission.milestoneCode,
+  ordinal: submission.ordinal ?? null,
   studentUserID: 0,
   studentUserCode: submission.studentUserCode,
   studentProfileID: 0,
