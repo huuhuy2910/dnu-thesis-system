@@ -51,6 +51,7 @@ namespace ThesisManagement.Api.Application.Command.LecturerProfiles
                 DepartmentCode = dto.DepartmentCode,
                 DepartmentID = department?.DepartmentID,
                 Degree = dto.Degree,
+                Organization = dto.Organization,
                 GuideQuota = dto.GuideQuota ?? 10,
                 DefenseQuota = dto.DefenseQuota ?? 8,
                 CurrentGuidingCount = dto.CurrentGuidingCount,

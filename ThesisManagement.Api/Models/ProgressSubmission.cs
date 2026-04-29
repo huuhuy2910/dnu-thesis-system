@@ -15,6 +15,7 @@ namespace ThesisManagement.Api.Models
         public string? StudentProfileCode { get; set; } // New: reference by code
         public int? LecturerProfileID { get; set; } // New: reference by code
         public string? LecturerCode { get; set; } // New: reference by code
+    public int? Ordinal { get; set; }
         public DateTime? SubmittedAt { get; set; }
         public int? AttemptNumber { get; set; }
         public string? LecturerComment { get; set; }

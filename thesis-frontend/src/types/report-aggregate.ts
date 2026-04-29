@@ -59,6 +59,7 @@ export interface StudentProgressHistorySubmission {
   submissionCode: string;
   milestoneID: number;
   milestoneCode: string;
+  ordinal: number | null;
   studentUserCode: string;
   studentProfileCode: string | null;
   lecturerCode: string | null;

@@ -120,7 +120,10 @@ const extractPeriodIdFromPath = (pathname: string): number | null => {
   return null;
 };
 
-const attachPeriodIdQuery = (targetUrl: string, periodId: number | null): string => {
+const attachPeriodIdQuery = (
+  targetUrl: string,
+  periodId: number | null,
+): string => {
   if (!targetUrl || periodId == null) {
     return targetUrl;
   }
@@ -138,7 +141,11 @@ const attachPeriodIdQuery = (targetUrl: string, periodId: number | null): string
 const normalizeActionTarget = (
   rawActionUrl: string,
   actionType: string,
-): { targetUrl: string; isExternal: boolean; periodId: number | null } | null => {
+): {
+  targetUrl: string;
+  isExternal: boolean;
+  periodId: number | null;
+} | null => {
   const fallbackTarget = fallbackActionUrlByType[actionType] || "";
   const candidate = rawActionUrl || fallbackTarget;
   if (!candidate) {
@@ -178,11 +185,17 @@ const normalizeActionTarget = (
   let inAppPath = normalizedPath;
   if (/^\/defense\/periods\/\d+\/student(?:\/.*)?$/i.test(normalizedPath)) {
     inAppPath = "/student/defense-info";
-  } else if (/^\/defense-periods\/\d+\/student(?:\/.*)?$/i.test(normalizedPath)) {
+  } else if (
+    /^\/defense-periods\/\d+\/student(?:\/.*)?$/i.test(normalizedPath)
+  ) {
     inAppPath = "/student/defense-info";
-  } else if (/^\/defense\/periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)) {
+  } else if (
+    /^\/defense\/periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)
+  ) {
     inAppPath = "/lecturer/committees";
-  } else if (/^\/defense-periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)) {
+  } else if (
+    /^\/defense-periods\/\d+\/lecturer(?:\/.*)?$/i.test(normalizedPath)
+  ) {
     inAppPath = "/lecturer/committees";
   }
 
@@ -200,6 +213,27 @@ const normalizeActionTarget = (
     isExternal: false,
     periodId,
   };
+};
+
+const resolveCategoryTarget = (
+  theme: NotificationTheme,
+  notifCategory: string,
+): string | null => {
+  const category = String(notifCategory ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (theme === "student") {
+    if (category === "TOPIC_WORKFLOW") return "/student/topics";
+    if (category === "PROGRESS_SUBMISSION") return "/student/reports";
+  }
+
+  if (theme === "lecturer") {
+    if (category === "TOPIC_WORKFLOW") return "/lecturer/topic-review";
+    if (category === "PROGRESS_SUBMISSION") return "/lecturer/reports";
+  }
+
+  return null;
 };
 
 function mergeByRecipientId(
@@ -514,6 +548,16 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
         await markOneAsRead(item.recipientID);
       }
 
+      const categoryTarget = resolveCategoryTarget(
+        theme,
+        item.notification.notifCategory,
+      );
+      if (categoryTarget) {
+        navigate(categoryTarget);
+        setIsOpen(false);
+        return;
+      }
+
       const rawActionUrl = String(item.notification.actionUrl ?? "").trim();
       const normalizedActionType = String(item.notification.actionType ?? "")
         .trim()
@@ -544,7 +588,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ theme }) => {
       );
       setIsOpen(false);
     },
-    [markOneAsRead, navigate],
+    [markOneAsRead, navigate, theme],
   );
 
   useEffect(() => {

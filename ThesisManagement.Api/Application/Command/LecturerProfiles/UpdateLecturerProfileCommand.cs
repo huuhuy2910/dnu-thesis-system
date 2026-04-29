@@ -37,6 +37,8 @@ namespace ThesisManagement.Api.Application.Command.LecturerProfiles
             }
 
             entity.Degree = dto.Degree;
+            if (dto.Organization != null)
+                entity.Organization = dto.Organization;
             entity.GuideQuota = dto.GuideQuota ?? entity.GuideQuota;
             entity.DefenseQuota = dto.DefenseQuota ?? entity.DefenseQuota;
             entity.CurrentGuidingCount = dto.CurrentGuidingCount ?? entity.CurrentGuidingCount;

@@ -12,7 +12,6 @@ import TopicRegistration from "../pages/student/TopicRegistration";
 import Progress from "../pages/student/Progress";
 import Reports from "../pages/student/Reports";
 import Schedule from "../pages/student/Schedule";
-import Notifications from "../pages/student/Notifications";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
 import LecturerCommitteeGradingRoom from "../pages/lecturer/LecturerCommitteeGradingRoom";
@@ -75,7 +74,6 @@ const AppRoutes: React.FC = () => {
           <Route path="progress" element={<Progress />} />
           <Route path="reports" element={<Reports />} />
           <Route path="schedule" element={<Schedule />} />
-          <Route path="notifications" element={<Notifications />} />
           <Route path="defense-info" element={<StudentDefenseInfo />} />
           <Route path="profile" element={<StudentProfilePage />} />
           <Route path="change-password" element={<ChangePasswordPage />} />

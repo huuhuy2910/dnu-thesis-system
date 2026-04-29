@@ -2,6 +2,7 @@ using AutoMapper;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
+using ThesisManagement.Api.DTOs.Cohorts.Query;
 using ThesisManagement.Api.DTOs.ConversationMembers.Query;
 using ThesisManagement.Api.DTOs.Conversations.Query;
 using ThesisManagement.Api.DTOs.DefenseTerms.Query;
@@ -35,6 +36,7 @@ namespace ThesisManagement.Api.Mappings
         public MappingProfile()
         {
             CreateMap<Department, DepartmentReadDto>();
+            CreateMap<Cohort, CohortReadDto>();
             CreateMap<User, UserReadDto>();
             CreateMap<User, LoginResponseDto>();
             CreateMap<StudentProfile, StudentProfileReadDto>();

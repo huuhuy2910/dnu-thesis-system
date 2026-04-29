@@ -13,6 +13,7 @@ namespace ThesisManagement.Api.DTOs.ProgressSubmissions.Query
         string? StudentProfileCode,
         int? LecturerProfileID,
         string? LecturerCode,
+        int? Ordinal,
         DateTime? SubmittedAt,
         int? AttemptNumber,
         string? LecturerComment,

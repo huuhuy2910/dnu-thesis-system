@@ -5,6 +5,7 @@ export interface Report {
   submissionCode: string;
   milestoneID: number;
   milestoneCode: string;
+  ordinal: number | null;
   studentUserID: number;
   studentUserCode: string;
   studentProfileID: number;
