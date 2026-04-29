@@ -63,6 +63,7 @@ namespace ThesisManagement.Api.DTOs.Reports.Query
         string? StudentUserCode,
         string? StudentProfileCode,
         string? LecturerCode,
+        int? Ordinal,
         DateTime? SubmittedAt,
         int? AttemptNumber,
         string? LecturerComment,

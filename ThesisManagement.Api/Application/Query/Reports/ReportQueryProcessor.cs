@@ -451,6 +451,7 @@ namespace ThesisManagement.Api.Application.Query.Reports
                 submission.StudentUserCode,
                 submission.StudentProfileCode,
                 submission.LecturerCode,
+                submission.Ordinal,
                 submission.SubmittedAt,
                 submission.AttemptNumber,
                 submission.LecturerComment,

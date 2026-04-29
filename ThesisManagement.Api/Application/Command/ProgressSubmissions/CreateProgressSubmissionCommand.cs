@@ -31,18 +31,25 @@ namespace ThesisManagement.Api.Application.Command.ProgressSubmissions
             if (!string.IsNullOrWhiteSpace(validationError))
                 return OperationResult<ProgressSubmissionReadDto>.Failed(validationError, 400);
 
+            var milestone = await _uow.ProgressMilestones.Query()
+                .FirstOrDefaultAsync(x => x.MilestoneCode == dto.MilestoneCode);
+
+            if (milestone == null)
+                return OperationResult<ProgressSubmissionReadDto>.Failed("Milestone not found", 404);
+
             var code = await GenerateSubmissionCodeAsync();
             var ent = new ProgressSubmission
             {
                 SubmissionCode = code,
-                MilestoneID = dto.MilestoneID,
-                MilestoneCode = dto.MilestoneCode,
+                MilestoneID = milestone.MilestoneID,
+                MilestoneCode = milestone.MilestoneCode,
                 StudentUserID = dto.StudentUserID,
                 StudentUserCode = dto.StudentUserCode,
                 StudentProfileID = dto.StudentProfileID,
                 StudentProfileCode = dto.StudentProfileCode,
                 LecturerProfileID = dto.LecturerProfileID,
                 LecturerCode = dto.LecturerCode,
+                Ordinal = milestone.Ordinal,
                 AttemptNumber = dto.AttemptNumber ?? 1,
                 ReportTitle = dto.ReportTitle,
                 ReportDescription = dto.ReportDescription,

@@ -8,6 +8,7 @@ namespace ThesisManagement.Api.DTOs.LecturerProfiles.Query
         string? UserCode,
         string? DepartmentCode,
         string? Degree,
+        string? Organization,
         int GuideQuota,
         int DefenseQuota,
         int CurrentGuidingCount,

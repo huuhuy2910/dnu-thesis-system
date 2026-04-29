@@ -6,6 +6,7 @@ namespace ThesisManagement.Api.DTOs.LecturerProfiles.Command
         string UserCode,
         string? DepartmentCode,
         string? Degree,
+        string? Organization,
         int? GuideQuota,
         int? DefenseQuota,
         int CurrentGuidingCount,
@@ -21,6 +22,7 @@ namespace ThesisManagement.Api.DTOs.LecturerProfiles.Command
     public record LecturerProfileUpdateDto(
         string? DepartmentCode,
         string? Degree,
+        string? Organization,
         int? GuideQuota,
         int? DefenseQuota,
         int? CurrentGuidingCount,

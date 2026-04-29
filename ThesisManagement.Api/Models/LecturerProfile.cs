@@ -14,6 +14,7 @@ namespace ThesisManagement.Api.Models
         public string? Degree { get; set; }
         public string? Specialties { get; set; } // Keep for backward compatibility
         public string? FullName { get; set; }
+        public string? Organization { get; set; }
         public int? GuideQuota { get; set; }
         public int? DefenseQuota { get; set; }
         public int CurrentGuidingCount { get; set; } = 0; // New: current number of guiding topics

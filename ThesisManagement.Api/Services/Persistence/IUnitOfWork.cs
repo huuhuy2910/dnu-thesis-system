@@ -12,6 +12,7 @@ namespace ThesisManagement.Api.Services
         IGenericRepository<LecturerProfile> LecturerProfiles { get; }
         IGenericRepository<CatalogTopic> CatalogTopics { get; }
         IGenericRepository<Topic> Topics { get; }
+        IGenericRepository<Cohort> Cohorts { get; }
         IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
             IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }

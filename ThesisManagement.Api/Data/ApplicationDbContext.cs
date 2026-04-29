@@ -29,6 +29,7 @@ namespace ThesisManagement.Api.Data
         public DbSet<LecturerProfile> LecturerProfiles => Set<LecturerProfile>();
         public DbSet<CatalogTopic> CatalogTopics => Set<CatalogTopic>();
         public DbSet<Topic> Topics => Set<Topic>();
+        public DbSet<Cohort> Cohorts => Set<Cohort>();
         public DbSet<ProgressMilestone> ProgressMilestones => Set<ProgressMilestone>();
         public DbSet<ProgressSubmission> ProgressSubmissions => Set<ProgressSubmission>();
         public DbSet<Committee> Committees => Set<Committee>();
@@ -147,8 +148,12 @@ namespace ThesisManagement.Api.Data
                 b.HasIndex(x => x.ClassCode).IsUnique();
                 b.Property(x => x.ClassName).HasMaxLength(150).IsRequired();
                 b.Property(x => x.DepartmentCode).HasMaxLength(30);
+                b.Property(x => x.CohortId);
+                b.Property(x => x.CohortCode).HasMaxLength(50);
+                b.Property(x => x.CohortName).HasMaxLength(255);
                 b.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("Đang hoạt động");
                 b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentID).OnDelete(DeleteBehavior.Restrict);
+                b.HasOne(x => x.Cohort).WithMany(x => x.Classes).HasForeignKey(x => x.CohortId).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
@@ -163,6 +168,7 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.FullName).HasMaxLength(150);
                 b.HasOne(x => x.User).WithOne(x => x.LecturerProfile).HasForeignKey<LecturerProfile>(x => x.UserCode).HasPrincipalKey<User>(x => x.UserCode);
                 b.HasOne(x => x.Department).WithMany(x => x.LecturerProfiles).HasForeignKey(x => x.DepartmentCode).HasPrincipalKey(x => x.DepartmentCode);
+                b.Property(x => x.Organization).HasMaxLength(255);
                 b.Property(x => x.GuideQuota).HasDefaultValue(10);
                 b.Property(x => x.DefenseQuota).HasDefaultValue(8);
                 b.Property(x => x.CurrentGuidingCount).HasDefaultValue(0);
@@ -259,6 +265,20 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");
             });
 
+            modelBuilder.Entity<Cohort>(b =>
+            {
+                b.ToTable("COHORTS");
+                b.HasKey(x => x.Id);
+                b.Property(x => x.CohortCode).HasMaxLength(50).IsRequired();
+                b.HasIndex(x => x.CohortCode).IsUnique();
+                b.Property(x => x.CohortName).HasMaxLength(255).IsRequired();
+                b.Property(x => x.StartYear).IsRequired();
+                b.Property(x => x.EndYear).IsRequired();
+                b.Property(x => x.Status).HasDefaultValue(1);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property(x => x.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
             // ProgressSubmissions
             modelBuilder.Entity<ProgressSubmission>(b =>
             {
@@ -279,6 +299,7 @@ namespace ThesisManagement.Api.Data
                 b.HasOne(x => x.StudentUser).WithMany().HasForeignKey(x => x.StudentUserID).OnDelete(DeleteBehavior.SetNull);
                 b.Property(x => x.StudentUserCode).HasMaxLength(40);
                 b.Property(x => x.StudentProfileCode).HasMaxLength(60);
+                b.Property(x => x.Ordinal);
                 b.Property(x => x.SubmittedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.AttemptNumber).HasDefaultValue(1);
                 // File columns are stored in SubmissionFiles table; do not configure file columns on ProgressSubmission
@@ -1310,7 +1331,8 @@ namespace ThesisManagement.Api.Data
                 ["Users"] = new HashSet<string>(StringComparer.Ordinal) { "Role" },
                 ["TOPICS"] = new HashSet<string>(StringComparer.Ordinal) { "Type" },
                 ["SYSTEMACTIVITYLOGS"] = new HashSet<string>(StringComparer.Ordinal) { "Comment" },
-                ["PROGRESSMILESTONES"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" }
+                ["PROGRESSMILESTONES"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" },
+                ["PROGRESSSUBMISSIONS"] = new HashSet<string>(StringComparer.Ordinal) { "Ordinal" }
             };
 
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())

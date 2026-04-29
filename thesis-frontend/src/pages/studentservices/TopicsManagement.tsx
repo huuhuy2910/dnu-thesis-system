@@ -159,6 +159,7 @@ type ProgressHistorySubmission = {
   submissionCode: string;
   milestoneID?: number;
   milestoneCode: string;
+  ordinal?: number;
   studentUserCode: string;
   studentProfileCode?: string | null;
   lecturerCode?: string;

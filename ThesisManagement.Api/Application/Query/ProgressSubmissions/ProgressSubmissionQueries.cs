@@ -26,6 +26,7 @@ namespace ThesisManagement.Api.Application.Query.ProgressSubmissions
                 SubmissionCode = sampleCode,
                 MilestoneID = (int?)null,
                 MilestoneCode = string.Empty,
+                Ordinal = (int?)null,
                 StudentUserID = (int?)null,
                 StudentUserCode = string.Empty,
                 StudentProfileID = (int?)null,

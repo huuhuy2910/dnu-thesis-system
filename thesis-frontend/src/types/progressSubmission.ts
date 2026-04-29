@@ -3,6 +3,7 @@ export interface ProgressSubmission {
   submissionCode: string;
   milestoneID: number;
   milestoneCode: string;
+  ordinal: number | null;
   studentUserID: number;
   studentUserCode: string;
   studentProfileID: number | null;
@@ -24,6 +25,7 @@ export interface ApiResponseProgressSubmissions {
 }
 
 export interface ProgressSubmissionUpdate {
+  ordinal?: number | null;
   lecturerComment: string;
   lecturerState: string;
   feedbackLevel: string;

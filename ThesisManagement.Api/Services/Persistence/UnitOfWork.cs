@@ -17,6 +17,7 @@ namespace ThesisManagement.Api.Services
             LecturerProfiles = new GenericRepository<LecturerProfile>(_db);
             CatalogTopics = new GenericRepository<CatalogTopic>(_db);
             Topics = new GenericRepository<Topic>(_db);
+            Cohorts = new GenericRepository<Cohort>(_db);
             ProgressMilestones = new GenericRepository<ProgressMilestone>(_db);
             ProgressSubmissions = new GenericRepository<ProgressSubmission>(_db);
             MilestoneTemplates = new GenericRepository<MilestoneTemplate>(_db);
@@ -71,6 +72,7 @@ namespace ThesisManagement.Api.Services
         public IGenericRepository<LecturerProfile> LecturerProfiles { get; }
         public IGenericRepository<CatalogTopic> CatalogTopics { get; }
         public IGenericRepository<Topic> Topics { get; }
+        public IGenericRepository<Cohort> Cohorts { get; }
         public IGenericRepository<ProgressMilestone> ProgressMilestones { get; }
         public IGenericRepository<ProgressSubmission> ProgressSubmissions { get; }
     public IGenericRepository<MilestoneTemplate> MilestoneTemplates { get; }

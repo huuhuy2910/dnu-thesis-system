@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ThesisManagement.Api.DTOs;
 using ThesisManagement.Api.DTOs.CatalogTopics.Query;
 using ThesisManagement.Api.DTOs.CatalogTopicTags.Query;
+using ThesisManagement.Api.DTOs.Cohorts.Query;
 using ThesisManagement.Api.DTOs.CommitteeMembers.Query;
 using ThesisManagement.Api.DTOs.DefenseAssignments.Query;
 using ThesisManagement.Api.DTOs.DefenseTermLecturers.Query;
@@ -43,6 +44,44 @@ namespace ThesisManagement.Api.Helpers
 
             if (!string.IsNullOrEmpty(filter.DepartmentCode))
                 query = query.Where(x => x.DepartmentCode.Contains(filter.DepartmentCode));
+
+            if (filter.FromDate.HasValue)
+                query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
+
+            if (filter.ToDate.HasValue)
+                query = query.Where(x => x.CreatedAt <= filter.ToDate.Value);
+
+            return ApplySorting(query, filter);
+        }
+
+        public static IQueryable<Cohort> ApplyFilter(this IQueryable<Cohort> query, CohortFilter filter)
+        {
+            if (!string.IsNullOrEmpty(filter.Search))
+            {
+                query = query.Where(x => x.CohortName.Contains(filter.Search) ||
+                                        x.CohortCode.Contains(filter.Search));
+            }
+
+            if (!string.IsNullOrEmpty(filter.CohortCode))
+                query = query.Where(x => x.CohortCode.Contains(filter.CohortCode));
+
+            if (!string.IsNullOrEmpty(filter.CohortName))
+                query = query.Where(x => x.CohortName.Contains(filter.CohortName));
+
+            if (filter.Status.HasValue)
+                query = query.Where(x => x.Status == filter.Status.Value);
+
+            if (filter.MinStartYear.HasValue)
+                query = query.Where(x => x.StartYear >= filter.MinStartYear.Value);
+
+            if (filter.MaxStartYear.HasValue)
+                query = query.Where(x => x.StartYear <= filter.MaxStartYear.Value);
+
+            if (filter.MinEndYear.HasValue)
+                query = query.Where(x => x.EndYear >= filter.MinEndYear.Value);
+
+            if (filter.MaxEndYear.HasValue)
+                query = query.Where(x => x.EndYear <= filter.MaxEndYear.Value);
 
             if (filter.FromDate.HasValue)
                 query = query.Where(x => x.CreatedAt >= filter.FromDate.Value);
