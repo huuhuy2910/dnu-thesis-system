@@ -627,8 +627,8 @@ namespace ThesisManagement.Api.Data
                 b.Property(x => x.AssignmentCode).HasMaxLength(60);
                 b.Property(x => x.MemberLecturerCode).HasMaxLength(30);
                 b.Property(x => x.MemberLecturerUserCode).HasMaxLength(40);
-                b.Property(x => x.Role).HasMaxLength(20);
-                b.Property(x => x.Score).HasColumnType("NUMBER(4,2)");
+                b.Ignore(x => x.Role);
+                b.Property(x => x.Score).HasColumnType("NUMBER(5,2)");
                 b.Property(x => x.IsSubmitted).HasConversion<int>().HasDefaultValue(0);
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSTIMESTAMP");
                 b.Property(x => x.LastUpdated).HasDefaultValueSql("SYSTIMESTAMP");

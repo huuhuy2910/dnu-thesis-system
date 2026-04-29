@@ -15,6 +15,7 @@ import Schedule from "../pages/student/Schedule";
 import Notifications from "../pages/student/Notifications";
 import LecturerDashboard from "../pages/lecturer/Dashboard";
 import LecturerCommittees from "../pages/lecturer/LecturerCommittees";
+import LecturerCommitteeGradingRoom from "../pages/lecturer/LecturerCommitteeGradingRoom";
 import LecturerStudents from "../pages/lecturer/LecturerStudents";
 import LecturerSchedule from "../pages/lecturer/LecturerSchedule";
 import LecturerReports from "../pages/lecturer/LecturerReports";
@@ -93,7 +94,8 @@ const AppRoutes: React.FC = () => {
           <Route index element={<LecturerDashboard />} />
           <Route path="students" element={<LecturerStudents />} />
           <Route path="schedule" element={<LecturerSchedule />} />
-          <Route path="committees" element={<LecturerCommittees />} />
+          <Route path="committees" element={<LecturerCommittees key="lecturer-committees" />} />
+          <Route path="committees/grading" element={<LecturerCommitteeGradingRoom />} />
           <Route path="reports" element={<LecturerReports />} />
           <Route path="topic-review" element={<LecturerTopicReviewPage />} />
           <Route

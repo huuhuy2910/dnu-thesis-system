@@ -432,7 +432,7 @@ namespace ThesisManagement.Api.Controllers
                 return MapFailure(state, stateStatusCode, "Không thể lấy trạng thái setup.");
             }
 
-            var studentsAction = await GetStudentParticipants(periodId, "all", null);
+            var studentsAction = await GetStudentParticipants(periodId, "eligible", null);
             if (!TryExtractApiResponse(studentsAction, out var students, out var studentsStatusCode) || students == null)
             {
                 return StatusCode(500, ApiResponse<object>.Fail("Không thể lấy setup snapshot.", 500));
@@ -4176,13 +4176,14 @@ namespace ThesisManagement.Api.Controllers
                 var inPeriodLecturerPool = !string.IsNullOrWhiteSpace(topic.SupervisorLecturerCode)
                     && context.PeriodLecturerCodes.Contains(topic.SupervisorLecturerCode);
 
+                assignmentByTopicCode.TryGetValue(topic.TopicCode, out var assignment);
+                var isAssignedToCouncil = assignment != null;
                 var hasEligibleStatus = IsDefenseEligibleTopicStatus(topic.Status);
 
                 var isEligible = inPeriodStudentPool
                     && inPeriodLecturerPool
                     && hasEligibleStatus;
-
-                assignmentByTopicCode.TryGetValue(topic.TopicCode, out var assignment);
+                var resolvedTopicStatus = ResolveTopicStatusForCouncilAssignment(topic.Status, isAssignedToCouncil);
                 var hasScoringResult = assignment != null
                     && resultByAssignmentId.TryGetValue(assignment.AssignmentID, out var result)
                     && HasScoringData(result);
@@ -4214,7 +4215,7 @@ namespace ThesisManagement.Api.Controllers
                     Tags = topicTagMap.TryGetValue(topic.TopicCode, out var topicTags)
                         ? topicTags.OrderBy(x => x).ToList()
                         : new List<string>(),
-                    TopicStatus = topic.Status,
+                    TopicStatus = resolvedTopicStatus,
                     StudentCode = studentCode,
                     StudentName = studentName,
                     SupervisorCode = supervisorCode,
@@ -4223,7 +4224,7 @@ namespace ThesisManagement.Api.Controllers
                     InPeriodLecturerPool = inPeriodLecturerPool,
                     HasCompletedMilestone = hasEligibleStatus,
                     IsEligibleForDefense = isEligible,
-                    IsAssignedToCouncil = assignment != null,
+                    IsAssignedToCouncil = isAssignedToCouncil,
                     HasScoringResult = hasScoringResult,
                     AssignmentId = assignment?.AssignmentID,
                     CommitteeId = assignment?.CommitteeID,
@@ -4324,6 +4325,16 @@ namespace ThesisManagement.Api.Controllers
                 || normalized.Contains("READY FOR DEFENSE", StringComparison.Ordinal)
                 || normalized.Contains("READY_FOR_DEFENSE", StringComparison.Ordinal)
                 || normalized.Contains("APPROVED", StringComparison.Ordinal);
+        }
+
+        private static string ResolveTopicStatusForCouncilAssignment(string? topicStatus, bool isAssignedToCouncil)
+        {
+            if (isAssignedToCouncil)
+            {
+                return "Đã phân hội đồng";
+            }
+
+            return topicStatus ?? string.Empty;
         }
 
         private static decimal CalculateCompletionPercent(int totalCount, int completedCount)

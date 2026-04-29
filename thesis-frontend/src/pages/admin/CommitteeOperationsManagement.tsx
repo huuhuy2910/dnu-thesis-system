@@ -152,8 +152,8 @@ type OperationsSnapshotData = {
 const cardStyle: React.CSSProperties = {
   background: "#ffffff",
   border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: 16,
+  borderRadius: 10,
+  padding: 18,
   boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
 };
 
@@ -206,12 +206,13 @@ const actionIconButtonStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+  transition: "all 0.2s ease",
 };
 
 const dangerActionIconButtonStyle: React.CSSProperties = {
   ...actionIconButtonStyle,
   border: "1px solid #fecaca",
-  color: "#b91c1c",
+  color: "#ef4444",
 };
 
 const emptyStateCardStyle: React.CSSProperties = {
@@ -230,9 +231,9 @@ const panelTabs: Array<{
   label: string;
   icon: React.ReactNode;
 }> = [
-  { key: "snapshot", label: "Snapshot", icon: <Search size={15} /> },
-  { key: "lifecycle", label: "Lifecycle", icon: <Activity size={15} /> },
-  { key: "scoring", label: "Scoring Matrix", icon: <BarChart3 size={15} /> },
+  { key: "snapshot", label: "Tổng quan", icon: <Search size={15} /> },
+  { key: "lifecycle", label: "Vòng đời", icon: <Activity size={15} /> },
+  { key: "scoring", label: "Chấm điểm", icon: <BarChart3 size={15} /> },
   {
     key: "post-defense",
     label: "Hậu bảo vệ",
@@ -240,10 +241,93 @@ const panelTabs: Array<{
   },
   {
     key: "audit-report",
-    label: "Audit & Báo cáo",
+    label: "Kiểm toán & báo cáo",
     icon: <Download size={15} />,
   },
 ];
+
+type ToneStyle = {
+  bg: string;
+  border: string;
+  text: string;
+};
+
+const normalizeStatusKey = (value: string | null | undefined) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+
+const statusToneMap: Record<string, ToneStyle> = {
+  APPROVED: { bg: "#f0fdf4", border: "#bbf7d0", text: "#166534" },
+  PENDING: { bg: "#fffbeb", border: "#fde68a", text: "#92400e" },
+  REJECTED: { bg: "#fef2f2", border: "#fecaca", text: "#991b1b" },
+  LOCKED: { bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
+  IN_PROGRESS: { bg: "#fff7ed", border: "#fed7aa", text: "#c2410c" },
+  DRAFT: { bg: "#f8fafc", border: "#cbd5e1", text: "#475569" },
+  READY: { bg: "#111827", border: "#111827", text: "#ffffff" },
+  FINALIZED: { bg: "#fff7ed", border: "#fed7aa", text: "#c2410c" },
+  PUBLISHED: { bg: "#f0fdf4", border: "#bbf7d0", text: "#166534" },
+  ARCHIVED: { bg: "#f8fafc", border: "#cbd5e1", text: "#475569" },
+  WARNING: { bg: "#fffbeb", border: "#fde68a", text: "#92400e" },
+};
+
+const statusLabelMap: Record<string, string> = {
+  APPROVED: "Đã duyệt",
+  PENDING: "Chờ xử lý",
+  REJECTED: "Từ chối",
+  LOCKED: "Đã khóa",
+  IN_PROGRESS: "Đang xử lý",
+  DRAFT: "Nháp",
+  READY: "Ready",
+  FINALIZED: "Đã chốt",
+  PUBLISHED: "Đã công bố",
+  ARCHIVED: "Đã lưu trữ",
+  WARNING: "Cảnh báo",
+};
+
+const getStatusTone = (value: string | null | undefined): ToneStyle => {
+  const normalized = normalizeStatusKey(value);
+  return statusToneMap[normalized] ?? statusToneMap.DRAFT;
+};
+
+const getStatusLabel = (value: string | null | undefined) => {
+  const normalized = normalizeStatusKey(value);
+  return statusLabelMap[normalized] ?? (String(value ?? "-").trim() || "-");
+};
+
+const reportTypeOptions: Array<{ value: ReportType; label: string; description: string }> = [
+  {
+    value: "council-summary",
+    label: "Tổng hợp hội đồng",
+    description: "Danh sách hội đồng, phòng, trạng thái và tiến độ tổng hợp.",
+  },
+  {
+    value: "form-1",
+    label: "Form-1",
+    description: "Xuất theo một hội đồng cụ thể khi cần kiểm tra chi tiết.",
+  },
+  {
+    value: "final-term",
+    label: "Kết quả cuối kỳ",
+    description: "Bộ dữ liệu kết quả, điểm và trạng thái sau chốt.",
+  },
+  {
+    value: "sync-errors",
+    label: "Lỗi đồng bộ",
+    description: "Danh sách các bản ghi cần rà soát hoặc đồng bộ lại.",
+  },
+];
+
+const distributionPalette: Record<string, string> = {
+  "Xuất sắc": "#16a34a",
+  "Khá": "#0ea5e9",
+  "Đạt": "#f59e0b",
+  "Cần cải thiện": "#ef4444",
+};
 
 const CommitteeOperationsManagement: React.FC = () => {
   const { addToast } = useToast();
@@ -639,6 +723,16 @@ const CommitteeOperationsManagement: React.FC = () => {
       { label: "Cần cải thiện", value: Number(distribution?.weak ?? 0) },
     ];
   }, [analytics?.distribution]);
+
+  const distributionTotal = useMemo(
+    () => distributionRows.reduce((sum, item) => sum + item.value, 0),
+    [distributionRows],
+  );
+
+  const distributionPeak = useMemo(
+    () => Math.max(1, ...distributionRows.map((item) => item.value)),
+    [distributionRows],
+  );
 
   const hasSnapshotContent = useMemo(
     () =>
@@ -1288,9 +1382,7 @@ const CommitteeOperationsManagement: React.FC = () => {
                   <th style={tableHeadCellStyle}>
                     Điểm
                   </th>
-                  <th style={tableHeadCellStyle}>
-                    Trạng thái
-                  </th>
+                  <th style={tableHeadCellStyle}>Trạng thái</th>
                   <th style={tableHeadCellStyle}>Thao tác</th>
                 </tr>
               </thead>
@@ -1322,7 +1414,27 @@ const CommitteeOperationsManagement: React.FC = () => {
                         : "-"}
                     </td>
                     <td style={tableCellStyle}>
-                      {row.status ?? (row.isLocked ? "LOCKED" : "IN_PROGRESS")}
+                      {(() => {
+                        const statusValue = row.status ?? (row.isLocked ? "LOCKED" : "IN_PROGRESS");
+                        const statusTone = getStatusTone(statusValue);
+                        return (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              borderRadius: 999,
+                              border: `1px solid ${statusTone.border}`,
+                              background: statusTone.bg,
+                              color: statusTone.text,
+                              padding: "5px 10px",
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {getStatusLabel(statusValue)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={tableCellStyle}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1362,35 +1474,74 @@ const CommitteeOperationsManagement: React.FC = () => {
               marginTop: 14,
               border: "1px solid #cbd5e1",
               borderRadius: 10,
-              padding: 10,
+              padding: 12,
               background: "#ffffff",
             }}
           >
             <div
               style={{
-                fontSize: 12,
-                color: "#0f172a",
-                fontWeight: 700,
-                marginBottom: 6,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 12,
+                flexWrap: "wrap",
               }}
             >
-              Phân bố chất lượng
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
+              >
+                Phân bố chất lượng
+              </div>
+              <div style={{ fontSize: 12, color: "#0f172a" }}>
+                Tổng số: {formatNumber(distributionTotal)}
+              </div>
             </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              {distributionRows.map((item) => (
-                <div
-                  key={item.label}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 13,
-                    color: "#0f172a",
-                  }}
-                >
-                  <span>{item.label}</span>
-                  <strong>{formatNumber(item.value)}</strong>
-                </div>
-              ))}
+            <div style={{ display: "grid", gap: 10 }}>
+              {distributionRows.map((item) => {
+                const percent = Math.round((item.value / distributionPeak) * 100);
+                const barColor = distributionPalette[item.label] ?? "#f37021";
+
+                return (
+                  <div key={item.label} style={{ display: "grid", gap: 6 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        fontSize: 13,
+                        color: "#0f172a",
+                      }}
+                    >
+                      <span style={{ fontWeight: 700 }}>{item.label}</span>
+                      <strong>{formatNumber(item.value)}</strong>
+                    </div>
+                    <div
+                      style={{
+                        height: 10,
+                        borderRadius: 999,
+                        background: "#e2e8f0",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${percent}%`,
+                          minWidth: item.value > 0 ? 8 : 0,
+                          height: "100%",
+                          background: barColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -1475,7 +1626,27 @@ const CommitteeOperationsManagement: React.FC = () => {
                       </div>
                     </td>
                     <td style={tableCellStyle}>
-                      {item.status ?? "PENDING"}
+                      {(() => {
+                        const statusValue = item.status ?? "PENDING";
+                        const statusTone = getStatusTone(statusValue);
+                        return (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              borderRadius: 999,
+                              border: `1px solid ${statusTone.border}`,
+                              background: statusTone.bg,
+                              color: statusTone.text,
+                              padding: "5px 10px",
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {getStatusLabel(statusValue)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={tableCellStyle}>
                       <div>{item.submittedAt ?? "-"}</div>
@@ -1581,49 +1752,107 @@ const CommitteeOperationsManagement: React.FC = () => {
               <Download size={16} color="#f37021" /> Xuất báo cáo
             </h2>
             <div style={{ display: "grid", gap: 10 }}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
-                  Report type
-                </span>
-                <select
-                  value={reportType}
-                  onChange={(event) => setReportType(event.target.value as ReportType)}
-                  style={selectControlStyle}
-                >
-                  <option value="council-summary">council-summary</option>
-                  <option value="form-1">form-1</option>
-                  <option value="final-term">final-term</option>
-                  <option value="sync-errors">sync-errors</option>
-                </select>
-              </label>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
-                  Format
-                </span>
-                <select
-                  value={reportFormat}
-                  onChange={(event) => setReportFormat(event.target.value as ReportFormat)}
-                  style={selectControlStyle}
-                >
-                  <option value="csv">csv</option>
-                </select>
-              </label>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
-                  Council ID (bắt buộc khi form-1)
-                </span>
-                <input
-                  value={reportCouncilId}
-                  onChange={(event) => setReportCouncilId(event.target.value)}
-                  placeholder="Ví dụ: 3"
+              <div style={{ display: "grid", gap: 8 }}>
+                <div
                   style={{
-                    minHeight: 36,
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 10,
-                    padding: "0 10px",
+                    fontSize: 12,
+                    color: "#0f172a",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.4,
                   }}
-                />
-              </label>
+                >
+                  Chọn loại file xuất
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                    gap: 8,
+                  }}
+                >
+                  {reportTypeOptions.map((option) => {
+                    const isActive = reportType === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setReportType(option.value)}
+                        style={{
+                          border: `1px solid ${isActive ? "#f37021" : "#cbd5e1"}`,
+                          borderRadius: 10,
+                          background: isActive ? "#fff7ed" : "#ffffff",
+                          color: isActive ? "#9a3412" : "#0f172a",
+                          minHeight: 52,
+                          padding: "10px 12px",
+                          fontWeight: 700,
+                          fontSize: 13,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "grid",
+                          gap: 4,
+                        }}
+                      >
+                        <span>{option.label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>
+                          {option.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
+                    Format
+                  </span>
+                  <select
+                    value={reportFormat}
+                    onChange={(event) => setReportFormat(event.target.value as ReportFormat)}
+                    style={selectControlStyle}
+                  >
+                    <option value="csv">csv</option>
+                  </select>
+                </label>
+
+                {reportType === "form-1" && (
+                  <label style={{ display: "grid", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
+                      Council ID (bắt buộc khi form-1)
+                    </span>
+                    <input
+                      value={reportCouncilId}
+                      onChange={(event) => setReportCouncilId(event.target.value)}
+                      placeholder="Ví dụ: 3"
+                      style={{
+                        minHeight: 36,
+                        border: "1px solid #cbd5e1",
+                        borderRadius: 10,
+                        padding: "0 10px",
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#0f172a",
+                  lineHeight: 1.5,
+                }}
+              >
+                Chọn một loại file rồi bấm xuất để mở báo cáo riêng trong tab mới.
+              </div>
 
               <button
                 type="button"

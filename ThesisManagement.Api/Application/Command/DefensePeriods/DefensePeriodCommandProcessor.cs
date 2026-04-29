@@ -75,6 +75,16 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
 
     public class DefensePeriodCommandProcessor : IDefensePeriodCommandProcessor
     {
+        private sealed class MinuteExtendedData
+        {
+            public List<MinuteChapterInputDto> ChapterContents { get; set; } = new();
+            public string? CouncilDiscussionConclusion { get; set; }
+            public string? ChairConclusion { get; set; }
+            public string? CommitteeMemberComments { get; set; }
+            public List<MinuteQuestionAnswerDto> QuestionAnswers { get; set; } = new();
+            public ReviewerStructuredSectionsDto? ReviewerSections { get; set; }
+        }
+
         private sealed class RetryExecutionResult<T>
         {
             public T Data { get; init; } = default!;
@@ -970,8 +980,6 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     throw new BusinessRuleException("Không tìm thấy hội đồng trong đợt để chốt danh sách.", "UC2.6.NO_COUNCILS");
                 }
 
-                var topicsPerSession = NormalizeTopicsPerSession(config.CouncilConfig.TopicsPerSessionConfig);
-                var membersPerCouncil = NormalizeMembersPerCouncil(config.CouncilConfig.MembersPerCouncilConfig);
                 var warnings = new List<string>();
                 var now = DateTime.UtcNow;
 
@@ -991,8 +999,6 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
 
                     var validation = await ValidateCouncilHardRulesAsync(
                         council.CommitteeID,
-                        topicsPerSession,
-                        membersPerCouncil,
                         cancellationToken);
 
                     if (!string.IsNullOrWhiteSpace(validation))
@@ -1343,10 +1349,16 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 }
 
                 var assignments = await _db.DefenseAssignments.Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
+                var topicCodes = assignments
+                    .Where(x => !string.IsNullOrWhiteSpace(x.TopicCode))
+                    .Select(x => x.TopicCode!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 var members = await _db.CommitteeMembers.Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
                 var tags = await _db.CommitteeTags.Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
 
                 _db.DefenseAssignments.RemoveRange(assignments);
+                await RestoreTopicsToEligibleStatusIfUnassignedAsync(periodId, councilId, topicCodes, DateTime.UtcNow, cancellationToken);
                 _db.CommitteeMembers.RemoveRange(members);
                 _db.CommitteeTags.RemoveRange(tags);
                 _db.Committees.Remove(committee);
@@ -2295,8 +2307,6 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 {
                     var validation = await ValidateCouncilHardRulesAsync(
                         committee.CommitteeID,
-                        NormalizeTopicsPerSession(config.CouncilConfig.TopicsPerSessionConfig),
-                        NormalizeMembersPerCouncil(config.CouncilConfig.MembersPerCouncilConfig),
                         cancellationToken);
                     if (!string.IsNullOrWhiteSpace(validation))
                     {
@@ -2740,12 +2750,13 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 }
 
                 var normalizedRole = NormalizeRole(member.Role);
-                if (normalizedRole != "UVTK" && normalizedRole != "CT")
+                if (normalizedRole != "UVTK" && normalizedRole != "CT" && normalizedRole != "UVPB")
                 {
-                    throw new BusinessRuleException("Chỉ Ủy viên thư ký (UVTK) hoặc Chủ tịch (CT) được cập nhật biên bản.", "UC3.1.INVALID_ROLE");
+                    throw new BusinessRuleException("Chỉ thành viên hội đồng có quyền biên bản mới được cập nhật.", "UC3.1.INVALID_ROLE");
                 }
 
                 var minute = await _db.DefenseMinutes.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
+                MinuteExtendedData extendedData;
                 var beforeSnapshot = minute == null
                     ? null
                     : new
@@ -2767,14 +2778,77 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                         CreatedAt = DateTime.UtcNow
                     };
                     await _uow.DefenseMinutes.AddAsync(minute);
+                    extendedData = new MinuteExtendedData();
+                }
+                else
+                {
+                    extendedData = ParseMinuteExtendedData(minute.ReviewerComments);
                 }
 
-                minute.SummaryContent = request.SummaryContent;
-                minute.ReviewerComments = request.ReviewerComments;
-                minute.QnaDetails = request.QnaDetails;
-                minute.Strengths = request.Strengths;
-                minute.Weaknesses = request.Weaknesses;
-                minute.Recommendations = request.Recommendations;
+                var normalizedChapterInputs = (request.ChapterContents ?? new List<MinuteChapterInputDto>())
+                    .Where(x => !string.IsNullOrWhiteSpace(x.ChapterTitle) || !string.IsNullOrWhiteSpace(x.Content))
+                    .Select(x => new MinuteChapterInputDto
+                    {
+                        ChapterTitle = (x.ChapterTitle ?? string.Empty).Trim(),
+                        Content = (x.Content ?? string.Empty).Trim()
+                    })
+                    .ToList();
+
+                var normalizedQuestionAnswers = (request.QuestionAnswers ?? new List<MinuteQuestionAnswerDto>())
+                    .Select(x => new MinuteQuestionAnswerDto
+                    {
+                        Question = (x.Question ?? string.Empty).Trim(),
+                        Answer = (x.Answer ?? string.Empty).Trim()
+                    })
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Question) || !string.IsNullOrWhiteSpace(x.Answer))
+                    .ToList();
+
+                var incomingReviewerSections = request.ReviewerSections == null
+                    ? null
+                    : new ReviewerStructuredSectionsDto
+                    {
+                        Necessity = request.ReviewerSections.Necessity,
+                        Novelty = request.ReviewerSections.Novelty,
+                        MethodologyReliability = request.ReviewerSections.MethodologyReliability,
+                        ResultsContent = request.ReviewerSections.ResultsContent,
+                        Limitations = request.ReviewerSections.Limitations,
+                        Suggestions = request.ReviewerSections.Suggestions,
+                        OverallConclusion = request.ReviewerSections.OverallConclusion
+                    };
+
+                if (normalizedRole == "UVPB")
+                {
+                    if (incomingReviewerSections != null)
+                    {
+                        extendedData.ReviewerSections = incomingReviewerSections;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.ReviewerComments))
+                    {
+                        minute.ReviewerComments = request.ReviewerComments;
+                    }
+                }
+                else
+                {
+                    minute.SummaryContent = request.SummaryContent;
+                    extendedData.CommitteeMemberComments = request.CommitteeMemberComments;
+                    minute.QnaDetails = request.QnaDetails;
+                    minute.Strengths = request.Strengths;
+                    minute.Weaknesses = request.Weaknesses;
+                    minute.Recommendations = request.Recommendations;
+
+                    extendedData.ChapterContents = normalizedChapterInputs;
+                    extendedData.QuestionAnswers = normalizedQuestionAnswers;
+                    extendedData.CouncilDiscussionConclusion = request.CouncilDiscussionConclusion;
+                    extendedData.ChairConclusion = request.ChairConclusion;
+
+                    if (incomingReviewerSections != null)
+                    {
+                        extendedData.ReviewerSections = incomingReviewerSections;
+                    }
+                }
+
+                minute.ReviewerComments = ComposeReviewerComments(minute.ReviewerComments, extendedData);
                 minute.LastUpdated = DateTime.UtcNow;
 
                 if (minute.Id > 0)
@@ -2813,6 +2887,55 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
             {
                 return Fail<bool>(ex.Message, 400, ResolveUcCode(ex.Code, "UC3.1"), ex.Details);
             }
+        }
+
+        private static MinuteExtendedData ParseMinuteExtendedData(string? reviewerComments)
+        {
+            if (string.IsNullOrWhiteSpace(reviewerComments))
+            {
+                return new MinuteExtendedData();
+            }
+
+            var marker = "[MINUTE_EXTENDED_JSON]";
+            var markerIndex = reviewerComments.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex < 0)
+            {
+                return new MinuteExtendedData();
+            }
+
+            var jsonPart = reviewerComments[(markerIndex + marker.Length)..].Trim();
+            if (string.IsNullOrWhiteSpace(jsonPart))
+            {
+                return new MinuteExtendedData();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<MinuteExtendedData>(jsonPart) ?? new MinuteExtendedData();
+            }
+            catch
+            {
+                return new MinuteExtendedData();
+            }
+        }
+
+        private static string? ComposeReviewerComments(string? plainReviewerComments, MinuteExtendedData extendedData)
+        {
+            var plain = (plainReviewerComments ?? string.Empty).Trim();
+            var marker = "[MINUTE_EXTENDED_JSON]";
+            var markerIndex = plain.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex >= 0)
+            {
+                plain = plain[..markerIndex].TrimEnd();
+            }
+
+            var json = JsonSerializer.Serialize(extendedData);
+            if (string.IsNullOrWhiteSpace(plain))
+            {
+                return $"{marker}{json}";
+            }
+
+            return $"{plain}\n\n{marker}{json}";
         }
 
         public async Task<ApiResponse<bool>> SubmitIndependentScoreAsync(int committeeId, LecturerScoreSubmitDto request, string lecturerCode, int actorUserId, string? idempotencyKey = null, CancellationToken cancellationToken = default)
@@ -4135,25 +4258,31 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
             throw new BusinessRuleException("Không thể tạo mã hội đồng duy nhất. Vui lòng thử lại.", DefenseUcErrorCodes.AutoCode.ReservationFailed);
         }
 
-        private async Task<string?> ValidateCouncilHardRulesAsync(int councilId, int topicsPerSession, int membersPerCouncil, CancellationToken cancellationToken)
+        private async Task<string?> ValidateCouncilHardRulesAsync(int councilId, CancellationToken cancellationToken)
         {
             var assignments = await _db.DefenseAssignments.AsNoTracking().Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
             var members = await _db.CommitteeMembers.AsNoTracking().Where(x => x.CommitteeID == councilId).ToListAsync(cancellationToken);
 
-            var totalTopics = assignments.Count(x => !string.IsNullOrWhiteSpace(x.TopicCode));
-            if (totalTopics < 6)
+            var morningTopicCount = assignments.Count(x => !string.IsNullOrWhiteSpace(x.TopicCode) && (x.Session ?? 1) == 1);
+            if (morningTopicCount < MinTopicsPerSession || morningTopicCount > MaxTopicsPerSession)
             {
-                return "Mỗi hội đồng cần tối thiểu 6 đề tài bảo vệ.";
+                return $"Buổi sáng phải có từ {MinTopicsPerSession} đến {MaxTopicsPerSession} đề tài.";
             }
 
-            if (members.Count != membersPerCouncil)
+            var afternoonTopicCount = assignments.Count(x => !string.IsNullOrWhiteSpace(x.TopicCode) && (x.Session ?? 1) == 2);
+            if (afternoonTopicCount < MinTopicsPerSession || afternoonTopicCount > MaxTopicsPerSession)
             {
-                return $"Mỗi hội đồng phải có đúng {membersPerCouncil} thành viên.";
+                return $"Buổi chiều phải có từ {MinTopicsPerSession} đến {MaxTopicsPerSession} đề tài.";
+            }
+
+            if (members.Count < MinMembersPerCouncil || members.Count > MaxMembersPerCouncil)
+            {
+                return $"Mỗi hội đồng phải có từ {MinMembersPerCouncil} đến {MaxMembersPerCouncil} thành viên.";
             }
 
             try
             {
-                ValidateRolePlan(members.Select(x => NormalizeRole(x.Role)).ToList(), membersPerCouncil, "UC2.3.INVALID_ROLE_PLAN");
+                ValidateRolePlan(members.Select(x => NormalizeRole(x.Role)).ToList(), members.Count, "UC2.3.INVALID_ROLE_PLAN");
             }
             catch (BusinessRuleException ex)
             {
@@ -4315,15 +4444,17 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                 });
             }
 
-            var config = ReadConfig(await EnsurePeriodAsync(periodId, cancellationToken));
             dto.Warning = manualWarning ?? await ValidateCouncilHardRulesAsync(
                 councilId,
-                NormalizeTopicsPerSession(config.CouncilConfig.TopicsPerSessionConfig),
-                NormalizeMembersPerCouncil(config.CouncilConfig.MembersPerCouncilConfig),
                 cancellationToken);
             if (!string.IsNullOrWhiteSpace(dto.Warning))
             {
                 dto.Status = "Warning";
+            }
+            else if (string.Equals(dto.Status, "Draft", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dto.Status, "Warning", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.Status = DefenseWorkflowStateMachine.ToValue(CommitteeStatus.Ready);
             }
 
             return dto;

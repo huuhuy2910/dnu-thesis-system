@@ -77,6 +77,7 @@ using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Services.Chat;
 using ThesisManagement.Api.Services.DataExchange;
 using ThesisManagement.Api.Services.FileStorage;
+using ThesisManagement.Api.Services.DefenseDocuments;
 using ThesisManagement.Api.Services.TopicRenameRequests;
 using ThesisManagement.Api.Application.Command.TopicRenameRequests;
 using ThesisManagement.Api.Application.Query.TopicRenameRequests;
@@ -237,6 +238,7 @@ builder.Services.AddScoped<IUpdateDefenseTermLecturerCommand, UpdateDefenseTermL
 builder.Services.AddScoped<IDeleteDefenseTermLecturerCommand, DeleteDefenseTermLecturerCommand>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IDataExchangeService, DataExchangeService>();
+builder.Services.AddScoped<IDefenseTemplateExportService, DefenseTemplateExportService>();
 builder.Services.AddScoped<ICommitteeConstraintService, CommitteeConstraintService>();
 builder.Services.AddScoped<ICommitteeConstraintRule, RoleRequirementRule>();
 builder.Services.AddScoped<ICommitteeConstraintRule, LecturerOverlapRule>();
@@ -524,6 +526,7 @@ builder.Services.AddScoped<IGetDefenseByCouncilAnalyticsQuery, GetDefenseByCounc
 builder.Services.AddScoped<IGetDefenseDistributionAnalyticsQuery, GetDefenseDistributionAnalyticsQuery>();
 builder.Services.AddScoped<IGetScoringMatrixQuery, GetScoringMatrixQuery>();
 builder.Services.AddScoped<IGetScoringProgressQuery, GetScoringProgressQuery>();
+builder.Services.AddScoped<IGetTopicFinalScoreProgressQuery, GetTopicFinalScoreProgressQuery>();
 builder.Services.AddScoped<IGetScoringAlertsQuery, GetScoringAlertsQuery>();
 builder.Services.AddScoped<IBuildDefenseReportQuery, BuildDefenseReportQuery>();
 builder.Services.AddScoped<IGetDefenseExportHistoryQuery, GetDefenseExportHistoryQuery>();

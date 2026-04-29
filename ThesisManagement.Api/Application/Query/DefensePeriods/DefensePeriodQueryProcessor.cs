@@ -45,6 +45,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         Task<ApiResponse<AnalyticsDistributionDto>> GetDistributionAsync(int periodId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<ScoringMatrixRowDto>>> GetScoringMatrixAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<ScoringProgressDto>>> GetScoringProgressAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
+        Task<ApiResponse<List<TopicFinalScoreProgressDto>>> GetTopicFinalScoreProgressAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<ScoringAlertDto>>> GetScoringAlertsAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default);
         Task<ApiResponse<(byte[] Content, string FileName, string ContentType)>> BuildReportAsync(int periodId, string reportType, string format, int? councilId, CancellationToken cancellationToken = default);
         Task<ApiResponse<List<ExportHistoryDto>>> GetExportHistoryAsync(int periodId, CancellationToken cancellationToken = default);
@@ -1029,37 +1030,163 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 }
             }
 
-            var rows = await _db.DefenseAssignments.AsNoTracking()
+            var assignmentRows = await _db.DefenseAssignments.AsNoTracking()
                 .Where(x => x.CommitteeID == committeeId)
                 .Join(_db.Topics.AsNoTracking(), a => a.TopicCode, t => t.TopicCode, (a, t) => new { a, t })
-                .GroupJoin(_db.DefenseMinutes.AsNoTracking(), at => at.a.AssignmentID, m => m.AssignmentId, (at, m) => new { at, minute = m.FirstOrDefault() })
-                .GroupJoin(_db.DefenseResults.AsNoTracking(), atm => atm.at.a.AssignmentID, r => r.AssignmentId, (atm, r) => new { atm.at, atm.minute, result = r.FirstOrDefault() })
-                .OrderBy(x => x.at.a.Session)
-                .ThenBy(x => x.at.a.OrderIndex)
-                .Select(x => new LecturerCommitteeMinuteDto
-                {
-                    CommitteeId = x.at.a.CommitteeID ?? committeeId,
-                    CommitteeCode = x.at.a.CommitteeCode ?? string.Empty,
-                    AssignmentId = x.at.a.AssignmentID,
-                    TopicCode = x.at.t.TopicCode,
-                    TopicTitle = x.at.t.Title,
-                    SummaryContent = x.minute != null ? x.minute.SummaryContent : null,
-                    ReviewerComments = x.minute != null ? x.minute.ReviewerComments : null,
-                    QnaDetails = x.minute != null ? x.minute.QnaDetails : null,
-                    Strengths = x.minute != null ? x.minute.Strengths : null,
-                    Weaknesses = x.minute != null ? x.minute.Weaknesses : null,
-                    Recommendations = x.minute != null ? x.minute.Recommendations : null,
-                    ScoreGvhd = x.at.t.Score ?? (x.result != null ? x.result.ScoreGvhd : null),
-                    ScoreCt = x.result != null ? x.result.ScoreCt : null,
-                    ScoreTk = x.result != null ? x.result.ScoreUvtk : null,
-                    ScorePb = x.result != null ? x.result.ScoreUvpb : null,
-                    FinalScore = x.result != null ? x.result.FinalScoreNumeric : null,
-                    FinalGrade = x.result != null ? x.result.FinalScoreText : null,
-                    LastUpdated = x.minute != null ? x.minute.LastUpdated : (x.result != null ? x.result.LastUpdated : null)
-                })
+                .OrderBy(x => x.a.Session)
+                .ThenBy(x => x.a.OrderIndex)
                 .ToListAsync(cancellationToken);
 
+            if (assignmentRows.Count == 0)
+            {
+                return ApiResponse<List<LecturerCommitteeMinuteDto>>.SuccessResponse(new List<LecturerCommitteeMinuteDto>());
+            }
+
+            var assignmentIds = assignmentRows
+                .Select(x => x.a.AssignmentID)
+                .Distinct()
+                .ToList();
+
+            var minuteRows = await _db.DefenseMinutes.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentId))
+                .OrderByDescending(x => x.LastUpdated)
+                .ThenByDescending(x => x.Id)
+                .ToListAsync(cancellationToken);
+
+            var resultRows = await _db.DefenseResults.AsNoTracking()
+                .Where(x => assignmentIds.Contains(x.AssignmentId))
+                .OrderByDescending(x => x.LastUpdated)
+                .ThenByDescending(x => x.Id)
+                .ToListAsync(cancellationToken);
+
+            var minuteByAssignmentId = minuteRows
+                .GroupBy(x => x.AssignmentId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var resultByAssignmentId = resultRows
+                .GroupBy(x => x.AssignmentId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var rows = assignmentRows.Select(x =>
+            {
+                minuteByAssignmentId.TryGetValue(x.a.AssignmentID, out var minute);
+                resultByAssignmentId.TryGetValue(x.a.AssignmentID, out var result);
+                var parsedMinute = ParseMinutePayload(minute?.ReviewerComments);
+
+                return new LecturerCommitteeMinuteDto
+                {
+                    CommitteeId = x.a.CommitteeID ?? committeeId,
+                    CommitteeCode = x.a.CommitteeCode ?? string.Empty,
+                    AssignmentId = x.a.AssignmentID,
+                    TopicCode = x.t.TopicCode,
+                    TopicTitle = x.t.Title,
+                    SummaryContent = minute != null ? minute.SummaryContent : null,
+                    ReviewerComments = parsedMinute.PlainReviewerComments,
+                    CommitteeMemberComments = parsedMinute.CommitteeMemberComments,
+                    QnaDetails = minute != null ? minute.QnaDetails : null,
+                    QuestionAnswers = parsedMinute.QuestionAnswers,
+                    Strengths = minute != null ? minute.Strengths : null,
+                    Weaknesses = minute != null ? minute.Weaknesses : null,
+                    Recommendations = minute != null ? minute.Recommendations : null,
+                    ChapterContents = parsedMinute.ChapterContents,
+                    CouncilDiscussionConclusion = parsedMinute.CouncilDiscussionConclusion,
+                    ChairConclusion = parsedMinute.ChairConclusion,
+                    ReviewerSections = parsedMinute.ReviewerSections,
+                    ScoreGvhd = x.t.Score ?? (result != null ? result.ScoreGvhd : null),
+                    ScoreCt = result != null ? result.ScoreCt : null,
+                    ScoreTk = result != null ? result.ScoreUvtk : null,
+                    ScorePb = result != null ? result.ScoreUvpb : null,
+                    FinalScore = result != null ? result.FinalScoreNumeric : null,
+                    FinalGrade = result != null ? result.FinalScoreText : null,
+                    LastUpdated = minute != null ? minute.LastUpdated : (result != null ? result.LastUpdated : null)
+                };
+            }).ToList();
+
             return ApiResponse<List<LecturerCommitteeMinuteDto>>.SuccessResponse(rows);
+        }
+
+        private sealed class ParsedMinutePayload
+        {
+            public string? PlainReviewerComments { get; set; }
+            public List<MinuteChapterInputDto> ChapterContents { get; set; } = new();
+            public string? CouncilDiscussionConclusion { get; set; }
+            public string? ChairConclusion { get; set; }
+            public string? CommitteeMemberComments { get; set; }
+            public List<MinuteQuestionAnswerDto> QuestionAnswers { get; set; } = new();
+            public ReviewerStructuredSectionsDto? ReviewerSections { get; set; }
+        }
+
+        private sealed class MinuteExtendedPayload
+        {
+            public List<MinuteChapterInputDto>? ChapterContents { get; set; }
+            public string? CouncilDiscussionConclusion { get; set; }
+            public string? ChairConclusion { get; set; }
+            public string? CommitteeMemberComments { get; set; }
+            public List<MinuteQuestionAnswerDto>? QuestionAnswers { get; set; }
+            public ReviewerStructuredSectionsDto? ReviewerSections { get; set; }
+        }
+
+        private static ParsedMinutePayload ParseMinutePayload(string? rawReviewerComments)
+        {
+            var payload = new ParsedMinutePayload();
+            if (string.IsNullOrWhiteSpace(rawReviewerComments))
+            {
+                return payload;
+            }
+
+            var marker = "[MINUTE_EXTENDED_JSON]";
+            var text = rawReviewerComments.Trim();
+            var markerIndex = text.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex < 0)
+            {
+                payload.PlainReviewerComments = text;
+                return payload;
+            }
+
+            var plain = text[..markerIndex].TrimEnd();
+            payload.PlainReviewerComments = string.IsNullOrWhiteSpace(plain) ? null : plain;
+
+            var json = text[(markerIndex + marker.Length)..].Trim();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return payload;
+            }
+
+            try
+            {
+                var extended = JsonSerializer.Deserialize<MinuteExtendedPayload>(json);
+                if (extended == null)
+                {
+                    return payload;
+                }
+
+                payload.ChapterContents = (extended.ChapterContents ?? new List<MinuteChapterInputDto>())
+                    .Where(x => !string.IsNullOrWhiteSpace(x.ChapterTitle) || !string.IsNullOrWhiteSpace(x.Content))
+                    .Select(x => new MinuteChapterInputDto
+                    {
+                        ChapterTitle = (x.ChapterTitle ?? string.Empty).Trim(),
+                        Content = (x.Content ?? string.Empty).Trim()
+                    })
+                    .ToList();
+                payload.CouncilDiscussionConclusion = extended.CouncilDiscussionConclusion;
+                payload.ChairConclusion = extended.ChairConclusion;
+                payload.CommitteeMemberComments = extended.CommitteeMemberComments;
+                payload.QuestionAnswers = (extended.QuestionAnswers ?? new List<MinuteQuestionAnswerDto>())
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Question) || !string.IsNullOrWhiteSpace(x.Answer))
+                    .Select(x => new MinuteQuestionAnswerDto
+                    {
+                        Question = (x.Question ?? string.Empty).Trim(),
+                        Answer = (x.Answer ?? string.Empty).Trim()
+                    })
+                    .ToList();
+                payload.ReviewerSections = extended.ReviewerSections;
+            }
+            catch
+            {
+                // Keep backward compatibility if stored payload is malformed.
+            }
+
+            return payload;
         }
 
         public async Task<ApiResponse<List<object>>> GetLecturerRevisionQueueAsync(string lecturerCode, int? periodId = null, CancellationToken cancellationToken = default)
@@ -1597,7 +1724,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var committeeMembers = await _db.CommitteeMembers.AsNoTracking()
                 .Where(x => x.CommitteeID.HasValue && committeeIds.Contains(x.CommitteeID.Value))
-                .Select(x => new { CommitteeId = x.CommitteeID!.Value, x.MemberLecturerCode })
+                .Select(x => new { CommitteeId = x.CommitteeID!.Value, x.MemberLecturerCode, x.Role })
                 .ToListAsync(cancellationToken);
 
             var memberCountMap = committeeMembers
@@ -1608,7 +1735,7 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var scoreRows = await _db.DefenseScores.AsNoTracking()
                 .Where(x => assignmentIds.Contains(x.AssignmentID))
-                .Select(x => new { x.AssignmentID, x.Score, x.IsSubmitted })
+                .Select(x => new { x.AssignmentID, x.Score, x.IsSubmitted, x.Comment, x.MemberLecturerCode })
                 .ToListAsync(cancellationToken);
 
             var resultMap = await _db.DefenseResults.AsNoTracking()
@@ -1624,6 +1751,33 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         SubmittedCount = g.Count(v => v.IsSubmitted),
                         SubmittedScores = g.Where(v => v.IsSubmitted).Select(v => v.Score).ToList()
                     });
+
+            // Build per-assignment, per-role score lookup from DEFENSE_SCORES
+            // This ensures individual scores are visible immediately after submission
+            var roleScoreLookup = scoreRows
+                .Where(x => x.IsSubmitted)
+                .Select(x => 
+                {
+                    var committeeId = assignments.FirstOrDefault(a => a.AssignmentID == x.AssignmentID)?.CommitteeID;
+                    var role = string.Empty;
+                    if (committeeId.HasValue)
+                    {
+                        var member = committeeMembers.FirstOrDefault(m => m.CommitteeId == committeeId.Value && string.Equals(m.MemberLecturerCode, x.MemberLecturerCode, StringComparison.OrdinalIgnoreCase));
+                        if (member != null)
+                        {
+                            role = NormalizeRole(member.Role ?? "");
+                        }
+                    }
+                    return new { x.AssignmentID, x.Score, x.Comment, Role = role };
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Role))
+                .GroupBy(x => x.AssignmentID)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(v => v.Role)
+                        .ToDictionary(
+                            rg => rg.Key,
+                            rg => rg.OrderByDescending(v => v.Score).First()));
 
             var rows = assignments
                 .OrderBy(x => x.CommitteeID)
@@ -1696,6 +1850,76 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                             ? fallbackDocuments
                             : new List<DefenseDocumentDto>());
 
+                    // Score resolution:
+                    // - When LOCKED (chốt): use DEFENSE_RESULTS (finalized, for export)
+                    // - When NOT locked: use DEFENSE_SCORES (live working scores)
+                    roleScoreLookup.TryGetValue(assignment.AssignmentID, out var roleScores);
+
+                    decimal? liveScoreCt, liveScoreTk, liveScorePb, liveScoreGvhd;
+                    string? commentCt = null, commentTk = null, commentPb = null, commentGvhd = null;
+
+                    if (isLocked && defenseResult != null)
+                    {
+                        // Locked: use finalized DEFENSE_RESULTS scores
+                        liveScoreCt = defenseResult.ScoreCt;
+                        liveScoreTk = defenseResult.ScoreUvtk;
+                        liveScorePb = defenseResult.ScoreUvpb;
+                        liveScoreGvhd = defenseResult.ScoreGvhd ?? resolvedSupervisorScore;
+                        // Comments still come from DEFENSE_SCORES (DEFENSE_RESULTS doesn't store comments)
+                        if (roleScores != null)
+                        {
+                            if (roleScores.TryGetValue("CT", out var ctc)) commentCt = ctc.Comment;
+                            if (roleScores.TryGetValue("UVTK", out var tkc)) commentTk = tkc.Comment;
+                            if (roleScores.TryGetValue("UVPB", out var pbc)) commentPb = pbc.Comment;
+                            if (roleScores.TryGetValue("GVHD", out var gvhdc)) commentGvhd = gvhdc.Comment;
+                        }
+                    }
+                    else
+                    {
+                        // Not locked: use live DEFENSE_SCORES
+                        liveScoreCt = roleScores != null && roleScores.TryGetValue("CT", out var ctRow) ? (decimal?)ctRow.Score : null;
+                        liveScoreTk = roleScores != null && roleScores.TryGetValue("UVTK", out var tkRow) ? (decimal?)tkRow.Score : null;
+                        liveScorePb = roleScores != null && roleScores.TryGetValue("UVPB", out var pbRow) ? (decimal?)pbRow.Score : null;
+                        liveScoreGvhd = resolvedSupervisorScore
+                            ?? (roleScores != null && roleScores.TryGetValue("GVHD", out var gvhdRow) ? (decimal?)gvhdRow.Score : null);
+                        if (roleScores != null)
+                        {
+                            if (roleScores.TryGetValue("CT", out var ctc2)) commentCt = ctc2.Comment;
+                            if (roleScores.TryGetValue("UVTK", out var tkc2)) commentTk = tkc2.Comment;
+                            if (roleScores.TryGetValue("UVPB", out var pbc2)) commentPb = pbc2.Comment;
+                            if (roleScores.TryGetValue("GVHD", out var gvhdc2)) commentGvhd = gvhdc2.Comment;
+                        }
+                    }
+
+                    decimal? liveFinalScore = null;
+                    string? liveFinalGrade = null;
+                    if (isLocked)
+                    {
+                        liveFinalScore = defenseResult?.FinalScoreNumeric;
+                        liveFinalGrade = defenseResult?.FinalScoreText;
+                    }
+                    else
+                    {
+                        var liveSubmittedScores = roleScores?.Values.Select(x => (decimal)x.Score).ToList() ?? new List<decimal>();
+                        if (liveSubmittedScores.Count > 0)
+                        {
+                            if (liveScoreGvhd.HasValue && liveScoreCt.HasValue && liveScoreTk.HasValue && liveScorePb.HasValue)
+                            {
+                                liveFinalScore = Math.Round((liveScoreGvhd.Value + liveScoreCt.Value + liveScoreTk.Value + liveScorePb.Value) / 4m, 1);
+                            }
+                            else
+                            {
+                                liveFinalScore = Math.Round(liveSubmittedScores.Average(), 1);
+                            }
+                            
+                            if (liveFinalScore >= 8.5m) liveFinalGrade = "Giỏi";
+                            else if (liveFinalScore >= 7.0m) liveFinalGrade = "Khá";
+                            else if (liveFinalScore >= 5.5m) liveFinalGrade = "Trung bình";
+                            else if (liveFinalScore >= 4.0m) liveFinalGrade = "Yếu";
+                            else liveFinalGrade = "Kém";
+                        }
+                    }
+
                     return new ScoringMatrixRowDto
                     {
                         CommitteeId = cid,
@@ -1719,13 +1943,17 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         SubmittedCount = submittedCount,
                         RequiredCount = requiredCount,
                         IsLocked = isLocked,
-                        ScoreGvhd = resolvedSupervisorScore,
-                        ScoreCt = defenseResult?.ScoreCt,
-                        ScoreTk = defenseResult?.ScoreUvtk,
-                        ScorePb = defenseResult?.ScoreUvpb,
+                        ScoreGvhd = liveScoreGvhd,
+                        ScoreCt = liveScoreCt,
+                        ScoreTk = liveScoreTk,
+                        ScorePb = liveScorePb,
+                        CommentCt = commentCt,
+                        CommentTk = commentTk,
+                        CommentPb = commentPb,
+                        CommentGvhd = commentGvhd,
                         TopicSupervisorScore = topicSupervisorScore,
-                        FinalScore = defenseResult?.FinalScoreNumeric,
-                        FinalGrade = defenseResult?.FinalScoreText,
+                        FinalScore = liveFinalScore,
+                        FinalGrade = liveFinalGrade,
                         Variance = variance,
                         Status = status,
                         DefenseDocuments = documents
@@ -1763,6 +1991,39 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 .ToList();
 
             return ApiResponse<List<ScoringProgressDto>>.SuccessResponse(progress);
+        }
+
+        public async Task<ApiResponse<List<TopicFinalScoreProgressDto>>> GetTopicFinalScoreProgressAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
+        {
+            var matrixResult = await GetScoringMatrixAsync(periodId, committeeId, cancellationToken);
+            if (!matrixResult.Success || matrixResult.Data == null)
+            {
+                return ApiResponse<List<TopicFinalScoreProgressDto>>.Fail(
+                    matrixResult.Message ?? "Không thể lấy scoring matrix.",
+                    matrixResult.HttpStatusCode == 0 ? 400 : matrixResult.HttpStatusCode,
+                    matrixResult.Errors,
+                    matrixResult.Code);
+            }
+
+            var progress = matrixResult.Data
+                .GroupBy(x => new { x.CommitteeId, x.CommitteeCode })
+                .Select(g =>
+                {
+                    var total = g.Count();
+                    var scored = g.Count(x => x.FinalScore.HasValue);
+                    return new TopicFinalScoreProgressDto
+                    {
+                        CommitteeId = g.Key.CommitteeId,
+                        CommitteeCode = g.Key.CommitteeCode,
+                        TotalTopics = total,
+                        ScoredTopics = scored,
+                        ProgressPercent = total == 0 ? 0 : Math.Round((decimal)scored * 100m / total, 2)
+                    };
+                })
+                .OrderBy(x => x.CommitteeId)
+                .ToList();
+
+            return ApiResponse<List<TopicFinalScoreProgressDto>>.SuccessResponse(progress);
         }
 
         public async Task<ApiResponse<List<ScoringAlertDto>>> GetScoringAlertsAsync(int periodId, int? committeeId = null, CancellationToken cancellationToken = default)
@@ -2591,6 +2852,11 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 return new List<string> { "UPSERT_MINUTES" };
             }
 
+            if (normalizedRole == "UVPB")
+            {
+                return new List<string> { "UPSERT_REVIEW" };
+            }
+
             return new List<string>();
         }
 
@@ -2964,9 +3230,8 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
             var lecturerNameMap = await _db.LecturerProfiles.AsNoTracking()
                 .Select(l => new { l.LecturerCode, Name = l.FullName ?? l.LecturerCode })
                 .ToDictionaryAsync(x => x.LecturerCode, x => x.Name, cancellationToken);
-            var config = await GetPeriodConfigAsync(periodId, cancellationToken);
-            var topicsPerSession = Math.Max(3, Math.Min(7, config.CouncilConfig.TopicsPerSessionConfig));
-            var membersPerCouncil = Math.Max(3, Math.Min(7, config.CouncilConfig.MembersPerCouncilConfig));
+            const int minRequiredCount = 3;
+            const int maxAllowedCount = 7;
 
             var dto = new CouncilDraftDto
             {
@@ -3057,13 +3322,41 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 });
             }
 
-            if (dto.MorningStudents.Count != topicsPerSession || dto.AfternoonStudents.Count != topicsPerSession || dto.Members.Count != membersPerCouncil)
+            var morningTopicCount = dto.MorningStudents.Count;
+            var afternoonTopicCount = dto.AfternoonStudents.Count;
+            var memberCount = dto.Members.Count;
+
+            if (morningTopicCount < minRequiredCount || morningTopicCount > maxAllowedCount
+                || afternoonTopicCount < minRequiredCount || afternoonTopicCount > maxAllowedCount
+                || memberCount < minRequiredCount || memberCount > maxAllowedCount)
             {
-                dto.Warning = $"Vi phạm chuẩn cứng: 2 buổi x {topicsPerSession} đề tài + {membersPerCouncil} thành viên.";
+                dto.Warning =
+                    $"Vi phạm chuẩn cứng: Sáng {morningTopicCount}/{maxAllowedCount}, Chiều {afternoonTopicCount}/{maxAllowedCount}, Thành viên {memberCount}/{maxAllowedCount} (yêu cầu từ {minRequiredCount} đến {maxAllowedCount}).";
                 dto.Status = "Warning";
+            }
+            else if (string.Equals(dto.Status, "Draft", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dto.Status, "Warning", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.Status = "Ready";
             }
 
             return dto;
+        }
+
+        private static string NormalizeRole(string? role)
+        {
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                return string.Empty;
+            }
+
+            var upper = role.Trim().ToUpperInvariant();
+            if (upper.Contains("GVHD")) return "GVHD";
+            if (upper.Contains("CHU") || upper == "CT") return "CT";
+            if (upper.Contains("UVTK") || upper.Contains("THU") || upper == "TK" || upper.Contains("SECRETARY")) return "UVTK";
+            if (upper.Contains("UVPB") || upper.Contains("PHAN") || upper == "PB" || upper.Contains("REVIEWER")) return "UVPB";
+            if (upper == "UV" || upper.Contains("UY VIEN") || upper == "MEMBER") return "UV";
+            return upper;
         }
     }
 }

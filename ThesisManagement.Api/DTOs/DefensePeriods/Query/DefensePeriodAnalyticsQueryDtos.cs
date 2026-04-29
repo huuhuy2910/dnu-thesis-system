@@ -73,6 +73,10 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public decimal? ScoreCt { get; set; }
         public decimal? ScoreTk { get; set; }
         public decimal? ScorePb { get; set; }
+        public string? CommentGvhd { get; set; }
+        public string? CommentCt { get; set; }
+        public string? CommentTk { get; set; }
+        public string? CommentPb { get; set; }
         public decimal? TopicSupervisorScore { get; set; }
         public decimal? FinalScore { get; set; }
         public string? FinalGrade { get; set; }
