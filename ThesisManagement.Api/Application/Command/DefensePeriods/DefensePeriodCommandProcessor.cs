@@ -2421,10 +2421,16 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                             .FirstOrDefault();
                     }
 
-                    if (!scoreGvhd.HasValue || !scoreCt.HasValue || !scoreTk.HasValue || !scorePb.HasValue)
+                    var availableScores = new List<decimal>();
+                    if (scoreGvhd.HasValue) availableScores.Add(scoreGvhd.Value);
+                    if (scoreCt.HasValue) availableScores.Add(scoreCt.Value);
+                    if (scoreTk.HasValue) availableScores.Add(scoreTk.Value);
+                    if (scorePb.HasValue) availableScores.Add(scorePb.Value);
+
+                    if (availableScores.Count < 3)
                     {
                         throw new BusinessRuleException(
-                            $"Thiếu điểm thành phần bắt buộc (GVHD/CT/UVTK/UVPB) cho assignment {assignment.AssignmentCode}.",
+                            $"Cần ít nhất 3 đầu điểm hợp lệ (GVHD/CT/UVTK/UVPB) cho assignment {assignment.AssignmentCode} để công bố điểm tổng.",
                             details: new
                             {
                                 assignment.AssignmentCode,
@@ -2442,7 +2448,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     result.ScoreCt = scoreCt;
                     result.ScoreUvtk = scoreTk;
                     result.ScoreUvpb = scorePb;
-                    result.FinalScoreNumeric = Math.Round((scoreGvhd.Value + scoreCt.Value + scoreTk.Value + scorePb.Value) / 4m, 1);
+                    result.FinalScoreNumeric = Math.Round(availableScores.Average(), 1);
                     result.FinalScoreText = ToGrade(result.FinalScoreNumeric);
                     result.LastUpdated = now;
                     result.IsLocked = true;
@@ -2755,6 +2761,17 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     throw new BusinessRuleException("Chỉ thành viên hội đồng có quyền biên bản mới được cập nhật.", "UC3.1.INVALID_ROLE");
                 }
 
+                var normalizedLecturerCode = (lecturerCode ?? string.Empty).Trim();
+                var secretaryProfileId = await _db.LecturerProfiles.AsNoTracking()
+                    .Where(x => x.LecturerCode != null && x.LecturerCode.ToUpper() == normalizedLecturerCode.ToUpper())
+                    .Select(x => (int?)x.LecturerProfileID)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (!secretaryProfileId.HasValue)
+                {
+                    throw new BusinessRuleException("Không tìm thấy hồ sơ giảng viên để lưu biên bản.", DefenseUcErrorCodes.Minutes.LecturerProfileNotFound);
+                }
+
                 var minute = await _db.DefenseMinutes.FirstOrDefaultAsync(x => x.AssignmentId == request.AssignmentId, cancellationToken);
                 MinuteExtendedData extendedData;
                 var beforeSnapshot = minute == null
@@ -2774,7 +2791,7 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     minute = new DefenseMinute
                     {
                         AssignmentId = request.AssignmentId,
-                        SecretaryId = actorUserId,
+                        SecretaryId = secretaryProfileId.Value,
                         CreatedAt = DateTime.UtcNow
                     };
                     await _uow.DefenseMinutes.AddAsync(minute);
@@ -2881,12 +2898,127 @@ namespace ThesisManagement.Api.Application.Command.DefensePeriods
                     actorUserId,
                     cancellationToken);
                 await SendDefenseHubEventAsync("DefenseMinuteAutosaved", new { CommitteeId = committeeId, AssignmentId = request.AssignmentId, IntervalSeconds = 30 }, cancellationToken);
-                return ApiResponse<bool>.SuccessResponse(true);
+
+                var minuteWarnings = BuildMinuteEmptyFieldWarnings(
+                    normalizedRole,
+                    request,
+                    incomingReviewerSections,
+                    normalizedChapterInputs,
+                    normalizedQuestionAnswers);
+
+                minuteWarnings.Insert(0, new ApiWarning
+                {
+                    Type = "success",
+                    Code = DefenseUcErrorCodes.Minutes.SaveSuccess,
+                    Message = "Lưu biên bản thành công."
+                });
+
+                return ApiResponse<bool>.SuccessResponse(
+                    true,
+                    code: DefenseUcErrorCodes.Minutes.SaveSuccess,
+                    warnings: minuteWarnings,
+                    allowedActions: new List<string> { "EDIT_MINUTE" });
             }
             catch (BusinessRuleException ex)
             {
                 return Fail<bool>(ex.Message, 400, ResolveUcCode(ex.Code, "UC3.1"), ex.Details);
             }
+        }
+
+        private static List<ApiWarning> BuildMinuteEmptyFieldWarnings(
+            string normalizedRole,
+            UpdateLecturerMinutesDto request,
+            ReviewerStructuredSectionsDto? incomingReviewerSections,
+            List<MinuteChapterInputDto> normalizedChapterInputs,
+            List<MinuteQuestionAnswerDto> normalizedQuestionAnswers)
+        {
+            var warnings = new List<ApiWarning>();
+
+            if (normalizedRole == "UVPB")
+            {
+                var hasStructuredReviewerContent = incomingReviewerSections != null
+                    && (!string.IsNullOrWhiteSpace(incomingReviewerSections.Necessity)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.Novelty)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.MethodologyReliability)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.ResultsContent)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.Limitations)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.Suggestions)
+                        || !string.IsNullOrWhiteSpace(incomingReviewerSections.OverallConclusion));
+
+                if (string.IsNullOrWhiteSpace(request.ReviewerComments) && !hasStructuredReviewerContent)
+                {
+                    warnings.Add(new ApiWarning
+                    {
+                        Type = "soft",
+                        Code = "UC3.1.MINUTE.EMPTY_REVIEWER_CONTENT",
+                        Message = "Phần nhận xét phản biện đang để trống."
+                    });
+                }
+
+                return warnings;
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SummaryContent))
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_SUMMARY",
+                    Message = "Nội dung tóm tắt đang để trống."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Strengths))
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_STRENGTHS",
+                    Message = "Mục ưu điểm đang để trống."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Weaknesses))
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_WEAKNESSES",
+                    Message = "Mục nhược điểm đang để trống."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Recommendations))
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_RECOMMENDATIONS",
+                    Message = "Mục kiến nghị đang để trống."
+                });
+            }
+
+            if (normalizedChapterInputs.Count == 0)
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_CHAPTERS",
+                    Message = "Danh sách nội dung theo chương đang để trống."
+                });
+            }
+
+            if (normalizedQuestionAnswers.Count == 0)
+            {
+                warnings.Add(new ApiWarning
+                {
+                    Type = "soft",
+                    Code = "UC3.1.MINUTE.EMPTY_QNA",
+                    Message = "Danh sách câu hỏi và trả lời đang để trống."
+                });
+            }
+
+            return warnings;
         }
 
         private static MinuteExtendedData ParseMinuteExtendedData(string? reviewerComments)

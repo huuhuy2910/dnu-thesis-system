@@ -78,6 +78,8 @@ using ThesisManagement.Api.Repositories;
 using ThesisManagement.Api.Services;
 using ThesisManagement.Api.Services.Chat;
 using ThesisManagement.Api.Services.DataExchange;
+using ThesisManagement.Api.Services.DocumentExports;
+using ThesisManagement.Api.Services.DefenseOperationsExport;
 using ThesisManagement.Api.Services.FileStorage;
 using ThesisManagement.Api.Services.DefenseDocuments;
 using ThesisManagement.Api.Services.TopicRenameRequests;
@@ -241,6 +243,8 @@ builder.Services.AddScoped<IDeleteDefenseTermLecturerCommand, DeleteDefenseTermL
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IDataExchangeService, DataExchangeService>();
 builder.Services.AddScoped<IDefenseTemplateExportService, DefenseTemplateExportService>();
+builder.Services.AddScoped<IDocumentExportService, DocumentExportService>();
+builder.Services.AddScoped<IDefenseOperationsExportService, DefenseOperationsExportService>();
 builder.Services.AddScoped<ICommitteeConstraintService, CommitteeConstraintService>();
 builder.Services.AddScoped<ICommitteeConstraintRule, RoleRequirementRule>();
 builder.Services.AddScoped<ICommitteeConstraintRule, LecturerOverlapRule>();

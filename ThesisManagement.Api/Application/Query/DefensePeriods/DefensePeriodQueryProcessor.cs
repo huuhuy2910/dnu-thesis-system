@@ -115,6 +115,8 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
         {
             public string LecturerCode { get; set; } = string.Empty;
             public string Name { get; set; } = string.Empty;
+            public string? Degree { get; set; }
+            public string? Organization { get; set; }
         }
 
         private sealed class CouncilCalendarProjection
@@ -916,13 +918,21 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     .Select(x => new LecturerNameSnapshotRow
                     {
                         LecturerCode = x.LecturerCode!,
-                        Name = x.FullName ?? x.LecturerCode!
+                        Name = x.FullName ?? x.LecturerCode!,
+                        Degree = x.Degree,
+                        Organization = x.Organization
                     })
                     .ToListAsync(cancellationToken)).ToList();
 
             var lecturerNameMap = lecturerNameRows
                 .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
                 .ToDictionary(x => x.LecturerCode, x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var lecturerDegreeMap = lecturerNameRows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .ToDictionary(x => x.LecturerCode, x => x.Degree, StringComparer.OrdinalIgnoreCase);
+            var lecturerOrganizationMap = lecturerNameRows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .ToDictionary(x => x.LecturerCode, x => x.Organization, StringComparer.OrdinalIgnoreCase);
 
             var membersByCommittee = committeeMembers
                 .GroupBy(x => x.CommitteeId)
@@ -938,6 +948,12 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                             LecturerName = !string.IsNullOrWhiteSpace(code) && lecturerNameMap.TryGetValue(code, out var lecturerName)
                                 ? lecturerName
                                 : code,
+                            Degree = !string.IsNullOrWhiteSpace(code) && lecturerDegreeMap.TryGetValue(code, out var degree)
+                                ? degree
+                                : null,
+                            Organization = !string.IsNullOrWhiteSpace(code) && lecturerOrganizationMap.TryGetValue(code, out var organization)
+                                ? organization
+                                : null,
                             Role = member.Role ?? string.Empty,
                             RoleCode = NormalizeCommitteeRole(member.Role)
                         };
@@ -1704,13 +1720,17 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                 .Select(x => new
                 {
                     x.LecturerCode,
-                    Name = x.FullName ?? x.LecturerCode
+                    Name = x.FullName ?? x.LecturerCode,
+                    x.Organization
                 })
                 .ToListAsync(cancellationToken);
 
             var supervisorNameMap = supervisorNameRows
                 .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
                 .ToDictionary(x => x.LecturerCode!, x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var lecturerOrganizationMap = supervisorNameRows
+                .Where(x => !string.IsNullOrWhiteSpace(x.LecturerCode))
+                .ToDictionary(x => x.LecturerCode!, x => x.Organization, StringComparer.OrdinalIgnoreCase);
 
             var studentCodes = topics.Values
                 .Where(x => !string.IsNullOrWhiteSpace(x.ProposerStudentCode))
@@ -1720,7 +1740,41 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
             var students = await _db.StudentProfiles.AsNoTracking()
                 .Where(x => studentCodes.Contains(x.StudentCode))
-                .ToDictionaryAsync(x => x.StudentCode, x => x.FullName ?? x.StudentCode, cancellationToken);
+                .ToListAsync(cancellationToken);
+
+            var studentNames = students
+                .Where(x => !string.IsNullOrWhiteSpace(x.StudentCode))
+                .ToDictionary(x => x.StudentCode!, x => x.FullName ?? x.StudentCode, StringComparer.OrdinalIgnoreCase);
+
+            var classIds = students
+                .Where(x => x.ClassID.HasValue)
+                .Select(x => x.ClassID!.Value)
+                .Distinct()
+                .ToList();
+
+            var classes = classIds.Count == 0
+                ? new List<Class>()
+                : await _db.Classes.AsNoTracking()
+                    .Where(x => classIds.Contains(x.ClassID))
+                    .ToListAsync(cancellationToken);
+
+            var classById = classes.ToDictionary(x => x.ClassID, x => x);
+
+            var cohortCodes = classes
+                .Where(x => !string.IsNullOrWhiteSpace(x.CohortCode))
+                .Select(x => x.CohortCode!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var cohorts = cohortCodes.Count == 0
+                ? new List<Cohort>()
+                : await _db.Cohorts.AsNoTracking()
+                    .Where(x => x.CohortCode != null && cohortCodes.Contains(x.CohortCode))
+                    .ToListAsync(cancellationToken);
+
+            var cohortByCode = cohorts
+                .Where(x => !string.IsNullOrWhiteSpace(x.CohortCode))
+                .ToDictionary(x => x.CohortCode!, x => x, StringComparer.OrdinalIgnoreCase);
 
             var committeeMembers = await _db.CommitteeMembers.AsNoTracking()
                 .Where(x => x.CommitteeID.HasValue && committeeIds.Contains(x.CommitteeID.Value))
@@ -1791,14 +1845,29 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     var topicCode = topic?.TopicCode ?? assignment.TopicCode ?? string.Empty;
 
                     var studentCode = topic?.ProposerStudentCode ?? string.Empty;
-                    var studentName = !string.IsNullOrWhiteSpace(studentCode) && students.TryGetValue(studentCode, out var name)
+                    var studentProfile = students.FirstOrDefault(x => string.Equals(x.StudentCode, studentCode, StringComparison.OrdinalIgnoreCase));
+                    var studentName = !string.IsNullOrWhiteSpace(studentCode) && studentNames.TryGetValue(studentCode, out var name)
                         ? name
                         : studentCode;
+
+                    Class? studentClass = null;
+                    Cohort? studentCohort = null;
+                    if (studentProfile != null && studentProfile.ClassID.HasValue && classById.TryGetValue(studentProfile.ClassID.Value, out var resolvedClass))
+                    {
+                        studentClass = resolvedClass;
+                        if (!string.IsNullOrWhiteSpace(resolvedClass.CohortCode) && cohortByCode.TryGetValue(resolvedClass.CohortCode.Trim(), out var resolvedCohort))
+                        {
+                            studentCohort = resolvedCohort;
+                        }
+                    }
 
                     var supervisorCode = topic?.SupervisorLecturerCode ?? string.Empty;
                     var supervisorName = !string.IsNullOrWhiteSpace(supervisorCode) && supervisorNameMap.TryGetValue(supervisorCode, out var lecturerName)
                         ? lecturerName
                         : supervisorCode;
+                    var supervisorOrganization = !string.IsNullOrWhiteSpace(supervisorCode) && lecturerOrganizationMap.TryGetValue(supervisorCode, out var organization)
+                        ? organization
+                        : null;
 
                     var topicTags = topicTagMap.TryGetValue(topicCode, out var tags)
                         ? tags.ToList()
@@ -1900,17 +1969,15 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                     }
                     else
                     {
-                        var liveSubmittedScores = roleScores?.Values.Select(x => (decimal)x.Score).ToList() ?? new List<decimal>();
-                        if (liveSubmittedScores.Count > 0)
+                        var liveComponentScores = new List<decimal>();
+                        if (liveScoreGvhd.HasValue) liveComponentScores.Add(liveScoreGvhd.Value);
+                        if (liveScoreCt.HasValue) liveComponentScores.Add(liveScoreCt.Value);
+                        if (liveScoreTk.HasValue) liveComponentScores.Add(liveScoreTk.Value);
+                        if (liveScorePb.HasValue) liveComponentScores.Add(liveScorePb.Value);
+
+                        if (liveComponentScores.Count >= 3)
                         {
-                            if (liveScoreGvhd.HasValue && liveScoreCt.HasValue && liveScoreTk.HasValue && liveScorePb.HasValue)
-                            {
-                                liveFinalScore = Math.Round((liveScoreGvhd.Value + liveScoreCt.Value + liveScoreTk.Value + liveScorePb.Value) / 4m, 1);
-                            }
-                            else
-                            {
-                                liveFinalScore = Math.Round(liveSubmittedScores.Average(), 1);
-                            }
+                            liveFinalScore = Math.Round(liveComponentScores.Average(), 1);
                             
                             if (liveFinalScore >= 8.5m) liveFinalGrade = "Giỏi";
                             else if (liveFinalScore >= 7.0m) liveFinalGrade = "Khá";
@@ -1935,6 +2002,9 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
                         TopicTags = topicTags,
                         StudentCode = studentCode,
                         StudentName = studentName,
+                        ClassName = studentClass?.ClassName ?? studentClass?.ClassCode,
+                        CohortCode = studentCohort?.CohortCode ?? studentClass?.CohortCode,
+                        SupervisorOrganization = supervisorOrganization,
                         Session = assignment.Session,
                         SessionCode = ToSessionCode(assignment.Session),
                         ScheduledAt = scheduledAt,
@@ -3013,26 +3083,35 @@ namespace ThesisManagement.Api.Application.Query.DefensePeriods
 
         private async Task TrackExportAsync(int periodId, string fileName, string status, CancellationToken cancellationToken)
         {
-            var code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}";
-            var existing = await _db.ExportFiles.AsNoTracking()
-                .Where(x => x.FileCode == code)
-                .Select(x => x.FileCode)
-                .FirstOrDefaultAsync(cancellationToken) != null;
-            if (existing)
+            try
             {
-                code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}{Random.Shared.Next(10, 99)}";
+                var code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+                var existing = await _db.ExportFiles.AsNoTracking()
+                    .Where(x => x.FileCode == code)
+                    .Select(x => x.FileCode)
+                    .FirstOrDefaultAsync(cancellationToken) != null;
+                if (existing)
+                {
+                    code = $"EXP{DateTime.UtcNow:yyyyMMddHHmmssfff}{Random.Shared.Next(10, 99)}";
+                }
+
+                _db.ExportFiles.Add(new ExportFile
+                {
+                    FileCode = code,
+                    TermId = periodId,
+                    Status = status,
+                    FileUrl = fileName,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await _db.SaveChangesAsync(cancellationToken);
             }
-
-            _db.ExportFiles.Add(new ExportFile
+            catch (Exception ex)
             {
-                FileCode = code,
-                TermId = periodId,
-                Status = status,
-                FileUrl = fileName,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _db.SaveChangesAsync(cancellationToken);
+                // Log the exception but don't fail the export - the EXPORTFILES table might not exist
+                System.Diagnostics.Debug.WriteLine($"Export tracking failed: {ex.Message}");
+                // In production, you would log this: _logger?.LogWarning($"Export tracking failed: {ex.Message}");
+            }
         }
 
         private async Task<bool> PeriodExistsAsync(int periodId, CancellationToken cancellationToken)

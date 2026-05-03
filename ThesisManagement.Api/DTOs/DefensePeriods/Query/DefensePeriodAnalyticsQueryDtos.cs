@@ -66,6 +66,9 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string? EndTime { get; set; }
         public string StudentCode { get; set; } = string.Empty;
         public string StudentName { get; set; } = string.Empty;
+        public string? ClassName { get; set; }
+        public string? CohortCode { get; set; }
+        public string? SupervisorOrganization { get; set; }
         public int SubmittedCount { get; set; }
         public int RequiredCount { get; set; }
         public bool IsLocked { get; set; }

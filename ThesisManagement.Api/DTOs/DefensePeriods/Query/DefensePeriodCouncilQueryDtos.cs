@@ -31,6 +31,8 @@ namespace ThesisManagement.Api.DTOs.DefensePeriods
         public string Role { get; set; } = string.Empty;
         public string LecturerCode { get; set; } = string.Empty;
         public string LecturerName { get; set; } = string.Empty;
+        public string? Degree { get; set; }
+        public string? Organization { get; set; }
         public List<string> Tags { get; set; } = new();
     }
 

@@ -82,6 +82,8 @@ type CommitteeMemberView = {
   memberId: string;
   lecturerCode: string;
   lecturerName: string;
+  degree: string | null;
+  organization: string | null;
   roleRaw: string;
   roleCode: CommitteeRoleCode;
   roleLabel: string;
@@ -523,6 +525,14 @@ const getCommitteeMemberParticipation = (
     text: online ? "#166534" : "#475569",
   };
 };
+
+const normalizeCommitteeKey = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+
+const extractDigits = (value: unknown) => String(value ?? "").replace(/\D+/g, "");
 
 type CommitteeStatusVisual = {
   emoji: string;
@@ -1303,6 +1313,12 @@ const LecturerCommittees: React.FC = () => {
             ) ?? `${lecturerCode || "member"}-${index + 1}`,
           lecturerCode,
           lecturerName,
+          degree: toStringOrNull(
+            pickSnapshotSection<unknown>(record, ["degree", "Degree"], null),
+          ),
+          organization: toStringOrNull(
+            pickSnapshotSection<unknown>(record, ["organization", "Organization"], null),
+          ),
           roleRaw,
           roleCode,
           roleLabel: getRoleLabel(roleCode),
@@ -1788,6 +1804,7 @@ const LecturerCommittees: React.FC = () => {
           setCommittees(mapped);
           setSelectedCommitteeId((prev) => (mapped.some((item) => item.id === prev) ? prev : mapped[0]?.id ?? ""));
           setDetailCommitteeId((prev) => (mapped.some((item) => item.id === prev) ? prev : ""));
+          await refreshAllScoringRows();
         } else {
           setCommittees([]);
           setSelectedCommitteeId("");
@@ -1902,32 +1919,26 @@ const LecturerCommittees: React.FC = () => {
     if (!committee) {
       return false;
     }
+
+    const committeeCode = normalizeCommitteeKey(committee.id);
+    const rowCommitteeCode = normalizeCommitteeKey(row.committeeCode);
+    const committeeDigits = extractDigits(committee.id);
+    const rowCommitteeDigits = extractDigits(row.committeeCode);
+    const rowCommitteeIdDigits = extractDigits(row.committeeId);
+
     return (
       row.committeeId === committee.numericId ||
-      String(row.committeeCode).trim().toUpperCase() === committee.id.trim().toUpperCase()
+      rowCommitteeCode === committeeCode ||
+      (committeeDigits.length > 0 && (rowCommitteeDigits === committeeDigits || rowCommitteeIdDigits === committeeDigits)) ||
+      normalizeCommitteeKey(row.committeeName) === normalizeCommitteeKey(committee.name)
     );
   };
 
   const committeeBadgeStats = useMemo(() => {
-    const committeesWithProgress = new Set<string>();
     const statsMap = new Map<string, { total: number; scored: number; locked: number }>();
+
     committees.forEach((committee) => {
-      const fromTopicProgress =
-        topicFinalProgressRows.find(
-          (row) =>
-            row.committeeId === committee.numericId ||
-            String(row.committeeCode).trim().toUpperCase() === committee.id.trim().toUpperCase(),
-        ) ?? null;
-
-      if (fromTopicProgress) {
-        committeesWithProgress.add(committee.id);
-      }
-
-      statsMap.set(committee.id, {
-        total: fromTopicProgress?.totalTopics ?? 0,
-        scored: fromTopicProgress?.scoredTopics ?? 0,
-        locked: 0,
-      });
+      statsMap.set(committee.id, { total: 0, scored: 0, locked: 0 });
     });
 
     allScoringRows.forEach((row) => {
@@ -1935,12 +1946,11 @@ const LecturerCommittees: React.FC = () => {
       if (!matched) {
         return;
       }
+
       const current = statsMap.get(matched.id) ?? { total: 0, scored: 0, locked: 0 };
-      if (!committeesWithProgress.has(matched.id)) {
-        current.total += 1;
-        if (row.finalScore != null || row.submittedCount > 0) {
-          current.scored += 1;
-        }
+      current.total += 1;
+      if (row.finalScore != null && Number(row.finalScore) > 0) {
+        current.scored += 1;
       }
       if (row.isLocked) {
         current.locked += 1;
@@ -1949,10 +1959,16 @@ const LecturerCommittees: React.FC = () => {
     });
 
     committees.forEach((committee) => {
+      const fromTopicProgress =
+        topicFinalProgressRows.find(
+          (row) =>
+            row.committeeId === committee.numericId ||
+            String(row.committeeCode).trim().toUpperCase() === committee.id.trim().toUpperCase(),
+        ) ?? null;
+
       const current = statsMap.get(committee.id) ?? { total: 0, scored: 0, locked: 0 };
-      if (current.total <= 0 && committee.studentCount > 0) {
-        current.total = committee.studentCount;
-      }
+      current.total = Math.max(current.total, fromTopicProgress?.totalTopics ?? 0, committee.studentCount);
+      current.scored = Math.max(current.scored, fromTopicProgress?.scoredTopics ?? 0);
       statsMap.set(committee.id, current);
     });
 
@@ -2881,7 +2897,6 @@ const LecturerCommittees: React.FC = () => {
                         <div className="lec-badge-row">
                           <span className="lec-count-badge"><FileText size={12} /> Tổng đề tài: {metric.total}</span>
                           <span className="lec-count-badge"><CheckCircle2 size={12} /> Đã có điểm: {metric.scored}</span>
-                          <span className="lec-count-badge"><Lock size={12} /> Đã khóa: {metric.locked}</span>
                         </div>
 
                         <div style={{ display: "grid", gap: 6 }}>
@@ -2925,8 +2940,9 @@ const LecturerCommittees: React.FC = () => {
                             type="button"
                             className="lec-ghost"
                             onClick={() => {
-                              setDetailCommitteeId(committee.id);
-                              setSelectedCommitteeId(committee.id);
+                                setDetailCommitteeId(committee.id);
+                                setSelectedCommitteeId(committee.id);
+                                setDetailTab("topics");
                             }}
                           >
                             <Eye size={14} /> Xem chi tiết
@@ -3064,8 +3080,6 @@ const LecturerCommittees: React.FC = () => {
                   <div style={{ fontSize: 13, color: "#64748b" }}>Snapshot chưa có danh sách thành viên cho hội đồng này.</div>
                 )}
                 {detailCommittee.members.map((member) => {
-                  const participation = getCommitteeMemberParticipation(member, detailCommitteeRows);
-
                   return (
                     <div
                       key={member.memberId}
@@ -3080,27 +3094,12 @@ const LecturerCommittees: React.FC = () => {
                       <div style={{ fontWeight: 700 }}>{member.roleLabel}</div>
                       <div style={{ display: "grid", gap: 6 }}>
                         <div style={{ fontSize: 13 }}>
-                          {member.lecturerCode ? `${member.lecturerCode} - ` : ""}
+                          {member.lecturerCode ? `${member.lecturerCode}` : ""}
+                          {member.degree ? ` - ${member.degree}` : ""}
+                          {member.lecturerCode || member.degree ? " - " : ""}
                           {member.lecturerName}
+                          {member.organization ? ` (${member.organization})` : ""}
                         </div>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "fit-content",
-                            borderRadius: 999,
-                            padding: "4px 10px",
-                            fontSize: 12,
-                            fontWeight: 500,
-                            gap: 6,
-                            border: `1px solid ${participation.border}`,
-                            background: participation.bg,
-                            color: participation.text,
-                          }}
-                        >
-                          {participation.label}
-                        </span>
                       </div>
                     </div>
                   );
@@ -3113,46 +3112,80 @@ const LecturerCommittees: React.FC = () => {
                 {detailCommitteeRows.length === 0 && (
                   <div style={{ fontSize: 13, color: "#64748b" }}>Chưa có assignment trong scoring matrix cho hội đồng này.</div>
                 )}
-                {detailCommitteeRows.map((row) => (
-                  <div
-                    key={`detail-topic-${row.assignmentId}`}
-                    style={{
-                      display: "grid",
-                      gap: 4,
-                      padding: "8px 0",
-                      borderBottom: "1px dashed #e2e8f0",
-                    }}
-                  >
-                    <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
-                    <div style={{ fontSize: 13, color: "#475569" }}>
-                      {row.studentCode} - {row.studentName} · {formatSession(row.session)} · {formatRowTimeRange(row)}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#475569" }}>
-                      GVHD: <strong>{row.supervisorLecturerName ?? "Chưa cập nhật"}</strong> · Hội đồng: <strong>{row.committeeCode} - {row.committeeName}</strong>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {row.topicTags.length > 0 ? (
-                        row.topicTags.map((tag) => (
+                {detailCommitteeRows.map((row) => {
+                  const isScored = row.finalScore != null && Number(row.finalScore) > 0;
+                  const scoredBgColor = isScored ? "#f0fdf4" : "transparent";
+                  const scoredBorderColor = isScored ? "#86efac" : "transparent";
+                  
+                  return (
+                    <div
+                      key={`detail-topic-${row.assignmentId}`}
+                      style={{
+                        display: "grid",
+                        gap: 4,
+                        padding: "8px 0",
+                        borderBottom: "1px dashed #e2e8f0",
+                        borderLeft: `3px solid ${scoredBorderColor}`,
+                        paddingLeft: "8px",
+                        background: scoredBgColor,
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                        {row.topicTitle}
+                        {isScored && (
                           <span
-                            key={`detail-tag-${row.assignmentId}-${tag}`}
                             style={{
-                              border: "1px solid #fdba74",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "2px 8px",
                               borderRadius: 999,
-                              padding: "1px 8px",
                               fontSize: 11,
-                              color: "#9a3412",
-                              background: "#fff7ed",
+                              fontWeight: 600,
+                              background: "#22c55e",
+                              color: "#ffffff",
                             }}
                           >
-                            {tag}
+                            ✓ Đã chấm
                           </span>
-                        ))
-                      ) : (
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>Chưa có tags đề tài</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#475569" }}>
+                        {row.studentCode} - {row.studentName} · {formatSession(row.session)} · {formatRowTimeRange(row)}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#475569" }}>
+                        GVHD: <strong>{row.supervisorLecturerName ?? "Chưa cập nhật"}</strong> · Hội đồng: <strong>{row.committeeCode} - {row.committeeName}</strong>
+                      </div>
+                      {isScored && (
+                        <div style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>
+                          Điểm cuối cùng: <strong>{row.finalScore?.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}</strong>
+                          {row.finalGrade ? ` - ${row.finalGrade}` : ""}
+                        </div>
                       )}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {row.topicTags.length > 0 ? (
+                          row.topicTags.map((tag) => (
+                            <span
+                              key={`detail-tag-${row.assignmentId}-${tag}`}
+                              style={{
+                                border: "1px solid #fdba74",
+                                borderRadius: 999,
+                                padding: "1px 8px",
+                                fontSize: 11,
+                                color: "#9a3412",
+                                background: "#fff7ed",
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ fontSize: 12, color: "#94a3b8" }}>Chưa có tags đề tài</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

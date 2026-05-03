@@ -16,6 +16,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
 {
     public sealed class DefenseTemplateExportService : IDefenseTemplateExportService
     {
+        private const string FixedMajorName = "Công nghệ thông tin";
         private const string MeetingTemplateFileName = "BIÊN BẢN HỌP.docx";
         private const string ReviewerTemplateFileName = "NHẬN XÉT CỦA NGƯỜI PHẢN BIỆN.docx";
         private const string DocxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -59,6 +60,10 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                     data.Result?.FinalScoreText,
                     parsedMinute.ChairConclusion,
                     data.Minute?.Recommendations),
+                ["{{ClassName}}"] = data.StudentClass?.ClassName ?? data.StudentClass?.ClassCode,
+                ["{{Major}}"] = FixedMajorName,
+                ["{{Cohort}}"] = FirstNonEmpty(data.StudentCohort?.CohortName, data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode),
+                ["{{CohortCode}}"] = FirstNonEmpty(data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode),
                 ["{{Department}}"] = FirstNonEmpty(
                     data.TopicDepartment?.Name,
                     data.StudentDepartment?.Name,
@@ -73,7 +78,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
             };
 
             var content = await BuildDocumentFromTemplateAsync(MeetingTemplateFileName, replacements, cancellationToken);
-            var fileName = $"bien-ban-hop-{SanitizeFileToken(data.Assignment?.AssignmentCode ?? assignmentId.ToString())}.docx";
+            var fileName = $"bien-ban-hop-{SanitizeFileToken(FirstNonEmpty(data.Assignment?.CommitteeCode, data.Committee?.CommitteeCode, assignmentId.ToString()))}.docx";
             return ApiResponse<(byte[] Content, string FileName, string ContentType)>.SuccessResponse((content, fileName, DocxMime));
         }
 
@@ -105,15 +110,20 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                 ["{{EvaluationCriteria3}}"] = parsedMinute.ReviewerSections?.MethodologyReliability,
                 ["{{EvaluationCriteria4}}"] = parsedMinute.ReviewerSections?.ResultsContent,
                 ["{{EvaluationCriteria5}}"] = parsedMinute.ReviewerSections?.Limitations,
+                ["{{CohortCode}}"] = FirstNonEmpty(data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode),
+                ["{{Cohort}}"] = FirstNonEmpty(data.StudentCohort?.CohortName, data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode),
+                ["{{ClassName}}"] = data.StudentClass?.ClassName ?? data.StudentClass?.ClassCode,
+                ["{{Major}}"] = FixedMajorName,
                 ["{{FullName}}"] = FirstNonEmpty(data.Student?.FullName, data.Student?.StudentCode),
                 ["{{ReviewerName}}"] = FirstNonEmpty(reviewer?.FullName, reviewer?.LecturerCode),
-                ["{{ReviewerUnit}}"] = ResolveDepartmentName(reviewer?.DepartmentID, reviewer?.DepartmentCode, data.TopicDepartment, data.StudentDepartment),
+                ["{{ReviewerUnit}}"] = ResolveDepartmentName(reviewer, data.TopicDepartment, data.StudentDepartment),
                 ["{{ThesisSubject}}"] = data.Topic?.Title,
-                ["{{Workplace}}"] = ResolveDepartmentName(reviewer?.DepartmentID, reviewer?.DepartmentCode, data.TopicDepartment, data.StudentDepartment)
+                ["{{Organization}}"] = FirstNonEmpty(reviewer?.Organization, ResolveDepartmentName(reviewer, data.TopicDepartment, data.StudentDepartment)),
+                ["{{Workplace}}"] = FirstNonEmpty(reviewer?.Organization, ResolveDepartmentName(reviewer, data.TopicDepartment, data.StudentDepartment))
             };
 
             var content = await BuildDocumentFromTemplateAsync(ReviewerTemplateFileName, replacements, cancellationToken);
-            var fileName = $"nhan-xet-phan-bien-{SanitizeFileToken(data.Assignment?.AssignmentCode ?? assignmentId.ToString())}.docx";
+            var fileName = $"nhan-xet-phan-bien-{SanitizeFileToken(FirstNonEmpty(reviewer?.LecturerCode, data.Assignment?.CommitteeCode, data.Committee?.CommitteeCode, assignmentId.ToString()))}.docx";
             return ApiResponse<(byte[] Content, string FileName, string ContentType)>.SuccessResponse((content, fileName, DocxMime));
         }
 
@@ -150,6 +160,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                         column.Item().Text("BIEN BAN HOP HOI DONG CHAM LUAN DO AN").Bold().FontSize(14);
                         column.Item().Text($"Hoi dong: {FirstNonEmpty(data.Committee?.Name, data.Assignment?.CommitteeCode)}");
                         column.Item().Text($"Sinh vien: {FirstNonEmpty(data.Student?.FullName, data.Student?.StudentCode)} - MSV: {FirstNonEmpty(data.Student?.StudentCode)}");
+                        column.Item().Text($"Khoa: {FirstNonEmpty(data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode)}");
                         column.Item().Text($"De tai: {FirstNonEmpty(data.Topic?.Title, data.Assignment?.TopicCode)}");
                     });
 
@@ -174,7 +185,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                 });
             }).GeneratePdf();
 
-            var fileName = $"bien-ban-hop-{SanitizeFileToken(data.Assignment?.AssignmentCode ?? assignmentId.ToString())}.pdf";
+            var fileName = $"bien-ban-hop-{SanitizeFileToken(FirstNonEmpty(data.Assignment?.CommitteeCode, data.Committee?.CommitteeCode, assignmentId.ToString()))}.pdf";
             return ApiResponse<(byte[] Content, string FileName, string ContentType)>.SuccessResponse((content, fileName, PdfMime));
         }
 
@@ -204,21 +215,23 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                     page.Margin(26);
                     page.Size(PageSizes.A4);
                     page.DefaultTextStyle(x => x.FontSize(10));
-
+ 
                     page.Header().Column(column =>
                     {
                         column.Item().Text("NHAN XET CUA NGUOI PHAN BIEN DO AN").Bold().FontSize(14);
-                        column.Item().Text("Nganh Cong nghe thong tin");
+                        column.Item().Text($"Nganh {FixedMajorName}");
                     });
-
+ 
                     page.Content().PaddingTop(10).Column(column =>
                     {
                         column.Spacing(6);
                         column.Item().Text($"Sinh vien: {FirstNonEmpty(data.Student?.FullName, data.Student?.StudentCode)} - MSV: {FirstNonEmpty(data.Student?.StudentCode)}");
+                        column.Item().Text($"Lop: {data.StudentClass?.ClassName ?? data.StudentClass?.ClassCode}");
+                        column.Item().Text($"Khoa: {FirstNonEmpty(data.StudentCohort?.CohortCode, data.StudentClass?.CohortCode)}");
                         column.Item().Text($"Ten de tai: {FirstNonEmpty(data.Topic?.Title, data.Assignment?.TopicCode)}");
                         column.Item().Text($"Nguoi phan bien: {FirstNonEmpty(reviewer?.FullName, reviewer?.LecturerCode)}");
                         column.Item().Text($"Hoc vi: {FirstNonEmpty(reviewer?.Degree)}");
-                        column.Item().Text($"Noi cong tac: {ResolveDepartmentName(reviewer?.DepartmentID, reviewer?.DepartmentCode, data.TopicDepartment, data.StudentDepartment)}");
+                        column.Item().Text($"Don vi cong tac: {FirstNonEmpty(reviewer?.Organization, ResolveDepartmentName(reviewer, data.TopicDepartment, data.StudentDepartment))}");
 
                         column.Item().PaddingTop(8).Text("NOI DUNG NHAN XET").Bold();
                         column.Item().Text($"1. Tinh cap thiet cua de tai: {FirstNonEmpty(parsedMinute.ReviewerSections?.Necessity)}");
@@ -232,7 +245,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                 });
             }).GeneratePdf();
 
-            var fileName = $"nhan-xet-phan-bien-{SanitizeFileToken(data.Assignment?.AssignmentCode ?? assignmentId.ToString())}.pdf";
+            var fileName = $"nhan-xet-phan-bien-{SanitizeFileToken(FirstNonEmpty(reviewer?.LecturerCode, data.Assignment?.CommitteeCode, data.Committee?.CommitteeCode, assignmentId.ToString()))}.pdf";
             return ApiResponse<(byte[] Content, string FileName, string ContentType)>.SuccessResponse((content, fileName, PdfMime));
         }
 
@@ -516,6 +529,8 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
 
             var topic = await ResolveTopicAsync(assignment, cancellationToken);
             var student = topic != null ? await ResolveStudentProfileAsync(topic, cancellationToken) : null;
+            var studentClass = await ResolveStudentClassAsync(student, cancellationToken);
+            var studentCohort = await ResolveStudentCohortAsync(studentClass, cancellationToken);
             var studentDepartment = await ResolveStudentDepartmentAsync(student, cancellationToken);
             var topicDepartment = await ResolveTopicDepartmentAsync(topic, cancellationToken);
 
@@ -540,6 +555,7 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
             var memberProfiles = memberCodes.Count == 0
                 ? new Dictionary<string, LecturerProfile>(StringComparer.OrdinalIgnoreCase)
                 : await _uow.LecturerProfiles.Query().AsNoTracking()
+                    .Include(x => x.Department)
                     .Where(x => x.LecturerCode != null && memberCodes.Contains(x.LecturerCode))
                     .ToDictionaryAsync(x => x.LecturerCode, x => x, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
@@ -549,6 +565,8 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
                 Committee = committee,
                 Topic = topic,
                 Student = student,
+                StudentClass = studentClass,
+                StudentCohort = studentCohort,
                 StudentDepartment = studentDepartment,
                 TopicDepartment = topicDepartment,
                 Minute = minute,
@@ -599,6 +617,45 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
             }
 
             return null;
+        }
+
+        private async Task<Class?> ResolveStudentClassAsync(StudentProfile? student, CancellationToken cancellationToken)
+        {
+            if (student == null)
+            {
+                return null;
+            }
+
+            if (student.ClassID.HasValue)
+            {
+                var byId = await _uow.Classes.Query().AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.ClassID == student.ClassID.Value, cancellationToken);
+                if (byId != null)
+                {
+                    return byId;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(student.ClassCode))
+            {
+                var classCode = student.ClassCode.Trim();
+                return await _uow.Classes.Query().AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.ClassCode == classCode, cancellationToken);
+            }
+
+            return null;
+        }
+
+        private async Task<Cohort?> ResolveStudentCohortAsync(Class? studentClass, CancellationToken cancellationToken)
+        {
+            if (studentClass == null || string.IsNullOrWhiteSpace(studentClass.CohortCode))
+            {
+                return null;
+            }
+
+            var cohortCode = studentClass.CohortCode.Trim();
+            return await _uow.Cohorts.Query().AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CohortCode == cohortCode, cancellationToken);
         }
 
         private async Task<Department?> ResolveStudentDepartmentAsync(StudentProfile? student, CancellationToken cancellationToken)
@@ -750,19 +807,16 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
         }
 
         private static string ResolveDepartmentName(
-            int? reviewerDepartmentId,
-            string? reviewerDepartmentCode,
+            LecturerProfile? reviewer,
             Department? topicDepartment,
             Department? studentDepartment)
         {
-            if (reviewerDepartmentId.HasValue)
+            if (reviewer != null)
             {
-                // Department name already resolved from profile dictionary is not available here.
-                // Fallback to topic/student department to avoid fabricating values.
-                return FirstNonEmpty(topicDepartment?.Name, studentDepartment?.Name, reviewerDepartmentCode);
+                return FirstNonEmpty(reviewer.Department?.Name, reviewer.DepartmentCode, topicDepartment?.Name, studentDepartment?.Name);
             }
 
-            return FirstNonEmpty(reviewerDepartmentCode, topicDepartment?.Name, studentDepartment?.Name);
+            return FirstNonEmpty(topicDepartment?.Name, studentDepartment?.Name);
         }
 
         private static ParsedMinutePayload ParseMinutePayload(string? rawReviewerComments)
@@ -833,6 +887,8 @@ namespace ThesisManagement.Api.Services.DefenseDocuments
             public Committee? Committee { get; set; }
             public Topic? Topic { get; set; }
             public StudentProfile? Student { get; set; }
+            public Class? StudentClass { get; set; }
+            public Cohort? StudentCohort { get; set; }
             public Department? StudentDepartment { get; set; }
             public Department? TopicDepartment { get; set; }
             public DefenseMinute? Minute { get; set; }

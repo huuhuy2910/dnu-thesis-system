@@ -35,6 +35,7 @@ namespace ThesisManagement.Api.Controllers
         private readonly IGetScoringProgressQuery _scoringProgressQuery;
         private readonly IGetTopicFinalScoreProgressQuery _topicFinalScoreProgressQuery;
         private readonly IGetScoringAlertsQuery _scoringAlertsQuery;
+        private readonly IBuildDefenseReportQuery _buildDefenseReportQuery;
         private readonly ICreateDefenseTermLecturerCommand _createDefenseTermLecturerCommand;
         private readonly IUpdateDefenseTermLecturerCommand _updateDefenseTermLecturerCommand;
         private readonly IDeleteDefenseTermLecturerCommand _deleteDefenseTermLecturerCommand;
@@ -58,6 +59,7 @@ namespace ThesisManagement.Api.Controllers
             IGetScoringProgressQuery scoringProgressQuery,
             IGetTopicFinalScoreProgressQuery topicFinalScoreProgressQuery,
             IGetScoringAlertsQuery scoringAlertsQuery,
+            IBuildDefenseReportQuery buildDefenseReportQuery,
             ICreateDefenseTermLecturerCommand createDefenseTermLecturerCommand,
             IUpdateDefenseTermLecturerCommand updateDefenseTermLecturerCommand,
             IDeleteDefenseTermLecturerCommand deleteDefenseTermLecturerCommand,
@@ -77,6 +79,7 @@ namespace ThesisManagement.Api.Controllers
             _scoringProgressQuery = scoringProgressQuery;
             _topicFinalScoreProgressQuery = topicFinalScoreProgressQuery;
             _scoringAlertsQuery = scoringAlertsQuery;
+            _buildDefenseReportQuery = buildDefenseReportQuery;
             _createDefenseTermLecturerCommand = createDefenseTermLecturerCommand;
             _updateDefenseTermLecturerCommand = updateDefenseTermLecturerCommand;
             _deleteDefenseTermLecturerCommand = deleteDefenseTermLecturerCommand;
@@ -98,7 +101,8 @@ namespace ThesisManagement.Api.Controllers
                 .Select(g =>
                 {
                     var total = g.Count();
-                    var completed = g.Count(x => x.Status == "COMPLETED" || x.Status == "LOCKED");
+                    // Consider a row "completed" only when it is explicitly completed/locked or a final score exists.
+                    var completed = g.Count(x => x.Status == "COMPLETED" || x.Status == "LOCKED" || x.FinalScore.HasValue);
                     return new ScoringProgressDto
                     {
                         CommitteeId = g.Key.CommitteeId,
@@ -119,6 +123,7 @@ namespace ThesisManagement.Api.Controllers
                 .Select(g =>
                 {
                     var total = g.Count();
+                    // Count a topic as "scored" only when the final score has been calculated.
                     var scored = g.Count(x => x.FinalScore.HasValue);
                     return new TopicFinalScoreProgressDto
                     {
@@ -547,6 +552,30 @@ namespace ThesisManagement.Api.Controllers
             }
 
             return File(result.Data.Content, result.Data.ContentType, result.Data.FileName);
+        }
+
+        [HttpGet("reports/export-form-1")]
+        [Authorize(Roles = "Lecturer,Head,Secretary")]
+        public async Task<IActionResult> ExportScoreSheet(
+            int periodId,
+            [FromQuery] int committeeId,
+            [FromQuery] string format = "word")
+        {
+            var normalizedFormat = (format ?? string.Empty).Trim().ToLowerInvariant();
+            var response = await _buildDefenseReportQuery.ExecuteAsync(periodId, "form-1", normalizedFormat, committeeId, HttpContext.RequestAborted);
+
+            if (!response.Success || response.Data.Content.Length == 0)
+            {
+                return StatusCode(
+                    response.HttpStatusCode == 0 ? 400 : response.HttpStatusCode,
+                    ApiResponse<object>.Fail(
+                        response.Message ?? "Không thể xuất bảng điểm.",
+                        response.HttpStatusCode == 0 ? 400 : response.HttpStatusCode,
+                        response.Errors,
+                        response.Code));
+            }
+
+            return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
         }
 
         [HttpGet("scoring/progress-topic-final")]

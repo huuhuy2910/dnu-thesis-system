@@ -83,6 +83,8 @@ type CommitteeMemberView = {
     memberId: string;
     lecturerCode: string;
     lecturerName: string;
+    degree: string | null;
+    organization: string | null;
     roleRaw: string;
     roleCode: CommitteeRoleCode;
     roleLabel: string;
@@ -106,7 +108,7 @@ type CommitteeDetailTabKey = "overview" | "members" | "topics";
 
 type WorkspaceTabKey = "scoring" | "minutes" | "review";
 
-type PreviewModalType = "meeting" | "reviewer";
+type PreviewModalType = "meeting" | "reviewer" | "scoreSheet";
 
 
 
@@ -154,7 +156,10 @@ type ScoringMatrixRow = {
     topicTitle: string;
     studentCode: string;
     studentName: string;
+    className: string | null;
+    cohortCode: string | null;
     supervisorLecturerName: string | null;
+    supervisorOrganization: string | null;
     topicTags: string[];
     session: SessionCode | null;
     scheduledAt: string | null;
@@ -976,7 +981,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
     const notifyInfo = (message: string) => addToast(message, "info");
 
     const downloadPreviewDocument = async (template: PreviewModalType, format: "word" | "pdf") => {
-        if (!selectedAssignmentId) {
+        if ((template === "meeting" || template === "reviewer") && !selectedAssignmentId) {
             notifyError("Vui lòng chọn đề tài trước khi tải file.");
             return;
         }
@@ -984,7 +989,9 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
         try {
             setIsDownloadingPreviewFile(true);
             const token = getAccessToken();
-            const endpoint = `/api/defense-periods/${periodId}/lecturer/minutes/export-document?committeeId=${selectedCommitteeNumericId}&assignmentId=${selectedAssignmentId}&template=${template}&format=${format}`;
+            const endpoint = template === "scoreSheet"
+                ? `/api/defense-periods/${periodId}/lecturer/reports/export-form-1?committeeId=${selectedCommitteeNumericId}&format=${format}`
+                : `/api/defense-periods/${periodId}/lecturer/minutes/export-document?committeeId=${selectedCommitteeNumericId}&assignmentId=${selectedAssignmentId}&template=${template}&format=${format}`;
             const url = normalizeUrl(endpoint);
             const response = await fetch(url, {
                 method: "GET",
@@ -1010,7 +1017,13 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
             const contentDisposition = response.headers.get("content-disposition") || "";
             const fileNameMatch = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(contentDisposition);
             const serverFileName = decodeURIComponent((fileNameMatch?.[1] || fileNameMatch?.[2] || "").trim());
-            const fallbackFileName = `${template === "meeting" ? "bien-ban-hop" : "nhan-xet-phan-bien"}-${selectedAssignmentId}.${format === "pdf" ? "pdf" : "docx"}`;
+            const committeeCodeFallback = selectedMatrixRow?.committeeCode || String(selectedCommitteeNumericId || selectedAssignmentId);
+            const reviewerCodeFallback = selectedCommittee?.members.find((member) => member.roleCode === "UVPB")?.lecturerCode || committeeCodeFallback;
+            const fallbackFileName = template === "meeting"
+                ? `bien-ban-hop-${committeeCodeFallback}.${format === "pdf" ? "pdf" : "docx"}`
+                : template === "reviewer"
+                    ? `nhan-xet-phan-bien-${reviewerCodeFallback}-${committeeCodeFallback}.${format === "pdf" ? "pdf" : "docx"}`
+                    : `bang-diem-chi-tiet-ket-qua-bao-ve-${committeeCodeFallback}.${format === "pdf" ? "pdf" : "docx"}`;
             const fileName = serverFileName || fallbackFileName;
 
             const blobUrl = URL.createObjectURL(blob);
@@ -1054,7 +1067,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
         finalLetter: null,
     });
 
-    const [summary, setSummary] = useState("");
     const [review, setReview] = useState("");
     const [questions, setQuestions] = useState("");
     const [answers, setAnswers] = useState("");
@@ -1539,6 +1551,12 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                         ),
                     ) ??
                     (lecturerCode ? `GV ${lecturerCode}` : "Chưa cập nhật");
+                const degree = toStringOrNull(
+                    pickSnapshotSection<unknown>(record, ["degree", "Degree", "academicTitle", "AcademicTitle"], null),
+                );
+                const organization = toStringOrNull(
+                    pickSnapshotSection<unknown>(record, ["organization", "Organization", "workplace", "Workplace"], null),
+                );
 
                 return {
                     memberId:
@@ -1547,6 +1565,8 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                         ) ?? `${lecturerCode || "member"}-${index + 1}`,
                     lecturerCode,
                     lecturerName,
+                    degree,
+                    organization,
                     roleRaw,
                     roleCode,
                     roleLabel: getRoleLabel(roleCode),
@@ -1622,6 +1642,13 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                     ),
                 )
                 : null;
+            const supervisorOrganization = toStringOrNull(
+                pickSnapshotSection<unknown>(
+                    item,
+                    ["supervisorOrganization", "SupervisorOrganization", "organization", "Organization"],
+                    null,
+                ),
+            );
             const supervisorCode =
                 toStringOrNull(
                     pickSnapshotSection<unknown>(
@@ -1711,10 +1738,17 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                     ) ?? assignmentCode,
                 studentCode: String(pickSnapshotSection<unknown>(item, ["studentCode", "StudentCode"], "-")),
                 studentName: String(pickSnapshotSection<unknown>(item, ["studentName", "StudentName"], "-")),
+                className: toStringOrNull(
+                    pickSnapshotSection<unknown>(item, ["className", "ClassName", "classCode", "ClassCode"], null),
+                ),
+                cohortCode: toStringOrNull(
+                    pickSnapshotSection<unknown>(item, ["cohortCode", "CohortCode"], null),
+                ),
                 supervisorLecturerName:
                     supervisorNameFromRow ??
                     supervisorNameFromTopic ??
                     (supervisorCode ? `GV ${supervisorCode}` : null),
+                supervisorOrganization,
                 topicTags,
                 session: resolvedSession,
                 scheduledAt,
@@ -1862,7 +1896,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
             rows[0] ??
             null;
         if (!target) {
-            setSummary("");
             setReview("");
             setQuestions("");
             setAnswers("");
@@ -1917,7 +1950,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
 
         const reviewerSectionsRaw = toRecord(target.reviewerSections);
 
-        setSummary(toText(target.summaryContent));
         setReview(toText(target.reviewerComments));
         setQuestions(toText(target.committeeMemberComments));
         setQuestionAnswers(
@@ -2255,6 +2287,11 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
         [scoringMatrix, selectedAssignmentId]
     );
 
+    const selectedCommitteeScoreRows = useMemo(
+        () => scoringMatrix.filter((row) => row.committeeId === selectedCommitteeNumericId),
+        [scoringMatrix, selectedCommitteeNumericId],
+    );
+
     const isRowInCommittee = (row: ScoringMatrixRow, committee: Committee | null) => {
         if (!committee) {
             return false;
@@ -2266,25 +2303,10 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
     };
 
     const committeeBadgeStats = useMemo(() => {
-        const committeesWithProgress = new Set<string>();
         const statsMap = new Map<string, { total: number; scored: number; locked: number }>();
+
         committees.forEach((committee) => {
-            const fromTopicProgress =
-                topicFinalProgressRows.find(
-                    (row) =>
-                        row.committeeId === committee.numericId ||
-                        String(row.committeeCode).trim().toUpperCase() === committee.id.trim().toUpperCase(),
-                ) ?? null;
-
-            if (fromTopicProgress) {
-                committeesWithProgress.add(committee.id);
-            }
-
-            statsMap.set(committee.id, {
-                total: fromTopicProgress?.totalTopics ?? 0,
-                scored: fromTopicProgress?.scoredTopics ?? 0,
-                locked: 0,
-            });
+            statsMap.set(committee.id, { total: 0, scored: 0, locked: 0 });
         });
 
         allScoringRows.forEach((row) => {
@@ -2292,12 +2314,11 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
             if (!matched) {
                 return;
             }
+
             const current = statsMap.get(matched.id) ?? { total: 0, scored: 0, locked: 0 };
-            if (!committeesWithProgress.has(matched.id)) {
-                current.total += 1;
-                if (row.finalScore != null || row.submittedCount > 0) {
-                    current.scored += 1;
-                }
+            current.total += 1;
+            if (row.finalScore != null && Number(row.finalScore) > 0) {
+                current.scored += 1;
             }
             if (row.isLocked) {
                 current.locked += 1;
@@ -2306,10 +2327,16 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
         });
 
         committees.forEach((committee) => {
+            const fromTopicProgress =
+                topicFinalProgressRows.find(
+                    (row) =>
+                        row.committeeId === committee.numericId ||
+                        String(row.committeeCode).trim().toUpperCase() === committee.id.trim().toUpperCase(),
+                ) ?? null;
+
             const current = statsMap.get(committee.id) ?? { total: 0, scored: 0, locked: 0 };
-            if (current.total <= 0 && committee.studentCount > 0) {
-                current.total = committee.studentCount;
-            }
+            current.total = Math.max(current.total, fromTopicProgress?.totalTopics ?? 0, committee.studentCount);
+            current.scored = Math.max(current.scored, fromTopicProgress?.scoredTopics ?? 0);
             statsMap.set(committee.id, current);
         });
 
@@ -2366,11 +2393,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
 
     const afternoonRows = useMemo(
         () => sortedScoringRows.filter((row) => row.session === "AFTERNOON"),
-        [sortedScoringRows],
-    );
-
-    const unscheduledRows = useMemo(
-        () => sortedScoringRows.filter((row) => row.session == null),
         [sortedScoringRows],
     );
 
@@ -2627,7 +2649,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                 JSON.stringify({
                     periodId: periodIdText,
                     selectedCommitteeId,
-                    summary,
                     review,
                     questions,
                     answers,
@@ -2647,7 +2668,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
         return () => window.clearInterval(timer);
     }, [
         selectedCommitteeId,
-        summary,
         review,
         questions,
         answers,
@@ -3463,15 +3483,41 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
 
                                     <div className="lec-assign-list">
                                         <div style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>Ca sáng</div>
-                                        {morningRows.map((row) => (
+                                        {morningRows.map((row) => {
+                                            const isScored = row.finalScore != null && Number(row.finalScore) > 0;
+                                            return (
                                             <button
                                                 key={`morning-${row.assignmentId}`}
                                                 type="button"
                                                 className={`lec-assign-btn ${selectedAssignmentId === row.assignmentId ? "active" : ""}`}
                                                 onClick={() => setSelectedAssignmentId(row.assignmentId)}
+                                                style={{
+                                                    background: isScored ? "#ecfdf5" : undefined,
+                                                    border: isScored ? "1px solid #22c55e" : undefined,
+                                                }}
                                             >
-                                                <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
-                                                <div style={{ fontSize: 12, color: "#475569" }}>{row.studentCode} · {row.studentName}</div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
+                                                        <div style={{ fontSize: 12, color: "#475569" }}>{row.studentCode} · {row.studentName}</div>
+                                                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                                                            Lớp: <strong>{row.className ?? "-"}</strong> · Khóa: <strong>{row.cohortCode ?? "-"}</strong>
+                                                        </div>
+                                                    </div>
+                                                    {isScored && (
+                                                        <div style={{
+                                                            padding: "4px 8px",
+                                                            borderRadius: 6,
+                                                            background: "#22c55e",
+                                                            color: "#ffffff",
+                                                            fontSize: 11,
+                                                            fontWeight: 600,
+                                                            whiteSpace: "nowrap",
+                                                        }}>
+                                                            {formatScore(row.finalScore)}{row.finalGrade ? ` - ${row.finalGrade}` : ""}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div style={{ fontSize: 12, color: "#475569" }}>
                                                     Giảng viên Hướng dẫn: <strong>{row.supervisorLecturerName ?? "Chưa cập nhật"}</strong>
                                                 </div>
@@ -3481,12 +3527,12 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             <span
                                                                 key={`m-tag-${row.assignmentId}-${tag}`}
                                                                 style={{
-                                                                    border: "1px solid #fed7aa",
+                                                                    border: "1px solid #22c55e",
                                                                     borderRadius: 999,
                                                                     padding: "1px 7px",
                                                                     fontSize: 11,
-                                                                    color: "#9a3412",
-                                                                    background: "#fff7ed",
+                                                                    color: "#166534",
+                                                                    background: "#f0fdf4",
                                                                 }}
                                                             >
                                                                 {tag}
@@ -3500,19 +3546,46 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                     {row.committeeCode} · {row.committeeName} · {formatSession(row.session)} · {formatRowTimeRange(row)}
                                                 </div>
                                             </button>
-                                        ))}
+                                            );
+                                        })}
                                         {morningRows.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Chưa có đề tài ca sáng.</div>}
 
                                         <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginTop: 6 }}>Ca chiều</div>
-                                        {afternoonRows.map((row) => (
+                                        {afternoonRows.map((row) => {
+                                            const isScored = row.finalScore != null && Number(row.finalScore) > 0;
+                                            return (
                                             <button
                                                 key={`afternoon-${row.assignmentId}`}
                                                 type="button"
                                                 className={`lec-assign-btn ${selectedAssignmentId === row.assignmentId ? "active" : ""}`}
                                                 onClick={() => setSelectedAssignmentId(row.assignmentId)}
+                                                style={{
+                                                    background: isScored ? "#ecfdf5" : undefined,
+                                                    border: isScored ? "1px solid #22c55e" : undefined,
+                                                }}
                                             >
-                                                <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
-                                                <div style={{ fontSize: 12, color: "#475569" }}>{row.studentCode} · {row.studentName}</div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
+                                                        <div style={{ fontSize: 12, color: "#475569" }}>{row.studentCode} · {row.studentName}</div>
+                                                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                                                            Lớp: <strong>{row.className ?? "-"}</strong> · Khóa: <strong>{row.cohortCode ?? "-"}</strong>
+                                                        </div>
+                                                    </div>
+                                                    {isScored && (
+                                                        <div style={{
+                                                            padding: "4px 8px",
+                                                            borderRadius: 6,
+                                                            background: "#22c55e",
+                                                            color: "#ffffff",
+                                                            fontSize: 11,
+                                                            fontWeight: 600,
+                                                            whiteSpace: "nowrap",
+                                                        }}>
+                                                            {formatScore(row.finalScore)}{row.finalGrade ? ` - ${row.finalGrade}` : ""}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div style={{ fontSize: 12, color: "#475569" }}>
                                                     Giảng viên Hướng dẫn: <strong>{row.supervisorLecturerName ?? "Chưa cập nhật"}</strong>
                                                 </div>
@@ -3522,12 +3595,12 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             <span
                                                                 key={`a-tag-${row.assignmentId}-${tag}`}
                                                                 style={{
-                                                                    border: "1px solid #fed7aa",
+                                                                    border: "1px solid #22c55e",
                                                                     borderRadius: 999,
                                                                     padding: "1px 7px",
                                                                     fontSize: 11,
-                                                                    color: "#9a3412",
-                                                                    background: "#fff7ed",
+                                                                    color: "#166534",
+                                                                    background: "#f0fdf4",
                                                                 }}
                                                             >
                                                                 {tag}
@@ -3541,49 +3614,10 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                     {row.committeeCode} · {row.committeeName} · {formatSession(row.session)} · {formatRowTimeRange(row)}
                                                 </div>
                                             </button>
-                                        ))}
+                                            );
+                                        })}
                                         {afternoonRows.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Chưa có đề tài ca chiều.</div>}
 
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginTop: 6 }}>Chưa phân ca</div>
-                                        {unscheduledRows.map((row) => (
-                                            <button
-                                                key={`unscheduled-${row.assignmentId}`}
-                                                type="button"
-                                                className={`lec-assign-btn ${selectedAssignmentId === row.assignmentId ? "active" : ""}`}
-                                                onClick={() => setSelectedAssignmentId(row.assignmentId)}
-                                            >
-                                                <div style={{ fontWeight: 700 }}>{row.topicTitle}</div>
-                                                <div style={{ fontSize: 12, color: "#475569" }}>{row.studentCode} · {row.studentName}</div>
-                                                <div style={{ fontSize: 12, color: "#475569" }}>
-                                                    Giảng viên Hướng dẫn: <strong>{row.supervisorLecturerName ?? "Chưa cập nhật"}</strong>
-                                                </div>
-                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                                    {row.topicTags.length > 0 ? (
-                                                        row.topicTags.slice(0, 3).map((tag) => (
-                                                            <span
-                                                                key={`u-tag-${row.assignmentId}-${tag}`}
-                                                                style={{
-                                                                    border: "1px solid #fed7aa",
-                                                                    borderRadius: 999,
-                                                                    padding: "1px 7px",
-                                                                    fontSize: 11,
-                                                                    color: "#9a3412",
-                                                                    background: "#fff7ed",
-                                                                }}
-                                                            >
-                                                                {tag}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span style={{ fontSize: 11, color: "#94a3b8" }}>Chưa có tags</span>
-                                                    )}
-                                                </div>
-                                                <div style={{ fontSize: 12, color: "#64748b" }}>
-                                                    {row.committeeCode} · {row.committeeName} · {formatSession(row.session)} · {formatRowTimeRange(row)}
-                                                </div>
-                                            </button>
-                                        ))}
-                                        {unscheduledRows.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Không có đề tài chưa phân ca.</div>}
                                     </div>
                                 </aside>
 
@@ -3681,12 +3715,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                 <div style={{ fontSize: 13, color: "#64748b" }}>Snapshot chưa có danh sách thành viên cho hội đồng này.</div>
                                             )}
                                             {selectedCommittee.members.map((member) => {
-                                                const participation = getCommitteeMemberParticipation(member, detailCommitteeRows, {
-                                                    isCurrentUser: member.roleCode === selectedCommittee.roleCode,
-                                                    hasJoinedCurrentCommittee: joinedCommitteeId === selectedCommittee.id,
-                                                    isCommitteeLive: selectedCommittee.status === "Đang họp",
-                                                });
-
                                                 return (
                                                     <div
                                                         key={member.memberId}
@@ -3696,32 +3724,17 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             padding: 10,
                                                             display: "grid",
                                                             gap: 6,
-                                                            background: participation.online ? "#f0fdf4" : "#f8fafc",
                                                         }}
                                                     >
                                                         <div style={{ fontWeight: 700 }}>{member.roleLabel}</div>
                                                         <div style={{ fontSize: 13, color: "#334155" }}>
                                                             {member.lecturerCode ? `${member.lecturerCode} - ` : ""}
+                                                            {member.degree ? `${member.degree} ` : ""}
                                                             {member.lecturerName}
                                                         </div>
-                                                        <span
-                                                            style={{
-                                                                display: "inline-flex",
-                                                                alignItems: "center",
-                                                                justifyContent: "center",
-                                                                width: "fit-content",
-                                                                borderRadius: 999,
-                                                                padding: "5px 10px",
-                                                                fontSize: 12,
-                                                                fontWeight: 500,
-                                                                gap: 6,
-                                                                border: `1px solid ${participation.border}`,
-                                                                background: participation.bg,
-                                                                color: participation.text,
-                                                            }}
-                                                        >
-                                                            {participation.label}
-                                                        </span>
+                                                        <div style={{ fontSize: 12, color: "#475569" }}>
+                                                            {member.organization || "Chưa cập nhật nơi công tác"}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -3979,7 +3992,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                         }
                                                     }}
                                                 >
-                                                    <Lock size={14} /> Chốt điểm
+                                                    <Lock size={14} /> Chốt điểm hội đồng
                                                 </button>
 
                                                 {isChairRole && isCurrentSessionLocked && (
@@ -4025,11 +4038,11 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             }
                                                         }}
                                                     >
-                                                        <Unlock size={14} /> Mở chốt điểm
+                                                        <Unlock size={14} /> Mở chốt điểm hội đồng
                                                     </button>
                                                 )}
 
-                                                {isChairRole && selectedAssignmentId > 0 && (
+                                                {isChairRole && selectedCommitteeNumericId > 0 && (
                                                     <>
                                                         <button
                                                             type="button"
@@ -4044,6 +4057,13 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             onClick={() => setPreviewModalType("reviewer")}
                                                         >
                                                             <Eye size={14} /> Xem nhận xét
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="lec-soft"
+                                                            onClick={() => setPreviewModalType("scoreSheet")}
+                                                        >
+                                                            <Eye size={14} /> Xem bảng điểm
                                                         </button>
                                                     </>
                                                 )}
@@ -4074,6 +4094,8 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
 
                                                             <div style={{ display: "grid", gap: 8, border: "1px solid #e2e8f0", borderRadius: 10, padding: 10 }}>
                                                                 <div style={{ fontWeight: 800, color: "#111111" }}>I. Tóm tắt nội dung đồ án</div>
+                                                                
+                                                                <div style={{ fontWeight: 600, color: "#334155", fontSize: 13, marginTop: 4 }}>Chi tiết chương</div>
                                                                 {chapterContents.length === 0 && (
                                                                     <div style={{ fontSize: 13, color: "#64748b" }}>Chưa có mục chương. Bấm "Thêm chương" để nhập Chương I, II, III, IV...n.</div>
                                                                 )}
@@ -4371,7 +4393,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                                 selectedCommitteeNumericId,
                                                                 {
                                                                     assignmentId: selectedAssignmentId,
-                                                                    summaryContent: summary,
                                                                     reviewerComments: review,
                                                                     committeeMemberComments: questions,
                                                                     qnaDetails: answers,
@@ -4389,6 +4410,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             if (notifyApiFailure(response as ApiResponse<unknown>, "Không lưu được biên bản.")) {
                                                                 return;
                                                             }
+                                                            notifySuccess("Lưu biên bản thành công.");
                                                             setMinuteSavedAt(new Date().toISOString());
                                                             setLastAutoSave(new Date().toLocaleTimeString("vi-VN"));
                                                             pushTrace("minutes-upsert", "Đã lưu biên bản họp.");
@@ -4521,7 +4543,6 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                                 selectedCommitteeNumericId,
                                                                 {
                                                                     assignmentId: selectedAssignmentId,
-                                                                    summaryContent: summary,
                                                                     reviewerComments: review,
                                                                     committeeMemberComments: questions,
                                                                     qnaDetails: answers,
@@ -4539,6 +4560,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                                             if (notifyApiFailure(response as ApiResponse<unknown>, "Không lưu được nhận xét phản biện.")) {
                                                                 return;
                                                             }
+                                                            notifySuccess("Lưu nhận xét phản biện thành công.");
                                                             setMinuteSavedAt(new Date().toISOString());
                                                             pushTrace("reviewer-comments-upsert", "Đã lưu nhận xét phản biện.");
                                                             await hydrateMinutes(selectedCommitteeNumericId, selectedAssignmentId);
@@ -4687,10 +4709,16 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                             <div>
                                 <div style={{ fontWeight: 800, fontSize: 18 }}>
-                                    {previewModalType === "meeting" ? "BIÊN BẢN HỌP HỘI ĐỒNG CHẤM LUẬN ĐỒ ÁN" : "NHẬN XÉT CỦA NGƯỜI PHẢN BIỆN ĐỒ ÁN"}
+                                    {previewModalType === "meeting"
+                                        ? "BIÊN BẢN HỌP HỘI ĐỒNG CHẤM LUẬN ĐỒ ÁN"
+                                        : previewModalType === "reviewer"
+                                            ? "NHẬN XÉT CỦA NGƯỜI PHẢN BIỆN ĐỒ ÁN"
+                                            : "BẢNG ĐIỂM GHI KẾT QUẢ BẢO VỆ"}
                                 </div>
                                 <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
-                                    Xem trước theo dữ liệu đã nhập của đề tài đang chọn trước khi tải file.
+                                        {previewModalType === "scoreSheet"
+                                            ? "Xem trước bảng điểm của toàn bộ đề tài trong hội đồng trước khi tải file."
+                                            : "Xem trước theo dữ liệu đã nhập của đề tài đang chọn trước khi tải file."}
                                 </div>
                             </div>
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -4737,7 +4765,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                         {(selectedCommittee?.members ?? []).map((member, idx) => (
                                             <tr key={`preview-member-${member.memberId}`}>
                                                 <td style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "center" }}>{idx + 1}</td>
-                                                <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>{`${member.lecturerName}`}</td>
+                                                <td style={{ border: "1px solid #cbd5e1", padding: 6 }}>{`${member.degree ? `${member.degree} ` : ""}${member.lecturerName}`}</td>
                                                 <td style={{ border: "1px solid #cbd5e1", padding: 6, textAlign: "center" }}>
                                                     {member.roleCode === "CT" ? "Chủ tịch" : member.roleCode === "UVPB" ? "UV Phản biện" : member.roleCode === "UVTK" ? "UV Thư ký" : member.roleLabel}
                                                 </td>
@@ -4751,10 +4779,11 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                 <div>
                                     Hội đồng đã họp vào ngày <strong>{formatDate(selectedMatrixRow?.scheduledAt ?? selectedCommittee?.date ?? null)}</strong> tại Trường Đại học Đại Nam để chấm đồ án cho sinh viên: <strong>{selectedMatrixRow?.studentName ?? ""}</strong> MSV: <strong>{selectedMatrixRow?.studentCode ?? ""}</strong>
                                 </div>
+                                <div>Lớp: <strong>{selectedMatrixRow?.className ?? "-"}</strong> Khóa: <strong>{selectedMatrixRow?.cohortCode ?? "-"}</strong> Ngành đào tạo: <strong>Công nghệ thông tin</strong></div>
                                 <div>Về đề tài: <strong>{selectedMatrixRow?.topicTitle ?? ""}</strong></div>
-                                <div>Ngành đào tạo: <strong>-</strong> Mã số: <strong>{selectedMatrixRow?.topicCode ?? ""}</strong></div>
+                                <div>Ngành đào tạo: <strong>Công nghệ thông tin</strong> Mã số: <strong>{selectedMatrixRow?.topicCode ?? ""}</strong></div>
                                 <div>Số thành viên có mặt trong phiên họp chấm đồ án tốt nghiệp là: <strong>{selectedCommittee?.members.length ?? 0}</strong> người. Số vắng mặt: <strong>0</strong> người.</div>
-                                <div>Họ tên và chức danh người hướng dẫn: <strong>{selectedMatrixRow?.supervisorLecturerName ?? ""}</strong></div>
+                                <div>Họ tên và chức danh người hướng dẫn: <strong>{selectedMatrixRow?.supervisorLecturerName ?? ""}</strong> · Nơi công tác: <strong>{selectedMatrixRow?.supervisorOrganization ?? "-"}</strong></div>
 
                                 <div style={{ textAlign: "center", fontWeight: "bold", marginTop: 10, marginBottom: 10 }}>NỘI DUNG HỌP HỘI ĐỒNG CHẤM ĐỒ ÁN</div>
 
@@ -4861,7 +4890,7 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        ) : (
+                        ) : previewModalType === "reviewer" ? (
                             <div style={{ display: "grid", gap: 10, fontSize: 14, lineHeight: 1.6 }}>
                                 <div style={{ textAlign: "center", fontWeight: "bold", fontSize: 16, marginBottom: 10 }}>
                                     NHẬN XÉT CỦA NGƯỜI PHẢN BIỆN ĐỒ ÁN<br />
@@ -4870,10 +4899,14 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                 </div>
                                 
                                 <div>Họ và tên sinh viên: <strong>{selectedMatrixRow?.studentName ?? ""}</strong> MSV: <strong>{selectedMatrixRow?.studentCode ?? ""}</strong></div>
-                                <div>Lớp: <strong>-</strong> Khóa: <strong>-</strong> Ngành học: <strong>-</strong></div>
+                                <div>Lớp: <strong>{selectedMatrixRow?.className ?? "-"}</strong> Khóa: <strong>{selectedMatrixRow?.cohortCode ?? "-"}</strong> Ngành học: <strong>Công nghệ thông tin</strong></div>
                                 <div>Tên đề tài: <strong>{selectedMatrixRow?.topicTitle ?? ""}</strong></div>
-                                <div>Học hàm/học vị - Họ và tên người phản biện: <strong>{(selectedCommittee?.members ?? []).find((x) => x.roleCode === "UVPB")?.lecturerName ?? ""}</strong></div>
-                                <div>Nơi công tác: <strong>-</strong></div>
+                                <div>Học hàm/học vị - Họ và tên người phản biện: <strong>{(() => {
+                                    const reviewerMember = (selectedCommittee?.members ?? []).find((x) => x.roleCode === "UVPB");
+                                    if (!reviewerMember) return "";
+                                    return `${reviewerMember.degree ? `${reviewerMember.degree} ` : ""}${reviewerMember.lecturerName}`.trim();
+                                })()}</strong></div>
+                                <div>Nơi công tác: <strong>{(selectedCommittee?.members ?? []).find((x) => x.roleCode === "UVPB")?.organization ?? "-"}</strong></div>
 
                                 <div style={{ textAlign: "center", fontWeight: "bold", marginTop: 10, marginBottom: 10 }}>NỘI DUNG NHẬN XÉT</div>
 
@@ -4891,6 +4924,98 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                         (Ký và ghi rõ họ tên)<br /><br /><br /><br />
                                         <strong>{(selectedCommittee?.members ?? []).find(m => m.roleCode === "UVPB")?.lecturerName ?? ""}</strong>
                                     </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: "grid", gap: 10, fontSize: 13, lineHeight: 1.5 }}>
+                                <div style={{ textAlign: "center" }}>
+                                    <div style={{ fontSize: 12, fontWeight: "bold" }}>BỘ GIÁO DỤC VÀ ĐÀO TẠO</div>
+                                    <div style={{ fontSize: 13, fontWeight: "bold" }}>TRƯỜNG ĐẠI HỌC ĐẠI NAM</div>
+                                    <div style={{ fontSize: 14, fontWeight: "bold", marginTop: 6 }}>BẢNG ĐIỂM GHI KẾT QUẢ BẢO VỆ ĐỒ ÁN</div>
+                                    <div style={{ fontSize: 12, marginTop: 4 }}>NGÀNH: Công nghệ thông tin</div>
+                                    <div style={{ fontSize: 12, fontWeight: "bold", marginTop: 4 }}>HỘI ĐỒNG SỐ: {selectedMatrixRow?.committeeCode ?? selectedCommittee?.name ?? "-"}   NGÀY BẢO VỆ: {formatDate(selectedCommittee?.date ?? null)}</div>
+                                </div>
+
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, border: "1px solid #000", padding: 8 }}>
+                                    <div><strong>Lớp:</strong> {selectedMatrixRow?.className ?? "-"}</div>
+                                    <div><strong>Khóa:</strong> {selectedMatrixRow?.cohortCode ?? "-"}</div>
+                                    <div><strong>Người hướng dẫn:</strong> {selectedMatrixRow?.supervisorLecturerName ?? "-"}</div>
+                                    <div><strong>Nơi công tác:</strong> {selectedMatrixRow?.supervisorOrganization ?? "-"}</div>
+                                </div>
+
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 8 }}>
+                                    <tbody>
+                                        <tr>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>STT</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>MSSV</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Họ và tên sinh viên</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Khoá</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Họ và tên giảng viên hướng dẫn</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Điểm GVHD</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold", minWidth: 50 }}>CT</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold", minWidth: 50 }}>UVTK</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold", minWidth: 50 }}>UVPB</td>
+                                            <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold", minWidth: 60 }}>ĐIỂM TỔNG KẾT</td>
+                                        </tr>
+                                        {selectedCommitteeScoreRows.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={10} style={{ border: "1px solid #000", padding: 8, textAlign: "center", color: "#64748b" }}>Chưa có dữ liệu bảng điểm cho hội đồng này.</td>
+                                            </tr>
+                                        ) : (
+                                            selectedCommitteeScoreRows.map((row, idx) => (
+                                                <tr key={`preview-score-sheet-${row.assignmentId}`}>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{idx + 1}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{row.studentCode}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4 }}>{row.studentName}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{row.cohortCode ?? "-"}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4 }}>{row.supervisorLecturerName ?? "-"}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{formatScore(row.scoreGvhd)}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{formatScore(row.scoreCt)}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{formatScore(row.scoreTk)}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>{formatScore(row.scorePb)}</td>
+                                                    <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>{formatScore(row.finalScore)}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+
+                                <div style={{ marginTop: 12 }}>
+                                    <div style={{ fontWeight: "bold", marginBottom: 8 }}>CÁC THÀNH VIÊN HỘI ĐỒNG</div>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                        <tbody>
+                                            <tr>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>STT</td>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Chức danh</td>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Họ và tên</td>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center", fontWeight: "bold" }}>Ký tên</td>
+                                            </tr>
+                                            <tr>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}></td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>CHỦ TỊCH</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>{(selectedCommittee?.members ?? []).find(m => m.roleCode === "CT")?.lecturerName ?? "-"}</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}></td>
+                                            </tr>
+                                            <tr>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}>2</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>ỦY VIÊN THƯ KÝ</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>{(selectedCommittee?.members ?? []).find(m => m.roleCode === "UVTK")?.lecturerName ?? "-"}</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}></td>
+                                            </tr>
+                                            <tr>
+                                                <td style={{ border: "1px solid #000", padding: 4, textAlign: "center" }}></td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>ỦY VIÊN PHẢN BIỆN</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}>{(selectedCommittee?.members ?? []).find(m => m.roleCode === "UVPB")?.lecturerName ?? "-"}</td>
+                                                <td style={{ border: "1px solid #000", padding: 4 }}></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div style={{ marginTop: 16, textAlign: "center", fontSize: 12 }}>
+                                    <div>Hà Nội, ngày .........tháng.........năm 202.....</div>
+                                    <div style={{ marginTop: 12, fontWeight: "bold" }}>Chủ tịch Hội đồng</div>
+                                    <div style={{ fontSize: 11, fontStyle: "italic", marginTop: 2 }}>(Ký và ghi rõ họ tên)</div>
                                 </div>
                             </div>
                         )}
@@ -4963,6 +5088,10 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                     <div style={{ fontWeight: 700 }}>{formatDate(detailCommittee.date)} · {formatSession(detailCommittee.session)}</div>
                                 </div>
                                 <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: 10 }}>
+                                    <div className="lec-kicker">Ngành</div>
+                                    <div style={{ fontWeight: 700 }}>Công nghệ thông tin</div>
+                                </div>
+                                <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: 10 }}>
                                     <div className="lec-kicker">Phòng</div>
                                     <div style={{ fontWeight: 700 }}>{detailCommittee.room}</div>
                                 </div>
@@ -5019,7 +5148,11 @@ const LecturerCommitteeGradingRoom: React.FC = () => {
                                         <div style={{ display: "grid", gap: 6 }}>
                                             <div style={{ fontSize: 13 }}>
                                                 {member.lecturerCode ? `${member.lecturerCode} - ` : ""}
+                                                {member.degree ? `${member.degree} ` : ""}
                                                 {member.lecturerName}
+                                            </div>
+                                            <div style={{ fontSize: 12, color: "#475569" }}>
+                                                {member.organization || "Chưa cập nhật nơi công tác"}
                                             </div>
                                             {(() => {
                                                 const participation = getCommitteeMemberParticipation(member, detailCommitteeRows);
